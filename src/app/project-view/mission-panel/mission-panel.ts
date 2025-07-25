@@ -4,7 +4,7 @@ import { Component } from '@angular/core';
   selector: 'app-mission-panel',
   imports: [],
   templateUrl: './mission-panel.html',
-  styleUrl: './mission-panel.css'
+  styleUrl: './mission-panel.scss'
 })
 export class MissionPanel {
 

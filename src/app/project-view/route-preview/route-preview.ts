@@ -4,7 +4,7 @@ import { Component } from '@angular/core';
   selector: 'app-route-preview',
   imports: [],
   templateUrl: './route-preview.html',
-  styleUrl: './route-preview.css'
+  styleUrl: './route-preview.scss'
 })
 export class RoutePreview {
 

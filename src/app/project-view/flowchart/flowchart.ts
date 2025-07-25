@@ -4,7 +4,7 @@ import { Component } from '@angular/core';
   selector: 'app-flowchart',
   imports: [],
   templateUrl: './flowchart.html',
-  styleUrl: './flowchart.css'
+  styleUrl: './flowchart.scss'
 })
 export class Flowchart {
 

@@ -4,7 +4,7 @@ import { Component } from '@angular/core';
   selector: 'app-project-menu',
   imports: [],
   templateUrl: './project-menu.html',
-  styleUrl: './project-menu.css'
+  styleUrl: './project-menu.scss'
 })
 export class ProjectMenu {
 
