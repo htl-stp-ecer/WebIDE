@@ -1,0 +1,21 @@
+.navbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center; /* Aligns vertically centered */
+  border-bottom: 1px solid lightgray;
+  padding: 0.5rem 1rem;
+}
+
+.navbar-title {
+  font-weight: bold;
+  font-size: 1.25rem;
+}
+
+.navbar-actions {
+  display: flex;
+  align-items: center;
+}
+
+.language-selector {
+  margin-right: 1rem;
+}

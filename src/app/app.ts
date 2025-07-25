@@ -1,12 +1,14 @@
-import {Component, computed, signal} from '@angular/core';
+import {Component, signal} from '@angular/core';
 import {RouterOutlet} from '@angular/router';
-import {Button} from 'primeng/button';
+import {FormsModule} from '@angular/forms';
+import {Navbar} from './navbar/navbar';
 
 @Component({
   selector: 'app-root',
   imports: [
     RouterOutlet,
-    Button
+    FormsModule,
+    Navbar
   ],
   templateUrl: './app.html',
   styleUrl: './app.scss'
@@ -14,15 +16,4 @@ import {Button} from 'primeng/button';
 export class App {
   protected readonly title = signal('WebIDE');
 
-  isDarkMode = signal(false);
-
-  iconClass = computed(() => this.isDarkMode() ? 'pi pi-sun' : 'pi pi-moon');
-
-  toggleDarkMode() {
-    const element = document.querySelector('html');
-    if (element) {
-      const isDark = element.classList.toggle('dark-theme');
-      this.isDarkMode.set(isDark);
-    }
-  }
 }

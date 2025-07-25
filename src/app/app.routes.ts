@@ -1,6 +1,6 @@
 import { Routes } from '@angular/router';
-import {ProjectMenu} from './project-menu/project-menu';
+import {Home} from './home/home';
 
 export const routes: Routes = [
-  {path: "**", component: ProjectMenu}
+  {path: "**", component: Home}
 ];

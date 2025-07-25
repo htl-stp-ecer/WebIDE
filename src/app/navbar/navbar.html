@@ -1,0 +1,19 @@
+<div class="navbar">
+  <div class="navbar-title">R A C O O N</div>
+
+  <div class="navbar-actions">
+    <p-select
+      [options]="languages"
+      [(ngModel)]="selectedLanguage"
+      optionLabel="label"
+      optionValue="value"
+      (onChange)="changeLanguage($event.value)"
+      class="language-selector">
+    </p-select>
+
+    <p-button
+      (onClick)="toggleDarkMode()"
+      [icon]="iconClass()">
+    </p-button>
+  </div>
+</div>

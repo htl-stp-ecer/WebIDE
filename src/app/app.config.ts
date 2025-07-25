@@ -6,6 +6,7 @@ import {provideAnimationsAsync} from '@angular/platform-browser/animations/async
 import {providePrimeNG} from 'primeng/config';
 import Aura from '@primeuix/themes/aura';
 import {definePreset} from '@primeuix/themes';
+import {provideTranslateService} from '@ngx-translate/core';
 
 const Noir = definePreset(Aura, {
   semantic: {
@@ -69,6 +70,7 @@ export const appConfig: ApplicationConfig = {
     }),
     provideBrowserGlobalErrorListeners(),
     provideZoneChangeDetection({ eventCoalescing: true }),
-    provideRouter(routes)
+    provideRouter(routes),
+    provideTranslateService()
   ]
 };
