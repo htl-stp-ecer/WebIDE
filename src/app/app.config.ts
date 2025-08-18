@@ -7,6 +7,8 @@ import {providePrimeNG} from 'primeng/config';
 import Aura from '@primeuix/themes/aura';
 import {definePreset} from '@primeuix/themes';
 import {provideTranslateService} from '@ngx-translate/core';
+import {PortInterceptor} from './interceptors/PortInterceptor';
+import {HTTP_INTERCEPTORS, provideHttpClient, withFetch, withInterceptorsFromDi} from '@angular/common/http';
 
 const Noir = definePreset(Aura, {
   semantic: {
@@ -71,6 +73,12 @@ export const appConfig: ApplicationConfig = {
     provideBrowserGlobalErrorListeners(),
     provideZoneChangeDetection({ eventCoalescing: true }),
     provideRouter(routes),
-    provideTranslateService()
+    provideTranslateService(),
+    provideHttpClient(withFetch(), withInterceptorsFromDi()),
+    {
+      provide: HTTP_INTERCEPTORS,
+      useClass: PortInterceptor,
+      multi: true,
+    },
   ]
 };

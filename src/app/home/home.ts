@@ -4,6 +4,8 @@ import {InputText} from 'primeng/inputtext';
 import {Button} from 'primeng/button';
 import {FormsModule} from '@angular/forms';
 import {Card} from 'primeng/card';
+import {HttpService} from '../services/http-service';
+import {MessageService} from 'primeng/api';
 
 @Component({
   selector: 'app-home',
@@ -12,7 +14,7 @@ import {Card} from 'primeng/card';
     InputText,
     Button,
     FormsModule,
-    Card
+    Card,
   ],
   templateUrl: './home.html',
   styleUrl: './home.scss'
@@ -22,7 +24,7 @@ export class Home {
   previousConnections: ConnectionInfo[] = []
 
 
-  constructor() {
+  constructor(private httpService: HttpService, private messageService: MessageService) {
     const connections = localStorage.getItem("previousConnections");
     if (connections) {
       try {
@@ -36,13 +38,17 @@ export class Home {
   }
 
   tryConnecting(ip: string) {
-    this.previousConnections.push({
-      ip: ip,
-      name: '',
-      battery: 0
+    this.httpService.getDeviceInfo(ip).subscribe({
+      next: (res) => {
+        res.ip = ip;
+        this.previousConnections.push(res);
+        this.saveToLocalStorage();
+      },
+      error: (err) => {
+        console.error(err);
+        this.showError('Failed to connect to device');
+      }
     });
-
-    this.saveToLocalStorage()
   }
 
   removeConnection(ip: string) {
@@ -52,6 +58,10 @@ export class Home {
 
   saveToLocalStorage() {
     localStorage.setItem("previousConnections", JSON.stringify(this.previousConnections));
+  }
+
+  showError(detail: string) {
+    this.messageService.add({ severity: 'error', summary: 'Error', detail, life: 6000 });
   }
 
 }
