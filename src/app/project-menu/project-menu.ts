@@ -14,6 +14,6 @@ export class ProjectMenu implements OnInit {
 
   ngOnInit() {
     this.ip = this.route.snapshot.paramMap.get('ip');
-    console.log('Prefix:', this.ip);
+    // console.log('Prefix:', this.ip);
   }
 }
