@@ -4,15 +4,18 @@ import { HttpService } from '../services/http-service';
 import { FormsModule } from '@angular/forms';
 import { InputText } from 'primeng/inputtext';
 import { Button } from 'primeng/button';
-import {NotificationService} from '../services/NotificationService';
-import {Card} from 'primeng/card';
+import { NotificationService } from '../services/NotificationService';
+import { Card } from 'primeng/card';
+import { ConfirmDialog } from 'primeng/confirmdialog';
+import { ConfirmationService } from 'primeng/api';
 
 @Component({
   selector: 'app-project-menu',
   standalone: true,
-  imports: [FormsModule, InputText, Button, Card],
+  imports: [FormsModule, InputText, Button, Card, ConfirmDialog],
   templateUrl: './project-menu.html',
-  styleUrl: './project-menu.scss'
+  styleUrl: './project-menu.scss',
+  providers: [ConfirmationService] // required for PrimeNG
 })
 export class ProjectMenu implements OnInit {
   ip: string | null = "";
@@ -22,7 +25,11 @@ export class ProjectMenu implements OnInit {
 
   projects: Project[] = [];
 
-  constructor(private route: ActivatedRoute, private http: HttpService) {}
+  constructor(
+    private route: ActivatedRoute,
+    private http: HttpService,
+    private confirmationService: ConfirmationService
+  ) {}
 
   ngOnInit() {
     this.ip = this.route.snapshot.paramMap.get('ip');
@@ -55,22 +62,35 @@ export class ProjectMenu implements OnInit {
     this.http.changeHostname(this.ip!, newName).subscribe({
       next: res => {
         NotificationService.showSuccess(res.message);
-        },
+      },
       error: err => {
         NotificationService.showError("Could not save hostname")
         console.log(err)
       }
-    }
-    )
+    })
   }
 
-  deleteProject(uuid: string) {
+  confirmDelete(uuid: string) {
+    this.confirmationService.confirm({
+      message: 'Are you sure you want to delete this project?',
+      header: 'Confirm Deletion',
+      icon: 'pi pi-exclamation-triangle',
+      acceptButtonStyleClass: 'p-button-danger p-button-sm',
+      rejectButtonStyleClass: 'p-button-secondary p-button-sm',
+      accept: () => {
+        this.deleteProject(uuid);
+      }
+    });
+  }
+
+  private deleteProject(uuid: string) {
     this.http.deleteProject(this.ip!, uuid).subscribe({
       next: () => {
         NotificationService.showSuccess("Project deleted successfully.");
         this.projects = this.projects.filter(project => project.uuid !== uuid)
-      }, error: err => {
-        NotificationService.showError("Could not delete project ")
+      },
+      error: err => {
+        NotificationService.showError("Could not delete project")
         console.log(err)
       }
     })

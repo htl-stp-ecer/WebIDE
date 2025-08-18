@@ -31,6 +31,8 @@
 
 </div>
 
+<p-confirmDialog></p-confirmDialog>
+
 <div class="mt-40 text-xl">
   Projects:
 
@@ -45,7 +47,7 @@
 
           <div class="flex items-center space-x-3">
             <button
-              (click)="deleteProject(project.uuid)"
+              (click)="confirmDelete(project.uuid)"
               class="text-red-500 hover:text-red-700">
               <i class="pi pi-trash text-lg"></i>
             </button>
