@@ -1,22 +1,27 @@
-<div class="text-center mt-20 text-2xl">
-  <p class="mb-2">
+<div class="flex flex-col items-center justify-center text-2xl mt-20">
+  <p class="mb-4">
     Connect to device
   </p>
 
-  <div class="flex items-center justify-center ">
-    <div class="w-1/4">
-      <p-inputgroup class="">
-        <input [(ngModel)]="ip" pInputText placeholder="IP Address (1.1.1.1)">
-        <p-button label="go" (onClick)="tryConnecting(ip)"></p-button>
-      </p-inputgroup>
-    </div>
+  <div class="relative w-1/4">
+    <p-inputgroup class="flex-1">
+      <input [(ngModel)]="ip" pInputText placeholder="IP Address (1.1.1.1)">
+      <p-button label="go" (onClick)="tryConnecting(ip)" [disabled]="loading"></p-button>
+    </p-inputgroup>
+
+    @if (loading) {
+      <p-progressSpinner
+        style="width: 35px; height: 35px; position: absolute; right: -50px; top: 50%; transform: translateY(-50%);">
+      </p-progressSpinner>
+    }
   </div>
 
-  <p class="mt-4">
-    On the wombat, click
+  <p class="mt-6 text-center">
+    On the wombat, click <br>
+    Settings > Wifi > Device Info
   </p>
-  Settings > Wifi > Device Info
 </div>
+
 
 <div class="ml-20 mt-40 text-xl">
   Previous Connections:

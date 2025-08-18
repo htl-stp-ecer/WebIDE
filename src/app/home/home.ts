@@ -6,6 +6,7 @@ import {FormsModule} from '@angular/forms';
 import {Card} from 'primeng/card';
 import {HttpService} from '../services/http-service';
 import {MessageService} from 'primeng/api';
+import {ProgressSpinner} from 'primeng/progressspinner';
 
 @Component({
   selector: 'app-home',
@@ -15,14 +16,15 @@ import {MessageService} from 'primeng/api';
     Button,
     FormsModule,
     Card,
+    ProgressSpinner,
   ],
   templateUrl: './home.html',
   styleUrl: './home.scss'
 })
 export class Home {
-  ip: string = ""
-  previousConnections: ConnectionInfo[] = []
-
+  ip: string = "";
+  previousConnections: ConnectionInfo[] = [];
+  loading: boolean = false;
 
   constructor(private httpService: HttpService, private messageService: MessageService) {
     const connections = localStorage.getItem("previousConnections");
@@ -34,17 +36,19 @@ export class Home {
         this.previousConnections = [];
       }
     }
-
   }
 
   tryConnecting(ip: string) {
+    this.loading = true;
     this.httpService.getDeviceInfo(ip).subscribe({
       next: (res) => {
+        this.loading = false;
         res.ip = ip;
         this.previousConnections.push(res);
         this.saveToLocalStorage();
       },
       error: (err) => {
+        this.loading = false;
         console.error(err);
         this.showError('Failed to connect to device');
       }
@@ -63,5 +67,4 @@ export class Home {
   showError(detail: string) {
     this.messageService.add({ severity: 'error', summary: 'Error', detail, life: 6000 });
   }
-
 }
