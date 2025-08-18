@@ -8,11 +8,12 @@ import { NotificationService } from '../services/NotificationService';
 import { Card } from 'primeng/card';
 import { ConfirmDialog } from 'primeng/confirmdialog';
 import { ConfirmationService } from 'primeng/api';
+import {NgClass} from '@angular/common';
 
 @Component({
   selector: 'app-project-menu',
   standalone: true,
-  imports: [FormsModule, InputText, Button, Card, ConfirmDialog],
+  imports: [FormsModule, InputText, Button, Card, ConfirmDialog, NgClass],
   templateUrl: './project-menu.html',
   styleUrl: './project-menu.scss',
   providers: [ConfirmationService] // required for PrimeNG
