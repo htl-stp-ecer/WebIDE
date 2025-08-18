@@ -9,6 +9,7 @@ import {definePreset} from '@primeuix/themes';
 import {provideTranslateService} from '@ngx-translate/core';
 import {PortInterceptor} from './interceptors/PortInterceptor';
 import {HTTP_INTERCEPTORS, provideHttpClient, withFetch, withInterceptorsFromDi} from '@angular/common/http';
+import {MessageService} from 'primeng/api';
 
 const Noir = definePreset(Aura, {
   semantic: {
@@ -61,6 +62,7 @@ const Noir = definePreset(Aura, {
 
 export const appConfig: ApplicationConfig = {
   providers: [
+    MessageService,
     provideAnimationsAsync(),
     providePrimeNG({
       theme: {

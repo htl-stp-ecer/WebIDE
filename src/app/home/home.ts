@@ -8,6 +8,7 @@ import {HttpService} from '../services/http-service';
 import {MessageService} from 'primeng/api';
 import {ProgressSpinner} from 'primeng/progressspinner';
 import {Router} from '@angular/router';
+import {NotificationService} from '../services/NotificationService';
 
 @Component({
   selector: 'app-home',
@@ -69,7 +70,7 @@ export class Home {
       error: (err) => {
         this.loading = false;
         console.error(err);
-        this.showError('Failed to connect to device');
+        NotificationService.showError('Failed to connect to device');
       }
     });
   }
@@ -81,9 +82,5 @@ export class Home {
 
   saveToLocalStorage() {
     localStorage.setItem("previousConnections", JSON.stringify(this.previousConnections));
-  }
-
-  showError(detail: string) {
-    this.messageService.add({ severity: 'error', summary: 'Error', detail, life: 6000 });
   }
 }

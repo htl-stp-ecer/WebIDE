@@ -1,3 +1,30 @@
-<div class="ml-20">
-  Connected to: {{ ip }}
+<div class="ml-20 text-xl flex items-center gap-2">
+  Name:
+  @if (!editingName) {
+    <div class="flex items-center gap-1 cursor-pointer hover:text-gray-600" (click)="enableEdit()">
+      <span>{{ connectionInfo?.hostname }}</span>
+      <i class="pi pi-pencil text-gray-400 ml-2"></i>
+    </div>
+  } @else {
+    <div class="flex items-center gap-2">
+      <input [(ngModel)]="tempName"
+             pInputText
+             class="p-inputtext-sm w-60"/>
+
+      <p-button
+        label="Cancel"
+        size="small"
+        severity="secondary"
+        (onClick)="disableEdit()"
+      />
+
+      <p-button
+        label="Save"
+        size="small"
+        severity="success"
+        (onClick)="finishEdit()"
+      />
+
+    </div>
+  }
 </div>

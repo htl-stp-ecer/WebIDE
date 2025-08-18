@@ -12,7 +12,6 @@ export class PortInterceptor implements HttpInterceptor {
   intercept(req: HttpRequest<any>, next: HttpHandler): Observable<HttpEvent<any>> {
     let url = req.url;
 
-    // Only process if the URL is not already full
     if (!/^https?:\/\//i.test(url)) {
       url = 'http://' + url;
     }

@@ -77,7 +77,7 @@ export class Navbar implements OnInit, OnDestroy {
     this.pollingSub = undefined;
 
     if (this.ip) {
-      this.pollingSub = interval(7500)
+      this.pollingSub = interval(5000)
         .pipe(
           switchMap(() => this.http.getDeviceInfo(this.ip!)),
           takeUntil(this.destroy$)
