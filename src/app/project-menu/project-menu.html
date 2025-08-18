@@ -1,4 +1,4 @@
-<div class="ml-20 text-xl flex items-center gap-2">
+<div class="text-xl flex items-center gap-2">
   Name:
   @if (!editingName) {
     <div class="flex items-center gap-1 cursor-pointer hover:text-gray-600" (click)="enableEdit()">
@@ -27,4 +27,31 @@
 
     </div>
   }
+
+
+</div>
+
+<div class="mt-40 text-xl">
+  Projects:
+
+  <div class="mt-10 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+    @for (project of projects; track project.uuid) {
+      <p-card class="shadow-lg rounded-2xl border border-gray-200 hover:shadow-xl transition-all">
+        <div class="flex items-center justify-between">
+          <div>
+            <div class="text-lg font-semibold">{{ project.name }} </div>
+            <p class="text-sm text-gray-500">{{ project.uuid }}</p>
+          </div>
+
+          <div class="flex items-center space-x-3">
+            <button
+              (click)="deleteProject(project.uuid)"
+              class="text-red-500 hover:text-red-700">
+              <i class="pi pi-trash text-lg"></i>
+            </button>
+          </div>
+        </div>
+      </p-card>
+    }
+  </div>
 </div>
