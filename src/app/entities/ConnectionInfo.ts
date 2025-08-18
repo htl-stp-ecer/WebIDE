@@ -1,5 +1,5 @@
 interface ConnectionInfo {
-  name: string;
+  hostname: string;
   ip: string;
-  battery: number;
+  battery_percent: number;
 }

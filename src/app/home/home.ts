@@ -31,6 +31,15 @@ export class Home {
     if (connections) {
       try {
         this.previousConnections = JSON.parse(connections) as ConnectionInfo[];
+
+        for (const conn of this.previousConnections) {
+          conn.battery_percent = 0;
+          this.httpService.getDeviceInfo(conn.ip).subscribe(res => {
+            conn.battery_percent = res.battery_percent;
+            conn.hostname = res.hostname
+          });
+        }
+
       } catch (e) {
         console.error('Error parsing previousConnections from localStorage', e);
         this.previousConnections = [];
