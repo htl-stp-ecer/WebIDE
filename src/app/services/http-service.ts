@@ -22,4 +22,8 @@ export class HttpService {
   deleteProject(ip: string, uuid: string) {
     return this.http.delete(`${ip}/api/v1/projects/${uuid}`)
   }
+
+  createProject(ip: string, newProject: string) {
+    return this.http.post<Project>(`${ip}/api/v1/projects`, {name: newProject})
+  }
 }

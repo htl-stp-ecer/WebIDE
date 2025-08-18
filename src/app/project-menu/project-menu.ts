@@ -95,4 +95,37 @@ export class ProjectMenu implements OnInit {
       }
     })
   }
+
+
+  addingProject = false;
+  newProjectName = "";
+
+  enableAddProject() {
+    this.addingProject = true;
+    this.newProjectName = "";
+  }
+
+  cancelAddProject() {
+    this.addingProject = false;
+  }
+
+  createProject() {
+    if (!this.newProjectName.trim()) {
+      NotificationService.showError("Project name cannot be empty");
+      return;
+    }
+
+    this.http.createProject(this.ip!, this.newProjectName).subscribe({
+      next: (project: Project) => {
+        NotificationService.showSuccess("Project created successfully.");
+        this.projects = [...this.projects, project];
+        this.addingProject = false;
+      },
+      error: err => {
+        NotificationService.showError("Could not create project");
+        console.error(err);
+      }
+    });
+  }
+
 }
