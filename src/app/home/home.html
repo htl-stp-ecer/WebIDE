@@ -30,7 +30,7 @@
     @for (connection of previousConnections; track connection.ip) {
       <p-card class="shadow-lg rounded-2xl border border-gray-200 hover:shadow-xl transition-all">
         <div class="flex items-center justify-between">
-          <div>
+          <div (click)="tryConnecting(connection.ip)">
             <div class="text-lg font-semibold">{{ connection.hostname || 'Unnamed Device' }} <span class="text-sm text-gray-500 ml-5">{{ connection.ip }}</span></div>
 
             <p class="text-base text-gray-400 flex items-center">

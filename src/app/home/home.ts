@@ -7,6 +7,7 @@ import {Card} from 'primeng/card';
 import {HttpService} from '../services/http-service';
 import {MessageService} from 'primeng/api';
 import {ProgressSpinner} from 'primeng/progressspinner';
+import {Router} from '@angular/router';
 
 @Component({
   selector: 'app-home',
@@ -26,7 +27,7 @@ export class Home {
   previousConnections: ConnectionInfo[] = [];
   loading: boolean = false;
 
-  constructor(private httpService: HttpService, private messageService: MessageService) {
+  constructor(private httpService: HttpService, private messageService: MessageService, private router: Router) {
     const connections = localStorage.getItem("previousConnections");
     if (connections) {
       try {
@@ -52,9 +53,18 @@ export class Home {
     this.httpService.getDeviceInfo(ip).subscribe({
       next: (res) => {
         this.loading = false;
+        const existing = this.previousConnections.find(c => c.ip === ip);
         res.ip = ip;
-        this.previousConnections.push(res);
+
+        if (existing) {
+          existing.hostname = res.hostname;
+          existing.battery_percent = res.battery_percent;
+        } else {
+          this.previousConnections.push(res);
+        }
+
         this.saveToLocalStorage();
+        this.router.navigate([ip + "/projects"]);
       },
       error: (err) => {
         this.loading = false;
