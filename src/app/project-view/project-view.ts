@@ -1,4 +1,5 @@
-import { Component } from '@angular/core';
+import {Component, OnInit} from '@angular/core';
+import {ActivatedRoute} from '@angular/router';
 
 @Component({
   selector: 'app-project-view',
@@ -6,6 +7,19 @@ import { Component } from '@angular/core';
   templateUrl: './project-view.html',
   styleUrl: './project-view.scss'
 })
-export class ProjectView {
+export class ProjectView implements OnInit {
+
+  ip: string | null = "";
+  uuid: string | null = "";
+
+
+  constructor(
+    private route: ActivatedRoute,
+  ) {}
+
+  ngOnInit() {
+    this.ip = this.route.snapshot.paramMap.get('ip');
+    this.uuid = this.route.snapshot.paramMap.get('uuid');
+  }
 
 }

@@ -1,5 +1,5 @@
 import { Component, OnInit } from '@angular/core';
-import { ActivatedRoute } from '@angular/router';
+import {ActivatedRoute, Router} from '@angular/router';
 import { HttpService } from '../services/http-service';
 import { FormsModule } from '@angular/forms';
 import { InputText } from 'primeng/inputtext';
@@ -28,6 +28,7 @@ export class ProjectMenu implements OnInit {
 
   constructor(
     private route: ActivatedRoute,
+    private router: Router,
     private http: HttpService,
     private confirmationService: ConfirmationService
   ) {}
@@ -129,4 +130,7 @@ export class ProjectMenu implements OnInit {
     });
   }
 
+  redirectToProject(uuid: string) {
+    this.router.navigate([this.router.url + "/" + uuid]);
+  }
 }
