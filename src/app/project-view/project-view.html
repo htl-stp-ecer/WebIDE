@@ -1,16 +1,18 @@
-<div class="flex h-screen">
+<div class="flex h-screen overflow-hidden">
   <!-- Left Panel -->
-  <div class="w-1/5 border-r p-4 border-gray-300 dark:border-gray-600">
+  <div class="w-1/5 border-r p-4 border-gray-300 dark:border-gray-600 overflow-hidden">
     <app-mission-panel></app-mission-panel>
   </div>
 
   <!-- Center Content -->
-  <div class="flex-1 p-4">
+  <div class="flex-1 p-4 overflow-hidden">
     <app-flowchart></app-flowchart>
   </div>
 
-  <!-- Right Panel -->
-  <div class="w-1/5 border-l p-4 border-gray-300 dark:border-gray-600">
-    <app-step-panel [ip]="ip!"></app-step-panel>
+  <!-- Right Panel (scrollable step panel) -->
+  <div class="w-1/5 border-l p-4 border-gray-300 dark:border-gray-600 flex flex-col overflow-hidden">
+    <div class="flex-1 overflow-y-auto no-scrollbar">
+      <app-step-panel [ip]="ip!"></app-step-panel>
+    </div>
   </div>
 </div>

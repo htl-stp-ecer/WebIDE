@@ -1,7 +1,11 @@
-<app-navbar></app-navbar>
+<div class="flex flex-col h-screen overflow-hidden">
+  <!-- Navbar -->
+  <app-navbar class="shrink-0"></app-navbar>
 
-<!--<div class="ml-20 mr-20">-->
-  <router-outlet></router-outlet>
-<!--</div>-->
+  <!-- Main content fills remaining space -->
+  <div class="flex-1 min-h-0 overflow-hidden">
+    <router-outlet></router-outlet>
+  </div>
 
-<p-toast></p-toast>
+  <p-toast></p-toast>
+</div>
