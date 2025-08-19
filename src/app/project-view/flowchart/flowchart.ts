@@ -1,5 +1,5 @@
 import {Component, signal, viewChild} from '@angular/core';
-import {FCanvasComponent, FCreateNodeEvent, FFlowComponent, FFlowModule} from '@foblex/flow';
+import {FCanvasComponent, FCreateConnectionEvent, FCreateNodeEvent, FFlowComponent, FFlowModule} from '@foblex/flow';
 import {generateGuid} from '@foblex/utils';
 
 @Component({
@@ -13,6 +13,8 @@ import {generateGuid} from '@foblex/utils';
 })
 export class Flowchart {
   nodes = signal<{ id: string, text: string, position: any }[]>([]);
+
+  connections = signal<{ outputId: string, inputId: string }[]>([]);
 
   fCanvas = viewChild(FCanvasComponent);
 
@@ -29,6 +31,15 @@ export class Flowchart {
         text: step?.name ?? 'New Node',
         position: event.rect,
       }
+    ]);
+  }
+
+  public addConnection(event: FCreateConnectionEvent): void {
+    if (!event.fInputId) return;
+
+    this.connections.set([
+      ...this.connections(),
+      { outputId: event.fOutputId, inputId: event.fInputId }
     ]);
   }
 }

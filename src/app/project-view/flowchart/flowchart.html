@@ -1,14 +1,31 @@
 <f-flow fDraggable
         (fLoaded)="onLoaded()"
-        (fCreateNode)="onCreateNode($event)">
+        (fCreateNode)="onCreateNode($event)"
+        (fCreateConnection)="addConnection($event)">
   <f-background>
     <f-circle-pattern color="#4a5565"></f-circle-pattern>
-<!--    <f-rect-pattern vColor="#4a5565" hColor="#4a5565"></f-rect-pattern>-->
+    <!--    <f-rect-pattern vColor="#4a5565" hColor="#4a5565"></f-rect-pattern>-->
   </f-background>
   <f-canvas fZoom>
+    <f-connection-for-create fType="segment"></f-connection-for-create>
+    <f-snap-connection [fSnapThreshold]="50" fType="segment"></f-snap-connection>
+
+    @for (connection of connections(); track connection.outputId + '-' + connection.inputId) {
+      <f-connection [fReassignDisabled]="true" fType="segment"
+                    [fOutputId]="connection.outputId" [fInputId]="connection.inputId">
+      </f-connection>
+    }
+
     @for (node of nodes(); track node.id) {
-      <div fNode [fNodePosition]="node.position" fDragHandle>
-        {{ node.text }}
+      <div fNode fDragHandle [fNodePosition]="node.position" class="node-box">
+        <!-- Input at the top -->
+        <div fNodeInput fInputConnectableSide="top" class="top"></div>
+
+        <!-- Node content -->
+        <div class="node-content">{{ node.text }}</div>
+
+        <!-- Output at the bottom -->
+        <div fNodeOutput fOutputConnectableSide="bottom" class="bottom"></div>
       </div>
     }
   </f-canvas>
