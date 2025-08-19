@@ -26,4 +26,8 @@ export class HttpService {
   createProject(ip: string, newProject: string) {
     return this.http.post<Project>(`${ip}/api/v1/projects`, {name: newProject})
   }
+
+  getAllSteps(ip: string) {
+    return this.http.get<Step[]>(`${ip}/api/v1/steps`)
+  }
 }
