@@ -1,9 +1,12 @@
 import {Component, OnInit} from '@angular/core';
 import {ActivatedRoute} from '@angular/router';
+import {Card} from 'primeng/card';
 
 @Component({
   selector: 'app-project-view',
-  imports: [],
+  imports: [
+    Card
+  ],
   templateUrl: './project-view.html',
   styleUrl: './project-view.scss'
 })
