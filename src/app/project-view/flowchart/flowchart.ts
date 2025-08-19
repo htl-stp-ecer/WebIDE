@@ -12,6 +12,8 @@ import {generateGuid} from '@foblex/utils';
   styleUrl: './flowchart.scss'
 })
 export class Flowchart {
+  isDarkMode = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+
   nodes = signal<{ id: string, text: string, position: any }[]>([]);
 
   connections = signal<{ outputId: string, inputId: string }[]>([]);
