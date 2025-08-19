@@ -22,7 +22,6 @@ export class StepPanel implements OnInit {
   ngOnInit(): void {
     this.http.getAllSteps(this.ip).subscribe(steps => {
       this.steps = steps
-      console.log(steps)
     });
   }
 

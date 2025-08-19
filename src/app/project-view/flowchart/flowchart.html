@@ -28,10 +28,10 @@
 
     @for (node of nodes(); track node.id) {
       <div fNode fDragHandle [fNodePosition]="node.position"
-           class="relative w-36 p-4 text-center
+           class="relative w-48 p-4 text-center
                   bg-[#eee5e9] border border-[#383838] rounded-xl
                   shadow hover:shadow-lg transition-shadow duration-200
-                  dark:bg-[#131217] dark:border-[#383838] dark:text-[#EEE5E9]">
+                  dark:bg-[#131217] dark:border-[#383838] dark:text-[#EEE5E9] flex flex-col gap-2">
 
         <!-- Top port -->
         <div fNodeInput fInputConnectableSide="top"
@@ -39,6 +39,39 @@
 
         <!-- Node content -->
         <div class="font-semibold">{{ node.text }}</div>
+
+        <!-- Arguments -->
+        <div class="flex flex-col gap-2 mt-2">
+          @for (arg of node.step?.arguments; track arg.name) {
+            <div class="flex flex-col gap-1">
+              <label class="text-sm font-medium">{{ arg.name }} ({{ arg.type }})</label>
+              @if (arg.type === 'bool') {
+                <p-checkbox
+                  [(ngModel)]="node.args[arg.name]"
+                  [binary]="true"
+                  class="mx-auto">
+                </p-checkbox>
+              } @else if (arg.type === 'str') {
+                <input
+                  pInputText
+                  [(ngModel)]="node.args[arg.name]"
+                  class="w-full p-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm"
+                  placeholder="{{ arg.default || 'Enter ' + arg.name }}"
+                />
+              } @else if (arg.type === 'float') {
+                <p-inputNumber
+                  [(ngModel)]="node.args[arg.name]"
+                  mode="decimal"
+                  [minFractionDigits]="1"
+                  [maxFractionDigits]="2"
+                  class="w-full"
+                  inputStyleClass="w-full p-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm"
+                  placeholder="{{ arg.default || 'Enter ' + arg.name }}"
+                ></p-inputNumber>
+              }
+            </div>
+          }
+        </div>
 
         <!-- Bottom port -->
         <div fNodeOutput fOutputConnectableSide="bottom"
