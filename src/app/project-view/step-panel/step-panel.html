@@ -1,14 +1,12 @@
-<div class="flex flex-col gap-2">
-  <div class="text-lg font-bold mb-2">Steps</div>
-
-  <div class="external-panel flex flex-col gap-2">
-    @for (step of steps; track step.file) {
-      <div class="external-item p-2 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700"
-           fExternalItem
-           [fData]="step"
-           [fPreviewMatchSize]="true">
-        {{ step.name }}
-      </div>
-    }
-  </div>
+<div class="external-panel flex flex-col gap-2">
+  @for (step of steps; track step.file) {
+    <div class="external-item p-2 rounded border border-gray-300 dark:border-gray-700
+                bg-white dark:bg-gray-800 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700
+                select-none"
+         fExternalItem
+         [fData]="step"
+         [fPreviewMatchSize]="true">
+      {{ step.name }}
+    </div>
+  }
 </div>
