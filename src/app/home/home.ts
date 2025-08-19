@@ -1,14 +1,15 @@
-import { Component } from '@angular/core';
-import {InputGroup} from 'primeng/inputgroup';
-import {InputText} from 'primeng/inputtext';
-import {Button} from 'primeng/button';
-import {FormsModule} from '@angular/forms';
-import {Card} from 'primeng/card';
-import {HttpService} from '../services/http-service';
-import {MessageService} from 'primeng/api';
-import {ProgressSpinner} from 'primeng/progressspinner';
-import {Router} from '@angular/router';
-import {NotificationService} from '../services/NotificationService';
+import { Component, OnInit, OnDestroy } from '@angular/core';
+import { InputGroup } from 'primeng/inputgroup';
+import { InputText } from 'primeng/inputtext';
+import { Button } from 'primeng/button';
+import { FormsModule } from '@angular/forms';
+import { Card } from 'primeng/card';
+import { HttpService } from '../services/http-service';
+import { MessageService } from 'primeng/api';
+import { ProgressSpinner } from 'primeng/progressspinner';
+import { Router } from '@angular/router';
+import { NotificationService } from '../services/NotificationService';
+import { interval, Subscription } from 'rxjs';
 
 @Component({
   selector: 'app-home',
@@ -23,29 +24,52 @@ import {NotificationService} from '../services/NotificationService';
   templateUrl: './home.html',
   styleUrl: './home.scss'
 })
-export class Home {
+export class Home implements OnInit, OnDestroy {
   ip: string = "";
   previousConnections: ConnectionInfo[] = [];
   loading: boolean = false;
+  private refreshSub?: Subscription;
 
-  constructor(private httpService: HttpService, private messageService: MessageService, private router: Router) {
+  constructor(
+    private httpService: HttpService,
+    private messageService: MessageService,
+    private router: Router
+  ) {
     const connections = localStorage.getItem("previousConnections");
     if (connections) {
       try {
         this.previousConnections = JSON.parse(connections) as ConnectionInfo[];
-
-        for (const conn of this.previousConnections) {
-          conn.battery_percent = 0;
-          this.httpService.getDeviceInfo(conn.ip).subscribe(res => {
-            conn.battery_percent = res.battery_percent;
-            conn.hostname = res.hostname
-          });
-        }
-
+        // initialize battery_percent to 0
+        this.previousConnections.forEach(conn => conn.battery_percent = 0);
       } catch (e) {
         console.error('Error parsing previousConnections from localStorage', e);
         this.previousConnections = [];
       }
+    }
+  }
+
+  ngOnInit() {
+    this.updateDeviceInfos();
+
+    this.refreshSub = interval(5000).subscribe(() => this.updateDeviceInfos());
+  }
+
+  ngOnDestroy() {
+    this.refreshSub?.unsubscribe();
+  }
+
+  private updateDeviceInfos() {
+    for (const conn of this.previousConnections) {
+      this.httpService.getDeviceInfo(conn.ip).subscribe({
+        next: res => {
+          conn.battery_percent = res.battery_percent;
+          conn.hostname = res.hostname;
+        },
+        error: err => {
+          conn.battery_percent = 0
+          console.error(`Failed to fetch device info for ${conn.ip}`, err);
+        }
+      });
     }
   }
 

@@ -32,7 +32,9 @@
 
   <div class="mt-10 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
     @for (connection of previousConnections; track connection.ip) {
-      <p-card class="shadow-lg rounded-2xl border border-gray-200 hover:shadow-xl transition-all cursor-pointer" (click)="tryConnecting(connection.ip)">
+      <p-card class="shadow-lg rounded-2xl border border-gray-200
+         hover:shadow-xl hover:scale-105 hover:bg-gray-50
+         transition-all duration-300 cursor-pointer" (click)="tryConnecting(connection.ip)">
         <div class="flex items-center justify-between">
           <div>
             <div class="text-lg font-semibold">{{ connection.hostname || 'Unnamed Device' }} <span class="text-sm text-gray-500 ml-5">{{ connection.ip }}</span></div>
