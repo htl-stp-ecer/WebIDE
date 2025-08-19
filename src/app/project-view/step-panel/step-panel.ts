@@ -1,19 +1,29 @@
-import { Component, Input } from '@angular/core';
-import { HttpService } from '../../services/http-service';
+import {Component, Input, OnInit} from '@angular/core';
+import {FExternalItemDirective} from '@foblex/flow';
+import {HttpService} from '../../services/http-service';
 
 @Component({
   selector: 'app-step-panel',
   templateUrl: './step-panel.html',
+  imports: [
+    FExternalItemDirective,
+  ],
   styleUrls: ['./step-panel.scss']
 })
-export class StepPanel {
+export class StepPanel implements OnInit {
   steps: Step[] = [];
 
   @Input() ip: string = "";
 
   constructor(private http: HttpService) {
-    this.http.getAllSteps(this.ip).subscribe(steps => this.steps = steps);
 
+  }
+
+  ngOnInit(): void {
+    this.http.getAllSteps(this.ip).subscribe(steps => {
+      this.steps = steps
+      console.log(steps)
+    });
   }
 
 
