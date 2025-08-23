@@ -105,7 +105,7 @@ export class Navbar implements OnInit, OnDestroy {
   toggleDarkMode() {
     const element = document.querySelector('html');
     if (element) {
-      const isDark = element.classList.toggle('dark-theme');
+      const isDark = element.classList.toggle('dark');
       this.isDarkMode.set(isDark);
       localStorage.setItem("selectedDarkMode", this.isDarkMode() ? "dark" : "light");
     }
