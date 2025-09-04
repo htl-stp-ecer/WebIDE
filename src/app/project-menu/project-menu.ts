@@ -19,7 +19,6 @@ import {NgClass} from '@angular/common';
   providers: [ConfirmationService] // required for PrimeNG
 })
 export class ProjectMenu implements OnInit {
-  ip: string | null = "";
   connectionInfo: ConnectionInfo | undefined;
   tempName: string = ""
   editingName = false;
@@ -34,14 +33,12 @@ export class ProjectMenu implements OnInit {
   ) {}
 
   ngOnInit() {
-    this.ip = this.route.snapshot.paramMap.get('ip');
-
-    this.http.getDeviceInfo(this.ip!).subscribe(deviceInfo => {
+    this.http.getDeviceInfoDefault().subscribe(deviceInfo => {
       this.connectionInfo = deviceInfo;
       this.tempName = deviceInfo.hostname
     });
 
-    this.http.getAllProjects(this.ip!).subscribe(projects => {
+    this.http.getAllProjects().subscribe(projects => {
       this.projects = projects;
     })
   }
@@ -61,7 +58,7 @@ export class ProjectMenu implements OnInit {
   }
 
   saveHostname(newName: string) {
-    this.http.changeHostname(this.ip!, newName).subscribe({
+    this.http.changeHostname(newName).subscribe({
       next: res => {
         NotificationService.showSuccess(res.message);
       },
@@ -86,7 +83,7 @@ export class ProjectMenu implements OnInit {
   }
 
   private deleteProject(uuid: string) {
-    this.http.deleteProject(this.ip!, uuid).subscribe({
+    this.http.deleteProject(uuid).subscribe({
       next: () => {
         NotificationService.showSuccess("Project deleted successfully.");
         this.projects = this.projects.filter(project => project.uuid !== uuid)
@@ -117,7 +114,7 @@ export class ProjectMenu implements OnInit {
       return;
     }
 
-    this.http.createProject(this.ip!, this.newProjectName).subscribe({
+    this.http.createProject(this.newProjectName).subscribe({
       next: (project: Project) => {
         NotificationService.showSuccess("Project created successfully.");
         this.projects = [...this.projects, project];

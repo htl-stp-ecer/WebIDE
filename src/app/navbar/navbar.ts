@@ -3,7 +3,7 @@ import { Button } from "primeng/button";
 import { Select } from "primeng/select";
 import { TranslateService } from '@ngx-translate/core';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute, Router, NavigationEnd } from '@angular/router';
+import {ActivatedRoute, Router, NavigationEnd, RouterLink, RouterLinkActive} from '@angular/router';
 import { filter, Subscription, interval, switchMap, takeUntil, Subject } from 'rxjs';
 import { HttpService } from '../services/http-service';
 
@@ -12,7 +12,9 @@ import { HttpService } from '../services/http-service';
   imports: [
     Button,
     Select,
-    FormsModule
+    FormsModule,
+    RouterLink,
+    RouterLinkActive
   ],
   templateUrl: './navbar.html',
   styleUrl: './navbar.scss'
@@ -66,6 +68,7 @@ export class Navbar implements OnInit, OnDestroy {
 
         if (newIp !== this.ip) {
           this.ip = newIp;
+          this.http.setIp(newIp!)
           this.deviceInfo = undefined;
           this.restartPolling();
         }
@@ -79,7 +82,7 @@ export class Navbar implements OnInit, OnDestroy {
     if (this.ip) {
       this.pollingSub = interval(5000)
         .pipe(
-          switchMap(() => this.http.getDeviceInfo(this.ip!)),
+          switchMap(() => this.http.getDeviceInfoDefault()),
           takeUntil(this.destroy$)
         )
         .subscribe({
@@ -88,7 +91,7 @@ export class Navbar implements OnInit, OnDestroy {
         });
 
       //first polling
-      this.http.getDeviceInfo(this.ip).subscribe({
+      this.http.getDeviceInfoDefault().subscribe({
         next: info => this.deviceInfo = info,
         error: err => console.error("Failed to fetch device info:", err)
       });
