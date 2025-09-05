@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { BehaviorSubject } from 'rxjs';
+import {Mission} from '../entities/Mission';
 
 @Injectable({
   providedIn: 'root'
@@ -49,7 +50,13 @@ export class HttpService {
     return this.http.get<Step[]>(`${this.ip}/api/v1/steps`);
   }
 
-  getAllMissions() {
-    return this.http.get(`${this.ip}/api/v1/missions`);
+  getAllMissions(projectUUID: string) {
+    return this.http.get<Mission[]>(`${this.ip}/api/v1/missions/${projectUUID}`);
+  }
+
+  createMission(projectUUID: string, name: string) {
+    return this.http.post(`${this.ip}/api/v1/missions/${projectUUID}`, {
+      name: name
+    });
   }
 }

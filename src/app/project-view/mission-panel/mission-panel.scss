@@ -1,0 +1,7 @@
+:host ::ng-deep .p-timeline-event-opposite {
+  flex: 0 0 auto; /* Don’t let it take up big space */
+  padding: 0 !important;
+}
+:host ::ng-deep .p-timeline-event-content {
+  margin-left: 0 !important; /* Pull content closer */
+}
