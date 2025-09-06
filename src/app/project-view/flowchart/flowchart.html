@@ -66,38 +66,40 @@
         <!-- Node content -->
         <div class="font-semibold">{{ node.text }}</div>
 
-        <!-- Arguments -->
-        <div class="flex flex-col gap-2 mt-2">
-          @for (arg of node.step.arguments; track arg.name) {
-            <div class="flex flex-col gap-1">
-              <label class="text-sm font-medium">{{ arg.name }} ({{ arg.type }})</label>
-              @if (arg.type === 'bool') {
-                <p-checkbox
-                  [(ngModel)]="node.args[arg.name]"
-                  [binary]="true"
-                  class="mx-auto">
-                </p-checkbox>
-              } @else if (arg.type === 'str') {
-                <input
-                  pInputText
-                  [(ngModel)]="node.args[arg.name]"
-                  class="w-full p-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm"
-                  placeholder="{{ arg.default || 'Enter ' + arg.name }}"
-                />
-              } @else if (arg.type === 'float') {
-                <p-inputNumber
-                  [(ngModel)]="node.args[arg.name]"
-                  mode="decimal"
-                  [minFractionDigits]="1"
-                  [maxFractionDigits]="2"
-                  class="w-full"
-                  inputStyleClass="w-full p-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm"
-                  placeholder="{{ arg.default || 'Enter ' + arg.name }}"
-                ></p-inputNumber>
-              }
-            </div>
-          }
-        </div>
+        <!-- Arguments - Show for all nodes that have arguments -->
+        @if (node.step?.arguments && node.step.arguments.length > 0) {
+          <div class="flex flex-col gap-2 mt-2">
+            @for (arg of node.step.arguments; track arg.name) {
+              <div class="flex flex-col gap-1">
+                <label class="text-sm font-medium">{{ arg.name }} ({{ arg.type }})</label>
+                @if (arg.type === 'bool') {
+                  <p-checkbox
+                    [(ngModel)]="node.args[arg.name]"
+                    [binary]="true"
+                    class="mx-auto">
+                  </p-checkbox>
+                } @else if (arg.type === 'str') {
+                  <input
+                    pInputText
+                    [(ngModel)]="node.args[arg.name]"
+                    class="w-full p-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm"
+                    placeholder="{{ arg.default || 'Enter ' + arg.name }}"
+                  />
+                } @else if (arg.type === 'float') {
+                  <p-inputNumber
+                    [(ngModel)]="node.args[arg.name]"
+                    mode="decimal"
+                    [minFractionDigits]="1"
+                    [maxFractionDigits]="2"
+                    class="w-full"
+                    inputStyleClass="w-full p-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm"
+                    placeholder="{{ arg.default || 'Enter ' + arg.name }}"
+                  ></p-inputNumber>
+                }
+              </div>
+            }
+          </div>
+        }
 
         <!-- Fixed: Use consistent ID naming that matches TypeScript -->
         <div fNodeOutput

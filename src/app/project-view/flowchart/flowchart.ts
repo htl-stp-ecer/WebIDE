@@ -187,7 +187,7 @@ export class Flowchart {
         type: arg.type,
         import: null,
         optional: false,
-        default: arg.value
+        default: arg.value // Fixed: Use arg.value as the default, not undefined
       })),
       file: ''
     };
@@ -221,7 +221,7 @@ export class Flowchart {
     const step = event.data as Step;
     const args: { [key: string]: boolean | string | number | null } = {};
     step?.arguments?.forEach(arg => {
-      if (arg.default !== null) {
+      if (arg.default !== null && arg.default !== '') {
         if (arg.type === 'bool') {
           args[arg.name] = arg.default.toLowerCase() === 'true';
         } else if (arg.type === 'float') {
