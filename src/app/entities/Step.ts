@@ -5,9 +5,9 @@ interface Step {
   arguments: {
     name: string;
     type: string;
-    import: string;
+    import: string | null;
     optional: boolean;
-    default: string;
+    default: string | null;
   }[]
 
   file: string;

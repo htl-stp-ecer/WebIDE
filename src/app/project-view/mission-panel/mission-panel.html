@@ -12,13 +12,20 @@
       <ng-template let-item let-i="index" pTemplate="content">
         <div
           cdkDrag
-          class="flex items-center gap-3 cursor-pointer"
-          (click)="getDetailedMission(item.name)">
-          <span class="text-gray-500">{{ item.order }}</span>
-          <span>{{ item.name }}</span>
-          <i class="pi pi-bars text-gray-400 ml-auto"></i>
+          class="flex items-center gap-3 cursor-pointer px-2 py-1 rounded-lg transition-colors"
+          (click)="getDetailedMission(item.name)"
+          [ngClass]="{
+      'bg-blue-100 border border-blue-400 dark:bg-blue-900 dark:border-blue-500':
+        currentMission?.name === item.name
+    }"
+        >
+          <span class="text-gray-500 dark:text-gray-400">{{ item.order }}</span>
+          <span class="text-gray-800 dark:text-gray-200">{{ item.name }}</span>
+          <i class="pi pi-bars text-gray-400 dark:text-gray-500 ml-auto"></i>
         </div>
       </ng-template>
+
+
     </p-timeline>
   </div>
   <!-- Add Mission Section (Outside Timeline) -->

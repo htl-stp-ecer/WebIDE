@@ -10,11 +10,13 @@ import { InputText } from 'primeng/inputtext';
 import { Button } from 'primeng/button';
 import { Timeline } from 'primeng/timeline';
 import { CdkDragDrop, DragDropModule, moveItemInArray } from '@angular/cdk/drag-drop';
+import {NgClass} from '@angular/common';
+import {MissionStateService} from '../../services/mission-sate-service';
 
 @Component({
   selector: 'app-mission-panel',
   standalone: true,
-  imports: [Card, PrimeTemplate, FormsModule, InputText, Button, Timeline, DragDropModule],
+  imports: [Card, PrimeTemplate, FormsModule, InputText, Button, Timeline, DragDropModule, NgClass],
   templateUrl: './mission-panel.html',
   styleUrl: './mission-panel.scss'
 })
@@ -26,7 +28,7 @@ export class MissionPanel implements OnInit {
   newMissionName = "";
   currentMission: Mission | undefined;
 
-  constructor(private route: ActivatedRoute, private http: HttpService) {}
+  constructor(private route: ActivatedRoute, private http: HttpService, private missionState: MissionStateService) {}
 
   ngOnInit(): void {
     this.projectUUID = this.route.snapshot.paramMap.get('uuid');
@@ -51,6 +53,7 @@ export class MissionPanel implements OnInit {
     this.http.getDetailedMission(this.projectUUID!, name).subscribe({
       next: result => {
         this.currentMission = result;
+        this.missionState.setMission(result)
       }, error: error => {
         NotificationService.showError(error);
       }
