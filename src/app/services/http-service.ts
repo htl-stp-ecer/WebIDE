@@ -7,7 +7,7 @@ import {Mission} from '../entities/Mission';
   providedIn: 'root'
 })
 export class HttpService {
-  private ipSubject = new BehaviorSubject<string>(''); // default empty
+  private ipSubject = new BehaviorSubject<string>('');
   ip$ = this.ipSubject.asObservable();
 
   constructor(private http: HttpClient) {}
@@ -58,5 +58,13 @@ export class HttpService {
     return this.http.post(`${this.ip}/api/v1/missions/${projectUUID}`, {
       name: name
     });
+  }
+
+  updateMission(projectUUID: string, mission: Mission) {
+    return this.http.put(`${this.ip}/api/v1/missions/${projectUUID}/update`, mission);
+  }
+
+  getDetailedMission(projectUUID: string, name: string) {
+    return this.http.get<Mission>(`${this.ip}/api/v1/missions/${projectUUID}/detailed/${name}`);
   }
 }
