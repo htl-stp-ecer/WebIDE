@@ -1,4 +1,4 @@
-import {Component, effect, signal, viewChild} from '@angular/core';
+import {AfterViewChecked, Component, effect, QueryList, signal, viewChild, ViewChildren, ElementRef} from '@angular/core';
 import { FCanvasComponent, FCreateConnectionEvent, FCreateNodeEvent, FFlowComponent, FFlowModule } from '@foblex/flow';
 import { generateGuid } from '@foblex/utils';
 import { InputNumberModule } from 'primeng/inputnumber';
@@ -31,151 +31,198 @@ interface FlowNode {
   templateUrl: './flowchart.html',
   styleUrl: './flowchart.scss'
 })
-export class Flowchart {
+export class Flowchart implements AfterViewChecked {
   isDarkMode = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
 
   nodes = signal<FlowNode[]>([]);
   connections = signal<{ outputId: string, inputId: string }[]>([]);
   fCanvas = viewChild(FCanvasComponent);
 
+  private startNodeId = 'start-node';
   private startOutputId = 'start-node-output';
+
+  private stepToNodeId: Map<MissionStep, string> = new Map();
+  private needsAdjust: boolean = false;
+
+  @ViewChildren('nodeElement') nodeElements!: QueryList<ElementRef<HTMLDivElement>>;
 
   constructor(private missionState: MissionStateService, private stepsState: StepsStateService) {
     effect(() => {
       const mission = this.missionState.currentMission();
       if (mission) {
-        this.generateFlowFromMission(mission);
+        this.generateStructure(mission);
+        this.needsAdjust = true;
       }
     });
   }
 
-  private generateFlowFromMission(mission: Mission) {
-    const nodes: FlowNode[] = [];
-    const connections: { outputId: string, inputId: string }[] = [];
+  ngAfterViewChecked(): void {
+    if (this.needsAdjust) {
+      this.needsAdjust = false;
+      this.adjustPositions();
+    }
+  }
 
-    const nodeSpacing = 200;
-    const nodeWidth = 200; // Width between sibling nodes
-    const nodeHeight = 150; // Approximate node height
-    const verticalSpacing = 250; // Vertical spacing between levels
-    const baseX = 300;
-    let currentY = 300;
-
-    let previousExitIds = [this.startOutputId];
-
-    for (const missionStep of mission.steps) {
-      const position = { x: baseX, y: currentY };
-      const { entryIds, exitIds, maxY, width } = this.processStepWithSiblings(
-        [missionStep],
-        position,
-        0,
-        nodes,
-        connections,
-        nodeWidth,
-        nodeHeight,
-        verticalSpacing
-      );
-
-      // Connect all previous exits to all current entries
-      for (const prevExitId of previousExitIds) {
-        for (const entryId of entryIds) {
-          connections.push({
-            outputId: prevExitId,
-            inputId: entryId
-          });
-        }
+  private getNodeHeights(): Map<string, number> {
+    const heights = new Map<string, number>();
+    this.nodeElements.forEach(el => {
+      const id = el.nativeElement.dataset["nodeId"];
+      if (id) {
+        heights.set(id, el.nativeElement.offsetHeight);
       }
+    });
+    return heights;
+  }
 
-      previousExitIds = exitIds;
+  private adjustPositions(): void {
+    const nodeHeights = this.getNodeHeights();
+    const startHeight = nodeHeights.get(this.startNodeId) ?? 80;
+    let currentY = startHeight + 100;
 
-      // Advance currentY for the next top-level node
-      currentY = maxY + nodeSpacing;
+    const newNodes = this.nodes().map(n => ({ ...n, position: { ...n.position } }));
+
+    const updatePosition = (id: string, pos: { x: number; y: number }) => {
+      const node = newNodes.find(n => n.id === id)!;
+      node.position = pos;
+    };
+
+    const mission = this.missionState.currentMission();
+    if (mission) {
+      for (const missionStep of mission.steps) {
+        const startPos = { x: 300, y: currentY };
+        const res = this.assignPositions([missionStep], startPos, 200, 100, updatePosition, nodeHeights);
+        currentY = res.maxY + 100;
+      }
     }
 
-    // Update signals
+    this.nodes.set(newNodes);
+    this.fCanvas()?.resetScaleAndCenter(false);
+  }
+
+  private assignPositions(
+    missionSteps: MissionStep[],
+    startPosition: { x: number; y: number },
+    nodeWidth: number,
+    verticalSpacing: number,
+    updatePosition: (id: string, pos: { x: number; y: number }) => void,
+    nodeHeights: Map<string, number>
+  ): { maxY: number; width: number } {
+    if (missionSteps.length === 0) {
+      return { maxY: startPosition.y, width: 0 };
+    }
+
+    const siblingHeights = missionSteps.map(step => {
+      const nodeId = this.stepToNodeId.get(step);
+      return nodeId ? nodeHeights.get(nodeId) ?? 80 : 80;
+    });
+    const maxSiblingHeight = Math.max(...siblingHeights);
+
+    const totalWidth = (missionSteps.length - 1) * nodeWidth;
+    const startX = startPosition.x - totalWidth / 2;
+
+    let maxY = startPosition.y;
+
+    for (let i = 0; i < missionSteps.length; i++) {
+      const missionStep = missionSteps[i];
+      const nodeId = this.stepToNodeId.get(missionStep);
+      if (!nodeId) continue;
+
+      const siblingX = startX + (i * nodeWidth);
+      const pos = { x: siblingX, y: startPosition.y };
+      updatePosition(nodeId, pos);
+
+      const nodeHeight = siblingHeights[i];
+
+      let currentMaxY = startPosition.y + nodeHeight;
+
+      if (missionStep.children && missionStep.children.length > 0) {
+        const childPosition = { x: siblingX, y: startPosition.y + maxSiblingHeight + verticalSpacing };
+        const childResult = this.assignPositions(
+          missionStep.children,
+          childPosition,
+          nodeWidth,
+          verticalSpacing,
+          updatePosition,
+          nodeHeights
+        );
+        currentMaxY = childResult.maxY;
+      }
+
+      maxY = Math.max(maxY, currentMaxY);
+    }
+
+    return { maxY, width: totalWidth + nodeWidth };
+  }
+
+  private generateStructure(mission: Mission) {
+    this.stepToNodeId.clear();
+
+    const nodes: FlowNode[] = [];
+    const connections: { outputId: string; inputId: string }[] = [];
+
+    let previousExitIds: string[] = [this.startOutputId];
+
+    for (const missionStep of mission.steps) {
+      const result = this.createNodesAndConnections(
+        [missionStep],
+        previousExitIds,
+        nodes,
+        connections
+      );
+      previousExitIds = result.exitIds;
+    }
+
     this.nodes.set(nodes);
     this.connections.set(connections);
   }
 
-  private processStepWithSiblings(
+  private createNodesAndConnections(
     missionSteps: MissionStep[],
-    startPosition: { x: number; y: number },
-    level: number,
+    parentExitIds: string[],
     nodes: FlowNode[],
-    connections: { outputId: string, inputId: string }[],
-    nodeWidth: number,
-    nodeHeight: number,
-    verticalSpacing: number
-  ): { entryIds: string[]; exitIds: string[]; maxY: number; width: number } {
+    connections: { outputId: string; inputId: string }[]
+  ): { entryIds: string[]; exitIds: string[] } {
     const entryIds: string[] = [];
     const exitIds: string[] = [];
-    let maxY = startPosition.y + nodeHeight;
 
-    // Calculate total width needed for all siblings
-    const totalWidth = (missionSteps.length - 1) * nodeWidth;
-    const startX = startPosition.x - totalWidth / 2;
-
-    // Process each sibling
-    for (let i = 0; i < missionSteps.length; i++) {
-      const missionStep = missionSteps[i];
-      const siblingX = startX + (i * nodeWidth);
-      const siblingPosition = { x: siblingX, y: startPosition.y };
-
+    for (const missionStep of missionSteps) {
       const nodeId = generateGuid();
+      this.stepToNodeId.set(missionStep, nodeId);
+
       const inputId = nodeId + '-input';
       const outputId = nodeId + '-output';
 
       const node: FlowNode = {
         id: nodeId,
         text: missionStep.function_name,
-        position: siblingPosition,
+        position: { x: 0, y: 0 },
         step: this.convertMissionStepToStep(missionStep),
         args: this.initializeArgs(missionStep)
       };
       nodes.push(node);
 
-      entryIds.push(inputId);
-      let currentExitIds = [outputId];
-      let currentMaxY = startPosition.y + nodeHeight;
-
-      // Process children if they exist
-      if (missionStep.children && missionStep.children.length > 0) {
-        const childY = startPosition.y + verticalSpacing;
-        const childPosition = { x: siblingX, y: childY };
-
-        const childResult = this.processStepWithSiblings(
-          missionStep.children,
-          childPosition,
-          level + 1,
-          nodes,
-          connections,
-          nodeWidth,
-          nodeHeight,
-          verticalSpacing
-        );
-
-        // Connect this node's output to all child entries
-        for (const childEntryId of childResult.entryIds) {
-          connections.push({
-            outputId: outputId,
-            inputId: childEntryId
-          });
-        }
-
-        currentExitIds = childResult.exitIds;
-        currentMaxY = childResult.maxY;
+      for (const parentExitId of parentExitIds) {
+        connections.push({ outputId: parentExitId, inputId });
       }
 
-      // Update exit IDs and maxY
+      entryIds.push(inputId);
+
+      let currentExitIds: string[] = [outputId];
+
+      if (missionStep.children && missionStep.children.length > 0) {
+        const childResult = this.createNodesAndConnections(
+          missionStep.children,
+          [outputId],
+          nodes,
+          connections
+        );
+        currentExitIds = childResult.exitIds;
+      }
+
       exitIds.push(...currentExitIds);
-      maxY = Math.max(maxY, currentMaxY);
     }
 
-    return {
-      entryIds,
-      exitIds,
-      maxY,
-      width: totalWidth + nodeWidth // Include the width of the rightmost node
-    };
+    return { entryIds, exitIds };
   }
 
   private convertMissionStepToStep(missionStep: MissionStep): Step {

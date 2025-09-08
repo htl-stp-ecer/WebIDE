@@ -25,7 +25,9 @@
          class="relative w-48 p-4 text-center
               bg-[#eee5e9] border border-[#383838] rounded-xl
               shadow hover:shadow-lg transition-shadow duration-200
-              dark:bg-[#131217] dark:border-[#383838] dark:text-[#EEE5E9] flex flex-col gap-2">
+              dark:bg-[#131217] dark:border-[#383838] dark:text-[#EEE5E9] flex flex-col gap-2"
+         [attr.data-node-id]="'start-node'"
+         #nodeElement>
 
       <!-- Node content -->
       <div class="font-semibold">Start</div>
@@ -55,7 +57,9 @@
            class="relative w-48 p-4 text-center
                   bg-[#eee5e9] border border-[#383838] rounded-xl
                   shadow hover:shadow-lg transition-shadow duration-200
-                  dark:bg-[#131217] dark:border-[#383838] dark:text-[#EEE5E9] flex flex-col gap-2">
+                  dark:bg-[#131217] dark:border-[#383838] dark:text-[#EEE5E9] flex flex-col gap-2"
+           [attr.data-node-id]="node.id"
+           #nodeElement>
 
         <!-- Fixed: Use consistent ID naming that matches TypeScript -->
         <div fNodeInput
