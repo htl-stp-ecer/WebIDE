@@ -8,6 +8,7 @@ import { FormsModule } from '@angular/forms';
 import {MissionStateService} from '../../services/mission-sate-service';
 import {Mission} from '../../entities/Mission';
 import {MissionStep} from '../../entities/MissionStep';
+import {StepsStateService} from '../../services/steps-state-service';
 
 interface FlowNode {
   id: string;
@@ -39,12 +40,11 @@ export class Flowchart {
 
   private startOutputId = 'start-node-output';
 
-  constructor(private missionState: MissionStateService) {
+  constructor(private missionState: MissionStateService, private stepsState: StepsStateService) {
     effect(() => {
       const mission = this.missionState.currentMission();
       if (mission) {
         this.generateFlowFromMission(mission);
-        console.log(mission);
       }
     });
   }
@@ -179,36 +179,71 @@ export class Flowchart {
   }
 
   private convertMissionStepToStep(missionStep: MissionStep): Step {
-    return {
-      name: missionStep.function_name,
-      import: '',
-      arguments: missionStep.arguments.map(arg => ({
-        name: arg.name,
-        type: arg.type,
-        import: null,
-        optional: false,
-        default: arg.value // Fixed: Use arg.value as the default, not undefined
-      })),
-      file: ''
-    };
+    const availableSteps = this.stepsState.currentSteps();
+    const actualStep = availableSteps?.find(step => step.name === missionStep.function_name);
+    if (actualStep) {
+      return actualStep;
+    } else {
+      return {
+        name: missionStep.function_name,
+        import: '',
+        arguments: missionStep.arguments.map((arg, index) => ({
+          name: arg.name || `arg${index}`,
+          type: arg.type,
+          import: null,
+          optional: false,
+          default: arg.value
+        })),
+        file: ''
+      };
+    }
   }
 
   private initializeArgs(missionStep: MissionStep): { [key: string]: boolean | string | number | null } {
     const args: { [key: string]: boolean | string | number | null } = {};
 
-    missionStep.arguments.forEach(arg => {
-      if (arg.value !== null && arg.value !== '') {
-        if (arg.type === 'bool') {
-          args[arg.name] = arg.value.toLowerCase() === 'true';
-        } else if (arg.type === 'float') {
-          args[arg.name] = parseFloat(arg.value) || null;
-        } else {
-          args[arg.name] = arg.value;
+    // Get the actual step definition to use its argument structure
+    const availableSteps = this.stepsState.currentSteps();
+    const actualStep = availableSteps?.find(step => step.name === missionStep.function_name);
+
+    if (actualStep) {
+      // Initialize args based on the actual step definition, mapping by index
+      actualStep.arguments.forEach((stepArg, index) => {
+        const missionArg = missionStep.arguments[index];
+        let value: string = '';
+        if (missionArg && missionArg.value !== null && missionArg.value !== '') {
+          // Use the value from missionStep if available
+          value = missionArg.value;
+        } else if (stepArg.default !== null && stepArg.default !== '') {
+          // Use the default from the step definition
+          value = stepArg.default;
         }
-      } else {
-        args[arg.name] = arg.type === 'bool' ? false : arg.type === 'float' ? null : '';
-      }
-    });
+
+        if (stepArg.type === 'bool') {
+          args[stepArg.name] = String(value).toLowerCase() === 'true';
+        } else if (stepArg.type === 'float') {
+          args[stepArg.name] = parseFloat(value) || null;
+        } else {
+          args[stepArg.name] = value;
+        }
+      });
+    } else {
+      // Fallback to original logic if step not found, using index if name is null
+      missionStep.arguments.forEach((arg, index) => {
+        const argName = arg.name || `arg${index}`;
+        let value: string = arg.value;
+        if (value === null || value === '') {
+          value = '';
+        }
+        if (arg.type === 'bool') {
+          args[argName] = value.toLowerCase() === 'true';
+        } else if (arg.type === 'float') {
+          args[argName] = parseFloat(value) || null;
+        } else {
+          args[argName] = value;
+        }
+      });
+    }
 
     return args;
   }

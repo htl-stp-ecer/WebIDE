@@ -1,6 +1,7 @@
 import {Component, OnInit} from '@angular/core';
 import {FExternalItemDirective} from '@foblex/flow';
 import {HttpService} from '../../services/http-service';
+import {StepsStateService} from '../../services/steps-state-service';
 
 @Component({
   selector: 'app-step-panel',
@@ -13,13 +14,14 @@ import {HttpService} from '../../services/http-service';
 export class StepPanel implements OnInit {
   steps: Step[] = [];
 
-  constructor(private http: HttpService) {
+  constructor(private http: HttpService, private stepStateService: StepsStateService) {
 
   }
 
   ngOnInit(): void {
     this.http.getAllSteps().subscribe(steps => {
       this.steps = steps
+      this.stepStateService.setSteps(steps)
     });
   }
 
