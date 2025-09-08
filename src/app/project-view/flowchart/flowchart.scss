@@ -1,33 +1,151 @@
-.node-box {
-  background-color: #eee5e9;
-  border: 1px solid #63b0cd;
-  border-radius: 8px;
-  padding: 8px;
-  text-align: center;
-  width: 140px;
+/* Fill parent and remove stray spacing */
+:host {
+  display: block;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+/* Wrapper ensures no extra bottom gap */
+.flow-wrapper {
   position: relative;
+  inset: 0;
+  height: 100%;
+  width: 100%;
 }
 
-.node-content {
-  margin: 8px 0;
+/* Make sure f-flow / canvas consume all space and have zero margin/padding */
+:host ::ng-deep f-flow.flow-root,
+:host ::ng-deep f-canvas.flow-canvas,
+:host ::ng-deep f-background.flow-bg {
+  display: block;
+  height: 100%;
+  width: 100%;
+  margin: 0 !important;
+  padding: 0 !important;
 }
 
-.top, .bottom {
-  width: 12px;
-  height: 12px;
-  background-color: #63b0cd;
-  border-radius: 50%;
+/* Prevent any accidental spacing from internal wrappers */
+:host ::ng-deep f-flow.flow-root > * {
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+/* Node styling */
+.node {
+  position: relative;
+  width: 12rem; /* w-48 */
+  padding: 1rem; /* p-4 */
+  text-align: center;
+
+  background: #eee5e9;
+  border: 1px solid #383838;
+  border-radius: 0.75rem;
+  color: #131217;
+
+  box-shadow: 0 1px 2px rgba(0,0,0,.08);
+
+  /* Key fix: prevent child inputs from exceeding node width */
+  box-sizing: border-box;
+  * { box-sizing: border-box; }
+  min-width: 0; /* allow flex children to shrink properly */
+}
+
+@media (prefers-color-scheme: dark) {
+  .node {
+    background: #131217;
+    border-color: #383838;
+    color: #EEE5E9;
+  }
+}
+
+.node-title {
+  font-weight: 600;
+  word-break: break-word;
+}
+
+/* Ports */
+.port {
   position: absolute;
-}
-
-.top {
-  top: -6px;
+  width: 0.75rem;  /* 12px */
+  height: 0.75rem;
+  background: #383838;
+  border-radius: 9999px;
   left: 50%;
   transform: translateX(-50%);
 }
+.port-top { top: -0.375rem; }
+.port-bottom { bottom: -0.375rem; }
 
-.bottom {
-  bottom: -6px;
-  left: 50%;
-  transform: translateX(-50%);
+/* Args */
+.node-args {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  overflow: hidden; /* keeps long content clipped inside */
+}
+
+.arg {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0; /* critical to allow children to max at 100% */
+}
+
+.arg-label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Shared input baseline */
+.arg-input {
+  display: block;
+  width: 100% !important;
+  max-width: 100%;
+  padding: 0.25rem;
+  border-radius: 0.25rem;
+  border: 1px solid #d1d5db;
+  background: #fff;
+  font-size: 0.875rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* PrimeNG text input specifically */
+:host ::ng-deep .node .p-inputtext.arg-input {
+  width: 100% !important;
+  max-width: 100%;
+}
+
+/* PrimeNG InputNumber wrapper + inner input to full width */
+:host ::ng-deep .node .p-inputnumber.arg-number {
+  width: 100% !important;
+  max-width: 100%;
+}
+:host ::ng-deep .node .p-inputnumber.arg-number .p-inputtext.arg-input {
+  width: 100% !important;
+  max-width: 100%;
+}
+
+/* PrimeNG Checkbox stays centered and never widens layout */
+:host ::ng-deep .node .p-checkbox {
+  display: inline-flex;
+}
+
+/* Dark mode inputs */
+@media (prefers-color-scheme: dark) {
+  .arg-input {
+    border-color: #4b5563;
+    background: #1f2937;
+    color: #eee;
+  }
+}
+
+/* Ensure PrimeNG context menu never steals layout height */
+:host ::ng-deep .p-contextmenu {
+  position: fixed !important;
 }

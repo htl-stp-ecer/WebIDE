@@ -1,116 +1,127 @@
-<f-flow fDraggable
-        (fLoaded)="onLoaded()"
-        (fCreateNode)="onCreateNode($event)"
-        (fCreateConnection)="addConnection($event)">
-  <f-background>
-    <f-circle-pattern color="#4a5565"></f-circle-pattern>
-  </f-background>
+<div class="flow-wrapper">
+  <f-flow
+    class="flow-root"
+    fDraggable
+    (fLoaded)="onLoaded()"
+    (fCreateNode)="onCreateNode($event)"
+    (fCreateConnection)="addConnection($event)"
+  >
+    <f-background class="flow-bg">
+      <f-circle-pattern color="#4a5565"></f-circle-pattern>
+    </f-background>
 
-  <f-canvas fZoom>
-    <f-connection-for-create
-      fType="segment"
-      [fStartColor]="isDarkMode ? '#EEE5E9' : '#131217'"
-      [fEndColor]="isDarkMode ? '#EEE5E9' : '#131217'"></f-connection-for-create>
-    <f-snap-connection
-      [fSnapThreshold]="50"
-      fType="segment"
-      [fStartColor]="isDarkMode ? '#EEE5E9' : '#131217'"
-      [fEndColor]="isDarkMode ? '#EEE5E9' : '#131217'"
-    ></f-snap-connection>
+    <f-canvas fZoom class="flow-canvas">
+      <f-connection-for-create
+        fType="segment"
+        [fStartColor]="isDarkMode ? '#EEE5E9' : '#131217'"
+        [fEndColor]="isDarkMode ? '#EEE5E9' : '#131217'"
+      ></f-connection-for-create>
 
-    <!-- Start Node -->
-    <div fNode
-         [fNodeId]="'start-node'"
-         [fNodePosition]="{x: 300, y: 0}"
-         class="relative w-48 p-4 text-center
-              bg-[#eee5e9] border border-[#383838] rounded-xl
-              shadow hover:shadow-lg transition-shadow duration-200
-              dark:bg-[#131217] dark:border-[#383838] dark:text-[#EEE5E9] flex flex-col gap-2"
-         [attr.data-node-id]="'start-node'"
-         #nodeElement>
+      <f-snap-connection
+        [fSnapThreshold]="50"
+        fType="segment"
+        [fStartColor]="isDarkMode ? '#EEE5E9' : '#131217'"
+        [fEndColor]="isDarkMode ? '#EEE5E9' : '#131217'"
+      ></f-snap-connection>
 
-      <!-- Node content -->
-      <div class="font-semibold">Start</div>
-
-      <!-- Fixed: Use consistent ID naming that matches TypeScript -->
-      <div fNodeOutput
-           fOutputConnectableSide="bottom"
-           [fOutputId]="'start-node-output'"
-           class="absolute w-3 h-3 bg-[#383838] rounded-full -bottom-1.5 left-1/2 -translate-x-1/2"></div>
-    </div>
-
-    <!-- Connections -->
-    @for (connection of connections(); track connection.outputId + '-' + connection.inputId) {
-      <f-connection [fReassignDisabled]="true" fType="segment"
-                    [fOutputId]="connection.outputId" [fInputId]="connection.inputId"
-                    [fStartColor]="isDarkMode ? '#EEE5E9' : '#131217'"
-                    [fEndColor]="isDarkMode ? '#EEE5E9' : '#131217'">
-      </f-connection>
-    }
-
-    <!-- Mission Step Nodes -->
-    @for (node of nodes(); track node.id) {
-      <div fNode
-           fDragHandle
-           [fNodeId]="node.id"
-           [fNodePosition]="node.position"
-           class="relative w-48 p-4 text-center
-                  bg-[#eee5e9] border border-[#383838] rounded-xl
-                  shadow hover:shadow-lg transition-shadow duration-200
-                  dark:bg-[#131217] dark:border-[#383838] dark:text-[#EEE5E9] flex flex-col gap-2"
-           [attr.data-node-id]="node.id"
-           #nodeElement>
-
-        <!-- Fixed: Use consistent ID naming that matches TypeScript -->
-        <div fNodeInput
-             fInputConnectableSide="top"
-             [fInputId]="node.id + '-input'"
-             class="absolute w-3 h-3 bg-[#383838] rounded-full -top-1.5 left-1/2 -translate-x-1/2"></div>
-
-        <!-- Node content -->
-        <div class="font-semibold">{{ node.text }}</div>
-
-        <!-- Arguments - Show for all nodes that have arguments -->
-        @if (node.step.arguments && node.step.arguments.length > 0) {
-          <div class="flex flex-col gap-2 mt-2">
-            @for (arg of node.step.arguments; track arg.name) {
-              <div class="flex flex-col gap-1">
-                <label class="text-sm font-medium">{{ arg.name }} ({{ arg.type }})</label>
-                @if (arg.type === 'bool') {
-                  <p-checkbox
-                    [(ngModel)]="node.args[arg.name]"
-                    [binary]="true"
-                    class="mx-auto">
-                  </p-checkbox>
-                } @else if (arg.type === 'str') {
-                  <input
-                    pInputText
-                    [(ngModel)]="node.args[arg.name]"
-                    class="w-full p-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm"
-                    placeholder="{{ arg.default || 'Enter ' + arg.name }}"
-                  />
-                } @else if (arg.type === 'float') {
-                  <p-inputNumber
-                    [(ngModel)]="node.args[arg.name]"
-                    mode="decimal"
-                    [minFractionDigits]="1"
-                    [maxFractionDigits]="2"
-                    class="w-full"
-                    inputStyleClass="w-full p-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm"
-                    placeholder="{{ arg.default || 'Enter ' + arg.name }}"
-                  ></p-inputNumber>
-                }
-              </div>
-            }
-          </div>
-        }
-
-        <!-- Fixed: Use consistent ID naming that matches TypeScript -->
-        <div fNodeOutput
-             fOutputConnectableSide="bottom"
-             [fOutputId]="node.id + '-output'"
-             class="absolute w-3 h-3 bg-[#383838] rounded-full -bottom-1.5 left-1/2 -translate-x-1/2"></div>
+      <!-- Start Node -->
+      <div
+        fNode
+        [fNodeId]="'start-node'"
+        [fNodePosition]="{ x: 300, y: 0 }"
+        class="node"
+        [attr.data-node-id]="'start-node'"
+        #nodeElement
+      >
+        <div class="node-title">Start</div>
+        <div
+          fNodeOutput
+          fOutputConnectableSide="bottom"
+          [fOutputId]="'start-node-output'"
+          class="port port-bottom"
+        ></div>
       </div>
-    }
-  </f-canvas>
-</f-flow>
+
+      <!-- Connections -->
+      @for (connection of connections(); track connection.outputId + '-' + connection.inputId) {
+        <f-connection
+          [fReassignDisabled]="true"
+          fType="segment"
+          [fOutputId]="connection.outputId"
+          [fInputId]="connection.inputId"
+          [fStartColor]="isDarkMode ? '#EEE5E9' : '#131217'"
+          [fEndColor]="isDarkMode ? '#EEE5E9' : '#131217'"
+        >
+        </f-connection>
+      }
+
+      <!-- Mission Step Nodes -->
+      @for (node of nodes(); track node.id) {
+        <div
+          fNode
+          fDragHandle
+          [fNodeId]="node.id"
+          [fNodePosition]="node.position"
+          class="node"
+          [attr.data-node-id]="node.id"
+          (contextmenu)="onRightClick($event, node.id)"
+          #nodeElement
+        >
+          <div
+            fNodeInput
+            fInputConnectableSide="top"
+            [fInputId]="node.id + '-input'"
+            class="port port-top"
+          ></div>
+
+          <div class="node-title">{{ node.text }}</div>
+
+          @if (node.step.arguments && node.step.arguments.length > 0) {
+            <div class="node-args">
+              @for (arg of node.step.arguments; track arg.name) {
+                <div class="arg">
+                  <label class="arg-label">{{ arg.name }} ({{ arg.type }})</label>
+
+                  @if (arg.type === 'bool') {
+                    <p-checkbox
+                      [(ngModel)]="node.args[arg.name]"
+                      [binary]="true"
+                      class="mx-auto"
+                    ></p-checkbox>
+                  } @else if (arg.type === 'str') {
+                    <input
+                      pInputText
+                      [(ngModel)]="node.args[arg.name]"
+                      class="arg-input p-inputtext"
+                      [placeholder]="arg.default || ('Enter ' + arg.name)"
+                    />
+                  } @else if (arg.type === 'float') {
+                    <p-inputNumber
+                      [(ngModel)]="node.args[arg.name]"
+                      mode="decimal"
+                      [minFractionDigits]="1"
+                      [maxFractionDigits]="2"
+                      styleClass="arg-number"
+                      inputStyleClass="arg-input"
+                      [placeholder]="arg.default || ('Enter ' + arg.name)"
+                    ></p-inputNumber>
+                  }
+                </div>
+              }
+            </div>
+          }
+
+          <div
+            fNodeOutput
+            fOutputConnectableSide="bottom"
+            [fOutputId]="node.id + '-output'"
+            class="port port-bottom"
+          ></div>
+        </div>
+      }
+    </f-canvas>
+  </f-flow>
+
+  <!-- Append to body so it never shifts layout -->
+  <p-contextMenu #cm [model]="items" [appendTo]="'body'"></p-contextMenu>
+</div>

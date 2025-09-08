@@ -1,4 +1,4 @@
-import {AfterViewChecked, Component, effect, QueryList, signal, viewChild, ViewChildren, ElementRef} from '@angular/core';
+import {AfterViewChecked, Component, effect, QueryList, signal, viewChild, ViewChildren, ElementRef, ViewChild} from '@angular/core';
 import { FCanvasComponent, FCreateConnectionEvent, FCreateNodeEvent, FFlowComponent, FFlowModule } from '@foblex/flow';
 import { generateGuid } from '@foblex/utils';
 import { InputNumberModule } from 'primeng/inputnumber';
@@ -9,7 +9,9 @@ import {MissionStateService} from '../../services/mission-sate-service';
 import {Mission} from '../../entities/Mission';
 import {MissionStep} from '../../entities/MissionStep';
 import {StepsStateService} from '../../services/steps-state-service';
-
+import { ContextMenuModule } from 'primeng/contextmenu';
+import { ContextMenu } from 'primeng/contextmenu';
+import { MenuItem } from 'primeng/api';
 interface FlowNode {
   id: string;
   text: string;
@@ -17,7 +19,6 @@ interface FlowNode {
   step: Step;
   args: { [key: string]: boolean | string | number | null };
 }
-
 @Component({
   selector: 'app-flowchart',
   imports: [
@@ -26,26 +27,28 @@ interface FlowNode {
     InputNumberModule,
     CheckboxModule,
     InputTextModule,
-    FormsModule
+    FormsModule,
+    ContextMenuModule
   ],
   templateUrl: './flowchart.html',
   styleUrl: './flowchart.scss'
 })
 export class Flowchart implements AfterViewChecked {
   isDarkMode = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-
   nodes = signal<FlowNode[]>([]);
   connections = signal<{ outputId: string, inputId: string }[]>([]);
   fCanvas = viewChild(FCanvasComponent);
-
   private startNodeId = 'start-node';
   private startOutputId = 'start-node-output';
-
   private stepToNodeId: Map<MissionStep, string> = new Map();
+  private nodeIdToStep: Map<string, MissionStep> = new Map();
   private needsAdjust: boolean = false;
-
   @ViewChildren('nodeElement') nodeElements!: QueryList<ElementRef<HTMLDivElement>>;
-
+  @ViewChild('cm') cm!: ContextMenu;
+  items: MenuItem[] = [
+    { label: 'Delete', icon: 'pi pi-trash', command: () => this.deleteNode() }
+  ];
+  private selectedNodeId: string = '';
   constructor(private missionState: MissionStateService, private stepsState: StepsStateService) {
     effect(() => {
       const mission = this.missionState.currentMission();
@@ -55,14 +58,12 @@ export class Flowchart implements AfterViewChecked {
       }
     });
   }
-
   ngAfterViewChecked(): void {
     if (this.needsAdjust) {
       this.needsAdjust = false;
       this.adjustPositions();
     }
   }
-
   private getNodeHeights(): Map<string, number> {
     const heights = new Map<string, number>();
     this.nodeElements.forEach(el => {
@@ -73,19 +74,15 @@ export class Flowchart implements AfterViewChecked {
     });
     return heights;
   }
-
   private adjustPositions(): void {
     const nodeHeights = this.getNodeHeights();
     const startHeight = nodeHeights.get(this.startNodeId) ?? 80;
     let currentY = startHeight + 100;
-
     const newNodes = this.nodes().map(n => ({ ...n, position: { ...n.position } }));
-
     const updatePosition = (id: string, pos: { x: number; y: number }) => {
       const node = newNodes.find(n => n.id === id)!;
       node.position = pos;
     };
-
     const mission = this.missionState.currentMission();
     if (mission) {
       for (const missionStep of mission.steps) {
@@ -94,11 +91,8 @@ export class Flowchart implements AfterViewChecked {
         currentY = res.maxY + 100;
       }
     }
-
     this.nodes.set(newNodes);
-    this.fCanvas()?.resetScaleAndCenter(false);
   }
-
   private assignPositions(
     missionSteps: MissionStep[],
     startPosition: { x: number; y: number },
@@ -110,31 +104,23 @@ export class Flowchart implements AfterViewChecked {
     if (missionSteps.length === 0) {
       return { maxY: startPosition.y, width: 0 };
     }
-
     const siblingHeights = missionSteps.map(step => {
       const nodeId = this.stepToNodeId.get(step);
       return nodeId ? nodeHeights.get(nodeId) ?? 80 : 80;
     });
     const maxSiblingHeight = Math.max(...siblingHeights);
-
     const totalWidth = (missionSteps.length - 1) * nodeWidth;
     const startX = startPosition.x - totalWidth / 2;
-
     let maxY = startPosition.y;
-
     for (let i = 0; i < missionSteps.length; i++) {
       const missionStep = missionSteps[i];
       const nodeId = this.stepToNodeId.get(missionStep);
       if (!nodeId) continue;
-
       const siblingX = startX + (i * nodeWidth);
       const pos = { x: siblingX, y: startPosition.y };
       updatePosition(nodeId, pos);
-
       const nodeHeight = siblingHeights[i];
-
       let currentMaxY = startPosition.y + nodeHeight;
-
       if (missionStep.children && missionStep.children.length > 0) {
         const childPosition = { x: siblingX, y: startPosition.y + maxSiblingHeight + verticalSpacing };
         const childResult = this.assignPositions(
@@ -147,21 +133,16 @@ export class Flowchart implements AfterViewChecked {
         );
         currentMaxY = childResult.maxY;
       }
-
       maxY = Math.max(maxY, currentMaxY);
     }
-
     return { maxY, width: totalWidth + nodeWidth };
   }
-
   private generateStructure(mission: Mission) {
     this.stepToNodeId.clear();
-
+    this.nodeIdToStep.clear();
     const nodes: FlowNode[] = [];
     const connections: { outputId: string; inputId: string }[] = [];
-
     let previousExitIds: string[] = [this.startOutputId];
-
     for (const missionStep of mission.steps) {
       const result = this.createNodesAndConnections(
         [missionStep],
@@ -171,11 +152,9 @@ export class Flowchart implements AfterViewChecked {
       );
       previousExitIds = result.exitIds;
     }
-
     this.nodes.set(nodes);
     this.connections.set(connections);
   }
-
   private createNodesAndConnections(
     missionSteps: MissionStep[],
     parentExitIds: string[],
@@ -184,14 +163,12 @@ export class Flowchart implements AfterViewChecked {
   ): { entryIds: string[]; exitIds: string[] } {
     const entryIds: string[] = [];
     const exitIds: string[] = [];
-
     for (const missionStep of missionSteps) {
       const nodeId = generateGuid();
       this.stepToNodeId.set(missionStep, nodeId);
-
+      this.nodeIdToStep.set(nodeId, missionStep);
       const inputId = nodeId + '-input';
       const outputId = nodeId + '-output';
-
       const node: FlowNode = {
         id: nodeId,
         text: missionStep.function_name,
@@ -200,15 +177,11 @@ export class Flowchart implements AfterViewChecked {
         args: this.initializeArgs(missionStep)
       };
       nodes.push(node);
-
       for (const parentExitId of parentExitIds) {
         connections.push({ outputId: parentExitId, inputId });
       }
-
       entryIds.push(inputId);
-
       let currentExitIds: string[] = [outputId];
-
       if (missionStep.children && missionStep.children.length > 0) {
         const childResult = this.createNodesAndConnections(
           missionStep.children,
@@ -218,13 +191,10 @@ export class Flowchart implements AfterViewChecked {
         );
         currentExitIds = childResult.exitIds;
       }
-
       exitIds.push(...currentExitIds);
     }
-
     return { entryIds, exitIds };
   }
-
   private convertMissionStepToStep(missionStep: MissionStep): Step {
     const availableSteps = this.stepsState.currentSteps();
     const actualStep = availableSteps?.find(step => step.name === missionStep.function_name);
@@ -245,14 +215,11 @@ export class Flowchart implements AfterViewChecked {
       };
     }
   }
-
   private initializeArgs(missionStep: MissionStep): { [key: string]: boolean | string | number | null } {
     const args: { [key: string]: boolean | string | number | null } = {};
-
     // Get the actual step definition to use its argument structure
     const availableSteps = this.stepsState.currentSteps();
     const actualStep = availableSteps?.find(step => step.name === missionStep.function_name);
-
     if (actualStep) {
       // Initialize args based on the actual step definition, mapping by index
       actualStep.arguments.forEach((stepArg, index) => {
@@ -265,7 +232,6 @@ export class Flowchart implements AfterViewChecked {
           // Use the default from the step definition
           value = stepArg.default;
         }
-
         if (stepArg.type === 'bool') {
           args[stepArg.name] = String(value).toLowerCase() === 'true';
         } else if (stepArg.type === 'float') {
@@ -291,14 +257,11 @@ export class Flowchart implements AfterViewChecked {
         }
       });
     }
-
     return args;
   }
-
   onLoaded() {
     this.fCanvas()?.resetScaleAndCenter(false);
   }
-
   onCreateNode(event: FCreateNodeEvent) {
     const step = event.data as Step;
     const args: { [key: string]: boolean | string | number | null } = {};
@@ -315,7 +278,6 @@ export class Flowchart implements AfterViewChecked {
         args[arg.name] = arg.type === 'bool' ? false : arg.type === 'float' ? null : '';
       }
     });
-
     this.nodes.set([
       ...this.nodes(),
       {
@@ -326,14 +288,53 @@ export class Flowchart implements AfterViewChecked {
         args: args
       }
     ]);
+    this.needsAdjust = true;
   }
-
   public addConnection(event: FCreateConnectionEvent): void {
     if (!event.fInputId) return;
-
     this.connections.set([
       ...this.connections(),
       { outputId: event.fOutputId, inputId: event.fInputId }
     ]);
+  }
+  onRightClick(event: MouseEvent, nodeId: string) {
+    event.preventDefault();
+    this.selectedNodeId = nodeId;
+    this.cm.show(event);
+  }
+  deleteNode() {
+    const nodeId = this.selectedNodeId;
+    const stepToRemove = this.nodeIdToStep.get(nodeId);
+    if (stepToRemove) {
+      this.removeStepFromMission(stepToRemove);
+      this.stepToNodeId.delete(stepToRemove);
+      this.nodeIdToStep.delete(nodeId);
+    } else {
+      // For nodes not in mission (e.g., newly created)
+      this.nodes.set(this.nodes().filter(n => n.id !== nodeId));
+      const inputId = `${nodeId}-input`;
+      const outputId = `${nodeId}-output`;
+      this.connections.set(this.connections().filter(c => c.outputId !== outputId && c.inputId !== inputId));
+    }
+    this.needsAdjust = true;
+  }
+  private removeStepFromMission(stepToRemove: MissionStep) {
+    const mission = this.missionState.currentMission();
+    if (!mission) return;
+    // Remove from top-level steps
+    mission.steps = mission.steps.filter(s => s !== stepToRemove);
+    // Recursively remove from children
+    for (const step of mission.steps) {
+      this.removeStepFromChildren(step, stepToRemove);
+    }
+    // Manually regenerate structure since we mutated the mission
+    this.generateStructure(mission);
+  }
+  private removeStepFromChildren(parent: MissionStep, stepToRemove: MissionStep) {
+    if (!parent.children) return;
+    parent.children = parent.children.filter(c => c !== stepToRemove);
+    for (const child of parent.children) {
+      this.removeStepFromChildren(child, stepToRemove);
+    }
   }
 }
