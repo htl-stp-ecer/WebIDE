@@ -42,7 +42,7 @@
         ></div>
       </div>
 
-      <!-- Connections -->
+      <!-- Connections (mission + ad-hoc merged in TS) -->
       @for (connection of connections(); track connection.outputId + '-' + connection.inputId) {
         <f-connection
           [fReassignDisabled]="true"
@@ -55,7 +55,7 @@
         </f-connection>
       }
 
-      <!-- Mission Step Nodes -->
+      <!-- Nodes (mission + ad-hoc merged in TS) -->
       @for (node of nodes(); track node.id) {
         <div
           fNode
@@ -80,7 +80,6 @@
             <div class="node-args">
               @for (arg of node.step.arguments; track arg.name) {
                 <div class="arg">
-                  <!-- Tooltip always shows full text; label remains visually truncated -->
                   <label
                     class="arg-label"
                     pTooltip="{{ arg.name }} ({{ arg.type }})"

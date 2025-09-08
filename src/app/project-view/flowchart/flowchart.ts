@@ -1,18 +1,35 @@
-import {AfterViewChecked, Component, effect, QueryList, signal, viewChild, ViewChildren, ElementRef, ViewChild} from '@angular/core';
-import { FCanvasComponent, FCreateConnectionEvent, FCreateNodeEvent, FFlowComponent, FFlowModule } from '@foblex/flow';
+import {
+  AfterViewChecked,
+  Component,
+  effect,
+  QueryList,
+  signal,
+  viewChild,
+  ViewChildren,
+  ElementRef,
+  ViewChild
+} from '@angular/core';
+import {
+  FCanvasComponent,
+  FCreateConnectionEvent,
+  FCreateNodeEvent,
+  FFlowComponent,
+  FFlowModule
+} from '@foblex/flow';
 import { generateGuid } from '@foblex/utils';
 import { InputNumberModule } from 'primeng/inputnumber';
 import { CheckboxModule } from 'primeng/checkbox';
 import { InputTextModule } from 'primeng/inputtext';
 import { FormsModule } from '@angular/forms';
-import {MissionStateService} from '../../services/mission-sate-service';
-import {Mission} from '../../entities/Mission';
-import {MissionStep} from '../../entities/MissionStep';
-import {StepsStateService} from '../../services/steps-state-service';
+import { MissionStateService } from '../../services/mission-sate-service';
+import { Mission } from '../../entities/Mission';
+import { MissionStep } from '../../entities/MissionStep';
+import { StepsStateService } from '../../services/steps-state-service';
 import { ContextMenuModule } from 'primeng/contextmenu';
 import { ContextMenu } from 'primeng/contextmenu';
 import { MenuItem } from 'primeng/api';
-import {Tooltip} from 'primeng/tooltip';
+import { Tooltip } from 'primeng/tooltip';
+
 interface FlowNode {
   id: string;
   text: string;
@@ -20,6 +37,7 @@ interface FlowNode {
   step: Step;
   args: { [key: string]: boolean | string | number | null };
 }
+
 @Component({
   selector: 'app-flowchart',
   imports: [
@@ -37,20 +55,42 @@ interface FlowNode {
 })
 export class Flowchart implements AfterViewChecked {
   isDarkMode = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+  /**
+   * Public, merged, render-ready signals
+   */
   nodes = signal<FlowNode[]>([]);
-  connections = signal<{ outputId: string, inputId: string }[]>([]);
+  connections = signal<{ outputId: string; inputId: string }[]>([]);
+
+  /**
+   * Separate stores so mission rebuilds never touch ad-hoc items
+   */
+  private missionNodes = signal<FlowNode[]>([]);
+  private missionConnections = signal<{ outputId: string; inputId: string }[]>([]);
+  private adHocNodes = signal<FlowNode[]>([]);
+  private adHocConnections = signal<{ outputId: string; inputId: string }[]>([]);
+
   fCanvas = viewChild(FCanvasComponent);
-  private startNodeId = 'start-node';
-  private startOutputId = 'start-node-output';
+
+  private readonly startNodeId = 'start-node';
+  private readonly startOutputId = 'start-node-output';
+
+  /**
+   * Keep a stable mapping between MissionStep objects and nodeIds
+   * so regenerations won't break connections pointing to mission nodes.
+   */
   private stepToNodeId: Map<MissionStep, string> = new Map();
   private nodeIdToStep: Map<string, MissionStep> = new Map();
-  private needsAdjust: boolean = false;
+
+  private needsAdjust = false;
+
   @ViewChildren('nodeElement') nodeElements!: QueryList<ElementRef<HTMLDivElement>>;
   @ViewChild('cm') cm!: ContextMenu;
-  items: MenuItem[] = [
-    { label: 'Delete', icon: 'pi pi-trash', command: () => this.deleteNode() }
-  ];
+
+  items: MenuItem[] = [{ label: 'Delete', icon: 'pi pi-trash', command: () => this.deleteNode() }];
+
   private selectedNodeId: string = '';
+
   constructor(private missionState: MissionStateService, private stepsState: StepsStateService) {
     effect(() => {
       const mission = this.missionState.currentMission();
@@ -60,31 +100,44 @@ export class Flowchart implements AfterViewChecked {
       }
     });
   }
+
   ngAfterViewChecked(): void {
     if (this.needsAdjust) {
       this.needsAdjust = false;
       this.adjustPositions();
     }
   }
+
+  onLoaded() {
+    this.fCanvas()?.resetScaleAndCenter(false);
+  }
+
+  /**
+   * ===== Layout helpers =====
+   */
   private getNodeHeights(): Map<string, number> {
     const heights = new Map<string, number>();
-    this.nodeElements.forEach(el => {
-      const id = el.nativeElement.dataset["nodeId"];
-      if (id) {
-        heights.set(id, el.nativeElement.offsetHeight);
-      }
+    this.nodeElements.forEach((el) => {
+      const id = el.nativeElement.dataset['nodeId'];
+      if (id) heights.set(id, el.nativeElement.offsetHeight);
     });
     return heights;
   }
+
   private adjustPositions(): void {
     const nodeHeights = this.getNodeHeights();
     const startHeight = nodeHeights.get(this.startNodeId) ?? 80;
+
     let currentY = startHeight + 100;
-    const newNodes = this.nodes().map(n => ({ ...n, position: { ...n.position } }));
+
+    // Copy so we can mutate
+    const newNodes = this.nodes().map((n) => ({ ...n, position: { ...n.position } }));
+
     const updatePosition = (id: string, pos: { x: number; y: number }) => {
-      const node = newNodes.find(n => n.id === id)!;
-      node.position = pos;
+      const node = newNodes.find((n) => n.id === id);
+      if (node) node.position = pos;
     };
+
     const mission = this.missionState.currentMission();
     if (mission) {
       for (const missionStep of mission.steps) {
@@ -93,8 +146,10 @@ export class Flowchart implements AfterViewChecked {
         currentY = res.maxY + 100;
       }
     }
+
     this.nodes.set(newNodes);
   }
+
   private assignPositions(
     missionSteps: MissionStep[],
     startPosition: { x: number; y: number },
@@ -103,26 +158,31 @@ export class Flowchart implements AfterViewChecked {
     updatePosition: (id: string, pos: { x: number; y: number }) => void,
     nodeHeights: Map<string, number>
   ): { maxY: number; width: number } {
-    if (missionSteps.length === 0) {
-      return { maxY: startPosition.y, width: 0 };
-    }
-    const siblingHeights = missionSteps.map(step => {
+    if (missionSteps.length === 0) return { maxY: startPosition.y, width: 0 };
+
+    const siblingHeights = missionSteps.map((step) => {
       const nodeId = this.stepToNodeId.get(step);
       return nodeId ? nodeHeights.get(nodeId) ?? 80 : 80;
     });
+
     const maxSiblingHeight = Math.max(...siblingHeights);
     const totalWidth = (missionSteps.length - 1) * nodeWidth;
     const startX = startPosition.x - totalWidth / 2;
+
     let maxY = startPosition.y;
+
     for (let i = 0; i < missionSteps.length; i++) {
       const missionStep = missionSteps[i];
       const nodeId = this.stepToNodeId.get(missionStep);
       if (!nodeId) continue;
-      const siblingX = startX + (i * nodeWidth);
+
+      const siblingX = startX + i * nodeWidth;
       const pos = { x: siblingX, y: startPosition.y };
       updatePosition(nodeId, pos);
+
       const nodeHeight = siblingHeights[i];
       let currentMaxY = startPosition.y + nodeHeight;
+
       if (missionStep.children && missionStep.children.length > 0) {
         const childPosition = { x: siblingX, y: startPosition.y + maxSiblingHeight + verticalSpacing };
         const childResult = this.assignPositions(
@@ -135,42 +195,67 @@ export class Flowchart implements AfterViewChecked {
         );
         currentMaxY = childResult.maxY;
       }
+
       maxY = Math.max(maxY, currentMaxY);
     }
+
     return { maxY, width: totalWidth + nodeWidth };
   }
+
+  /**
+   * ===== Mission build (id-stable & ad-hoc safe) =====
+   */
   private generateStructure(mission: Mission) {
-    this.stepToNodeId.clear();
+    // Build mission nodes and connections WITHOUT touching ad-hoc
+    const newMissionNodes: FlowNode[] = [];
+    const newMissionConnections: { outputId: string; inputId: string }[] = [];
+
+    const oldStepToNodeId = new Map(this.stepToNodeId);
+
+    // We'll repopulate these maps with the steps that still exist
+    this.stepToNodeId = new Map();
     this.nodeIdToStep.clear();
-    const nodes: FlowNode[] = [];
-    const connections: { outputId: string; inputId: string }[] = [];
+
+    // Connect Start node to first top-level step chain(s)
     let previousExitIds: string[] = [this.startOutputId];
-    for (const missionStep of mission.steps) {
-      const result = this.createNodesAndConnections(
-        [missionStep],
-        previousExitIds,
-        nodes,
-        connections
-      );
+
+    for (const topStep of mission.steps) {
+      const result = this.createNodesAndConnectionsStable([topStep], previousExitIds, newMissionNodes, newMissionConnections, oldStepToNodeId);
       previousExitIds = result.exitIds;
     }
-    this.nodes.set(nodes);
-    this.connections.set(connections);
+
+    // Store mission parts
+    this.missionNodes.set(newMissionNodes);
+    this.missionConnections.set(newMissionConnections);
+
+    // Merge with ad-hoc (and auto-filter ad-hoc connections that reference missing nodes)
+    this.recomputeMergedView();
   }
-  private createNodesAndConnections(
+
+  /**
+   * Same as old createNodesAndConnections, but:
+   *  - reuses nodeIds for existing MissionStep objects (stability)
+   *  - fills step/node maps accordingly
+   */
+  private createNodesAndConnectionsStable(
     missionSteps: MissionStep[],
     parentExitIds: string[],
-    nodes: FlowNode[],
-    connections: { outputId: string; inputId: string }[]
+    nodesOut: FlowNode[],
+    connsOut: { outputId: string; inputId: string }[],
+    oldStepToNodeId: Map<MissionStep, string>
   ): { entryIds: string[]; exitIds: string[] } {
     const entryIds: string[] = [];
     const exitIds: string[] = [];
+
     for (const missionStep of missionSteps) {
-      const nodeId = generateGuid();
+      // Reuse ID if exists; otherwise create one
+      const nodeId = oldStepToNodeId.get(missionStep) ?? generateGuid();
       this.stepToNodeId.set(missionStep, nodeId);
       this.nodeIdToStep.set(nodeId, missionStep);
-      const inputId = nodeId + '-input';
-      const outputId = nodeId + '-output';
+
+      const inputId = `${nodeId}-input`;
+      const outputId = `${nodeId}-output`;
+
       const node: FlowNode = {
         id: nodeId,
         text: missionStep.function_name,
@@ -178,28 +263,180 @@ export class Flowchart implements AfterViewChecked {
         step: this.convertMissionStepToStep(missionStep),
         args: this.initializeArgs(missionStep)
       };
-      nodes.push(node);
+      nodesOut.push(node);
+
+      // Connect with parents
       for (const parentExitId of parentExitIds) {
-        connections.push({ outputId: parentExitId, inputId });
+        connsOut.push({ outputId: parentExitId, inputId });
       }
+
       entryIds.push(inputId);
+
+      // Recurse into children; by default exitIds = this node's output unless children override
       let currentExitIds: string[] = [outputId];
       if (missionStep.children && missionStep.children.length > 0) {
-        const childResult = this.createNodesAndConnections(
+        const childResult = this.createNodesAndConnectionsStable(
           missionStep.children,
           [outputId],
-          nodes,
-          connections
+          nodesOut,
+          connsOut,
+          oldStepToNodeId
         );
         currentExitIds = childResult.exitIds;
       }
       exitIds.push(...currentExitIds);
     }
+
     return { entryIds, exitIds };
   }
+
+  /**
+   * ===== Public creation & connection (AD-HOC) =====
+   */
+  onCreateNode(event: FCreateNodeEvent) {
+    const step = event.data as Step;
+    const args: { [key: string]: boolean | string | number | null } = {};
+
+    step?.arguments?.forEach((arg) => {
+      if (arg.default !== null && arg.default !== '') {
+        if (arg.type === 'bool') {
+          args[arg.name] = arg.default.toLowerCase() === 'true';
+        } else if (arg.type === 'float') {
+          args[arg.name] = parseFloat(arg.default) || null;
+        } else {
+          args[arg.name] = arg.default;
+        }
+      } else {
+        args[arg.name] = arg.type === 'bool' ? false : arg.type === 'float' ? null : '';
+      }
+    });
+
+    const id = generateGuid();
+
+    const newNode: FlowNode = {
+      id,
+      text: step?.name ?? 'New Node',
+      position: event.rect,
+      step: step,
+      args
+    };
+
+    this.adHocNodes.set([...this.adHocNodes(), newNode]);
+
+    // Refresh merged view
+    this.recomputeMergedView();
+
+    // Adjust layout after adding
+    this.needsAdjust = true;
+  }
+
+  public addConnection(event: FCreateConnectionEvent): void {
+    if (!event.fInputId) return;
+    // User-created connections are considered ad-hoc so they survive mission rebuilds.
+    this.adHocConnections.set([
+      ...this.adHocConnections(),
+      { outputId: event.fOutputId, inputId: event.fInputId }
+    ]);
+    this.recomputeMergedView();
+  }
+
+  /**
+   * ===== Context menu / deletion =====
+   */
+  onRightClick(event: MouseEvent, nodeId: string) {
+    event.preventDefault();
+    this.selectedNodeId = nodeId;
+    this.cm.show(event);
+  }
+
+  deleteNode() {
+    const nodeId = this.selectedNodeId;
+    if (!nodeId) return;
+
+    const stepToRemove = this.nodeIdToStep.get(nodeId);
+
+    if (stepToRemove) {
+      // Delete a mission step
+      this.removeStepFromMission(stepToRemove);
+      // Regenerate mission structure (ids kept stable for remaining steps)
+      const mission = this.missionState.currentMission();
+      if (mission) this.generateStructure(mission);
+    } else {
+      // Delete an ad-hoc node
+      this.adHocNodes.set(this.adHocNodes().filter((n) => n.id !== nodeId));
+
+      const inputId = `${nodeId}-input`;
+      const outputId = `${nodeId}-output`;
+
+      // Only remove from ad-hoc connections; leave mission connections intact
+      this.adHocConnections.set(
+        this.adHocConnections().filter((c) => c.outputId !== outputId && c.inputId !== inputId)
+      );
+
+      this.recomputeMergedView();
+    }
+
+    this.needsAdjust = true;
+  }
+
+  private removeStepFromMission(stepToRemove: MissionStep) {
+    const mission = this.missionState.currentMission();
+    if (!mission) return;
+
+    // Remove from top-level steps
+    mission.steps = mission.steps.filter((s) => s !== stepToRemove);
+
+    // Recursively remove from children
+    for (const step of mission.steps) {
+      this.removeStepFromChildren(step, stepToRemove);
+    }
+  }
+
+  private removeStepFromChildren(parent: MissionStep, stepToRemove: MissionStep) {
+    if (!parent.children) return;
+    parent.children = parent.children.filter((c) => c !== stepToRemove);
+    for (const child of parent.children) {
+      this.removeStepFromChildren(child, stepToRemove);
+    }
+  }
+
+  /**
+   * ===== Merge mission + ad-hoc for rendering =====
+   *  - Filters ad-hoc connections that reference missing endpoints
+   */
+  private recomputeMergedView() {
+    const missionNodes = this.missionNodes();
+    const adHocNodes = this.adHocNodes();
+
+    const allNodes = [...missionNodes, ...adHocNodes];
+    const nodeIdSet = new Set(allNodes.map((n) => n.id));
+    const validInputId = (id: string) => {
+      const base = id.replace(/-input$/, '');
+      return nodeIdSet.has(base) || id === this.startOutputId; // start-output handled separately
+    };
+    const validOutputId = (id: string) => {
+      const base = id.replace(/-output$/, '');
+      return nodeIdSet.has(base) || id === this.startOutputId;
+    };
+
+    // Mission connections are already valid by construction
+    const missionConns = this.missionConnections();
+
+    // Keep only ad-hoc connections that still point to existing nodes
+    const filteredAdHocConns = this.adHocConnections().filter(
+      (c) => validOutputId(c.outputId) && validInputId(c.inputId)
+    );
+
+    this.nodes.set(allNodes);
+    this.connections.set([...missionConns, ...filteredAdHocConns]);
+  }
+
+  /**
+   * ===== Conversion & args init =====
+   */
   private convertMissionStepToStep(missionStep: MissionStep): Step {
     const availableSteps = this.stepsState.currentSteps();
-    const actualStep = availableSteps?.find(step => step.name === missionStep.function_name);
+    const actualStep = availableSteps?.find((step) => step.name === missionStep.function_name);
     if (actualStep) {
       return actualStep;
     } else {
@@ -217,21 +454,22 @@ export class Flowchart implements AfterViewChecked {
       };
     }
   }
-  private initializeArgs(missionStep: MissionStep): { [key: string]: boolean | string | number | null } {
+
+  private initializeArgs(missionStep: MissionStep): {
+    [key: string]: boolean | string | number | null;
+  } {
     const args: { [key: string]: boolean | string | number | null } = {};
-    // Get the actual step definition to use its argument structure
+
     const availableSteps = this.stepsState.currentSteps();
-    const actualStep = availableSteps?.find(step => step.name === missionStep.function_name);
+    const actualStep = availableSteps?.find((step) => step.name === missionStep.function_name);
+
     if (actualStep) {
-      // Initialize args based on the actual step definition, mapping by index
       actualStep.arguments.forEach((stepArg, index) => {
         const missionArg = missionStep.arguments[index];
         let value: string = '';
         if (missionArg && missionArg.value !== null && missionArg.value !== '') {
-          // Use the value from missionStep if available
           value = missionArg.value;
         } else if (stepArg.default !== null && stepArg.default !== '') {
-          // Use the default from the step definition
           value = stepArg.default;
         }
         if (stepArg.type === 'bool') {
@@ -243,7 +481,6 @@ export class Flowchart implements AfterViewChecked {
         }
       });
     } else {
-      // Fallback to original logic if step not found, using index if name is null
       missionStep.arguments.forEach((arg, index) => {
         const argName = arg.name || `arg${index}`;
         let value: string = arg.value;
@@ -260,83 +497,5 @@ export class Flowchart implements AfterViewChecked {
       });
     }
     return args;
-  }
-  onLoaded() {
-    this.fCanvas()?.resetScaleAndCenter(false);
-  }
-  onCreateNode(event: FCreateNodeEvent) {
-    const step = event.data as Step;
-    const args: { [key: string]: boolean | string | number | null } = {};
-    step?.arguments?.forEach(arg => {
-      if (arg.default !== null && arg.default !== '') {
-        if (arg.type === 'bool') {
-          args[arg.name] = arg.default.toLowerCase() === 'true';
-        } else if (arg.type === 'float') {
-          args[arg.name] = parseFloat(arg.default) || null;
-        } else {
-          args[arg.name] = arg.default;
-        }
-      } else {
-        args[arg.name] = arg.type === 'bool' ? false : arg.type === 'float' ? null : '';
-      }
-    });
-    this.nodes.set([
-      ...this.nodes(),
-      {
-        id: generateGuid(),
-        text: step?.name ?? 'New Node',
-        position: event.rect,
-        step: step,
-        args: args
-      }
-    ]);
-    this.needsAdjust = true;
-  }
-  public addConnection(event: FCreateConnectionEvent): void {
-    if (!event.fInputId) return;
-    this.connections.set([
-      ...this.connections(),
-      { outputId: event.fOutputId, inputId: event.fInputId }
-    ]);
-  }
-  onRightClick(event: MouseEvent, nodeId: string) {
-    event.preventDefault();
-    this.selectedNodeId = nodeId;
-    this.cm.show(event);
-  }
-  deleteNode() {
-    const nodeId = this.selectedNodeId;
-    const stepToRemove = this.nodeIdToStep.get(nodeId);
-    if (stepToRemove) {
-      this.removeStepFromMission(stepToRemove);
-      this.stepToNodeId.delete(stepToRemove);
-      this.nodeIdToStep.delete(nodeId);
-    } else {
-      // For nodes not in mission (e.g., newly created)
-      this.nodes.set(this.nodes().filter(n => n.id !== nodeId));
-      const inputId = `${nodeId}-input`;
-      const outputId = `${nodeId}-output`;
-      this.connections.set(this.connections().filter(c => c.outputId !== outputId && c.inputId !== inputId));
-    }
-    this.needsAdjust = true;
-  }
-  private removeStepFromMission(stepToRemove: MissionStep) {
-    const mission = this.missionState.currentMission();
-    if (!mission) return;
-    // Remove from top-level steps
-    mission.steps = mission.steps.filter(s => s !== stepToRemove);
-    // Recursively remove from children
-    for (const step of mission.steps) {
-      this.removeStepFromChildren(step, stepToRemove);
-    }
-    // Manually regenerate structure since we mutated the mission
-    this.generateStructure(mission);
-  }
-  private removeStepFromChildren(parent: MissionStep, stepToRemove: MissionStep) {
-    if (!parent.children) return;
-    parent.children = parent.children.filter(c => c !== stepToRemove);
-    for (const child of parent.children) {
-      this.removeStepFromChildren(child, stepToRemove);
-    }
   }
 }
