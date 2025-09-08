@@ -80,7 +80,17 @@
             <div class="node-args">
               @for (arg of node.step.arguments; track arg.name) {
                 <div class="arg">
-                  <label class="arg-label">{{ arg.name }} ({{ arg.type }})</label>
+                  <!-- Tooltip always shows full text; label remains visually truncated -->
+                  <label
+                    class="arg-label"
+                    pTooltip="{{ arg.name }} ({{ arg.type }})"
+                    tooltipPosition="top"
+                    [showDelay]="150"
+                    [hideDelay]="50"
+                    tooltipStyleClass="!max-w-[24rem] !break-words"
+                  >
+                    {{ arg.name }} ({{ arg.type }})
+                  </label>
 
                   @if (arg.type === 'bool') {
                     <p-checkbox

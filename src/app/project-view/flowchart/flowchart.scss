@@ -93,9 +93,12 @@
   min-width: 0; /* critical to allow children to max at 100% */
 }
 
+/* Truncated label */
 .arg-label {
   font-size: 0.875rem;
   font-weight: 500;
+
+  display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -122,10 +125,6 @@
 }
 
 /* PrimeNG InputNumber wrapper + inner input to full width */
-:host ::ng-deep .node .p-inputnumber.arg-number {
-  width: 100% !important;
-  max-width: 100%;
-}
 :host ::ng-deep .node .p-inputnumber.arg-number {
   width: 100% !important;
   max-width: 100%;

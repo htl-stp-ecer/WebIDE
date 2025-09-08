@@ -12,6 +12,7 @@ import {StepsStateService} from '../../services/steps-state-service';
 import { ContextMenuModule } from 'primeng/contextmenu';
 import { ContextMenu } from 'primeng/contextmenu';
 import { MenuItem } from 'primeng/api';
+import {Tooltip} from 'primeng/tooltip';
 interface FlowNode {
   id: string;
   text: string;
@@ -28,7 +29,8 @@ interface FlowNode {
     CheckboxModule,
     InputTextModule,
     FormsModule,
-    ContextMenuModule
+    ContextMenuModule,
+    Tooltip
   ],
   templateUrl: './flowchart.html',
   styleUrl: './flowchart.scss'
