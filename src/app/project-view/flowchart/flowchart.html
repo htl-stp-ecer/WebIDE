@@ -92,7 +92,7 @@
                     <input
                       pInputText
                       [(ngModel)]="node.args[arg.name]"
-                      class="arg-input p-inputtext"
+                      class="arg-input"
                       [placeholder]="arg.default || ('Enter ' + arg.name)"
                     />
                   } @else if (arg.type === 'float') {
