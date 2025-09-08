@@ -21,7 +21,6 @@ import { generateGuid } from '@foblex/utils';
 import { InputNumberModule } from 'primeng/inputnumber';
 import { CheckboxModule } from 'primeng/checkbox';
 import { InputTextModule } from 'primeng/inputtext';
-import { FormsModule } from '@angular/forms';
 import { MissionStateService } from '../../services/mission-sate-service';
 import { Mission } from '../../entities/Mission';
 import { MissionStep } from '../../entities/MissionStep';
@@ -30,6 +29,7 @@ import { ContextMenuModule } from 'primeng/contextmenu';
 import { ContextMenu } from 'primeng/contextmenu';
 import { MenuItem } from 'primeng/api';
 import { Tooltip } from 'primeng/tooltip';
+import {FormsModule} from '@angular/forms';
 
 interface FlowNode {
   id: string;
@@ -47,9 +47,9 @@ interface FlowNode {
     InputNumberModule,
     CheckboxModule,
     InputTextModule,
-    FormsModule,
     ContextMenuModule,
-    Tooltip
+    Tooltip,
+    FormsModule
   ],
   templateUrl: './flowchart.html',
   styleUrl: './flowchart.scss'
@@ -71,15 +71,20 @@ export class Flowchart implements AfterViewChecked {
   private adHocNodes = signal<FlowNode[]>([]);
   private adHocConnections = signal<{ outputId: string; inputId: string }[]>([]);
 
+  /**
+   * NEW: scope ad-hoc items per mission, so floating nodes don't leak between missions
+   */
+  private adHocPerMission = new Map<
+    string,
+    { nodes: FlowNode[]; connections: { outputId: string; inputId: string }[] }
+  >();
+  private currentMissionKey: string | null = null;
+
   fCanvas = viewChild(FCanvasComponent);
 
   private readonly startNodeId = 'start-node';
   private readonly startOutputId = 'start-node-output';
 
-  /**
-   * Keep a stable mapping between MissionStep objects and nodeIds
-   * so regenerations won't break connections pointing to mission nodes.
-   */
   private stepToNodeId: Map<MissionStep, string> = new Map();
   private nodeIdToStep: Map<string, MissionStep> = new Map();
 
@@ -95,11 +100,42 @@ export class Flowchart implements AfterViewChecked {
   constructor(private missionState: MissionStateService, private stepsState: StepsStateService) {
     effect(() => {
       const mission = this.missionState.currentMission();
+      const newKey = mission ? this.missionKey(mission) : null;
+
+      // If mission changed, swap the ad-hoc set
+      if (newKey !== this.currentMissionKey) {
+        // stash current ad-hoc under previous mission key
+        if (this.currentMissionKey) {
+          this.adHocPerMission.set(this.currentMissionKey, {
+            nodes: this.adHocNodes(),
+            connections: this.adHocConnections(),
+          });
+        }
+
+        // load ad-hoc for the new mission (or clear if none saved yet)
+        if (newKey && this.adHocPerMission.has(newKey)) {
+          const saved = this.adHocPerMission.get(newKey)!;
+          this.adHocNodes.set(saved.nodes);
+          this.adHocConnections.set(saved.connections);
+        } else {
+          this.adHocNodes.set([]);
+          this.adHocConnections.set([]);
+        }
+
+        this.currentMissionKey = newKey;
+      }
+
       if (mission) {
         this.generateStructure(mission);
         this.needsAdjust = true;
       }
     });
+  }
+
+  private missionKey(m: Mission): string {
+    // Prefer a stable id/uuid if your Mission has one; fallback to name.
+    // If you have m.uuid, use that here.
+    return (m as any).uuid ?? m.name;
   }
 
   ngAfterViewChecked(): void {
@@ -114,10 +150,9 @@ export class Flowchart implements AfterViewChecked {
   }
 
   /**
-   * ===== NEW: persist drag positions so nodes don't "teleport" after rebuilds =====
+   * Persist drag positions so nodes don't "teleport" after rebuilds
    */
   onNodeMoved(nodeId: string, pos: IPoint) {
-    // Try ad-hoc nodes first (the "floating" ones you drag in)
     const updatedAdHoc = this.adHocNodes().map(n =>
       n.id === nodeId ? { ...n, position: { x: pos.x, y: pos.y } } : n
     );
@@ -127,7 +162,6 @@ export class Flowchart implements AfterViewChecked {
       return;
     }
 
-    // If it's a mission node (you allow dragging them), persist too.
     const updatedMission = this.missionNodes().map(n =>
       n.id === nodeId ? { ...n, position: { x: pos.x, y: pos.y } } : n
     );
@@ -138,7 +172,7 @@ export class Flowchart implements AfterViewChecked {
   }
 
   /**
-   * ===== Layout helpers =====
+   * Layout helpers
    */
   private getNodeHeights(): Map<string, number> {
     const heights = new Map<string, number>();
@@ -155,7 +189,6 @@ export class Flowchart implements AfterViewChecked {
 
     let currentY = startHeight + 100;
 
-    // Copy so we can mutate
     const newNodes = this.nodes().map((n) => ({ ...n, position: { ...n.position } }));
 
     const updatePosition = (id: string, pos: { x: number; y: number }) => {
@@ -228,20 +261,17 @@ export class Flowchart implements AfterViewChecked {
   }
 
   /**
-   * ===== Mission build (id-stable & ad-hoc safe) =====
+   * Mission build (id-stable & ad-hoc safe)
    */
   private generateStructure(mission: Mission) {
-    // Build mission nodes and connections WITHOUT touching ad-hoc
     const newMissionNodes: FlowNode[] = [];
     const newMissionConnections: { outputId: string; inputId: string }[] = [];
 
     const oldStepToNodeId = new Map(this.stepToNodeId);
 
-    // We'll repopulate these maps with the steps that still exist
     this.stepToNodeId = new Map();
     this.nodeIdToStep.clear();
 
-    // Connect Start node to first top-level step chain(s)
     let previousExitIds: string[] = [this.startOutputId];
 
     for (const topStep of mission.steps) {
@@ -249,19 +279,12 @@ export class Flowchart implements AfterViewChecked {
       previousExitIds = result.exitIds;
     }
 
-    // Store mission parts
     this.missionNodes.set(newMissionNodes);
     this.missionConnections.set(newMissionConnections);
 
-    // Merge with ad-hoc (and auto-filter ad-hoc connections that reference missing nodes)
     this.recomputeMergedView();
   }
 
-  /**
-   * Same as old createNodesAndConnections, but:
-   *  - reuses nodeIds for existing MissionStep objects (stability)
-   *  - fills step/node maps accordingly
-   */
   private createNodesAndConnectionsStable(
     missionSteps: MissionStep[],
     parentExitIds: string[],
@@ -273,7 +296,6 @@ export class Flowchart implements AfterViewChecked {
     const exitIds: string[] = [];
 
     for (const missionStep of missionSteps) {
-      // Reuse ID if exists; otherwise create one
       const nodeId = oldStepToNodeId.get(missionStep) ?? generateGuid();
       this.stepToNodeId.set(missionStep, nodeId);
       this.nodeIdToStep.set(nodeId, missionStep);
@@ -290,14 +312,12 @@ export class Flowchart implements AfterViewChecked {
       };
       nodesOut.push(node);
 
-      // Connect with parents
       for (const parentExitId of parentExitIds) {
         connsOut.push({ outputId: parentExitId, inputId });
       }
 
       entryIds.push(inputId);
 
-      // Recurse into children; by default exitIds = this node's output unless children override
       let currentExitIds: string[] = [outputId];
       if (missionStep.children && missionStep.children.length > 0) {
         const childResult = this.createNodesAndConnectionsStable(
@@ -316,7 +336,7 @@ export class Flowchart implements AfterViewChecked {
   }
 
   /**
-   * ===== Public creation & connection (AD-HOC) =====
+   * Public creation & connection (AD-HOC)
    */
   onCreateNode(event: FCreateNodeEvent) {
     const step = event.data as Step;
@@ -347,17 +367,12 @@ export class Flowchart implements AfterViewChecked {
     };
 
     this.adHocNodes.set([...this.adHocNodes(), newNode]);
-
-    // Refresh merged view
     this.recomputeMergedView();
-
-    // Adjust layout after adding
     this.needsAdjust = true;
   }
 
   public addConnection(event: FCreateConnectionEvent): void {
     if (!event.fInputId) return;
-    // User-created connections are considered ad-hoc so they survive mission rebuilds.
     this.adHocConnections.set([
       ...this.adHocConnections(),
       { outputId: event.fOutputId, inputId: event.fInputId }
@@ -366,7 +381,7 @@ export class Flowchart implements AfterViewChecked {
   }
 
   /**
-   * ===== Context menu / deletion =====
+   * Context menu / deletion
    */
   onRightClick(event: MouseEvent, nodeId: string) {
     event.preventDefault();
@@ -381,19 +396,15 @@ export class Flowchart implements AfterViewChecked {
     const stepToRemove = this.nodeIdToStep.get(nodeId);
 
     if (stepToRemove) {
-      // Delete a mission step
       this.removeStepFromMission(stepToRemove);
-      // Regenerate mission structure (ids kept stable for remaining steps)
       const mission = this.missionState.currentMission();
       if (mission) this.generateStructure(mission);
     } else {
-      // Delete an ad-hoc node
       this.adHocNodes.set(this.adHocNodes().filter((n) => n.id !== nodeId));
 
       const inputId = `${nodeId}-input`;
       const outputId = `${nodeId}-output`;
 
-      // Only remove from ad-hoc connections; leave mission connections intact
       this.adHocConnections.set(
         this.adHocConnections().filter((c) => c.outputId !== outputId && c.inputId !== inputId)
       );
@@ -408,10 +419,7 @@ export class Flowchart implements AfterViewChecked {
     const mission = this.missionState.currentMission();
     if (!mission) return;
 
-    // Remove from top-level steps
     mission.steps = mission.steps.filter((s) => s !== stepToRemove);
-
-    // Recursively remove from children
     for (const step of mission.steps) {
       this.removeStepFromChildren(step, stepToRemove);
     }
@@ -426,8 +434,7 @@ export class Flowchart implements AfterViewChecked {
   }
 
   /**
-   * ===== Merge mission + ad-hoc for rendering =====
-   *  - Filters ad-hoc connections that reference missing endpoints
+   * Merge mission + ad-hoc for rendering
    */
   private recomputeMergedView() {
     const missionNodes = this.missionNodes();
@@ -437,17 +444,15 @@ export class Flowchart implements AfterViewChecked {
     const nodeIdSet = new Set(allNodes.map((n) => n.id));
     const validInputId = (id: string) => {
       const base = id.replace(/-input$/, '');
-      return nodeIdSet.has(base) || id === this.startOutputId; // start-output handled separately
+      return nodeIdSet.has(base);
     };
     const validOutputId = (id: string) => {
       const base = id.replace(/-output$/, '');
       return nodeIdSet.has(base) || id === this.startOutputId;
     };
 
-    // Mission connections are already valid by construction
     const missionConns = this.missionConnections();
 
-    // Keep only ad-hoc connections that still point to existing nodes
     const filteredAdHocConns = this.adHocConnections().filter(
       (c) => validOutputId(c.outputId) && validInputId(c.inputId)
     );
@@ -457,7 +462,7 @@ export class Flowchart implements AfterViewChecked {
   }
 
   /**
-   * ===== Conversion & args init =====
+   * Conversion & args init
    */
   private convertMissionStepToStep(missionStep: MissionStep): Step {
     const availableSteps = this.stepsState.currentSteps();
@@ -508,12 +513,9 @@ export class Flowchart implements AfterViewChecked {
     } else {
       missionStep.arguments.forEach((arg, index) => {
         const argName = arg.name || `arg${index}`;
-        let value: string = arg.value;
-        if (value === null || value === '') {
-          value = '';
-        }
+        let value: string = arg.value ?? '';
         if (arg.type === 'bool') {
-          args[argName] = value.toLowerCase() === 'true';
+          args[arg.name] = String(value).toLowerCase() === 'true';
         } else if (arg.type === 'float') {
           args[argName] = parseFloat(value) || null;
         } else {
