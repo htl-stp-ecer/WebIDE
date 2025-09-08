@@ -16,6 +16,7 @@ import {
   FFlowComponent,
   FFlowModule
 } from '@foblex/flow';
+import { IPoint } from '@foblex/2d';
 import { generateGuid } from '@foblex/utils';
 import { InputNumberModule } from 'primeng/inputnumber';
 import { CheckboxModule } from 'primeng/checkbox';
@@ -110,6 +111,30 @@ export class Flowchart implements AfterViewChecked {
 
   onLoaded() {
     this.fCanvas()?.resetScaleAndCenter(false);
+  }
+
+  /**
+   * ===== NEW: persist drag positions so nodes don't "teleport" after rebuilds =====
+   */
+  onNodeMoved(nodeId: string, pos: IPoint) {
+    // Try ad-hoc nodes first (the "floating" ones you drag in)
+    const updatedAdHoc = this.adHocNodes().map(n =>
+      n.id === nodeId ? { ...n, position: { x: pos.x, y: pos.y } } : n
+    );
+    if (updatedAdHoc !== this.adHocNodes()) {
+      this.adHocNodes.set(updatedAdHoc);
+      this.recomputeMergedView();
+      return;
+    }
+
+    // If it's a mission node (you allow dragging them), persist too.
+    const updatedMission = this.missionNodes().map(n =>
+      n.id === nodeId ? { ...n, position: { x: pos.x, y: pos.y } } : n
+    );
+    if (updatedMission !== this.missionNodes()) {
+      this.missionNodes.set(updatedMission);
+      this.recomputeMergedView();
+    }
   }
 
   /**
