@@ -1,7 +1,12 @@
-import {Component, OnInit} from '@angular/core';
-import {FExternalItemDirective} from '@foblex/flow';
-import {HttpService} from '../../services/http-service';
-import {StepsStateService} from '../../services/steps-state-service';
+import { Component, OnInit } from '@angular/core';
+import { FExternalItemDirective } from '@foblex/flow';
+import { HttpService } from '../../services/http-service';
+import { StepsStateService } from '../../services/steps-state-service';
+
+interface StepGroup {
+  headline: string;
+  steps: Step[];
+}
 
 @Component({
   selector: 'app-step-panel',
@@ -12,48 +17,82 @@ import {StepsStateService} from '../../services/steps-state-service';
   styleUrls: ['./step-panel.scss']
 })
 export class StepPanel implements OnInit {
-  steps: Step[] = [];
+  stepGroups: StepGroup[] = [];
 
-  constructor(private http: HttpService, private stepStateService: StepsStateService) {
-
-  }
+  constructor(private http: HttpService, private stepStateService: StepsStateService) {}
 
   ngOnInit(): void {
     this.http.getAllSteps().subscribe(steps => {
-      this.steps = steps;
-      this.addDefaultSteps();
-      this.stepStateService.setSteps(this.steps);
+      this.addDefaultSteps(steps);
+      this.stepStateService.setSteps(steps);
+      this.groupSteps(steps);
     });
   }
 
-  private addDefaultSteps(): void {
-    this.steps.push({
+  private addDefaultSteps(steps: Step[]): void {
+    steps.push({
       name: 'sequential',
       import: 'from libstp_helpers.api.steps import seq',
       arguments: [],
       file: ''
     });
 
-    this.steps.push({
+    steps.push({
       name: 'parallel',
       import: '',
       arguments: [],
       file: ''
     });
-
-    this.steps.push({
-      name: 'timeout',
-      import: '',
-      arguments: [
-        {
-          name: 'timeout',
-          type: 'float',
-          import: null,
-          optional: false,
-          default: null
-        }
-      ],
-      file: ''
-    });
   }
+
+  private groupSteps(steps: Step[]): void {
+    const prefixCounts: Record<string, number> = {};
+    const suffixCounts: Record<string, number> = {};
+
+    // 1) Build frequency maps for prefixes and suffixes
+    for (const step of steps) {
+      const parts = step.name.split('_');
+      if (parts.length > 1) {
+        const pref = parts[0];
+        const suff = parts[parts.length - 1];
+        prefixCounts[pref] = (prefixCounts[pref] ?? 0) + 1;
+        suffixCounts[suff] = (suffixCounts[suff] ?? 0) + 1;
+      }
+    }
+
+    // 2) Assign each step to the best dynamic key
+    const groups: Record<string, Step[]> = {};
+    for (const step of steps) {
+      const parts = step.name.split('_');
+
+      let key: string;
+      if (parts.length > 1) {
+        const pref = parts[0];
+        const suff = parts[parts.length - 1];
+        const prefCount = prefixCounts[pref] ?? 0;
+        const suffCount = suffixCounts[suff] ?? 0;
+
+        if (suffCount > 1 && suffCount >= prefCount) {
+          key = suff;           // e.g., *_servo → "servo"
+        } else if (prefCount > 1) {
+          key = pref;           // e.g., strafe_* → "strafe"
+        } else {
+          key = step.name;      // no real family — keep its own group
+        }
+      } else {
+        key = step.name;        // single word → its own group
+      }
+
+      (groups[key] ??= []).push(step);
+    }
+
+    // 3) Normalize output (optional: sort headlines and steps)
+    this.stepGroups = Object.entries(groups)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([headline, groupedSteps]) => ({
+        headline,
+        steps: groupedSteps.sort((a, b) => a.name.localeCompare(b.name)),
+      }));
+  }
+
 }

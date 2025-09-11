@@ -1,13 +1,25 @@
-<div class="external-panel flex flex-col gap-2">
+<div class="external-panel">
   <h2 class="text-xl mb-2 text-center font-bold select-none">Steps</h2>
-  @for (step of steps; track step.name) {
-    <div class="external-item p-2 rounded border border-gray-300 dark:border-gray-700
-                bg-white dark:bg-gray-800 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700
-                select-none"
-         fExternalItem
-         [fData]="step"
-         [fPreviewMatchSize]="true">
-      {{ step.name }}
-    </div>
-  }
+
+  <div class="groups-scroll flex-1 min-h-0 flex flex-col gap-4">
+    @for (group of stepGroups; track group.headline) {
+      <div>
+        <h3 class="text-lg font-semibold mb-1 capitalize">{{ group.headline }}</h3>
+        <div class="flex flex-col gap-2">
+          @for (step of group.steps; track step.name) {
+            <div
+              class="external-item p-2 rounded border border-gray-300 dark:border-gray-700
+                         bg-white dark:bg-gray-800 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700
+                         select-none"
+              fExternalItem
+              [fData]="step"
+              [fPreviewMatchSize]="true"
+            >
+              {{ step.name }}
+            </div>
+          }
+        </div>
+      </div>
+    }
+  </div>
 </div>
