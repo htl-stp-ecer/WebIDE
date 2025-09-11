@@ -29,7 +29,7 @@ import { ContextMenuModule } from 'primeng/contextmenu';
 import { ContextMenu } from 'primeng/contextmenu';
 import { MenuItem } from 'primeng/api';
 import { Tooltip } from 'primeng/tooltip';
-import { FormsModule } from '@angular/forms';
+import {FormsModule} from '@angular/forms';
 
 interface FlowNode {
   id: string;
@@ -58,23 +58,14 @@ export class Flowchart implements AfterViewChecked {
   isDarkMode =
     window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
 
-  /**
-   * Public, merged, render-ready signals
-   */
   nodes = signal<FlowNode[]>([]);
   connections = signal<{ outputId: string; inputId: string }[]>([]);
 
-  /**
-   * Separate stores so mission rebuilds never touch ad-hoc items
-   */
   private missionNodes = signal<FlowNode[]>([]);
   private missionConnections = signal<{ outputId: string; inputId: string }[]>([]);
   private adHocNodes = signal<FlowNode[]>([]);
   private adHocConnections = signal<{ outputId: string; inputId: string }[]>([]);
 
-  /**
-   * NEW: scope ad-hoc items per mission, so floating nodes don't leak between missions
-   */
   private adHocPerMission = new Map<
     string,
     { nodes: FlowNode[]; connections: { outputId: string; inputId: string }[] }
@@ -103,7 +94,6 @@ export class Flowchart implements AfterViewChecked {
       const mission = this.missionState.currentMission();
       const newKey = mission ? this.missionKey(mission) : null;
 
-      // If mission changed, swap the ad-hoc set
       if (newKey !== this.currentMissionKey) {
         if (this.currentMissionKey) {
           this.adHocPerMission.set(this.currentMissionKey, {
@@ -146,9 +136,6 @@ export class Flowchart implements AfterViewChecked {
     this.fCanvas()?.resetScaleAndCenter(false);
   }
 
-  /**
-   * Persist drag positions so nodes don't "teleport" after rebuilds
-   */
   onNodeMoved(nodeId: string, pos: IPoint) {
     const updatedAdHoc = this.adHocNodes().map(n =>
       n.id === nodeId ? { ...n, position: { x: pos.x, y: pos.y } } : n
@@ -168,9 +155,6 @@ export class Flowchart implements AfterViewChecked {
     }
   }
 
-  /**
-   * Layout helpers
-   */
   private getNodeHeights(): Map<string, number> {
     const heights = new Map<string, number>();
     this.nodeElements.forEach((el) => {
@@ -238,7 +222,6 @@ export class Flowchart implements AfterViewChecked {
     for (let i = 0; i < missionSteps.length; i++) {
       const missionStep = missionSteps[i];
 
-      // If this is a hidden "parallel" container, don't position a node: just place its children.
       if (this.isParallel(missionStep)) {
         if (missionStep.children && missionStep.children.length > 0) {
           const childPosition = {
@@ -290,13 +273,6 @@ export class Flowchart implements AfterViewChecked {
     return { maxY, width: totalWidth + nodeWidth };
   }
 
-  /**
-   * Mission build (id-stable & ad-hoc safe)
-   * NOTE: "parallel" steps are HIDDEN in the flowchart:
-   * - We DO NOT render a node for them.
-   * - We connect their PARENT directly to their CHILDREN in the diagram.
-   * - Mission data remains unchanged.
-   */
   private generateStructure(mission: Mission) {
     const newMissionNodes: FlowNode[] = [];
     const newMissionConnections: { outputId: string; inputId: string }[] = [];
@@ -336,7 +312,6 @@ export class Flowchart implements AfterViewChecked {
     const exitIds: string[] = [];
 
     for (const missionStep of missionSteps) {
-      // --- HIDE "parallel": don't create a node; forward connections to its children ---
       if (this.isParallel(missionStep)) {
         const children = missionStep.children ?? [];
         const forwarded = this.createNodesAndConnectionsStable(
@@ -391,9 +366,6 @@ export class Flowchart implements AfterViewChecked {
     return { entryIds, exitIds };
   }
 
-  /**
-   * Public creation & connection (AD-HOC)
-   */
   onCreateNode(event: FCreateNodeEvent) {
     const step = event.data as Step;
     const args: { [key: string]: boolean | string | number | null } = {};
@@ -429,6 +401,81 @@ export class Flowchart implements AfterViewChecked {
 
   public addConnection(event: FCreateConnectionEvent): void {
     if (!event.fInputId) return;
+
+    const srcBaseId = this.baseFromOutputId(event.fOutputId);
+    const dstBaseId = this.baseFromInputId(event.fInputId);
+
+    const mission = this.missionState.currentMission();
+
+    const srcStep = this.nodeIdToStep.get(srcBaseId);
+    const dstStep = this.nodeIdToStep.get(dstBaseId);
+
+    // A) generated -> ad-hoc  ==> promote ad-hoc into mission under srcStep
+    if (mission && srcStep && !dstStep) {
+      const adhoc = this.adHocNodes().find(n => n.id === dstBaseId);
+      if (adhoc) {
+        const promoted = this.missionStepFromAdHoc(adhoc);
+
+        // Reuse the ad-hoc node's id during regeneration for visual continuity
+        this.stepToNodeId.set(promoted, adhoc.id);
+
+        // Attach under the source (handles parallel fan-out internally)
+        this.attachChildWithParallel(mission, srcStep, promoted);
+
+        // Remove ad-hoc node + any ad-hoc connections touching it
+        const inputId = `${adhoc.id}-input`;
+        const outputId = `${adhoc.id}-output`;
+        this.adHocConnections.set(
+          this.adHocConnections().filter(c => c.inputId !== inputId && c.outputId !== outputId)
+        );
+        this.adHocNodes.set(this.adHocNodes().filter(n => n.id !== adhoc.id));
+
+        // Rebuild graph & auto-layout
+        this.generateStructure(mission);
+        this.needsAdjust = true;
+        return;
+      }
+    }
+
+    // B) Start -> ad-hoc  ==> promote as new top-level mission step
+    if (mission && srcBaseId === this.startNodeId && !dstStep) {
+      const adhoc = this.adHocNodes().find(n => n.id === dstBaseId);
+      if (adhoc) {
+        const promoted = this.missionStepFromAdHoc(adhoc);
+
+        // Reuse id
+        this.stepToNodeId.set(promoted, adhoc.id);
+
+        // Append to top-level mission steps
+        mission.steps = mission.steps ?? [];
+        mission.steps.push(promoted);
+
+        // Clean up ad-hoc copies
+        const inputId = `${adhoc.id}-input`;
+        const outputId = `${adhoc.id}-output`;
+        this.adHocConnections.set(
+          this.adHocConnections().filter(c => c.inputId !== inputId && c.outputId !== outputId)
+        );
+        this.adHocNodes.set(this.adHocNodes().filter(n => n.id !== adhoc.id));
+
+        // Rebuild & auto-layout
+        this.generateStructure(mission);
+        this.needsAdjust = true;
+        return;
+      }
+    }
+
+    // C) generated -> generated  ==> your existing "attach with parallel"
+    if (mission && srcStep && dstStep) {
+      const changed = this.attachChildWithParallel(mission, srcStep, dstStep);
+      if (changed) {
+        this.generateStructure(mission);
+        this.needsAdjust = true;
+        return;
+      }
+    }
+
+    // Fallback: keep as ad-hoc connection
     this.adHocConnections.set([
       ...this.adHocConnections(),
       { outputId: event.fOutputId, inputId: event.fInputId }
@@ -436,9 +483,7 @@ export class Flowchart implements AfterViewChecked {
     this.recomputeMergedView();
   }
 
-  /**
-   * Context menu / deletion
-   */
+
   onRightClick(event: MouseEvent, nodeId: string) {
     event.preventDefault();
     this.selectedNodeId = nodeId;
@@ -489,9 +534,6 @@ export class Flowchart implements AfterViewChecked {
     }
   }
 
-  /**
-   * Merge mission + ad-hoc for rendering
-   */
   private recomputeMergedView() {
     const missionNodes = this.missionNodes();
     const adHocNodes = this.adHocNodes();
@@ -517,9 +559,6 @@ export class Flowchart implements AfterViewChecked {
     this.connections.set([...missionConns, ...filteredAdHocConns]);
   }
 
-  /**
-   * Conversion & args init
-   */
   private convertMissionStepToStep(missionStep: MissionStep): Step {
     const availableSteps = this.stepsState.currentSteps();
     const actualStep = availableSteps?.find((step) => step.name === missionStep.function_name);
@@ -582,14 +621,96 @@ export class Flowchart implements AfterViewChecked {
     return args;
   }
 
-  /**
-   * Treat a step as a hidden "parallel" container if either field says so.
-   * (We don't render it, but we wire its children directly to the parent.)
-   */
   private isParallel(step: MissionStep | null | undefined): boolean {
     if (!step) return false;
     const fn = (step.function_name ?? '').toLowerCase();
     const st = (step.step_type ?? '').toLowerCase();
     return fn === 'parallel' || st === 'parallel';
   }
+
+  private baseFromOutputId(outputId: string): string {
+    if (outputId === this.startOutputId) return this.startNodeId;
+    return outputId.replace(/-output$/, '');
+  }
+
+  private baseFromInputId(inputId: string): string {
+    return inputId.replace(/-input$/, '');
+  }
+
+  private ensureParallelUnder(parent: MissionStep): MissionStep {
+    parent.children = parent.children ?? [];
+    if (parent.children.length === 0) {
+      const par = this.newParallel();
+      parent.children.push(par);
+      return par;
+    }
+    if (this.isParallel(parent.children[0])) {
+      return parent.children[0];
+    }
+    const par = this.newParallel();
+    par.children = [...parent.children];
+    parent.children = [par];
+    return par;
+  }
+
+  private newParallel(): MissionStep {
+    return {
+      step_type: 'parallel',
+      function_name: 'parallel',
+      arguments: [],
+      children: []
+    };
+  }
+
+  private detachFromAllParents(mission: Mission, target: MissionStep, exceptParent?: MissionStep): void {
+    const walk = (parent: MissionStep) => {
+      if (!parent.children || parent.children.length === 0) return;
+      parent.children = parent.children.filter((c) => {
+        if (exceptParent && parent === exceptParent) return true;
+        // Also dive into parallel containers
+        if (c === target) return false;
+        walk(c);
+        return true;
+      });
+    };
+    mission.steps = mission.steps.filter((top) => top !== target);
+    mission.steps.forEach((top) => walk(top));
+  }
+
+  private attachChildWithParallel(mission: Mission, parent: MissionStep, child: MissionStep): boolean {
+    if (parent === child) return false;
+    const alreadyChild = (p: MissionStep): boolean => {
+      if (!p.children) return false;
+      if (p.children.includes(child)) return true;
+      const par = this.isParallel(p.children[0]) ? p.children[0] : null;
+      return !!(par && par.children && par.children.includes(child));
+    };
+    if (alreadyChild(parent)) return false;
+
+    this.detachFromAllParents(mission, child, parent);
+
+    const par = this.ensureParallelUnder(parent);
+    par.children = par.children ?? [];
+    if (!par.children.includes(child)) {
+      par.children.push(child);
+      return true;
+    }
+    return false;
+  }
+
+  private missionStepFromAdHoc(node: FlowNode): MissionStep {
+    const args = Object.entries(node.args ?? {}).map(([name, v]) => ({
+      name,
+      value: v === null || v === undefined ? '' : String(v),
+      type: node.step?.arguments?.find(a => a.name === name)?.type ?? 'str'
+    }));
+
+    return {
+      step_type: (node.step?.name ?? '').toLowerCase() === 'parallel' ? 'parallel' : '',
+      function_name: node.step?.name || node.text,
+      arguments: args,
+      children: []
+    };
+  }
+
 }
