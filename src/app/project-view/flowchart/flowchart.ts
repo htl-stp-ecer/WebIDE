@@ -29,14 +29,16 @@ import { ContextMenuModule } from 'primeng/contextmenu';
 import { ContextMenu } from 'primeng/contextmenu';
 import { MenuItem } from 'primeng/api';
 import { Tooltip } from 'primeng/tooltip';
-import {FormsModule} from '@angular/forms';
+import { FormsModule } from '@angular/forms';
+
+type Connection = { outputId: string; inputId: string };
 
 interface FlowNode {
   id: string;
   text: string;
   position: any;
   step: Step;
-  args: { [key: string]: boolean | string | number | null };
+  args: Record<string, boolean | string | number | null>;
 }
 
 @Component({
@@ -55,642 +57,446 @@ interface FlowNode {
   styleUrl: './flowchart.scss'
 })
 export class Flowchart implements AfterViewChecked {
-  isDarkMode =
-    window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  isDarkMode = window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false;
 
+  // merged state rendered by <f-flow>
   nodes = signal<FlowNode[]>([]);
-  connections = signal<{ outputId: string; inputId: string }[]>([]);
+  connections = signal<Connection[]>([]);
 
+  // generated vs ad-hoc (user-added) layers
   private missionNodes = signal<FlowNode[]>([]);
-  private missionConnections = signal<{ outputId: string; inputId: string }[]>([]);
+  private missionConnections = signal<Connection[]>([]);
   private adHocNodes = signal<FlowNode[]>([]);
-  private adHocConnections = signal<{ outputId: string; inputId: string }[]>([]);
+  private adHocConnections = signal<Connection[]>([]);
 
-  private adHocPerMission = new Map<
-    string,
-    { nodes: FlowNode[]; connections: { outputId: string; inputId: string }[] }
-  >();
+  // remember per-mission ad-hoc layer
+  private adHocPerMission = new Map<string, { nodes: FlowNode[]; connections: Connection[] }>();
   private currentMissionKey: string | null = null;
 
   fCanvas = viewChild(FCanvasComponent);
-
-  private readonly startNodeId = 'start-node';
-  private readonly startOutputId = 'start-node-output';
-
-  private stepToNodeId: Map<MissionStep, string> = new Map();
-  private nodeIdToStep: Map<string, MissionStep> = new Map();
-
-  private needsAdjust = false;
-
-  @ViewChildren('nodeElement') nodeElements!: QueryList<ElementRef<HTMLDivElement>>;
+  @ViewChildren('nodeElement') nodeEls!: QueryList<ElementRef<HTMLDivElement>>;
   @ViewChild('cm') cm!: ContextMenu;
 
-  items: MenuItem[] = [{ label: 'Delete', icon: 'pi pi-trash', command: () => this.deleteNode() }];
+  private readonly START_NODE = 'start-node' as const;
+  private readonly START_OUT = 'start-node-output' as const;
 
-  private selectedNodeId: string = '';
+  private stepToNodeId = new Map<MissionStep, string>();
+  private nodeIdToStep = new Map<string, MissionStep>();
+  private needsAdjust = false;
+  private selectedNodeId = '';
+
+  items: MenuItem[] = [{ label: 'Delete', icon: 'pi pi-trash', command: () => this.deleteNode() }];
 
   constructor(private missionState: MissionStateService, private stepsState: StepsStateService) {
     effect(() => {
       const mission = this.missionState.currentMission();
-      const newKey = mission ? this.missionKey(mission) : null;
+      const newKey = mission ? ((mission as any).uuid ?? mission.name) : null;
 
       if (newKey !== this.currentMissionKey) {
-        if (this.currentMissionKey) {
+        if (this.currentMissionKey)
           this.adHocPerMission.set(this.currentMissionKey, {
             nodes: this.adHocNodes(),
-            connections: this.adHocConnections(),
+            connections: this.adHocConnections()
           });
-        }
 
-        if (newKey && this.adHocPerMission.has(newKey)) {
-          const saved = this.adHocPerMission.get(newKey)!;
-          this.adHocNodes.set(saved.nodes);
-          this.adHocConnections.set(saved.connections);
-        } else {
-          this.adHocNodes.set([]);
-          this.adHocConnections.set([]);
-        }
-
+        const saved = newKey ? this.adHocPerMission.get(newKey) : null;
+        this.adHocNodes.set(saved?.nodes ?? []);
+        this.adHocConnections.set(saved?.connections ?? []);
         this.currentMissionKey = newKey;
       }
 
       if (mission) {
-        this.generateStructure(mission);
+        this.rebuildFromMission(mission);
         this.needsAdjust = true;
       }
     });
   }
 
-  private missionKey(m: Mission): string {
-    return (m as any).uuid ?? m.name;
-  }
-
   ngAfterViewChecked(): void {
-    if (this.needsAdjust) {
-      this.needsAdjust = false;
-      this.adjustPositions();
-    }
+    if (!this.needsAdjust) return;
+    this.needsAdjust = false;
+    this.autoLayout();
   }
 
   onLoaded() {
     this.fCanvas()?.resetScaleAndCenter(false);
   }
 
-  onNodeMoved(nodeId: string, pos: IPoint) {
-    const updatedAdHoc = this.adHocNodes().map(n =>
-      n.id === nodeId ? { ...n, position: { x: pos.x, y: pos.y } } : n
-    );
-    if (updatedAdHoc !== this.adHocNodes()) {
-      this.adHocNodes.set(updatedAdHoc);
-      this.recomputeMergedView();
-      return;
-    }
+  // ---------- Small helpers ----------
+  private isParallel = (s?: MissionStep | null) =>
+    !!s && ((s.function_name ?? '').toLowerCase() === 'parallel' || (s.step_type ?? '').toLowerCase() === 'parallel');
+  private base = (id: string, suffix: 'input' | 'output') =>
+    suffix === 'output'
+      ? id === this.START_OUT
+        ? this.START_NODE
+        : id.replace(/-output$/, '')
+      : id.replace(/-input$/, '');
 
-    const updatedMission = this.missionNodes().map(n =>
-      n.id === nodeId ? { ...n, position: { x: pos.x, y: pos.y } } : n
-    );
-    if (updatedMission !== this.missionNodes()) {
-      this.missionNodes.set(updatedMission);
-      this.recomputeMergedView();
-    }
-  }
-
-  private getNodeHeights(): Map<string, number> {
-    const heights = new Map<string, number>();
-    this.nodeElements.forEach((el) => {
+  private heights(): Map<string, number> {
+    const m = new Map<string, number>();
+    this.nodeEls.forEach(el => {
       const id = el.nativeElement.dataset['nodeId'];
-      if (id) heights.set(id, el.nativeElement.offsetHeight);
+      if (id) m.set(id, el.nativeElement.offsetHeight || 80);
     });
-    return heights;
+    return m;
   }
 
-  private adjustPositions(): void {
-    const nodeHeights = this.getNodeHeights();
-    const startHeight = nodeHeights.get(this.startNodeId) ?? 80;
+  private cleanupAdHocNode(id: string) {
+    const inputId = `${id}-input`;
+    const outputId = `${id}-output`;
+    this.adHocNodes.set(this.adHocNodes().filter(n => n.id !== id));
+    this.adHocConnections.set(this.adHocConnections().filter(c => c.inputId !== inputId && c.outputId !== outputId));
+  }
 
-    let currentY = startHeight + 100;
+  private recomputeMergedView() {
+    const allNodes = [...this.missionNodes(), ...this.adHocNodes()];
+    const nodeIds = new Set(allNodes.map(n => n.id));
+    const validIn = (id: string) => nodeIds.has(id.replace(/-input$/, ''));
+    const validOut = (id: string) => id === this.START_OUT || nodeIds.has(id.replace(/-output$/, ''));
+    const adhocConns = this.adHocConnections().filter(c => validOut(c.outputId) && validIn(c.inputId));
+    this.nodes.set(allNodes);
+    this.connections.set([...this.missionConnections(), ...adhocConns]);
+  }
 
-    const newNodes = this.nodes().map((n) => ({ ...n, position: { ...n.position } }));
+  // ---------- Node movement ----------
+  onNodeMoved(nodeId: string, pos: IPoint) {
+    const upd = (arr: FlowNode[]) =>
+      arr.map(n => (n.id === nodeId ? { ...n, position: { x: pos.x, y: pos.y } } : n));
+    const trySet = (sig: typeof this.adHocNodes | typeof this.missionNodes) => {
+      const next = upd(sig());
+      if (next !== sig()) {
+        sig.set(next);
+        this.recomputeMergedView();
+        return true;
+      }
+      return false;
+    };
+    if (!trySet(this.adHocNodes)) trySet(this.missionNodes);
+  }
 
-    const updatePosition = (id: string, pos: { x: number; y: number }) => {
-      const node = newNodes.find((n) => n.id === id);
+  // ---------- Auto layout ----------
+  private autoLayout() {
+    const nodeHeights = this.heights();
+    const startH = nodeHeights.get(this.START_NODE) ?? 80;
+    let currentY = startH + 100;
+
+    const newNodes = this.nodes().map(n => ({ ...n, position: { ...n.position } }));
+    const setPos = (id: string, pos: { x: number; y: number }) => {
+      const node = newNodes.find(n => n.id === id);
       if (node) node.position = pos;
     };
 
     const mission = this.missionState.currentMission();
     if (mission) {
-      for (const missionStep of mission.steps) {
-        const startPos = { x: 300, y: currentY };
-        const res = this.assignPositions(
-          [missionStep],
-          startPos,
-          200,
-          100,
-          updatePosition,
-          nodeHeights
-        );
+      for (const s of mission.steps) {
+        const res = this.layoutSubtree([s], { x: 300, y: currentY }, 200, 100, setPos, nodeHeights);
         currentY = res.maxY + 100;
       }
     }
-
     this.nodes.set(newNodes);
   }
 
-  private assignPositions(
-    missionSteps: MissionStep[],
-    startPosition: { x: number; y: number },
-    nodeWidth: number,
-    verticalSpacing: number,
-    updatePosition: (id: string, pos: { x: number; y: number }) => void,
-    nodeHeights: Map<string, number>
+  private layoutSubtree(
+    steps: MissionStep[],
+    start: { x: number; y: number },
+    w: number,
+    vGap: number,
+    setPos: (id: string, p: { x: number; y: number }) => void,
+    hMap: Map<string, number>
   ): { maxY: number; width: number } {
-    if (missionSteps.length === 0) return { maxY: startPosition.y, width: 0 };
+    if (!steps.length) return { maxY: start.y, width: 0 };
+    const heights = steps.map(s => (this.isParallel(s) ? 0 : hMap.get(this.stepToNodeId.get(s) ?? '') ?? 80));
+    const maxH = Math.max(...heights, 0);
+    const totalW = (steps.length - 1) * w;
+    const startX = start.x - totalW / 2;
 
-    // Compute heights for visible nodes only; hidden ("parallel") steps have no node.
-    const siblingHeights = missionSteps.map((step) => {
-      if (this.isParallel(step)) return 0; // treat as transparent for height
-      const nodeId = this.stepToNodeId.get(step);
-      return nodeId ? nodeHeights.get(nodeId) ?? 80 : 80;
+    let maxY = start.y;
+    steps.forEach((s, i) => {
+      const x = startX + i * w;
+      if (this.isParallel(s)) {
+        if (s.children?.length) {
+          const r = this.layoutSubtree(s.children, { x, y: start.y + maxH + vGap }, w, vGap, setPos, hMap);
+          maxY = Math.max(maxY, r.maxY);
+        }
+        return;
+      }
+
+      const nodeId = this.stepToNodeId.get(s);
+      if (!nodeId) return;
+      setPos(nodeId, { x, y: start.y });
+
+      let curMaxY = start.y + (heights[i] || 0);
+      if (s.children?.length) {
+        const r = this.layoutSubtree(
+          s.children,
+          { x, y: start.y + Math.max(heights[i] || 0, maxH) + vGap },
+          w,
+          vGap,
+          setPos,
+          hMap
+        );
+        curMaxY = r.maxY;
+      }
+      maxY = Math.max(maxY, curMaxY);
     });
 
-    const maxSiblingHeight = Math.max(...siblingHeights, 0);
-    const totalWidth = (missionSteps.length - 1) * nodeWidth;
-    const startX = startPosition.x - totalWidth / 2;
-
-    let maxY = startPosition.y;
-
-    for (let i = 0; i < missionSteps.length; i++) {
-      const missionStep = missionSteps[i];
-
-      if (this.isParallel(missionStep)) {
-        if (missionStep.children && missionStep.children.length > 0) {
-          const childPosition = {
-            x: startX + i * nodeWidth,
-            y: startPosition.y + maxSiblingHeight + verticalSpacing
-          };
-          const childResult = this.assignPositions(
-            missionStep.children,
-            childPosition,
-            nodeWidth,
-            verticalSpacing,
-            updatePosition,
-            nodeHeights
-          );
-          maxY = Math.max(maxY, childResult.maxY);
-        }
-        continue;
-      }
-
-      const nodeId = this.stepToNodeId.get(missionStep);
-      if (!nodeId) continue;
-
-      const siblingX = startX + i * nodeWidth;
-      const pos = { x: siblingX, y: startPosition.y };
-      updatePosition(nodeId, pos);
-
-      const nodeHeight = siblingHeights[i] || 0;
-      let currentMaxY = startPosition.y + nodeHeight;
-
-      if (missionStep.children && missionStep.children.length > 0) {
-        const childPosition = {
-          x: siblingX,
-          y: startPosition.y + Math.max(nodeHeight, maxSiblingHeight) + verticalSpacing
-        };
-        const childResult = this.assignPositions(
-          missionStep.children,
-          childPosition,
-          nodeWidth,
-          verticalSpacing,
-          updatePosition,
-          nodeHeights
-        );
-        currentMaxY = childResult.maxY;
-      }
-
-      maxY = Math.max(maxY, currentMaxY);
-    }
-
-    return { maxY, width: totalWidth + nodeWidth };
+    return { maxY, width: totalW + w };
   }
 
-  private generateStructure(mission: Mission) {
-    const newMissionNodes: FlowNode[] = [];
-    const newMissionConnections: { outputId: string; inputId: string }[] = [];
-
-    const oldStepToNodeId = new Map(this.stepToNodeId);
+  // ---------- Mission rebuild ----------
+  private rebuildFromMission(mission: Mission) {
+    const newNodes: FlowNode[] = [];
+    const newConns: Connection[] = [];
+    const oldMap = new Map(this.stepToNodeId);
 
     this.stepToNodeId = new Map();
     this.nodeIdToStep.clear();
 
-    let previousExitIds: string[] = [this.startOutputId];
-
-    for (const topStep of mission.steps) {
-      const result = this.createNodesAndConnectionsStable(
-        [topStep],
-        previousExitIds,
-        newMissionNodes,
-        newMissionConnections,
-        oldStepToNodeId
-      );
-      previousExitIds = result.exitIds;
+    let exits: string[] = [this.START_OUT];
+    for (const top of mission.steps) {
+      const r = this.buildStable([top], exits, newNodes, newConns, oldMap);
+      exits = r.exitIds;
     }
 
-    this.missionNodes.set(newMissionNodes);
-    this.missionConnections.set(newMissionConnections);
-
+    this.missionNodes.set(newNodes);
+    this.missionConnections.set(newConns);
     this.recomputeMergedView();
   }
 
-  private createNodesAndConnectionsStable(
-    missionSteps: MissionStep[],
-    parentExitIds: string[],
+  private buildStable(
+    steps: MissionStep[],
+    parentExits: string[],
     nodesOut: FlowNode[],
-    connsOut: { outputId: string; inputId: string }[],
-    oldStepToNodeId: Map<MissionStep, string>
+    connsOut: Connection[],
+    old: Map<MissionStep, string>
   ): { entryIds: string[]; exitIds: string[] } {
-    const entryIds: string[] = [];
-    const exitIds: string[] = [];
+    const entries: string[] = [];
+    const exits: string[] = [];
 
-    for (const missionStep of missionSteps) {
-      if (this.isParallel(missionStep)) {
-        const children = missionStep.children ?? [];
-        const forwarded = this.createNodesAndConnectionsStable(
-          children,
-          parentExitIds,
-          nodesOut,
-          connsOut,
-          oldStepToNodeId
-        );
-        entryIds.push(...forwarded.entryIds);
-        exitIds.push(...forwarded.exitIds);
+    for (const s of steps) {
+      if (this.isParallel(s)) {
+        const { entryIds, exitIds } = this.buildStable(s.children ?? [], parentExits, nodesOut, connsOut, old);
+        entries.push(...entryIds);
+        exits.push(...exitIds);
         continue;
       }
 
-      // visible step
-      const nodeId = oldStepToNodeId.get(missionStep) ?? generateGuid();
-      this.stepToNodeId.set(missionStep, nodeId);
-      this.nodeIdToStep.set(nodeId, missionStep);
+      const nodeId = old.get(s) ?? generateGuid();
+      this.stepToNodeId.set(s, nodeId);
+      this.nodeIdToStep.set(nodeId, s);
 
       const inputId = `${nodeId}-input`;
       const outputId = `${nodeId}-output`;
 
-      const node: FlowNode = {
+      nodesOut.push({
         id: nodeId,
-        text: missionStep.function_name,
+        text: s.function_name,
         position: { x: 0, y: 0 },
-        step: this.convertMissionStepToStep(missionStep),
-        args: this.initializeArgs(missionStep)
-      };
-      nodesOut.push(node);
+        step: this.asStep(s),
+        args: this.initialArgs(s)
+      });
 
-      for (const parentExitId of parentExitIds) {
-        connsOut.push({ outputId: parentExitId, inputId });
-      }
+      parentExits.forEach(pid => connsOut.push({ outputId: pid, inputId }));
+      entries.push(inputId);
 
-      entryIds.push(inputId);
-
-      let currentExitIds: string[] = [outputId];
-      if (missionStep.children && missionStep.children.length > 0) {
-        const childResult = this.createNodesAndConnectionsStable(
-          missionStep.children,
-          [outputId],
-          nodesOut,
-          connsOut,
-          oldStepToNodeId
-        );
-        currentExitIds = childResult.exitIds;
-      }
-      exitIds.push(...currentExitIds);
+      const childExit = s.children?.length
+        ? this.buildStable(s.children, [outputId], nodesOut, connsOut, old).exitIds
+        : [outputId];
+      exits.push(...childExit);
     }
 
-    return { entryIds, exitIds };
+    return { entryIds: entries, exitIds: exits };
   }
 
-  onCreateNode(event: FCreateNodeEvent) {
-    const step = event.data as Step;
-    const args: { [key: string]: boolean | string | number | null } = {};
-
-    step?.arguments?.forEach((arg) => {
-      if (arg.default !== null && arg.default !== '') {
-        if (arg.type === 'bool') {
-          args[arg.name] = arg.default.toLowerCase() === 'true';
-        } else if (arg.type === 'float') {
-          args[arg.name] = parseFloat(arg.default) || null;
-        } else {
-          args[arg.name] = arg.default;
-        }
-      } else {
-        args[arg.name] = arg.type === 'bool' ? false : arg.type === 'float' ? null : '';
-      }
+  // ---------- Node create / connect ----------
+  onCreateNode(e: FCreateNodeEvent) {
+    const step = e.data as Step;
+    const args: Record<string, boolean | string | number | null> = {};
+    step?.arguments?.forEach(a => {
+      const d = a.default ?? '';
+      const v = d !== '' ? d : '';
+      args[a.name] = a.type === 'bool' ? String(v).toLowerCase() === 'true' : a.type === 'float' ? parseFloat(String(v)) || null : v;
     });
 
-    const id = generateGuid();
+    this.adHocNodes.set([
+      ...this.adHocNodes(),
+      {
+        id: generateGuid(),
+        text: step?.name ?? 'New Node',
+        position: e.rect,
+        step,
+        args
+      }
+    ]);
 
-    const newNode: FlowNode = {
-      id,
-      text: step?.name ?? 'New Node',
-      position: event.rect,
-      step: step,
-      args
-    };
-
-    this.adHocNodes.set([...this.adHocNodes(), newNode]);
     this.recomputeMergedView();
     this.needsAdjust = true;
   }
 
-  public addConnection(event: FCreateConnectionEvent): void {
-    if (!event.fInputId) return;
+  public addConnection(e: FCreateConnectionEvent): void {
+    if (!e.fInputId) return;
 
-    const srcBaseId = this.baseFromOutputId(event.fOutputId);
-    const dstBaseId = this.baseFromInputId(event.fInputId);
-
+    const srcId = this.base(e.fOutputId, 'output');
+    const dstId = this.base(e.fInputId, 'input');
     const mission = this.missionState.currentMission();
+    const srcStep = this.nodeIdToStep.get(srcId);
+    const dstStep = this.nodeIdToStep.get(dstId);
 
-    const srcStep = this.nodeIdToStep.get(srcBaseId);
-    const dstStep = this.nodeIdToStep.get(dstBaseId);
+    const promote = (adhocId: string, parent?: MissionStep) => {
+      const n = this.adHocNodes().find(x => x.id === adhocId);
+      if (!mission || !n) return false;
+      const mStep = this.fromAdHoc(n);
+      this.stepToNodeId.set(mStep, n.id); // keep visual continuity
 
-    // A) generated -> ad-hoc  ==> promote ad-hoc into mission under srcStep
-    if (mission && srcStep && !dstStep) {
-      const adhoc = this.adHocNodes().find(n => n.id === dstBaseId);
-      if (adhoc) {
-        const promoted = this.missionStepFromAdHoc(adhoc);
+      if (parent) this.attachChildWithParallel(mission, parent, mStep);
+      else (mission.steps ??= []).push(mStep);
 
-        // Reuse the ad-hoc node's id during regeneration for visual continuity
-        this.stepToNodeId.set(promoted, adhoc.id);
+      this.cleanupAdHocNode(n.id);
+      this.rebuildFromMission(mission);
+      this.needsAdjust = true;
+      return true;
+    };
 
-        // Attach under the source (handles parallel fan-out internally)
-        this.attachChildWithParallel(mission, srcStep, promoted);
-
-        // Remove ad-hoc node + any ad-hoc connections touching it
-        const inputId = `${adhoc.id}-input`;
-        const outputId = `${adhoc.id}-output`;
-        this.adHocConnections.set(
-          this.adHocConnections().filter(c => c.inputId !== inputId && c.outputId !== outputId)
-        );
-        this.adHocNodes.set(this.adHocNodes().filter(n => n.id !== adhoc.id));
-
-        // Rebuild graph & auto-layout
-        this.generateStructure(mission);
-        this.needsAdjust = true;
-        return;
-      }
+    if (mission && srcStep && !dstStep && promote(dstId, srcStep)) return; // generated -> ad-hoc
+    if (mission && srcId === this.START_NODE && !dstStep && promote(dstId)) return; // start -> ad-hoc
+    if (mission && srcStep && dstStep && this.attachChildWithParallel(mission, srcStep, dstStep)) {
+      this.rebuildFromMission(mission);
+      this.needsAdjust = true;
+      return;
     }
 
-    // B) Start -> ad-hoc  ==> promote as new top-level mission step
-    if (mission && srcBaseId === this.startNodeId && !dstStep) {
-      const adhoc = this.adHocNodes().find(n => n.id === dstBaseId);
-      if (adhoc) {
-        const promoted = this.missionStepFromAdHoc(adhoc);
-
-        // Reuse id
-        this.stepToNodeId.set(promoted, adhoc.id);
-
-        // Append to top-level mission steps
-        mission.steps = mission.steps ?? [];
-        mission.steps.push(promoted);
-
-        // Clean up ad-hoc copies
-        const inputId = `${adhoc.id}-input`;
-        const outputId = `${adhoc.id}-output`;
-        this.adHocConnections.set(
-          this.adHocConnections().filter(c => c.inputId !== inputId && c.outputId !== outputId)
-        );
-        this.adHocNodes.set(this.adHocNodes().filter(n => n.id !== adhoc.id));
-
-        // Rebuild & auto-layout
-        this.generateStructure(mission);
-        this.needsAdjust = true;
-        return;
-      }
-    }
-
-    // C) generated -> generated  ==> your existing "attach with parallel"
-    if (mission && srcStep && dstStep) {
-      const changed = this.attachChildWithParallel(mission, srcStep, dstStep);
-      if (changed) {
-        this.generateStructure(mission);
-        this.needsAdjust = true;
-        return;
-      }
-    }
-
-    // Fallback: keep as ad-hoc connection
-    this.adHocConnections.set([
-      ...this.adHocConnections(),
-      { outputId: event.fOutputId, inputId: event.fInputId }
-    ]);
+    // fallback: keep as ad-hoc wire
+    this.adHocConnections.set([...this.adHocConnections(), { outputId: e.fOutputId, inputId: e.fInputId }]);
     this.recomputeMergedView();
   }
 
-
-  onRightClick(event: MouseEvent, nodeId: string) {
-    event.preventDefault();
+  // ---------- Context menu ----------
+  onRightClick(ev: MouseEvent, nodeId: string) {
+    ev.preventDefault();
     this.selectedNodeId = nodeId;
-    this.cm.show(event);
+    this.cm.show(ev);
   }
 
   deleteNode() {
-    const nodeId = this.selectedNodeId;
-    if (!nodeId) return;
+    const id = this.selectedNodeId;
+    if (!id) return;
 
-    const stepToRemove = this.nodeIdToStep.get(nodeId);
+    const step = this.nodeIdToStep.get(id);
+    const mission = this.missionState.currentMission();
 
-    if (stepToRemove) {
-      this.removeStepFromMission(stepToRemove);
-      const mission = this.missionState.currentMission();
-      if (mission) this.generateStructure(mission);
+    if (step && mission) {
+      // explicitly typed, self-recursive helper
+      const rm = (arr?: MissionStep[]): MissionStep[] | undefined =>
+        arr?.filter(s => s !== step)
+          .map(s => ({ ...s, children: rm(s.children) ?? [] }));
+
+      mission.steps = rm(mission.steps) ?? [];
+      this.rebuildFromMission(mission);
     } else {
-      this.adHocNodes.set(this.adHocNodes().filter((n) => n.id !== nodeId));
-
-      const inputId = `${nodeId}-input`;
-      const outputId = `${nodeId}-output`;
-
-      this.adHocConnections.set(
-        this.adHocConnections().filter((c) => c.outputId !== outputId && c.inputId !== inputId)
-      );
-
+      this.cleanupAdHocNode(id);
       this.recomputeMergedView();
     }
 
     this.needsAdjust = true;
   }
 
-  private removeStepFromMission(stepToRemove: MissionStep) {
-    const mission = this.missionState.currentMission();
-    if (!mission) return;
+  // ---------- Step ↔ UI translation ----------
+  private asStep(ms: MissionStep): Step {
+    const pool = this.stepsState.currentSteps() ?? [];
+    const match = pool.find(s => s.name === ms.function_name);
+    if (match) return match;
 
-    mission.steps = mission.steps.filter((s) => s !== stepToRemove);
-    for (const step of mission.steps) {
-      this.removeStepFromChildren(step, stepToRemove);
-    }
+    return {
+      name: ms.function_name,
+      import: '',
+      arguments: ms.arguments.map((a, i) => ({
+        name: a.name || `arg${i}`,
+        type: a.type,
+        import: null,
+        optional: false,
+        default: a.value
+      })),
+      file: ''
+    };
   }
 
-  private removeStepFromChildren(parent: MissionStep, stepToRemove: MissionStep) {
-    if (!parent.children) return;
-    parent.children = parent.children.filter((c) => c !== stepToRemove);
-    for (const child of parent.children) {
-      this.removeStepFromChildren(child, stepToRemove);
-    }
-  }
+  private initialArgs(ms: MissionStep): Record<string, boolean | string | number | null> {
+    const pool = this.stepsState.currentSteps() ?? [];
+    const match = pool.find(s => s.name === ms.function_name);
 
-  private recomputeMergedView() {
-    const missionNodes = this.missionNodes();
-    const adHocNodes = this.adHocNodes();
+    const setVal = (type: string, raw: string) =>
+      type === 'bool' ? raw.toLowerCase() === 'true' : type === 'float' ? parseFloat(raw) || null : raw;
 
-    const allNodes = [...missionNodes, ...adHocNodes];
-    const nodeIdSet = new Set(allNodes.map((n) => n.id));
-    const validInputId = (id: string) => {
-      const base = id.replace(/-input$/, '');
-      return nodeIdSet.has(base);
-    };
-    const validOutputId = (id: string) => {
-      const base = id.replace(/-output$/, '');
-      return nodeIdSet.has(base) || id === this.startOutputId;
-    };
+    if (match)
+      return Object.fromEntries(
+        match.arguments.map((sa, i) => {
+          const mv = ms.arguments[i]?.value ?? sa.default ?? '';
+          return [sa.name, setVal(sa.type, String(mv))];
+        })
+      );
 
-    const missionConns = this.missionConnections();
-
-    const filteredAdHocConns = this.adHocConnections().filter(
-      (c) => validOutputId(c.outputId) && validInputId(c.inputId)
+    return Object.fromEntries(
+      ms.arguments.map((a, i) => {
+        const name = a.name || `arg${i}`;
+        return [name, setVal(a.type, String(a.value ?? ''))];
+      })
     );
-
-    this.nodes.set(allNodes);
-    this.connections.set([...missionConns, ...filteredAdHocConns]);
-  }
-
-  private convertMissionStepToStep(missionStep: MissionStep): Step {
-    const availableSteps = this.stepsState.currentSteps();
-    const actualStep = availableSteps?.find((step) => step.name === missionStep.function_name);
-    if (actualStep) {
-      return actualStep;
-    } else {
-      return {
-        name: missionStep.function_name,
-        import: '',
-        arguments: missionStep.arguments.map((arg, index) => ({
-          name: arg.name || `arg${index}`,
-          type: arg.type,
-          import: null,
-          optional: false,
-          default: arg.value
-        })),
-        file: ''
-      };
-    }
-  }
-
-  private initializeArgs(missionStep: MissionStep): {
-    [key: string]: boolean | string | number | null;
-  } {
-    const args: { [key: string]: boolean | string | number | null } = {};
-
-    const availableSteps = this.stepsState.currentSteps();
-    const actualStep = availableSteps?.find((step) => step.name === missionStep.function_name);
-
-    if (actualStep) {
-      actualStep.arguments.forEach((stepArg, index) => {
-        const missionArg = missionStep.arguments[index];
-        let value: string = '';
-        if (missionArg && missionArg.value !== null && missionArg.value !== '') {
-          value = missionArg.value;
-        } else if (stepArg.default !== null && stepArg.default !== '') {
-          value = stepArg.default;
-        }
-        if (stepArg.type === 'bool') {
-          args[stepArg.name] = String(value).toLowerCase() === 'true';
-        } else if (stepArg.type === 'float') {
-          args[stepArg.name] = parseFloat(value) || null;
-        } else {
-          args[stepArg.name] = value;
-        }
-      });
-    } else {
-      missionStep.arguments.forEach((arg, index) => {
-        const argName = arg.name || `arg${index}`;
-        let value: string = arg.value ?? '';
-        if (arg.type === 'bool') {
-          args[arg.name] = String(value).toLowerCase() === 'true';
-        } else if (arg.type === 'float') {
-          args[argName] = parseFloat(value) || null;
-        } else {
-          args[argName] = value;
-        }
-      });
-    }
-    return args;
-  }
-
-  private isParallel(step: MissionStep | null | undefined): boolean {
-    if (!step) return false;
-    const fn = (step.function_name ?? '').toLowerCase();
-    const st = (step.step_type ?? '').toLowerCase();
-    return fn === 'parallel' || st === 'parallel';
-  }
-
-  private baseFromOutputId(outputId: string): string {
-    if (outputId === this.startOutputId) return this.startNodeId;
-    return outputId.replace(/-output$/, '');
-  }
-
-  private baseFromInputId(inputId: string): string {
-    return inputId.replace(/-input$/, '');
   }
 
   private ensureParallelUnder(parent: MissionStep): MissionStep {
-    parent.children = parent.children ?? [];
-    if (parent.children.length === 0) {
-      const par = this.newParallel();
-      parent.children.push(par);
-      return par;
+    parent.children ??= [];
+    if (!parent.children.length) {
+      const p = this.newParallel();
+      parent.children.push(p);
+      return p;
     }
-    if (this.isParallel(parent.children[0])) {
-      return parent.children[0];
-    }
-    const par = this.newParallel();
-    par.children = [...parent.children];
-    parent.children = [par];
-    return par;
+    if (this.isParallel(parent.children[0])) return parent.children[0];
+    const p = this.newParallel();
+    p.children = [...parent.children];
+    parent.children = [p];
+    return p;
   }
 
   private newParallel(): MissionStep {
-    return {
-      step_type: 'parallel',
-      function_name: 'parallel',
-      arguments: [],
-      children: []
-    };
+    return { step_type: 'parallel', function_name: 'parallel', arguments: [], children: [] };
   }
 
-  private detachFromAllParents(mission: Mission, target: MissionStep, exceptParent?: MissionStep): void {
+  private detachEverywhere(mission: Mission, target: MissionStep, exceptParent?: MissionStep): void {
+    mission.steps = (mission.steps ?? []).filter(s => s !== target);
+
     const walk = (parent: MissionStep) => {
-      if (!parent.children || parent.children.length === 0) return;
-      parent.children = parent.children.filter((c) => {
-        if (exceptParent && parent === exceptParent) return true;
-        // Also dive into parallel containers
-        if (c === target) return false;
-        walk(c);
+      const children = parent.children ?? [];
+      if (!children.length) return;
+
+      parent.children = children.filter(child => {
+        if (exceptParent && parent === exceptParent) {
+          walk(child);
+          return true;
+        }
+        if (child === target) return false;
+        walk(child);
         return true;
       });
     };
-    mission.steps = mission.steps.filter((top) => top !== target);
-    mission.steps.forEach((top) => walk(top));
+
+    (mission.steps ?? []).forEach(walk);
   }
+
 
   private attachChildWithParallel(mission: Mission, parent: MissionStep, child: MissionStep): boolean {
     if (parent === child) return false;
-    const alreadyChild = (p: MissionStep): boolean => {
-      if (!p.children) return false;
-      if (p.children.includes(child)) return true;
-      const par = this.isParallel(p.children[0]) ? p.children[0] : null;
-      return !!(par && par.children && par.children.includes(child));
+
+    const alreadyChild = (p: MissionStep) => {
+      const ch = p.children ?? [];
+      if (ch.includes(child)) return true;
+      const first = ch[0];
+      return this.isParallel(first) && !!first.children?.includes(child);
     };
     if (alreadyChild(parent)) return false;
 
-    this.detachFromAllParents(mission, child, parent);
-
+    this.detachEverywhere(mission, child, parent);
     const par = this.ensureParallelUnder(parent);
-    par.children = par.children ?? [];
+    par.children ??= [];
     if (!par.children.includes(child)) {
       par.children.push(child);
       return true;
@@ -698,19 +504,17 @@ export class Flowchart implements AfterViewChecked {
     return false;
   }
 
-  private missionStepFromAdHoc(node: FlowNode): MissionStep {
-    const args = Object.entries(node.args ?? {}).map(([name, v]) => ({
+  private fromAdHoc(n: FlowNode): MissionStep {
+    const args = Object.entries(n.args || {}).map(([name, v]) => ({
       name,
-      value: v === null || v === undefined ? '' : String(v),
-      type: node.step?.arguments?.find(a => a.name === name)?.type ?? 'str'
+      value: v == null ? '' : String(v),
+      type: n.step?.arguments?.find(a => a.name === name)?.type ?? 'str'
     }));
-
     return {
-      step_type: (node.step?.name ?? '').toLowerCase() === 'parallel' ? 'parallel' : '',
-      function_name: node.step?.name || node.text,
+      step_type: (n.step?.name ?? '').toLowerCase() === 'parallel' ? 'parallel' : '',
+      function_name: n.step?.name || n.text,
       arguments: args,
       children: []
     };
   }
-
 }
