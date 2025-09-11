@@ -48,7 +48,7 @@
   /* Key fix: prevent child inputs from exceeding node width */
   box-sizing: border-box;
   * { box-sizing: border-box; }
-  min-width: 0; /* allow flex children to shrink properly */
+  //min-width: 0; /* allow flex children to shrink properly */
 }
 
 @media (prefers-color-scheme: dark) {

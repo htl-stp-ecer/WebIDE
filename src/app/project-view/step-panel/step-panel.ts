@@ -23,25 +23,8 @@ export class StepPanel implements OnInit {
 
   ngOnInit(): void {
     this.http.getAllSteps().subscribe(steps => {
-      this.addDefaultSteps(steps);
       this.stepStateService.setSteps(steps);
       this.groupSteps(steps);
-    });
-  }
-
-  private addDefaultSteps(steps: Step[]): void {
-    steps.push({
-      name: 'sequential',
-      import: 'from libstp_helpers.api.steps import seq',
-      arguments: [],
-      file: ''
-    });
-
-    steps.push({
-      name: 'parallel',
-      import: '',
-      arguments: [],
-      file: ''
     });
   }
 

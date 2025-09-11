@@ -29,7 +29,7 @@ import { ContextMenuModule } from 'primeng/contextmenu';
 import { ContextMenu } from 'primeng/contextmenu';
 import { MenuItem } from 'primeng/api';
 import { Tooltip } from 'primeng/tooltip';
-import {FormsModule} from '@angular/forms';
+import { FormsModule } from '@angular/forms';
 
 interface FlowNode {
   id: string;
@@ -55,7 +55,8 @@ interface FlowNode {
   styleUrl: './flowchart.scss'
 })
 export class Flowchart implements AfterViewChecked {
-  isDarkMode = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  isDarkMode =
+    window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
 
   /**
    * Public, merged, render-ready signals
@@ -104,7 +105,6 @@ export class Flowchart implements AfterViewChecked {
 
       // If mission changed, swap the ad-hoc set
       if (newKey !== this.currentMissionKey) {
-        // stash current ad-hoc under previous mission key
         if (this.currentMissionKey) {
           this.adHocPerMission.set(this.currentMissionKey, {
             nodes: this.adHocNodes(),
@@ -112,7 +112,6 @@ export class Flowchart implements AfterViewChecked {
           });
         }
 
-        // load ad-hoc for the new mission (or clear if none saved yet)
         if (newKey && this.adHocPerMission.has(newKey)) {
           const saved = this.adHocPerMission.get(newKey)!;
           this.adHocNodes.set(saved.nodes);
@@ -133,8 +132,6 @@ export class Flowchart implements AfterViewChecked {
   }
 
   private missionKey(m: Mission): string {
-    // Prefer a stable id/uuid if your Mission has one; fallback to name.
-    // If you have m.uuid, use that here.
     return (m as any).uuid ?? m.name;
   }
 
@@ -200,7 +197,14 @@ export class Flowchart implements AfterViewChecked {
     if (mission) {
       for (const missionStep of mission.steps) {
         const startPos = { x: 300, y: currentY };
-        const res = this.assignPositions([missionStep], startPos, 200, 100, updatePosition, nodeHeights);
+        const res = this.assignPositions(
+          [missionStep],
+          startPos,
+          200,
+          100,
+          updatePosition,
+          nodeHeights
+        );
         currentY = res.maxY + 100;
       }
     }
@@ -218,12 +222,14 @@ export class Flowchart implements AfterViewChecked {
   ): { maxY: number; width: number } {
     if (missionSteps.length === 0) return { maxY: startPosition.y, width: 0 };
 
+    // Compute heights for visible nodes only; hidden ("parallel") steps have no node.
     const siblingHeights = missionSteps.map((step) => {
+      if (this.isParallel(step)) return 0; // treat as transparent for height
       const nodeId = this.stepToNodeId.get(step);
       return nodeId ? nodeHeights.get(nodeId) ?? 80 : 80;
     });
 
-    const maxSiblingHeight = Math.max(...siblingHeights);
+    const maxSiblingHeight = Math.max(...siblingHeights, 0);
     const totalWidth = (missionSteps.length - 1) * nodeWidth;
     const startX = startPosition.x - totalWidth / 2;
 
@@ -231,6 +237,27 @@ export class Flowchart implements AfterViewChecked {
 
     for (let i = 0; i < missionSteps.length; i++) {
       const missionStep = missionSteps[i];
+
+      // If this is a hidden "parallel" container, don't position a node: just place its children.
+      if (this.isParallel(missionStep)) {
+        if (missionStep.children && missionStep.children.length > 0) {
+          const childPosition = {
+            x: startX + i * nodeWidth,
+            y: startPosition.y + maxSiblingHeight + verticalSpacing
+          };
+          const childResult = this.assignPositions(
+            missionStep.children,
+            childPosition,
+            nodeWidth,
+            verticalSpacing,
+            updatePosition,
+            nodeHeights
+          );
+          maxY = Math.max(maxY, childResult.maxY);
+        }
+        continue;
+      }
+
       const nodeId = this.stepToNodeId.get(missionStep);
       if (!nodeId) continue;
 
@@ -238,11 +265,14 @@ export class Flowchart implements AfterViewChecked {
       const pos = { x: siblingX, y: startPosition.y };
       updatePosition(nodeId, pos);
 
-      const nodeHeight = siblingHeights[i];
+      const nodeHeight = siblingHeights[i] || 0;
       let currentMaxY = startPosition.y + nodeHeight;
 
       if (missionStep.children && missionStep.children.length > 0) {
-        const childPosition = { x: siblingX, y: startPosition.y + maxSiblingHeight + verticalSpacing };
+        const childPosition = {
+          x: siblingX,
+          y: startPosition.y + Math.max(nodeHeight, maxSiblingHeight) + verticalSpacing
+        };
         const childResult = this.assignPositions(
           missionStep.children,
           childPosition,
@@ -262,6 +292,10 @@ export class Flowchart implements AfterViewChecked {
 
   /**
    * Mission build (id-stable & ad-hoc safe)
+   * NOTE: "parallel" steps are HIDDEN in the flowchart:
+   * - We DO NOT render a node for them.
+   * - We connect their PARENT directly to their CHILDREN in the diagram.
+   * - Mission data remains unchanged.
    */
   private generateStructure(mission: Mission) {
     const newMissionNodes: FlowNode[] = [];
@@ -275,7 +309,13 @@ export class Flowchart implements AfterViewChecked {
     let previousExitIds: string[] = [this.startOutputId];
 
     for (const topStep of mission.steps) {
-      const result = this.createNodesAndConnectionsStable([topStep], previousExitIds, newMissionNodes, newMissionConnections, oldStepToNodeId);
+      const result = this.createNodesAndConnectionsStable(
+        [topStep],
+        previousExitIds,
+        newMissionNodes,
+        newMissionConnections,
+        oldStepToNodeId
+      );
       previousExitIds = result.exitIds;
     }
 
@@ -296,6 +336,22 @@ export class Flowchart implements AfterViewChecked {
     const exitIds: string[] = [];
 
     for (const missionStep of missionSteps) {
+      // --- HIDE "parallel": don't create a node; forward connections to its children ---
+      if (this.isParallel(missionStep)) {
+        const children = missionStep.children ?? [];
+        const forwarded = this.createNodesAndConnectionsStable(
+          children,
+          parentExitIds,
+          nodesOut,
+          connsOut,
+          oldStepToNodeId
+        );
+        entryIds.push(...forwarded.entryIds);
+        exitIds.push(...forwarded.exitIds);
+        continue;
+      }
+
+      // visible step
       const nodeId = oldStepToNodeId.get(missionStep) ?? generateGuid();
       this.stepToNodeId.set(missionStep, nodeId);
       this.nodeIdToStep.set(nodeId, missionStep);
@@ -524,5 +580,16 @@ export class Flowchart implements AfterViewChecked {
       });
     }
     return args;
+  }
+
+  /**
+   * Treat a step as a hidden "parallel" container if either field says so.
+   * (We don't render it, but we wire its children directly to the parent.)
+   */
+  private isParallel(step: MissionStep | null | undefined): boolean {
+    if (!step) return false;
+    const fn = (step.function_name ?? '').toLowerCase();
+    const st = (step.step_type ?? '').toLowerCase();
+    return fn === 'parallel' || st === 'parallel';
   }
 }
