@@ -317,12 +317,14 @@ export class Flowchart implements AfterViewChecked {
     if (parent === child) return false;
     const effective = this.getEffectiveChildren(mission, parent);
     if (effective.includes(child)) return false;
-    this.detachEverywhere(mission, child, parent);
-    const par = this.ensureParallelUnder(parent);
-    par.children ??= [];
-    const uniq = new Set<MissionStep>([...par.children, ...effective]);
-    uniq.add(child);
-    par.children = Array.from(uniq);
+    for (const missionStep of effective) {
+      this.detachEverywhere(mission, missionStep, parent);
+      const par = this.ensureParallelUnder(parent);
+      par.children ??= [];
+      const uniq = new Set<MissionStep>([...par.children, ...effective]);
+      uniq.add(child);
+      par.children = Array.from(uniq);
+    }
     return true;
   }
   private fromAdHoc(n: FlowNode): MissionStep {
@@ -337,29 +339,6 @@ export class Flowchart implements AfterViewChecked {
       arguments: args,
       children: []
     };
-  }
-  private stepNodeId(s?: MissionStep): string | null {
-    if (!s) return null;
-    const id = this.stepToNodeId.get(s);
-    return id ?? null;
-  }
-  private hasConnectionFromTo(src?: MissionStep, dst?: MissionStep): boolean {
-    const sid = this.stepNodeId(src);
-    const did = this.stepNodeId(dst);
-    if (!sid || !did) return false;
-    const matches = (c: Connection) =>
-      this.base(c.outputId, 'output') === sid && this.base(c.inputId, 'input') === did;
-    return this.missionConnections().some(matches) || this.adHocConnections().some(matches);
-  }
-  private clearAdHocBetween(src?: MissionStep, dst?: MissionStep): void {
-    const sid = this.stepNodeId(src);
-    const did = this.stepNodeId(dst);
-    if (!sid || !did) return;
-    this.adHocConnections.set(
-      this.adHocConnections().filter(
-        c => !(this.base(c.outputId, 'output') === sid && this.base(c.inputId, 'input') === did)
-      )
-    );
   }
   private promoteAdHocByNodeId(mission: Mission, nodeId: string): MissionStep | null {
     const n = this.adHocNodes().find(x => x.id === nodeId);
@@ -385,17 +364,18 @@ export class Flowchart implements AfterViewChecked {
     // 2) wire-based
     const parentId = this.stepToNodeId.get(parent);
     if (parentId) {
-      const parentOut = `${parentId}-output`;
       const merged = [...this.missionConnections(), ...this.adHocConnections()];
       const wiredIns = merged.filter(c => this.base(c.outputId, 'output') === parentId).map(c => this.base(c.inputId, 'input'));
       for (const inNodeId of wiredIns) {
         const wiredStep = this.nodeIdToStep.get(inNodeId);
         if (wiredStep) {
           set.add(wiredStep);
+          console.log("wired")
         } else {
           // If it's an ad-hoc node, promote it so we can treat it as a real child
           const promoted = this.promoteAdHocByNodeId(mission, inNodeId);
           if (promoted) set.add(promoted);
+          console.log("promoted")
         }
       }
     }
