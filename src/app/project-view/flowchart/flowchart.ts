@@ -30,17 +30,14 @@ import { ContextMenu } from 'primeng/contextmenu';
 import { MenuItem } from 'primeng/api';
 import { Tooltip } from 'primeng/tooltip';
 import { FormsModule } from '@angular/forms';
-
 type Connection = { outputId: string; inputId: string };
-
 interface FlowNode {
   id: string;
   text: string;
-  position: any;
+  position: { x: number; y: number };
   step: Step;
   args: Record<string, boolean | string | number | null>;
 }
-
 @Component({
   selector: 'app-flowchart',
   imports: [
@@ -54,84 +51,64 @@ interface FlowNode {
     FormsModule
   ],
   templateUrl: './flowchart.html',
-  styleUrl: './flowchart.scss'
+  styleUrl: './flowchart.scss',
+  standalone: true
 })
 export class Flowchart implements AfterViewChecked {
-  isDarkMode = window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false;
-
-  // merged state rendered by <f-flow>
-  nodes = signal<FlowNode[]>([]);
-  connections = signal<Connection[]>([]);
-
-  // generated vs ad-hoc (user-added) layers
-  private missionNodes = signal<FlowNode[]>([]);
-  private missionConnections = signal<Connection[]>([]);
-  private adHocNodes = signal<FlowNode[]>([]);
-  private adHocConnections = signal<Connection[]>([]);
-
-  // remember per-mission ad-hoc layer
-  private adHocPerMission = new Map<string, { nodes: FlowNode[]; connections: Connection[] }>();
+  readonly isDarkMode = matchMedia?.('(prefers-color-scheme: dark)').matches ?? false;
+  // Rendered state for <f-flow>
+  readonly nodes = signal<FlowNode[]>([]);
+  readonly connections = signal<Connection[]>([]);
+  // Generated (mission) vs. ad-hoc layers
+  private readonly missionNodes = signal<FlowNode[]>([]);
+  private readonly missionConnections = signal<Connection[]>([]);
+  private readonly adHocNodes = signal<FlowNode[]>([]);
+  private readonly adHocConnections = signal<Connection[]>([]);
+  // Per-mission ad-hoc memory
+  private readonly adHocPerMission = new Map<string, { nodes: FlowNode[]; connections: Connection[] }>();
   private currentMissionKey: string | null = null;
-
   fCanvas = viewChild(FCanvasComponent);
   @ViewChildren('nodeElement') nodeEls!: QueryList<ElementRef<HTMLDivElement>>;
   @ViewChild('cm') cm!: ContextMenu;
-
   private readonly START_NODE = 'start-node' as const;
   private readonly START_OUT = 'start-node-output' as const;
-
   private stepToNodeId = new Map<MissionStep, string>();
   private nodeIdToStep = new Map<string, MissionStep>();
   private needsAdjust = false;
   private selectedNodeId = '';
-
-  items: MenuItem[] = [{ label: 'Delete', icon: 'pi pi-trash', command: () => this.deleteNode() }];
-
+  readonly items: MenuItem[] = [{ label: 'Delete', icon: 'pi pi-trash', command: () => this.deleteNode() }];
   constructor(private missionState: MissionStateService, private stepsState: StepsStateService) {
     effect(() => {
       const mission = this.missionState.currentMission();
       const newKey = mission ? ((mission as any).uuid ?? mission.name) : null;
-
+      // swap ad-hoc layer when mission changes
       if (newKey !== this.currentMissionKey) {
         if (this.currentMissionKey)
-          this.adHocPerMission.set(this.currentMissionKey, {
-            nodes: this.adHocNodes(),
-            connections: this.adHocConnections()
-          });
-
+          this.adHocPerMission.set(this.currentMissionKey, { nodes: this.adHocNodes(), connections: this.adHocConnections() });
         const saved = newKey ? this.adHocPerMission.get(newKey) : null;
         this.adHocNodes.set(saved?.nodes ?? []);
         this.adHocConnections.set(saved?.connections ?? []);
         this.currentMissionKey = newKey;
       }
-
       if (mission) {
         this.rebuildFromMission(mission);
         this.needsAdjust = true;
       }
     });
   }
-
+  // --- lifecycle ---
   ngAfterViewChecked(): void {
     if (!this.needsAdjust) return;
     this.needsAdjust = false;
     this.autoLayout();
   }
-
-  onLoaded() {
-    this.fCanvas()?.resetScaleAndCenter(false);
-  }
-
-  // ---------- Small helpers ----------
+  onLoaded() { this.fCanvas()?.resetScaleAndCenter(false); }
+  // --- tiny utils ---
   private isParallel = (s?: MissionStep | null) =>
     !!s && ((s.function_name ?? '').toLowerCase() === 'parallel' || (s.step_type ?? '').toLowerCase() === 'parallel');
-  private base = (id: string, suffix: 'input' | 'output') =>
-    suffix === 'output'
-      ? id === this.START_OUT
-        ? this.START_NODE
-        : id.replace(/-output$/, '')
-      : id.replace(/-input$/, '');
-
+  private base(id: string, kind: 'input' | 'output') {
+    return kind === 'output' ? (id === this.START_OUT ? this.START_NODE : id.replace(/-output$/, '')) : id.replace(/-input$/, '');
+  }
   private heights(): Map<string, number> {
     const m = new Map<string, number>();
     this.nodeEls.forEach(el => {
@@ -140,273 +117,159 @@ export class Flowchart implements AfterViewChecked {
     });
     return m;
   }
-
-  private cleanupAdHocNode(id: string) {
-    const inputId = `${id}-input`;
-    const outputId = `${id}-output`;
+  private cleanupAdHocNode(id: string): void {
+    const inputId = `${id}-input`, outputId = `${id}-output`;
     this.adHocNodes.set(this.adHocNodes().filter(n => n.id !== id));
     this.adHocConnections.set(this.adHocConnections().filter(c => c.inputId !== inputId && c.outputId !== outputId));
   }
-
-  private recomputeMergedView() {
+  private recomputeMergedView(): void {
     const allNodes = [...this.missionNodes(), ...this.adHocNodes()];
-    const nodeIds = new Set(allNodes.map(n => n.id));
-    const validIn = (id: string) => nodeIds.has(id.replace(/-input$/, ''));
-    const validOut = (id: string) => id === this.START_OUT || nodeIds.has(id.replace(/-output$/, ''));
+    const ids = new Set(allNodes.map(n => n.id));
+    const validIn = (x: string) => ids.has(x.replace(/-input$/, ''));
+    const validOut = (x: string) => x === this.START_OUT || ids.has(x.replace(/-output$/, ''));
     const adhocConns = this.adHocConnections().filter(c => validOut(c.outputId) && validIn(c.inputId));
     this.nodes.set(allNodes);
     this.connections.set([...this.missionConnections(), ...adhocConns]);
   }
-
-  // ---------- Node movement ----------
+  // --- movement ---
   onNodeMoved(nodeId: string, pos: IPoint) {
-    const upd = (arr: FlowNode[]) =>
-      arr.map(n => (n.id === nodeId ? { ...n, position: { x: pos.x, y: pos.y } } : n));
-    const trySet = (sig: typeof this.adHocNodes | typeof this.missionNodes) => {
-      const next = upd(sig());
-      if (next !== sig()) {
-        sig.set(next);
-        this.recomputeMergedView();
-        return true;
-      }
-      return false;
+    const update = (sig: typeof this.adHocNodes | typeof this.missionNodes) => {
+      const arr = sig(); const i = arr.findIndex(n => n.id === nodeId);
+      if (i < 0) return false;
+      const next = arr.slice(); next[i] = { ...next[i], position: { x: pos.x, y: pos.y } };
+      sig.set(next); return true;
     };
-    if (!trySet(this.adHocNodes)) trySet(this.missionNodes);
+    if (!update(this.adHocNodes)) update(this.missionNodes);
+    this.recomputeMergedView();
   }
-
-  // ---------- Auto layout ----------
-  private autoLayout() {
-    const nodeHeights = this.heights();
-    const startH = nodeHeights.get(this.START_NODE) ?? 80;
-    let currentY = startH + 100;
-
+  // --- layout (hidden "parallel" is skipped visually) ---
+  private autoLayout(): void {
+    const h = this.heights();
     const newNodes = this.nodes().map(n => ({ ...n, position: { ...n.position } }));
-    const setPos = (id: string, pos: { x: number; y: number }) => {
-      const node = newNodes.find(n => n.id === id);
-      if (node) node.position = pos;
+    const setPos = (id: string, p: { x: number; y: number }) => {
+      const idx = newNodes.findIndex(n => n.id === id); if (idx > -1) newNodes[idx] = { ...newNodes[idx], position: p };
     };
-
-    const mission = this.missionState.currentMission();
-    if (mission) {
-      for (const s of mission.steps) {
-        const res = this.layoutSubtree([s], { x: 300, y: currentY }, 200, 100, setPos, nodeHeights);
-        currentY = res.maxY + 100;
-      }
+    const mission = this.missionState.currentMission(); if (!mission) return;
+    let y = (h.get(this.START_NODE) ?? 80) + 100;
+    const layoutSubtree = (
+      steps: MissionStep[],
+      start: { x: number; y: number },
+      w: number,
+      vGap: number
+    ): { maxY: number } => {
+      if (!steps.length) return { maxY: start.y };
+      const nh = (s: MissionStep) => (this.isParallel(s) ? 0 : h.get(this.stepToNodeId.get(s) ?? '') ?? 80);
+      const hs = steps.map(nh), maxH = Math.max(0, ...hs), totalW = (steps.length - 1) * w, x0 = start.x - totalW / 2;
+      let maxY = start.y;
+      steps.forEach((s, i) => {
+        const x = x0 + i * w;
+        if (this.isParallel(s)) {
+          if (s.children?.length) maxY = Math.max(maxY, layoutSubtree(s.children, { x, y: start.y }, w, vGap).maxY);
+          return;
+        }
+        const id = this.stepToNodeId.get(s); if (id) setPos(id, { x, y: start.y });
+        const belowY = start.y + Math.max(hs[i] || 0, maxH) + vGap;
+        if (s.children?.length) maxY = Math.max(maxY, layoutSubtree(s.children, { x, y: belowY }, w, vGap).maxY);
+        else maxY = Math.max(maxY, start.y + (hs[i] || 0));
+      });
+      return { maxY };
+    };
+    for (const s of mission.steps) {
+      const r = layoutSubtree([s], { x: 300, y }, 200, 100);
+      y = r.maxY + 100;
     }
     this.nodes.set(newNodes);
   }
-
-  private layoutSubtree(
-    steps: MissionStep[],
-    start: { x: number; y: number },
-    w: number,
-    vGap: number,
-    setPos: (id: string, p: { x: number; y: number }) => void,
-    hMap: Map<string, number>
-  ): { maxY: number; width: number } {
-    if (!steps.length) return { maxY: start.y, width: 0 };
-    const heights = steps.map(s => (this.isParallel(s) ? 0 : hMap.get(this.stepToNodeId.get(s) ?? '') ?? 80));
-    const maxH = Math.max(...heights, 0);
-    const totalW = (steps.length - 1) * w;
-    const startX = start.x - totalW / 2;
-
-    let maxY = start.y;
-    steps.forEach((s, i) => {
-      const x = startX + i * w;
-      if (this.isParallel(s)) {
-        if (s.children?.length) {
-          const r = this.layoutSubtree(s.children, { x, y: start.y + maxH + vGap }, w, vGap, setPos, hMap);
-          maxY = Math.max(maxY, r.maxY);
+  // --- mission rebuild (skips visual "parallel" nodes) ---
+  private rebuildFromMission(mission: Mission): void {
+    const nodes: FlowNode[] = [], conns: Connection[] = [];
+    const old = new Map(this.stepToNodeId);
+    this.stepToNodeId = new Map(); this.nodeIdToStep.clear();
+    const build = (
+      steps: MissionStep[],
+      parentExits: string[]
+    ): { entryIds: string[]; exitIds: string[] } => {
+      const entries: string[] = [], exits: string[] = [];
+      for (const s of steps) {
+        if (this.isParallel(s)) {
+          const r = build(s.children ?? [], parentExits);
+          entries.push(...r.entryIds); exits.push(...r.exitIds); continue;
         }
-        return;
+        const id = old.get(s) ?? generateGuid();
+        this.stepToNodeId.set(s, id); this.nodeIdToStep.set(id, s);
+        const inputId = `${id}-input`, outputId = `${id}-output`;
+        nodes.push({ id, text: s.function_name, position: { x: 0, y: 0 }, step: this.asStep(s), args: this.initialArgs(s) });
+        parentExits.forEach(pid => conns.push({ outputId: pid, inputId }));
+        entries.push(inputId);
+        const childExit = s.children?.length ? build(s.children, [outputId]).exitIds : [outputId];
+        exits.push(...childExit);
       }
-
-      const nodeId = this.stepToNodeId.get(s);
-      if (!nodeId) return;
-      setPos(nodeId, { x, y: start.y });
-
-      let curMaxY = start.y + (heights[i] || 0);
-      if (s.children?.length) {
-        const r = this.layoutSubtree(
-          s.children,
-          { x, y: start.y + Math.max(heights[i] || 0, maxH) + vGap },
-          w,
-          vGap,
-          setPos,
-          hMap
-        );
-        curMaxY = r.maxY;
-      }
-      maxY = Math.max(maxY, curMaxY);
-    });
-
-    return { maxY, width: totalW + w };
-  }
-
-  // ---------- Mission rebuild ----------
-  private rebuildFromMission(mission: Mission) {
-    const newNodes: FlowNode[] = [];
-    const newConns: Connection[] = [];
-    const oldMap = new Map(this.stepToNodeId);
-
-    this.stepToNodeId = new Map();
-    this.nodeIdToStep.clear();
-
+      return { entryIds: entries, exitIds: exits };
+    };
     let exits: string[] = [this.START_OUT];
-    for (const top of mission.steps) {
-      const r = this.buildStable([top], exits, newNodes, newConns, oldMap);
-      exits = r.exitIds;
-    }
-
-    this.missionNodes.set(newNodes);
-    this.missionConnections.set(newConns);
+    for (const top of mission.steps) exits = build([top], exits).exitIds;
+    this.missionNodes.set(nodes);
+    this.missionConnections.set(conns);
     this.recomputeMergedView();
   }
-
-  private buildStable(
-    steps: MissionStep[],
-    parentExits: string[],
-    nodesOut: FlowNode[],
-    connsOut: Connection[],
-    old: Map<MissionStep, string>
-  ): { entryIds: string[]; exitIds: string[] } {
-    const entries: string[] = [];
-    const exits: string[] = [];
-
-    for (const s of steps) {
-      if (this.isParallel(s)) {
-        const { entryIds, exitIds } = this.buildStable(s.children ?? [], parentExits, nodesOut, connsOut, old);
-        entries.push(...entryIds);
-        exits.push(...exitIds);
-        continue;
-      }
-
-      const nodeId = old.get(s) ?? generateGuid();
-      this.stepToNodeId.set(s, nodeId);
-      this.nodeIdToStep.set(nodeId, s);
-
-      const inputId = `${nodeId}-input`;
-      const outputId = `${nodeId}-output`;
-
-      nodesOut.push({
-        id: nodeId,
-        text: s.function_name,
-        position: { x: 0, y: 0 },
-        step: this.asStep(s),
-        args: this.initialArgs(s)
-      });
-
-      parentExits.forEach(pid => connsOut.push({ outputId: pid, inputId }));
-      entries.push(inputId);
-
-      const childExit = s.children?.length
-        ? this.buildStable(s.children, [outputId], nodesOut, connsOut, old).exitIds
-        : [outputId];
-      exits.push(...childExit);
-    }
-
-    return { entryIds: entries, exitIds: exits };
-  }
-
-  // ---------- Node create / connect ----------
+  // --- create / connect ---
   onCreateNode(e: FCreateNodeEvent) {
     const step = e.data as Step;
+    const toVal = (t: string, v: string) => (t === 'bool' ? v.toLowerCase() === 'true' : t === 'float' ? (parseFloat(v) || null) : v);
     const args: Record<string, boolean | string | number | null> = {};
     step?.arguments?.forEach(a => {
       const d = a.default ?? '';
-      const v = d !== '' ? d : '';
-      args[a.name] = a.type === 'bool' ? String(v).toLowerCase() === 'true' : a.type === 'float' ? parseFloat(String(v)) || null : v;
+      args[a.name] = toVal(a.type, String(d !== '' ? d : ''));
     });
-
-    this.adHocNodes.set([
-      ...this.adHocNodes(),
-      {
-        id: generateGuid(),
-        text: step?.name ?? 'New Node',
-        position: e.rect,
-        step,
-        args
-      }
-    ]);
-
-    this.recomputeMergedView();
-    this.needsAdjust = true;
+    this.adHocNodes.set([...this.adHocNodes(), { id: generateGuid(), text: step?.name ?? 'New Node', position: e.rect, step, args }]);
+    this.recomputeMergedView(); this.needsAdjust = true;
   }
-
-  public addConnection(e: FCreateConnectionEvent): void {
+  addConnection(e: FCreateConnectionEvent): void {
     if (!e.fInputId) return;
-
-    const srcId = this.base(e.fOutputId, 'output');
-    const dstId = this.base(e.fInputId, 'input');
-    const mission = this.missionState.currentMission();
-    const srcStep = this.nodeIdToStep.get(srcId);
-    const dstStep = this.nodeIdToStep.get(dstId);
-
+    const mission = this.missionState.currentMission(); if (!mission) return;
+    const srcId = this.base(e.fOutputId, 'output'), dstId = this.base(e.fInputId, 'input');
+    const srcStep = this.nodeIdToStep.get(srcId), dstStep = this.nodeIdToStep.get(dstId);
     const promote = (adhocId: string, parent?: MissionStep) => {
-      const n = this.adHocNodes().find(x => x.id === adhocId);
-      if (!mission || !n) return false;
+      const n = this.adHocNodes().find(x => x.id === adhocId); if (!n) return false;
       const mStep = this.fromAdHoc(n);
       this.stepToNodeId.set(mStep, n.id); // keep visual continuity
-
-      if (parent) this.attachChildWithParallel(mission, parent, mStep);
-      else (mission.steps ??= []).push(mStep);
-
-      this.cleanupAdHocNode(n.id);
-      this.rebuildFromMission(mission);
-      this.needsAdjust = true;
-      return true;
+      parent ? this.attachChildWithParallel(mission, parent, mStep) : (mission.steps ??= []).push(mStep);
+      this.cleanupAdHocNode(n.id); this.rebuildFromMission(mission); this.needsAdjust = true; return true;
     };
-
-    if (mission && srcStep && !dstStep && promote(dstId, srcStep)) return; // generated -> ad-hoc
-    if (mission && srcId === this.START_NODE && !dstStep && promote(dstId)) return; // start -> ad-hoc
-    if (mission && srcStep && dstStep && this.attachChildWithParallel(mission, srcStep, dstStep)) {
-      this.rebuildFromMission(mission);
-      this.needsAdjust = true;
-      return;
+    if (srcStep && !dstStep && promote(dstId, srcStep)) return; // generated → ad-hoc
+    if (srcId === this.START_NODE && !dstStep && promote(dstId)) return; // start → ad-hoc
+    if (srcStep && dstStep && this.attachChildWithParallel(mission, srcStep, dstStep)) {
+      this.rebuildFromMission(mission); this.needsAdjust = true; return;
     }
-
     // fallback: keep as ad-hoc wire
     this.adHocConnections.set([...this.adHocConnections(), { outputId: e.fOutputId, inputId: e.fInputId }]);
     this.recomputeMergedView();
   }
-
-  // ---------- Context menu ----------
+  // --- context menu ---
   onRightClick(ev: MouseEvent, nodeId: string) {
     ev.preventDefault();
     this.selectedNodeId = nodeId;
     this.cm.show(ev);
   }
-
-  deleteNode() {
-    const id = this.selectedNodeId;
-    if (!id) return;
-
+  deleteNode(): void {
+    const id = this.selectedNodeId; if (!id) return;
     const step = this.nodeIdToStep.get(id);
     const mission = this.missionState.currentMission();
-
     if (step && mission) {
-      // explicitly typed, self-recursive helper
       const rm = (arr?: MissionStep[]): MissionStep[] | undefined =>
-        arr?.filter(s => s !== step)
-          .map(s => ({ ...s, children: rm(s.children) ?? [] }));
-
+        arr?.filter(s => s !== step).map(s => ({ ...s, children: rm(s.children) ?? [] }));
       mission.steps = rm(mission.steps) ?? [];
       this.rebuildFromMission(mission);
     } else {
-      this.cleanupAdHocNode(id);
-      this.recomputeMergedView();
+      this.cleanupAdHocNode(id); this.recomputeMergedView();
     }
-
     this.needsAdjust = true;
   }
-
-  // ---------- Step ↔ UI translation ----------
+  // --- step ↔ UI ---
   private asStep(ms: MissionStep): Step {
     const pool = this.stepsState.currentSteps() ?? [];
     const match = pool.find(s => s.name === ms.function_name);
-    if (match) return match;
-
-    return {
+    return match ?? {
       name: ms.function_name,
       import: '',
       arguments: ms.arguments.map((a, i) => ({
@@ -419,91 +282,49 @@ export class Flowchart implements AfterViewChecked {
       file: ''
     };
   }
-
   private initialArgs(ms: MissionStep): Record<string, boolean | string | number | null> {
     const pool = this.stepsState.currentSteps() ?? [];
     const match = pool.find(s => s.name === ms.function_name);
-
-    const setVal = (type: string, raw: string) =>
-      type === 'bool' ? raw.toLowerCase() === 'true' : type === 'float' ? parseFloat(raw) || null : raw;
-
+    const toVal = (t: string, v: string) => (t === 'bool' ? v.toLowerCase() === 'true' : t === 'float' ? (parseFloat(v) || null) : v);
     if (match)
       return Object.fromEntries(
-        match.arguments.map((sa, i) => {
-          const mv = ms.arguments[i]?.value ?? sa.default ?? '';
-          return [sa.name, setVal(sa.type, String(mv))];
-        })
+        match.arguments.map((sa, i) => [sa.name, toVal(sa.type, String(ms.arguments[i]?.value ?? sa.default ?? ''))])
       );
-
-    return Object.fromEntries(
-      ms.arguments.map((a, i) => {
-        const name = a.name || `arg${i}`;
-        return [name, setVal(a.type, String(a.value ?? ''))];
-      })
-    );
+    return Object.fromEntries(ms.arguments.map((a, i) => [a.name || `arg${i}`, toVal(a.type, String(a.value ?? ''))]));
   }
-
+  // --- parallel management ---
   private ensureParallelUnder(parent: MissionStep): MissionStep {
     parent.children ??= [];
-    if (!parent.children.length) {
-      const p = this.newParallel();
-      parent.children.push(p);
-      return p;
-    }
-    if (this.isParallel(parent.children[0])) return parent.children[0];
-    const p = this.newParallel();
-    p.children = [...parent.children];
-    parent.children = [p];
-    return p;
-  }
 
+    if (!parent.children.length) return parent.children[0] = this.newParallel();
+    if (this.isParallel(parent.children[0])) return parent.children[0];
+
+    const p = this.newParallel(); p.children = [...parent.children]; parent.children = [p]; return p;
+  }
   private newParallel(): MissionStep {
     return { step_type: 'parallel', function_name: 'parallel', arguments: [], children: [] };
   }
-
   private detachEverywhere(mission: Mission, target: MissionStep, exceptParent?: MissionStep): void {
     mission.steps = (mission.steps ?? []).filter(s => s !== target);
-
-    const walk = (parent: MissionStep) => {
-      const children = parent.children ?? [];
-      if (!children.length) return;
-
-      parent.children = children.filter(child => {
-        if (exceptParent && parent === exceptParent) {
-          walk(child);
-          return true;
-        }
-        if (child === target) return false;
-        walk(child);
-        return true;
-      });
+    const walk = (parent: MissionStep): void => {
+      const children = parent.children ?? []; if (!children.length) return;
+      parent.children = children.filter(ch => (exceptParent && parent === exceptParent) || ch !== target);
+      (parent.children ?? []).forEach(walk);
     };
-
     (mission.steps ?? []).forEach(walk);
   }
-
-
   private attachChildWithParallel(mission: Mission, parent: MissionStep, child: MissionStep): boolean {
     if (parent === child) return false;
-
-    const alreadyChild = (p: MissionStep) => {
-      const ch = p.children ?? [];
-      if (ch.includes(child)) return true;
-      const first = ch[0];
-      return this.isParallel(first) && !!first.children?.includes(child);
-    };
-    if (alreadyChild(parent)) return false;
-
+    const effective = this.getEffectiveChildren(mission, parent);
+    if (effective.includes(child)) return false;
     this.detachEverywhere(mission, child, parent);
     const par = this.ensureParallelUnder(parent);
     par.children ??= [];
-    if (!par.children.includes(child)) {
-      par.children.push(child);
-      return true;
-    }
-    return false;
+    const uniq = new Set<MissionStep>([...par.children, ...effective]);
+    uniq.add(child);
+    par.children = Array.from(uniq);
+    return true;
   }
-
   private fromAdHoc(n: FlowNode): MissionStep {
     const args = Object.entries(n.args || {}).map(([name, v]) => ({
       name,
@@ -516,5 +337,68 @@ export class Flowchart implements AfterViewChecked {
       arguments: args,
       children: []
     };
+  }
+  private stepNodeId(s?: MissionStep): string | null {
+    if (!s) return null;
+    const id = this.stepToNodeId.get(s);
+    return id ?? null;
+  }
+  private hasConnectionFromTo(src?: MissionStep, dst?: MissionStep): boolean {
+    const sid = this.stepNodeId(src);
+    const did = this.stepNodeId(dst);
+    if (!sid || !did) return false;
+    const matches = (c: Connection) =>
+      this.base(c.outputId, 'output') === sid && this.base(c.inputId, 'input') === did;
+    return this.missionConnections().some(matches) || this.adHocConnections().some(matches);
+  }
+  private clearAdHocBetween(src?: MissionStep, dst?: MissionStep): void {
+    const sid = this.stepNodeId(src);
+    const did = this.stepNodeId(dst);
+    if (!sid || !did) return;
+    this.adHocConnections.set(
+      this.adHocConnections().filter(
+        c => !(this.base(c.outputId, 'output') === sid && this.base(c.inputId, 'input') === did)
+      )
+    );
+  }
+  private promoteAdHocByNodeId(mission: Mission, nodeId: string): MissionStep | null {
+    const n = this.adHocNodes().find(x => x.id === nodeId);
+    if (!n) return null;
+    const mStep = this.fromAdHoc(n);
+    // keep visual continuity
+    this.stepToNodeId.set(mStep, n.id);
+    // remove the ad-hoc shadow (node + its wires)
+    this.cleanupAdHocNode(n.id);
+    // make it exist in the mission (temporarily as top-level; we'll reattach below)
+    (mission.steps ??= []).push(mStep);
+    return mStep;
+  }
+  private getEffectiveChildren(mission: Mission, parent: MissionStep): MissionStep[] {
+    const set = new Set<MissionStep>();
+    // 1) structure-based
+    const ch = parent.children ?? [];
+    if (ch.length && this.isParallel(ch[0])) {
+      (ch[0].children ?? []).forEach(c => set.add(c));
+    } else {
+      ch.forEach(c => set.add(c));
+    }
+    // 2) wire-based
+    const parentId = this.stepToNodeId.get(parent);
+    if (parentId) {
+      const parentOut = `${parentId}-output`;
+      const merged = [...this.missionConnections(), ...this.adHocConnections()];
+      const wiredIns = merged.filter(c => this.base(c.outputId, 'output') === parentId).map(c => this.base(c.inputId, 'input'));
+      for (const inNodeId of wiredIns) {
+        const wiredStep = this.nodeIdToStep.get(inNodeId);
+        if (wiredStep) {
+          set.add(wiredStep);
+        } else {
+          // If it's an ad-hoc node, promote it so we can treat it as a real child
+          const promoted = this.promoteAdHocByNodeId(mission, inNodeId);
+          if (promoted) set.add(promoted);
+        }
+      }
+    }
+    return Array.from(set);
   }
 }
