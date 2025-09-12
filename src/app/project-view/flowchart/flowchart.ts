@@ -14,7 +14,7 @@ import {
   FCreateConnectionEvent,
   FCreateNodeEvent,
   FFlowComponent,
-  FFlowModule
+  FFlowModule, FNodeIntersectedWithConnections
 } from '@foblex/flow';
 import { IPoint } from '@foblex/2d';
 import { generateGuid } from '@foblex/utils';
@@ -30,7 +30,7 @@ import { ContextMenu } from 'primeng/contextmenu';
 import { MenuItem } from 'primeng/api';
 import { Tooltip } from 'primeng/tooltip';
 import { FormsModule } from '@angular/forms';
-type Connection = { outputId: string; inputId: string };
+type Connection = { id: string; outputId: string; inputId: string };
 interface FlowNode {
   id: string;
   text: string;
@@ -200,7 +200,11 @@ export class Flowchart implements AfterViewChecked {
         this.stepToNodeId.set(s, id); this.nodeIdToStep.set(id, s);
         const inputId = `${id}-input`, outputId = `${id}-output`;
         nodes.push({ id, text: s.function_name, position: { x: 0, y: 0 }, step: this.asStep(s), args: this.initialArgs(s) });
-        parentExits.forEach(pid => conns.push({ outputId: pid, inputId }));
+        parentExits.forEach(pid => conns.push({
+          id: generateGuid(),
+          outputId: pid,
+          inputId: inputId
+        }));
         entries.push(inputId);
         const childExit = s.children?.length ? build(s.children, [outputId]).exitIds : [outputId];
         exits.push(...childExit);
@@ -251,7 +255,10 @@ export class Flowchart implements AfterViewChecked {
     console.log("last")
 
     // fallback: keep as ad-hoc wire
-    this.adHocConnections.set([...this.adHocConnections(), { outputId: e.fOutputId, inputId: e.fInputId }]);
+    this.adHocConnections.set([
+      ...this.adHocConnections(),
+      { id: generateGuid(), outputId: e.fOutputId, inputId: e.fInputId } // ⬅️ add id
+    ]);
     this.recomputeMergedView();
   }
   // --- context menu ---
@@ -393,4 +400,120 @@ export class Flowchart implements AfterViewChecked {
       children: []
     };
   }
+  onNodeIntersectedWithConnection(event: FNodeIntersectedWithConnections): void {
+    const nodeId = event.fNodeId;
+    const hitId = event.fConnectionIds?.[0];
+    if (!hitId || nodeId === this.START_NODE) return;
+
+    // locate the hit connection (ad-hoc first, then mission)
+    const adhoc = this.adHocConnections();
+    const ai = adhoc.findIndex(c => c.id === hitId);
+    if (ai !== -1) {
+      // --- split an ad-hoc wire visually ---
+      const hit = adhoc[ai];
+      const previousInput = hit.inputId;
+
+      // rewire existing to end at the new node's input
+      const updated = adhoc.slice();
+      updated[ai] = { ...hit, inputId: `${nodeId}-input` };
+
+      // add new second segment from new node to the old target
+      updated.push({
+        id: generateGuid(),
+        outputId: `${nodeId}-output`,
+        inputId: previousInput
+      });
+
+      this.adHocConnections.set(updated);
+      this.recomputeMergedView();
+      return;
+    }
+
+    // --- split a mission wire: insert step between parent→child ---
+    const mission = this.missionState.currentMission();
+    if (!mission) return;
+
+    const all = this.connections();
+    const hit = all.find(c => c.id === hitId);
+    if (!hit) return;
+
+    const srcBase = this.base(hit.outputId, 'output'); // node id or START
+    const dstBase = this.base(hit.inputId, 'input');
+
+    const parentStep = srcBase === this.START_NODE ? null : this.nodeIdToStep.get(srcBase) ?? null;
+    const childStep  = this.nodeIdToStep.get(dstBase);
+    if (!childStep) return;
+
+    // Build or fetch the step for the dragged node
+    let midStep: MissionStep | null = this.nodeIdToStep.get(nodeId) ?? null;
+    if (!midStep) {
+      const n = this.adHocNodes().find(x => x.id === nodeId);
+      if (!n) return;
+      midStep = this.fromAdHoc(n);
+      this.stepToNodeId.set(midStep, n.id);   // keep same visual id → step mapping
+      this.cleanupAdHocNode(n.id);            // remove ad-hoc ghost
+    }
+
+    if (midStep === parentStep || midStep === childStep) return;
+
+    // ensure 'midStep' is not referenced elsewhere
+    this.detachEverywhere(mission, midStep);
+
+    // Insert midStep directly between parentStep → childStep
+    const inserted = this.insertBetween(mission, parentStep, childStep, midStep);
+
+    if (inserted) {
+      this.rebuildFromMission(mission);
+      this.needsAdjust = true;
+    }
+  }
+  private insertBetween(mission: Mission, parent: MissionStep | null, child: MissionStep, mid: MissionStep): boolean {
+    // Case A: Start → child (top-level)
+    if (!parent) {
+      const idx = (mission.steps ?? []).indexOf(child);
+      if (idx === -1) return false;
+      mission.steps.splice(idx, 1, mid);
+      mid.children = [child];
+      return true;
+    }
+
+    // Case B1: parent.children directly lists child (sequential)
+    if (parent.children?.length) {
+      const j = parent.children.indexOf(child);
+      if (j !== -1) {
+        parent.children.splice(j, 1, mid);
+        mid.children = [child];
+        return true;
+      }
+    }
+
+    // Case B2: child is in the "parallel-after-parent" bucket
+    const par = this.ensureParallelAfter(mission, parent); // creates/reuses and moves the next step if needed
+    par.children ??= [];
+    const k = par.children.indexOf(child);
+    if (k !== -1) {
+      par.children.splice(k, 1, mid);
+      mid.children = [child];
+      return true;
+    }
+
+    // Fallback: replace first occurrence of child in the whole mission, then ensure it's after parent
+    if (this.replaceFirstOccurrence(mission, child, mid)) {
+      mid.children = [child];
+      return true;
+    }
+    return false;
+  }
+
+  private replaceFirstOccurrence(mission: Mission, target: MissionStep, replacement: MissionStep): boolean {
+    const walk = (arr?: MissionStep[]): boolean => {
+      if (!arr) return false;
+      const i = arr.indexOf(target);
+      if (i !== -1) { arr.splice(i, 1, replacement); return true; }
+      for (const s of arr) if (walk(s.children)) return true;
+      return false;
+    };
+    return walk(mission.steps);
+  }
+
 }

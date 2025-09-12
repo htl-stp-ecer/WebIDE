@@ -2,6 +2,8 @@
   <f-flow
     class="flow-root"
     fDraggable
+    fEmitOnNodeIntersect
+    (fNodeIntersectedWithConnections)="onNodeIntersectedWithConnection($event)"
     (fLoaded)="onLoaded()"
     (fCreateNode)="onCreateNode($event)"
     (fCreateConnection)="addConnection($event)"
@@ -46,6 +48,7 @@
       <!-- Connections (mission + ad-hoc merged in TS) -->
       @for (connection of connections(); track connection.outputId + '-' + connection.inputId) {
         <f-connection
+          [fConnectionId]="connection.id"
           [fReassignDisabled]="true"
           fType="segment"
           [fOutputId]="connection.outputId"
