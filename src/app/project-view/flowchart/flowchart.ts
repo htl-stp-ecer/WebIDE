@@ -232,35 +232,54 @@ export class Flowchart implements AfterViewChecked {
   addConnection(e: FCreateConnectionEvent): void {
     if (!e.fInputId) return;
     const mission = this.missionState.currentMission(); if (!mission) return;
-    const srcId = this.base(e.fOutputId, 'output'), dstId = this.base(e.fInputId, 'input');
-    const srcStep = this.nodeIdToStep.get(srcId), dstStep = this.nodeIdToStep.get(dstId);
-    console.log("start")
+
+    const srcId = this.base(e.fOutputId, 'output');
+    const dstId = this.base(e.fInputId, 'input');
+    const srcStep = this.nodeIdToStep.get(srcId);
+    const dstStep = this.nodeIdToStep.get(dstId);
+
+    // ✅ START → something: create/use top-level parallel and add as a branch
+    if (srcId === this.START_NODE) {
+      if (dstStep) {
+        if (this.attachToStartWithParallel(mission, dstStep)) {
+          this.rebuildFromMission(mission); this.needsAdjust = true; return;
+        }
+      } else {
+        // START → ad-hoc node: promote and add into the top-level parallel
+        const n = this.adHocNodes().find(x => x.id === dstId);
+        if (n) {
+          const mStep = this.fromAdHoc(n);
+          this.stepToNodeId.set(mStep, n.id);   // keep visual continuity
+          this.cleanupAdHocNode(n.id);
+          if (this.attachToStartWithParallel(mission, mStep)) {
+            this.rebuildFromMission(mission); this.needsAdjust = true; return;
+          }
+        }
+      }
+    }
+
+    // (keep your existing logic for generated → ad-hoc and step → step)
     const promote = (adhocId: string, parent?: MissionStep) => {
       const n = this.adHocNodes().find(x => x.id === adhocId); if (!n) return false;
-      console.log("promote1")
       const mStep = this.fromAdHoc(n);
-      this.stepToNodeId.set(mStep, n.id); // keep visual continuity
-      console.log(mStep)
+      this.stepToNodeId.set(mStep, n.id);
       parent ? this.attachChildWithParallel(mission, parent, mStep) : (mission.steps ??= []).push(mStep);
       this.cleanupAdHocNode(n.id); this.rebuildFromMission(mission); this.needsAdjust = true; return true;
     };
-    if (srcStep && !dstStep && promote(dstId, srcStep)) return; // generated → ad-hoc
-    console.log("start1")
-    if (srcId === this.START_NODE && !dstStep && promote(dstId)) return; // start → ad-hoc
-    console.log("start2")
+
+    if (srcStep && !dstStep && promote(dstId, srcStep)) return;              // generated → ad-hoc under parent
     if (srcStep && dstStep && this.attachChildWithParallel(mission, srcStep, dstStep)) {
       this.rebuildFromMission(mission); this.needsAdjust = true; return;
     }
 
-    console.log("last")
-
     // fallback: keep as ad-hoc wire
     this.adHocConnections.set([
       ...this.adHocConnections(),
-      { id: generateGuid(), outputId: e.fOutputId, inputId: e.fInputId } // ⬅️ add id
+      { id: generateGuid(), outputId: e.fOutputId, inputId: e.fInputId }
     ]);
     this.recomputeMergedView();
   }
+
   // --- context menu ---
   onRightClick(ev: MouseEvent, nodeId: string) {
     ev.preventDefault();
@@ -515,5 +534,33 @@ export class Flowchart implements AfterViewChecked {
     };
     return walk(mission.steps);
   }
+
+  // 👇 add next to ensureParallelAfter(...)
+  private ensureTopLevelParallel(mission: Mission): MissionStep {
+    mission.steps ??= [];
+    const first = mission.steps[0];
+    if (first && this.isParallel(first)) return first;
+
+    const par = this.newParallel();
+
+    if (first) {
+      // Replace the first step with a parallel and move the old first into it
+      mission.steps.splice(0, 1, par);
+      par.children = [...(par.children ?? []), first];
+    } else {
+      // Nothing at top-level yet → just place the parallel
+      mission.steps.push(par);
+    }
+    return par;
+  }
+
+  private attachToStartWithParallel(mission: Mission, child: MissionStep): boolean {
+    const par = this.ensureTopLevelParallel(mission);
+    par.children ??= [];
+    this.detachEverywhere(mission, child);       // make sure it's not referenced elsewhere
+    if (!par.children.includes(child)) par.children.push(child);
+    return true;
+  }
+
 
 }
