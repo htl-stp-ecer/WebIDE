@@ -287,19 +287,42 @@ export class Flowchart implements AfterViewChecked {
     this.cm.show(ev);
   }
   deleteNode(): void {
-    const id = this.selectedNodeId; if (!id) return;
+    const id = this.selectedNodeId;
+    if (!id) return;
+
     const step = this.nodeIdToStep.get(id);
     const mission = this.missionState.currentMission();
+
     if (step && mission) {
-      const rm = (arr?: MissionStep[]): MissionStep[] | undefined =>
-        arr?.filter(s => s !== step).map(s => ({ ...s, children: rm(s.children) ?? [] }));
-      mission.steps = rm(mission.steps) ?? [];
+      // Remove the step from mission everywhere (mutating in place)
+      const removeEverywhere = (arr?: MissionStep[]): void => {
+        if (!arr) return;
+        for (let i = 0; i < arr.length; ) {
+          const s = arr[i];
+          if (s === step) {
+            arr.splice(i, 1);
+            continue; // don't advance i after removal
+          }
+          removeEverywhere(s.children);
+          i++;
+        }
+      };
+
+      removeEverywhere(mission.steps);
+
+      // 👇 collapse single-child / empty parallels created by the deletion
+      this.normalizeParallels(mission);
+
       this.rebuildFromMission(mission);
     } else {
-      this.cleanupAdHocNode(id); this.recomputeMergedView();
+      // ad-hoc node deletion stays the same
+      this.cleanupAdHocNode(id);
+      this.recomputeMergedView();
     }
+
     this.needsAdjust = true;
   }
+
   // --- step ↔ UI ---
   private asStep(ms: MissionStep): Step {
     const pool = this.stepsState.currentSteps() ?? [];
@@ -562,5 +585,36 @@ export class Flowchart implements AfterViewChecked {
     return true;
   }
 
+  /** Replace any parallel with its single child; drop empty parallels */
+  private normalizeParallelsIn(arr?: MissionStep[]): void {
+    if (!arr) return;
+
+    for (let i = 0; i < arr.length; ) {
+      const s = arr[i];
+
+      // Recurse first so inner structures are normalized
+      this.normalizeParallelsIn(s.children);
+
+      if (this.isParallel(s)) {
+        const ch = s.children ?? [];
+        if (ch.length === 0) {
+          // remove empty parallel
+          arr.splice(i, 1);
+          continue; // don't advance i
+        }
+        if (ch.length === 1) {
+          // promote the only child
+          arr.splice(i, 1, ch[0]);
+          continue; // re-check the promoted node at same index
+        }
+      }
+      i++;
+    }
+  }
+
+  private normalizeParallels(mission: Mission): void {
+    mission.steps ??= [];
+    this.normalizeParallelsIn(mission.steps);
+  }
 
 }
