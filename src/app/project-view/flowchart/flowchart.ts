@@ -29,7 +29,7 @@ import { StepsStateService } from '../../services/steps-state-service';
 import { ContextMenuModule, ContextMenu } from 'primeng/contextmenu';
 import { MenuItem } from 'primeng/api';
 import { Tooltip } from 'primeng/tooltip';
-import { FormsModule } from '@angular/forms';
+import {FormsModule} from '@angular/forms';
 
 // ----- helpers & types -----
 type Connection = { id: string; outputId: string; inputId: string };
@@ -306,6 +306,37 @@ export class Flowchart implements AfterViewChecked {
     return true;
   }
 
+  // NEW: robust SEQ detection to keep SEQ when inserting between siblings inside a SEQ (even if that SEQ sits under a PARALLEL)
+  private containsStep(root: MissionStep, target: MissionStep): boolean {
+    if (root === target) return true;
+    return (root.children ?? []).some(ch => this.containsStep(ch, target));
+  }
+
+  private findSeqContainerForEdge(steps: MissionStep[] | undefined, prev: MissionStep, next: MissionStep): { seq: MissionStep; nextIndex: number } | null {
+    const search = (arr?: MissionStep[]): { seq: MissionStep; nextIndex: number } | null => {
+      if (!arr) return null;
+      for (const s of arr) {
+        if (isType(s, 'seq')) {
+          const cs = s.children ?? [];
+          let prevIdx = -1, nextIdx = -1;
+          for (let i = 0; i < cs.length; i++) {
+            const ch = cs[i];
+            if (prevIdx === -1 && this.containsStep(ch, prev)) prevIdx = i;
+            if (nextIdx === -1 && this.containsStep(ch, next)) nextIdx = i;
+            if (prevIdx !== -1 && nextIdx !== -1) break;
+          }
+          if (prevIdx !== -1 && nextIdx !== -1 && prevIdx + 1 === nextIdx) {
+            return { seq: s, nextIndex: nextIdx };
+          }
+        }
+        const deeper = search(s.children);
+        if (deeper) return deeper;
+      }
+      return null;
+    };
+    return search(steps);
+  }
+
   // ----- drop-in split insert -----
   onNodeIntersectedWithConnection(event: FNodeIntersectedWithConnections): void {
     const nodeId = event.fNodeId, hitId = event.fConnectionIds?.[0]; if (!hitId || nodeId === this.START_NODE) return;
@@ -327,11 +358,51 @@ export class Flowchart implements AfterViewChecked {
   }
 
   private insertBetween(mission: Mission, parent: MissionStep | null, child: MissionStep, mid: MissionStep): boolean {
-    if (!parent) { const i = (mission.steps ?? []).indexOf(child); if (i === -1) return false; mission.steps.splice(i, 1, mid); mid.children = [child]; return true; }
-    if (parent.children?.length === 1 && isType(parent.children[0], 'seq')) { const seq = parent.children[0]; seq.children ??= []; const k = seq.children.indexOf(child); if (k !== -1) { seq.children.splice(k, 0, mid); return true; } }
-    if (parent.children?.length) { const j = parent.children.indexOf(child); if (j !== -1) { parent.children.splice(j, 1, mid); mid.children = [child]; return true; } }
-    const par = this.ensureParallelAfter(mission, parent); par.children ??= []; const k = par.children.indexOf(child); if (k !== -1) { par.children.splice(k, 1, mid); mid.children = [child]; return true; }
-    const walk = (arr?: MissionStep[]): boolean => { if (!arr) return false; const i = arr.indexOf(child); if (i !== -1) { arr.splice(i, 1, mid); return true; } return (arr.some(s => walk(s.children))); };
+    // 1) If prev & next are adjacent siblings inside a SEQ wrapper, insert into that SEQ (no PARALLEL promotion)
+    if (parent) {
+      const seqHit = this.findSeqContainerForEdge(mission.steps, parent, child);
+      if (seqHit) {
+        seqHit.seq.children ??= [];
+        seqHit.seq.children.splice(seqHit.nextIndex, 0, mid);
+        return true;
+      }
+    }
+
+    // 2) Top-level
+    if (!parent) {
+      const i = (mission.steps ?? []).indexOf(child);
+      if (i === -1) return false;
+      mission.steps.splice(i, 1, mid);
+      mid.children = [child];
+      return true;
+    }
+
+    // 3) Parent has single SEQ child and edge is inside that SEQ (legacy fast-path)
+    if (parent.children?.length === 1 && isType(parent.children[0], 'seq')) {
+      const seq = parent.children[0];
+      seq.children ??= [];
+      const k = seq.children.indexOf(child);
+      if (k !== -1) { seq.children.splice(k, 0, mid); return true; }
+    }
+
+    // 4) Direct child of parent
+    if (parent.children?.length) {
+      const j = parent.children.indexOf(child);
+      if (j !== -1) { parent.children.splice(j, 1, mid); mid.children = [child]; return true; }
+    }
+
+    // 5) Fallbacks
+    const par = this.ensureParallelAfter(mission, parent);
+    par.children ??= [];
+    const k = par.children.indexOf(child);
+    if (k !== -1) { par.children.splice(k, 1, mid); mid.children = [child]; return true; }
+
+    const walk = (arr?: MissionStep[]): boolean => {
+      if (!arr) return false;
+      const i = arr.indexOf(child);
+      if (i !== -1) { arr.splice(i, 1, mid); return true; }
+      return arr.some(s => walk(s.children));
+    };
     if (walk(mission.steps)) { mid.children = [child]; return true; }
     return false;
   }
