@@ -14,7 +14,8 @@ import {
   FCreateConnectionEvent,
   FCreateNodeEvent,
   FFlowComponent,
-  FFlowModule, FNodeIntersectedWithConnections
+  FFlowModule,
+  FNodeIntersectedWithConnections
 } from '@foblex/flow';
 import { IPoint } from '@foblex/2d';
 import { generateGuid } from '@foblex/utils';
@@ -30,7 +31,9 @@ import { ContextMenu } from 'primeng/contextmenu';
 import { MenuItem } from 'primeng/api';
 import { Tooltip } from 'primeng/tooltip';
 import { FormsModule } from '@angular/forms';
+
 type Connection = { id: string; outputId: string; inputId: string };
+
 interface FlowNode {
   id: string;
   text: string;
@@ -38,6 +41,7 @@ interface FlowNode {
   step: Step;
   args: Record<string, boolean | string | number | null>;
 }
+
 @Component({
   selector: 'app-flowchart',
   imports: [
@@ -56,31 +60,40 @@ interface FlowNode {
 })
 export class Flowchart implements AfterViewChecked {
   readonly isDarkMode = matchMedia?.('(prefers-color-scheme: dark)').matches ?? false;
+
   // Rendered state for <f-flow>
   readonly nodes = signal<FlowNode[]>([]);
   readonly connections = signal<Connection[]>([]);
+
   // Generated (mission) vs. ad-hoc layers
   private readonly missionNodes = signal<FlowNode[]>([]);
   private readonly missionConnections = signal<Connection[]>([]);
   private readonly adHocNodes = signal<FlowNode[]>([]);
   private readonly adHocConnections = signal<Connection[]>([]);
+
   // Per-mission ad-hoc memory
   private readonly adHocPerMission = new Map<string, { nodes: FlowNode[]; connections: Connection[] }>();
   private currentMissionKey: string | null = null;
+
   fCanvas = viewChild(FCanvasComponent);
   @ViewChildren('nodeElement') nodeEls!: QueryList<ElementRef<HTMLDivElement>>;
   @ViewChild('cm') cm!: ContextMenu;
+
   private readonly START_NODE = 'start-node' as const;
   private readonly START_OUT = 'start-node-output' as const;
+
   private stepToNodeId = new Map<MissionStep, string>();
   private nodeIdToStep = new Map<string, MissionStep>();
   private needsAdjust = false;
   private selectedNodeId = '';
+
   readonly items: MenuItem[] = [{ label: 'Delete', icon: 'pi pi-trash', command: () => this.deleteNode() }];
+
   constructor(private missionState: MissionStateService, private stepsState: StepsStateService) {
     effect(() => {
       const mission = this.missionState.currentMission();
       const newKey = mission ? ((mission as any).uuid ?? mission.name) : null;
+
       // swap ad-hoc layer when mission changes
       if (newKey !== this.currentMissionKey) {
         if (this.currentMissionKey)
@@ -90,12 +103,14 @@ export class Flowchart implements AfterViewChecked {
         this.adHocConnections.set(saved?.connections ?? []);
         this.currentMissionKey = newKey;
       }
+
       if (mission) {
         this.rebuildFromMission(mission);
         this.needsAdjust = true;
       }
     });
   }
+
   // --- lifecycle ---
   ngAfterViewChecked(): void {
     if (!this.needsAdjust) return;
@@ -103,12 +118,18 @@ export class Flowchart implements AfterViewChecked {
     this.autoLayout();
   }
   onLoaded() { this.fCanvas()?.resetScaleAndCenter(false); }
+
   // --- tiny utils ---
   private isParallel = (s?: MissionStep | null) =>
     !!s && ((s.function_name ?? '').toLowerCase() === 'parallel' || (s.step_type ?? '').toLowerCase() === 'parallel');
+
+  private isSeq = (s?: MissionStep | null) =>
+    !!s && ((s.function_name ?? '').toLowerCase() === 'seq' || (s.step_type ?? '').toLowerCase() === 'seq');
+
   private base(id: string, kind: 'input' | 'output') {
     return kind === 'output' ? (id === this.START_OUT ? this.START_NODE : id.replace(/-output$/, '')) : id.replace(/-input$/, '');
   }
+
   private heights(): Map<string, number> {
     const m = new Map<string, number>();
     this.nodeEls.forEach(el => {
@@ -117,11 +138,13 @@ export class Flowchart implements AfterViewChecked {
     });
     return m;
   }
+
   private cleanupAdHocNode(id: string): void {
     const inputId = `${id}-input`, outputId = `${id}-output`;
     this.adHocNodes.set(this.adHocNodes().filter(n => n.id !== id));
     this.adHocConnections.set(this.adHocConnections().filter(c => c.inputId !== inputId && c.outputId !== outputId));
   }
+
   private recomputeMergedView(): void {
     const allNodes = [...this.missionNodes(), ...this.adHocNodes()];
     const ids = new Set(allNodes.map(n => n.id));
@@ -131,6 +154,7 @@ export class Flowchart implements AfterViewChecked {
     this.nodes.set(allNodes);
     this.connections.set([...this.missionConnections(), ...adhocConns]);
   }
+
   // --- movement ---
   onNodeMoved(nodeId: string, pos: IPoint) {
     const update = (sig: typeof this.adHocNodes | typeof this.missionNodes) => {
@@ -142,7 +166,8 @@ export class Flowchart implements AfterViewChecked {
     if (!update(this.adHocNodes)) update(this.missionNodes);
     this.recomputeMergedView();
   }
-  // --- layout (hidden "parallel" is skipped visually) ---
+
+  // --- layout (hidden "parallel"/"seq" are skipped visually) ---
   private autoLayout(): void {
     const h = this.heights();
     const newNodes = this.nodes().map(n => ({ ...n, position: { ...n.position } }));
@@ -150,7 +175,9 @@ export class Flowchart implements AfterViewChecked {
       const idx = newNodes.findIndex(n => n.id === id); if (idx > -1) newNodes[idx] = { ...newNodes[idx], position: p };
     };
     const mission = this.missionState.currentMission(); if (!mission) return;
+
     let y = (h.get(this.START_NODE) ?? 80) + 100;
+
     const layoutSubtree = (
       steps: MissionStep[],
       start: { x: number; y: number },
@@ -158,77 +185,148 @@ export class Flowchart implements AfterViewChecked {
       vGap: number
     ): { maxY: number } => {
       if (!steps.length) return { maxY: start.y };
-      const nh = (s: MissionStep) => (this.isParallel(s) ? 0 : h.get(this.stepToNodeId.get(s) ?? '') ?? 80);
+
+      const nh = (s: MissionStep) =>
+        (this.isParallel(s) || this.isSeq(s) ? 0 : h.get(this.stepToNodeId.get(s) ?? '') ?? 80);
+
       const hs = steps.map(nh), maxH = Math.max(0, ...hs), totalW = (steps.length - 1) * w, x0 = start.x - totalW / 2;
       let maxY = start.y;
+
       steps.forEach((s, i) => {
         const x = x0 + i * w;
-        if (this.isParallel(s)) {
-          if (s.children?.length) maxY = Math.max(maxY, layoutSubtree(s.children, { x, y: start.y }, w, vGap).maxY);
+
+        // seq: place children vertically at the same x
+        if (this.isSeq(s)) {
+          let yCursor = start.y;
+          let localMaxY = start.y;
+          for (const ch of (s.children ?? [])) {
+            const r = layoutSubtree([ch], { x, y: yCursor }, w, vGap);
+            yCursor = r.maxY + vGap;
+            localMaxY = Math.max(localMaxY, r.maxY);
+          }
+          maxY = Math.max(maxY, localMaxY);
           return;
         }
+
+        // parallel: distribute children across columns at same y
+        if (this.isParallel(s)) {
+          if (s.children?.length) {
+            const r = layoutSubtree(s.children, { x, y: start.y }, w, vGap);
+            maxY = Math.max(maxY, r.maxY);
+          }
+          return;
+        }
+
+        // Regular step
         const id = this.stepToNodeId.get(s); if (id) setPos(id, { x, y: start.y });
         const belowY = start.y + Math.max(hs[i] || 0, maxH) + vGap;
-        if (s.children?.length) maxY = Math.max(maxY, layoutSubtree(s.children, { x, y: belowY }, w, vGap).maxY);
-        else maxY = Math.max(maxY, start.y + (hs[i] || 0));
+
+        if (s.children?.length) {
+          const r = layoutSubtree(s.children, { x, y: belowY }, w, vGap);
+          maxY = Math.max(maxY, r.maxY);
+        } else {
+          maxY = Math.max(maxY, start.y + (hs[i] || 0));
+        }
       });
+
       return { maxY };
     };
+
     for (const s of mission.steps) {
       const r = layoutSubtree([s], { x: 300, y }, 200, 100);
       y = r.maxY + 100;
     }
     this.nodes.set(newNodes);
   }
-  // --- mission rebuild (skips visual "parallel" nodes) ---
+
+  // --- mission rebuild (skips visual "parallel"/"seq" wrappers) ---
   private rebuildFromMission(mission: Mission): void {
-    console.log(mission)
     const nodes: FlowNode[] = [], conns: Connection[] = [];
     const old = new Map(this.stepToNodeId);
     this.stepToNodeId = new Map(); this.nodeIdToStep.clear();
+
     const build = (
       steps: MissionStep[],
       parentExits: string[]
     ): { entryIds: string[]; exitIds: string[] } => {
       const entries: string[] = [], exits: string[] = [];
+
       for (const s of steps) {
+        // transparent seq: chain children top→bottom, pass-through wiring
+        if (this.isSeq(s)) {
+          let incoming = parentExits;
+          let firstEntries: string[] = [];
+          let lastExits: string[] = incoming;
+
+          for (let i = 0; i < (s.children?.length ?? 0); i++) {
+            const ch = s.children![i];
+            const r = build([ch], incoming);
+            if (i === 0) firstEntries.push(...r.entryIds);
+            incoming = r.exitIds;
+            lastExits = r.exitIds;
+          }
+
+          if (firstEntries.length) entries.push(...firstEntries);
+          exits.push(...(lastExits.length ? lastExits : parentExits));
+          continue;
+        }
+
+        // transparent parallel: fan-out/fan-in
         if (this.isParallel(s)) {
           const r = build(s.children ?? [], parentExits);
           entries.push(...r.entryIds); exits.push(...r.exitIds); continue;
         }
+
+        // regular executable step
         const id = old.get(s) ?? generateGuid();
         this.stepToNodeId.set(s, id); this.nodeIdToStep.set(id, s);
         const inputId = `${id}-input`, outputId = `${id}-output`;
-        nodes.push({ id, text: s.function_name, position: { x: 0, y: 0 }, step: this.asStep(s), args: this.initialArgs(s) });
-        parentExits.forEach(pid => conns.push({
-          id: generateGuid(),
-          outputId: pid,
-          inputId: inputId
-        }));
-        entries.push(inputId);
+
+        nodes.push({
+          id,
+          text: s.function_name,
+          position: { x: 0, y: 0 },
+          step: this.asStep(s),
+          args: this.initialArgs(s)
+        });
+
+        parentExits.forEach(pid => conns.push({ id: generateGuid(), outputId: pid, inputId }));
+
         const childExit = s.children?.length ? build(s.children, [outputId]).exitIds : [outputId];
+        entries.push(inputId);
         exits.push(...childExit);
       }
       return { entryIds: entries, exitIds: exits };
     };
+
     let exits: string[] = [this.START_OUT];
     for (const top of mission.steps) exits = build([top], exits).exitIds;
+
     this.missionNodes.set(nodes);
     this.missionConnections.set(conns);
     this.recomputeMergedView();
   }
+
   // --- create / connect ---
   onCreateNode(e: FCreateNodeEvent) {
     const step = e.data as Step;
-    const toVal = (t: string, v: string) => (t === 'bool' ? v.toLowerCase() === 'true' : t === 'float' ? (parseFloat(v) || null) : v);
+    const toVal = (t: string, v: string) =>
+      (t === 'bool' ? v.toLowerCase() === 'true' : t === 'float' ? (parseFloat(v) || null) : v);
+
     const args: Record<string, boolean | string | number | null> = {};
     step?.arguments?.forEach(a => {
       const d = a.default ?? '';
       args[a.name] = toVal(a.type, String(d !== '' ? d : ''));
     });
-    this.adHocNodes.set([...this.adHocNodes(), { id: generateGuid(), text: step?.name ?? 'New Node', position: e.rect, step, args }]);
+
+    this.adHocNodes.set([
+      ...this.adHocNodes(),
+      { id: generateGuid(), text: step?.name ?? 'New Node', position: e.rect, step, args }
+    ]);
+
     this.recomputeMergedView(); this.needsAdjust = true;
   }
+
   addConnection(e: FCreateConnectionEvent): void {
     if (!e.fInputId) return;
     const mission = this.missionState.currentMission(); if (!mission) return;
@@ -258,17 +356,24 @@ export class Flowchart implements AfterViewChecked {
       }
     }
 
-    // (keep your existing logic for generated → ad-hoc and step → step)
+    // promote helper (now uses seq under a parent)
     const promote = (adhocId: string, parent?: MissionStep) => {
       const n = this.adHocNodes().find(x => x.id === adhocId); if (!n) return false;
       const mStep = this.fromAdHoc(n);
       this.stepToNodeId.set(mStep, n.id);
-      parent ? this.attachChildWithParallel(mission, parent, mStep) : (mission.steps ??= []).push(mStep);
-      this.cleanupAdHocNode(n.id); this.rebuildFromMission(mission); this.needsAdjust = true; return true;
+      if (parent) {
+        this.attachChildWithSeq(mission, parent, mStep);
+      } else {
+        (mission.steps ??= []).push(mStep);
+      }
+      this.cleanupAdHocNode(n.id);
+      this.rebuildFromMission(mission);
+      this.needsAdjust = true;
+      return true;
     };
 
-    if (srcStep && !dstStep && promote(dstId, srcStep)) return;              // generated → ad-hoc under parent
-    if (srcStep && dstStep && this.attachChildWithParallel(mission, srcStep, dstStep)) {
+    if (srcStep && !dstStep && promote(dstId, srcStep)) return; // generated → ad-hoc under parent (seq)
+    if (srcStep && dstStep && this.attachChildWithSeq(mission, srcStep, dstStep)) {
       this.rebuildFromMission(mission); this.needsAdjust = true; return;
     }
 
@@ -286,6 +391,7 @@ export class Flowchart implements AfterViewChecked {
     this.selectedNodeId = nodeId;
     this.cm.show(ev);
   }
+
   deleteNode(): void {
     const id = this.selectedNodeId;
     if (!id) return;
@@ -299,10 +405,7 @@ export class Flowchart implements AfterViewChecked {
         if (!arr) return;
         for (let i = 0; i < arr.length; ) {
           const s = arr[i];
-          if (s === step) {
-            arr.splice(i, 1);
-            continue; // don't advance i after removal
-          }
+          if (s === step) { arr.splice(i, 1); continue; }
           removeEverywhere(s.children);
           i++;
         }
@@ -310,12 +413,13 @@ export class Flowchart implements AfterViewChecked {
 
       removeEverywhere(mission.steps);
 
-      // 👇 collapse single-child / empty parallels created by the deletion
+      // collapse wrappers created by the deletion
       this.normalizeParallels(mission);
+      this.normalizeSeqs(mission);
 
       this.rebuildFromMission(mission);
     } else {
-      // ad-hoc node deletion stays the same
+      // ad-hoc node deletion
       this.cleanupAdHocNode(id);
       this.recomputeMergedView();
     }
@@ -340,16 +444,31 @@ export class Flowchart implements AfterViewChecked {
       file: ''
     };
   }
+
   private initialArgs(ms: MissionStep): Record<string, boolean | string | number | null> {
     const pool = this.stepsState.currentSteps() ?? [];
     const match = pool.find(s => s.name === ms.function_name);
-    const toVal = (t: string, v: string) => (t === 'bool' ? v.toLowerCase() === 'true' : t === 'float' ? (parseFloat(v) || null) : v);
+    const toVal = (t: string, v: string) =>
+      (t === 'bool' ? v.toLowerCase() === 'true' : t === 'float' ? (parseFloat(v) || null) : v);
+
     if (match)
       return Object.fromEntries(
         match.arguments.map((sa, i) => [sa.name, toVal(sa.type, String(ms.arguments[i]?.value ?? sa.default ?? ''))])
       );
-    return Object.fromEntries(ms.arguments.map((a, i) => [a.name || `arg${i}`, toVal(a.type, String(a.value ?? ''))]));
+
+    return Object.fromEntries(
+      ms.arguments.map((a, i) => [a.name || `arg${i}`, toVal(a.type, String(a.value ?? ''))])
+    );
   }
+
+  private newParallel(): MissionStep {
+    return { step_type: 'parallel', function_name: 'parallel', arguments: [], children: [] };
+  }
+
+  private newSeq(): MissionStep {
+    return { step_type: 'seq', function_name: 'seq', arguments: [], children: [] };
+  }
+
   private ensureParallelAfter(mission: Mission, parent: MissionStep): MissionStep {
     // Find the array where "parent" lives (could be mission.steps or some parent's children)
     const findContainer = (arr?: MissionStep[]): MissionStep[] | null => {
@@ -393,10 +512,32 @@ export class Flowchart implements AfterViewChecked {
     return par;
   }
 
+  private ensureTopLevelParallel(mission: Mission): MissionStep {
+    mission.steps ??= [];
+    const first = mission.steps[0];
+    if (first && this.isParallel(first)) return first;
 
-  private newParallel(): MissionStep {
-    return { step_type: 'parallel', function_name: 'parallel', arguments: [], children: [] };
+    const par = this.newParallel();
+
+    if (first) {
+      // Replace the first step with a parallel and move the old first into it
+      mission.steps.splice(0, 1, par);
+      par.children = [...(par.children ?? []), first];
+    } else {
+      // Nothing at top-level yet → just place the parallel
+      mission.steps.push(par);
+    }
+    return par;
   }
+
+  private attachToStartWithParallel(mission: Mission, child: MissionStep): boolean {
+    const par = this.ensureTopLevelParallel(mission);
+    par.children ??= [];
+    this.detachEverywhere(mission, child); // make sure it's not referenced elsewhere
+    if (!par.children.includes(child)) par.children.push(child);
+    return true;
+  }
+
   private detachEverywhere(mission: Mission, target: MissionStep, exceptParent?: MissionStep): void {
     mission.steps = (mission.steps ?? []).filter(s => s !== target);
     const walk = (parent: MissionStep): void => {
@@ -406,42 +547,66 @@ export class Flowchart implements AfterViewChecked {
     };
     (mission.steps ?? []).forEach(walk);
   }
-  private attachChildWithParallel(mission: Mission, parent: MissionStep, child: MissionStep): boolean {
-    if (parent === child) return false;
 
-    const par = this.ensureParallelAfter(mission, parent);
+  // --- SEQ support ---
+  private ensureSequentialUnder(parent: MissionStep): MissionStep {
+    parent.children ??= [];
 
-    // Make sure parallel has a children array
-    par.children ??= [];
-
-    // If child is itself a parallel, merge
-    if (this.isParallel(child)) {
-      par.children.push(...(child.children ?? []));
-      this.detachEverywhere(mission, child);
-    } else {
-      // Detach from old spot and add
-      this.detachEverywhere(mission, child);
-      if (!par.children.includes(child)) {
-        par.children.push(child);
-      }
+    // Reuse existing seq wrapper
+    if (parent.children.length === 1 && this.isSeq(parent.children[0])) {
+      return parent.children[0];
     }
 
+    // Wrap the single existing child
+    if (parent.children.length === 1 && !this.isSeq(parent.children[0])) {
+      const existing = parent.children[0];
+      const seq = this.newSeq();
+      seq.children = [existing];
+      parent.children[0] = seq;
+      return seq;
+    }
+
+    // Safety: compress many children into one seq
+    if (parent.children.length > 1) {
+      const seq = this.newSeq();
+      seq.children = parent.children.slice();
+      parent.children = [seq];
+      return seq;
+    }
+
+    // If no children yet, create a seq placeholder (will receive the second child later)
+    const seq = this.newSeq();
+    parent.children.push(seq);
+    return seq;
+  }
+
+  private attachChildWithSeq(mission: Mission, parent: MissionStep, child: MissionStep): boolean {
+    if (parent === child) return false;
+    parent.children ??= [];
+
+    // First child: attach directly (no seq wrapper yet)
+    if (parent.children.length === 0) {
+      this.detachEverywhere(mission, child);
+      parent.children.push(child);
+      return true;
+    }
+
+    // Second+ child: ensure/reuse seq and append
+    const seq = this.ensureSequentialUnder(parent);
+    seq.children ??= [];
+
+    if (this.isSeq(child)) {
+      // flatten seq-of-seq
+      this.detachEverywhere(mission, child);
+      seq.children.push(...(child.children ?? []));
+    } else {
+      this.detachEverywhere(mission, child);
+      if (!seq.children.includes(child)) seq.children.push(child);
+    }
     return true;
   }
 
-  private fromAdHoc(n: FlowNode): MissionStep {
-    const args = Object.entries(n.args || {}).map(([name, v]) => ({
-      name,
-      value: v == null ? '' : String(v),
-      type: n.step?.arguments?.find(a => a.name === name)?.type ?? 'str'
-    }));
-    return {
-      step_type: (n.step?.name ?? '').toLowerCase() === 'parallel' ? 'parallel' : '',
-      function_name: n.step?.name || n.text,
-      arguments: args,
-      children: []
-    };
-  }
+  // --- drop-in split insert ---
   onNodeIntersectedWithConnection(event: FNodeIntersectedWithConnections): void {
     const nodeId = event.fNodeId;
     const hitId = event.fConnectionIds?.[0];
@@ -451,27 +616,20 @@ export class Flowchart implements AfterViewChecked {
     const adhoc = this.adHocConnections();
     const ai = adhoc.findIndex(c => c.id === hitId);
     if (ai !== -1) {
-      // --- split an ad-hoc wire visually ---
+      // split an ad-hoc wire visually
       const hit = adhoc[ai];
       const previousInput = hit.inputId;
 
-      // rewire existing to end at the new node's input
       const updated = adhoc.slice();
       updated[ai] = { ...hit, inputId: `${nodeId}-input` };
-
-      // add new second segment from new node to the old target
-      updated.push({
-        id: generateGuid(),
-        outputId: `${nodeId}-output`,
-        inputId: previousInput
-      });
+      updated.push({ id: generateGuid(), outputId: `${nodeId}-output`, inputId: previousInput });
 
       this.adHocConnections.set(updated);
       this.recomputeMergedView();
       return;
     }
 
-    // --- split a mission wire: insert step between parent→child ---
+    // split a mission wire: insert step between parent→child
     const mission = this.missionState.currentMission();
     if (!mission) return;
 
@@ -509,6 +667,7 @@ export class Flowchart implements AfterViewChecked {
       this.needsAdjust = true;
     }
   }
+
   private insertBetween(mission: Mission, parent: MissionStep | null, child: MissionStep, mid: MissionStep): boolean {
     // Case A: Start → child (top-level)
     if (!parent) {
@@ -519,7 +678,18 @@ export class Flowchart implements AfterViewChecked {
       return true;
     }
 
-    // Case B1: parent.children directly lists child (sequential)
+    // Case B0: parent has a seq wrapper; insert mid before 'child' inside the seq
+    if (parent.children?.length === 1 && this.isSeq(parent.children[0])) {
+      const seq = parent.children[0];
+      seq.children ??= [];
+      const k = seq.children.indexOf(child);
+      if (k !== -1) {
+        seq.children.splice(k, 0, mid);
+        return true;
+      }
+    }
+
+    // Case B1: parent.children directly lists child (simple sequential)
     if (parent.children?.length) {
       const j = parent.children.indexOf(child);
       if (j !== -1) {
@@ -539,7 +709,7 @@ export class Flowchart implements AfterViewChecked {
       return true;
     }
 
-    // Fallback: replace first occurrence of child in the whole mission, then ensure it's after parent
+    // Fallback
     if (this.replaceFirstOccurrence(mission, child, mid)) {
       mid.children = [child];
       return true;
@@ -558,33 +728,7 @@ export class Flowchart implements AfterViewChecked {
     return walk(mission.steps);
   }
 
-  // 👇 add next to ensureParallelAfter(...)
-  private ensureTopLevelParallel(mission: Mission): MissionStep {
-    mission.steps ??= [];
-    const first = mission.steps[0];
-    if (first && this.isParallel(first)) return first;
-
-    const par = this.newParallel();
-
-    if (first) {
-      // Replace the first step with a parallel and move the old first into it
-      mission.steps.splice(0, 1, par);
-      par.children = [...(par.children ?? []), first];
-    } else {
-      // Nothing at top-level yet → just place the parallel
-      mission.steps.push(par);
-    }
-    return par;
-  }
-
-  private attachToStartWithParallel(mission: Mission, child: MissionStep): boolean {
-    const par = this.ensureTopLevelParallel(mission);
-    par.children ??= [];
-    this.detachEverywhere(mission, child);       // make sure it's not referenced elsewhere
-    if (!par.children.includes(child)) par.children.push(child);
-    return true;
-  }
-
+  // --- normalize wrappers ---
   /** Replace any parallel with its single child; drop empty parallels */
   private normalizeParallelsIn(arr?: MissionStep[]): void {
     if (!arr) return;
@@ -597,16 +741,8 @@ export class Flowchart implements AfterViewChecked {
 
       if (this.isParallel(s)) {
         const ch = s.children ?? [];
-        if (ch.length === 0) {
-          // remove empty parallel
-          arr.splice(i, 1);
-          continue; // don't advance i
-        }
-        if (ch.length === 1) {
-          // promote the only child
-          arr.splice(i, 1, ch[0]);
-          continue; // re-check the promoted node at same index
-        }
+        if (ch.length === 0) { arr.splice(i, 1); continue; }
+        if (ch.length === 1) { arr.splice(i, 1, ch[0]); continue; }
       }
       i++;
     }
@@ -617,4 +753,39 @@ export class Flowchart implements AfterViewChecked {
     this.normalizeParallelsIn(mission.steps);
   }
 
+  private normalizeSeqsIn(arr?: MissionStep[]): void {
+    if (!arr) return;
+    for (let i = 0; i < arr.length; ) {
+      const s = arr[i];
+
+      this.normalizeSeqsIn(s.children); // recurse first
+
+      if (this.isSeq(s)) {
+        const ch = s.children ?? [];
+        if (ch.length === 0) { arr.splice(i, 1); continue; }
+        if (ch.length === 1) { arr.splice(i, 1, ch[0]); continue; }
+      }
+      i++;
+    }
+  }
+
+  private normalizeSeqs(mission: Mission): void {
+    mission.steps ??= [];
+    this.normalizeSeqsIn(mission.steps);
+  }
+
+  // --- conversions ---
+  private fromAdHoc(n: FlowNode): MissionStep {
+    const args = Object.entries(n.args || {}).map(([name, v]) => ({
+      name,
+      value: v == null ? '' : String(v),
+      type: n.step?.arguments?.find(a => a.name === name)?.type ?? 'str'
+    }));
+    return {
+      step_type: (n.step?.name ?? '').toLowerCase() === 'parallel' ? 'parallel' : '',
+      function_name: n.step?.name || n.text,
+      arguments: args,
+      children: []
+    };
+  }
 }
