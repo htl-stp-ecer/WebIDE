@@ -206,29 +206,72 @@ export class Flowchart implements AfterViewChecked {
   }
 
   addConnection(e: FCreateConnectionEvent): void {
-    if (!e.fInputId) return; const mission = this.missionState.currentMission(); if (!mission) return;
-    const srcId = baseId(e.fOutputId, 'output'), dstId = baseId(e.fInputId, 'input');
-    const srcStep = this.nodeIdToStep.get(srcId), dstStep = this.nodeIdToStep.get(dstId);
+    if (!e.fInputId) return;
+    const mission = this.missionState.currentMission();
+    if (!mission) return;
 
+    const srcId = baseId(e.fOutputId, 'output');
+    const dstId = baseId(e.fInputId, 'input');
+    const srcStep = this.nodeIdToStep.get(srcId);
+    const dstStep = this.nodeIdToStep.get(dstId);
+
+    // CHANGED: when promoting an ad-hoc node under a generated parent, attach via PARALLEL
     const promote = (adhocId: string, parent?: MissionStep) => {
-      const n = this.adHocNodes().find(x => x.id === adhocId); if (!n) return false;
-      const mStep = this.fromAdHoc(n); this.stepToNodeId.set(mStep, n.id);
-      parent ? this.attachChildWithSeq(mission, parent, mStep) : (mission.steps ??= []).push(mStep);
-      this.cleanupAdHocNode(n.id); this.rebuildFromMission(mission); this.needsAdjust = true; return true;
+      const n = this.adHocNodes().find(x => x.id === adhocId);
+      if (!n) return false;
+      const mStep = this.fromAdHoc(n);
+      this.stepToNodeId.set(mStep, n.id); // keep visual continuity
+
+      if (parent) {
+        this.attachChildWithParallel(mission, parent, mStep);   // <-- was attachChildWithSeq
+      } else {
+        (mission.steps ??= []).push(mStep);
+      }
+
+      this.cleanupAdHocNode(n.id);
+      this.rebuildFromMission(mission);
+      this.needsAdjust = true;
+      return true;
     };
 
+    // (optional) keep your "start → parallel bucket" behavior
     if (srcId === this.START_NODE) {
-      if (dstStep && this.attachToStartWithParallel(mission, dstStep) || (!dstStep && (() => { const n = this.adHocNodes().find(x => x.id === dstId); if (!n) return false; const m = this.fromAdHoc(n); this.stepToNodeId.set(m, n.id); this.cleanupAdHocNode(n.id); return this.attachToStartWithParallel(mission, m); })())) {
-        this.rebuildFromMission(mission); this.needsAdjust = true; return;
+      // If you want top-level connections from Start to also fan-out in parallel, keep this block.
+      if (
+        (dstStep && this.attachToStartWithParallel(mission, dstStep)) ||
+        (!dstStep && (() => {
+          const n = this.adHocNodes().find(x => x.id === dstId);
+          if (!n) return false;
+          const m = this.fromAdHoc(n);
+          this.stepToNodeId.set(m, n.id);
+          this.cleanupAdHocNode(n.id);
+          return this.attachToStartWithParallel(mission, m);
+        })())
+      ) {
+        this.rebuildFromMission(mission);
+        this.needsAdjust = true;
+        return;
       }
     }
 
+    // CHANGED: generated → ad-hoc attaches in PARALLEL after the source step
     if (srcStep && !dstStep && promote(dstId, srcStep)) return;
-    if (srcStep && dstStep && this.attachChildWithSeq(mission, srcStep, dstStep)) { this.rebuildFromMission(mission); this.needsAdjust = true; return; }
 
-    this.adHocConnections.set([...this.adHocConnections(), { id: generateGuid(), outputId: e.fOutputId, inputId: e.fInputId }]);
+    // CHANGED: generated → generated attaches in PARALLEL
+    if (srcStep && dstStep && this.attachChildWithParallel(mission, srcStep, dstStep)) {
+      this.rebuildFromMission(mission);
+      this.needsAdjust = true;
+      return;
+    }
+
+    // fallback: just draw an ad-hoc wire
+    this.adHocConnections.set([
+      ...this.adHocConnections(),
+      { id: generateGuid(), outputId: e.fOutputId, inputId: e.fInputId }
+    ]);
     this.recomputeMergedView();
   }
+
 
   // ----- context menu -----
   onRightClick(ev: MouseEvent, nodeId: string) { ev.preventDefault(); this.selectedNodeId = nodeId; this.cm.show(ev); }
@@ -286,24 +329,6 @@ export class Flowchart implements AfterViewChecked {
     mission.steps = (mission.steps ?? []).filter(s => s !== target);
     const walk = (p: MissionStep): void => { const cs = p.children ?? []; if (!cs.length) return; p.children = cs.filter(ch => (exceptParent && p === exceptParent) || ch !== target); (p.children ?? []).forEach(walk); };
     (mission.steps ?? []).forEach(walk);
-  }
-
-  // ----- SEQ support -----
-  private ensureSequentialUnder(parent: MissionStep): MissionStep {
-    parent.children ??= [];
-    if (parent.children.length === 1 && isType(parent.children[0], 'seq')) return parent.children[0];
-    if (parent.children.length === 1 && !isType(parent.children[0], 'seq')) { const seq = mk('seq'); seq.children = [parent.children[0]]; parent.children[0] = seq; return seq; }
-    if (parent.children.length > 1) { const seq = mk('seq'); seq.children = parent.children.slice(); parent.children = [seq]; return seq; }
-    const seq = mk('seq'); parent.children.push(seq); return seq;
-  }
-
-  private attachChildWithSeq(mission: Mission, parent: MissionStep, child: MissionStep): boolean {
-    if (parent === child) return false; parent.children ??= [];
-    if (parent.children.length === 0) { this.detachEverywhere(mission, child); parent.children.push(child); return true; }
-    const seq = this.ensureSequentialUnder(parent); seq.children ??= [];
-    this.detachEverywhere(mission, child);
-    if (isType(child, 'seq')) seq.children.push(...(child.children ?? [])); else if (!seq.children.includes(child)) seq.children.push(child);
-    return true;
   }
 
   // NEW: robust SEQ detection to keep SEQ when inserting between siblings inside a SEQ (even if that SEQ sits under a PARALLEL)
@@ -418,4 +443,25 @@ export class Flowchart implements AfterViewChecked {
     const args = Object.entries(n.args || {}).map(([name, v]) => ({ name, value: v == null ? '' : String(v), type: n.step?.arguments?.find(a => a.name === name)?.type ?? 'str' }));
     return { step_type: lc(n.step?.name) === 'parallel' ? 'parallel' : '', function_name: n.step?.name || n.text, arguments: args, children: [] };
   }
+
+  // ADD: bring back the parallel attach like in your previous version
+  private attachChildWithParallel(mission: Mission, parent: MissionStep, child: MissionStep): boolean {
+    if (parent === child) return false;
+
+    const par = this.ensureParallelAfter(mission, parent); // creates or reuses a parallel right after parent
+    par.children ??= [];
+
+    // If child is itself a parallel, merge its children into the parallel-after-parent
+    if (isType(child, 'parallel')) {
+      par.children.push(...(child.children ?? []));
+      this.detachEverywhere(mission, child);
+    } else {
+      // detach child from wherever it currently lives and add it as another lane
+      this.detachEverywhere(mission, child);
+      if (!par.children.includes(child)) par.children.push(child);
+    }
+
+    return true;
+  }
+
 }
