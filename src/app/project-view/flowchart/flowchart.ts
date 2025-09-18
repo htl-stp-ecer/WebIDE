@@ -32,19 +32,17 @@ import {Tooltip} from 'primeng/tooltip';
 import {FormsModule} from '@angular/forms';
 
 // Shared models and helpers
-import { Connection, FlowNode, Step, lc, isType, mk, baseId, toVal } from './models';
+import { Connection, FlowNode, Step, baseId, toVal } from './models';
 import {
   attachToStartWithParallel,
   detachEverywhere,
-  ensureParallelAfter,
-  containsStep,
-  findSeqContainerForEdge,
   normalize,
   attachChildWithParallel,
-  findParentAndIndex,
-  findNearestParallelAncestor,
 } from './mission-utils';
 import { computeAutoLayout } from './layout-utils';
+import { rebuildMissionView } from './mission-builder';
+import { insertBetween } from './mission-utils';
+import { asStepFromPool, initialArgsFromPool, missionStepFromAdHoc } from './step-utils';
 
 @Component({
   selector: 'app-flowchart',
@@ -168,55 +166,19 @@ export class Flowchart implements AfterViewChecked {
   }
 
   private rebuildFromMission(mission: Mission): void {
-    console.log(mission);
-    const nodes: FlowNode[] = [], conns: Connection[] = [], old = new Map(this.stepToNodeId);
-    this.stepToNodeId = new Map();
-    this.nodeIdToStep.clear();
-
-    const build = (steps: MissionStep[], parentExits: string[]): { entryIds: string[]; exitIds: string[] } => {
-      const entries: string[] = [], exits: string[] = [];
-      for (const s of steps) {
-        if (isType(s, 'seq')) {
-          let incoming = parentExits, first: string[] = [], last: string[] = incoming;
-          (s.children ?? []).forEach((ch, i) => {
-            const r = build([ch], incoming);
-            if (i === 0) first.push(...r.entryIds);
-            incoming = last = r.exitIds;
-          });
-          if (first.length) entries.push(...first);
-          exits.push(...(last.length ? last : parentExits));
-          continue;
-        }
-        if (isType(s, 'parallel')) {
-          const r = build(s.children ?? [], parentExits);
-          entries.push(...r.entryIds);
-          exits.push(...r.exitIds);
-          continue;
-        }
-
-        const id = old.get(s) ?? generateGuid();
-        this.stepToNodeId.set(s, id);
-        this.nodeIdToStep.set(id, s);
-        const inputId = `${id}-input`, outputId = `${id}-output`;
-        nodes.push({
-          id,
-          text: s.function_name,
-          position: {x: 0, y: 0},
-          step: this.asStep(s),
-          args: this.initialArgs(s)
-        });
-        parentExits.forEach(pid => conns.push({id: generateGuid(), outputId: pid, inputId}));
-        const childExit = s.children?.length ? build(s.children, [outputId]).exitIds : [outputId];
-        entries.push(inputId);
-        exits.push(...childExit);
-      }
-      return {entryIds: entries, exitIds: exits};
-    };
-
-    let exits: string[] = [this.START_OUT];
-    for (const top of mission.steps) exits = build([top], exits).exitIds;
-    this.missionNodes.set(nodes);
-    this.missionConnections.set(conns);
+    console.log(mission)
+    const old = new Map(this.stepToNodeId);
+    const res = rebuildMissionView(
+      mission,
+      old,
+      (ms) => asStepFromPool(ms, this.stepsState.currentSteps() ?? []),
+      (ms) => initialArgsFromPool(ms, this.stepsState.currentSteps() ?? []),
+      this.START_OUT
+    );
+    this.stepToNodeId = res.stepToNodeId;
+    this.nodeIdToStep = res.nodeIdToStep;
+    this.missionNodes.set(res.nodes);
+    this.missionConnections.set(res.connections);
     this.recomputeMergedView();
   }
 
@@ -249,7 +211,7 @@ export class Flowchart implements AfterViewChecked {
     const promote = (adhocId: string, parent?: MissionStep) => {
       const n = this.adHocNodes().find(x => x.id === adhocId);
       if (!n) return false;
-      const mStep = this.fromAdHoc(n);
+      const mStep = missionStepFromAdHoc(n);
       this.stepToNodeId.set(mStep, n.id); // keep visual continuity
 
       if (parent) {
@@ -272,7 +234,7 @@ export class Flowchart implements AfterViewChecked {
         (!dstStep && (() => {
           const n = this.adHocNodes().find(x => x.id === dstId);
           if (!n) return false;
-          const m = this.fromAdHoc(n);
+          const m = missionStepFromAdHoc(n);
           this.stepToNodeId.set(m, n.id);
           this.cleanupAdHocNode(n.id);
           return attachToStartWithParallel(mission, m);
@@ -339,31 +301,6 @@ export class Flowchart implements AfterViewChecked {
     this.needsAdjust = true;
   }
 
-  // ----- step ↔ UI -----
-  private asStep(ms: MissionStep): Step {
-    const pool = this.stepsState.currentSteps() ?? [];
-    const match = pool.find(s => s.name === ms.function_name);
-    return match ?? {
-      name: ms.function_name,
-      import: '',
-      arguments: ms.arguments.map((a, i) => ({
-        name: a.name || `arg${i}`,
-        type: a.type,
-        import: null,
-        optional: false,
-        default: a.value
-      })),
-      file: ''
-    };
-  }
-
-  private initialArgs(ms: MissionStep): Record<string, boolean | string | number | null> {
-    const pool = this.stepsState.currentSteps() ?? [], match = pool.find(s => s.name === ms.function_name);
-    return match
-      ? Object.fromEntries(match.arguments.map((sa, i) => [sa.name, toVal(sa.type, String(ms.arguments[i]?.value ?? sa.default ?? ''))]))
-      : Object.fromEntries(ms.arguments.map((a, i) => [a.name || `arg${i}`, toVal(a.type, String(a.value ?? ''))]));
-  }
-
   // extracted helpers from mission-utils.ts used below
 
   // ----- drop-in split insert -----
@@ -395,131 +332,16 @@ export class Flowchart implements AfterViewChecked {
     if (!midStep) {
       const n = this.adHocNodes().find(x => x.id === nodeId);
       if (!n) return;
-      midStep = this.fromAdHoc(n);
+      midStep = missionStepFromAdHoc(n);
       this.stepToNodeId.set(midStep, n.id);
       this.cleanupAdHocNode(n.id);
     }
     if (midStep === parentStep || midStep === childStep) return;
     detachEverywhere(mission, midStep);
 
-    if (this.insertBetween(mission, parentStep, childStep, midStep)) {
+    if (insertBetween(mission, parentStep, childStep, midStep)) {
       this.rebuildFromMission(mission);
       this.needsAdjust = true;
     }
   }
-
-  private insertBetween(mission: Mission, parent: MissionStep | null, child: MissionStep, mid: MissionStep): boolean {
-    // 0) LANE → OUTSIDE: if `parent` is inside a PARALLEL and `child` is outside it,
-    //    insert `mid` INTO THE LANE (wrap with SEQ or insert into existing lane SEQ).
-    if (parent) {
-      const parAncestor = findNearestParallelAncestor(mission, parent);
-      if (parAncestor && !containsStep(parAncestor, child)) {
-        const locPrev = findParentAndIndex(mission, parent);
-        if (!locPrev) return false;
-
-        const {parent: prevDirectParent, container, index} = locPrev;
-
-        // If lane already has a SEQ, insert after `parent`
-        if (prevDirectParent && isType(prevDirectParent, 'seq')) {
-          prevDirectParent.children ??= [];
-          prevDirectParent.children.splice(index + 1, 0, mid);
-        } else {
-          // Wrap the lane element with SEQ(parent, mid)
-          const seq = mk('seq');
-          seq.children = [parent, mid];
-          container.splice(index, 1, seq);
-        }
-        return true;
-      }
-    }
-
-    // 1) If prev & next are adjacent siblings inside a SEQ wrapper, insert into that SEQ
-    if (parent) {
-      const seqHit = findSeqContainerForEdge(mission.steps, parent, child);
-      if (seqHit) {
-        seqHit.seq.children ??= [];
-        seqHit.seq.children.splice(seqHit.nextIndex, 0, mid);
-        return true;
-      }
-    }
-
-    // 2) Top-level
-    if (!parent) {
-      const i = (mission.steps ?? []).indexOf(child);
-      if (i === -1) return false;
-      mission.steps.splice(i, 1, mid);
-      mid.children = [child];
-      return true;
-    }
-
-    // 3) Parent has single SEQ child and edge is inside that SEQ (legacy fast-path)
-    if (parent.children?.length === 1 && isType(parent.children[0], 'seq')) {
-      const seq = parent.children[0];
-      seq.children ??= [];
-      const k = seq.children.indexOf(child);
-      if (k !== -1) {
-        seq.children.splice(k, 0, mid);
-        return true;
-      }
-    }
-
-    // 4) Direct child of parent
-    if (parent.children?.length) {
-      const j = parent.children.indexOf(child);
-      if (j !== -1) {
-        parent.children.splice(j, 1, mid);
-        mid.children = [child];
-        return true;
-      }
-    }
-
-    // 5) Fallbacks (now lane-aware via ensureParallelAfter)
-    const par = ensureParallelAfter(mission, parent);
-    par.children ??= [];
-    const k = par.children.indexOf(child);
-    if (k !== -1) {
-      par.children.splice(k, 1, mid);
-      mid.children = [child];
-      return true;
-    }
-
-    const walk = (arr?: MissionStep[]): boolean => {
-      if (!arr) return false;
-      const i = arr.indexOf(child);
-      if (i !== -1) {
-        arr.splice(i, 1, mid);
-        return true;
-      }
-      return arr.some(s => walk(s.children));
-    };
-    if (walk(mission.steps)) {
-      mid.children = [child];
-      return true;
-    }
-
-    return false;
-  }
-
-  // ----- normalize wrappers (parallel & seq) -----
-  // normalize now imported from mission-utils
-
-  // ----- conversions -----
-  private fromAdHoc(n: FlowNode): MissionStep {
-    const args = Object.entries(n.args || {}).map(([name, v]) => ({
-      name,
-      value: v == null ? '' : String(v),
-      type: n.step?.arguments?.find(a => a.name === name)?.type ?? 'str'
-    }));
-    return {
-      step_type: lc(n.step?.name) === 'parallel' ? 'parallel' : '',
-      function_name: n.step?.name || n.text,
-      arguments: args,
-      children: []
-    };
-  }
-
-  // attachChildWithParallel now imported from mission-utils
-
-
-  // findParentAndIndex, findNearestParallelAncestor now imported from mission-utils
 }

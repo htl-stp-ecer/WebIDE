@@ -178,3 +178,99 @@ export function findNearestParallelAncestor(mission: Mission, step: MissionStep)
   return found;
 }
 
+export function insertBetween(
+  mission: Mission,
+  parent: MissionStep | null,
+  child: MissionStep,
+  mid: MissionStep
+): boolean {
+  // 0) LANE → OUTSIDE: if `parent` is inside a PARALLEL and `child` is outside it,
+  //    insert `mid` INTO THE LANE (wrap with SEQ or insert into existing lane SEQ).
+  if (parent) {
+    const parAncestor = findNearestParallelAncestor(mission, parent);
+    if (parAncestor && !containsStep(parAncestor, child)) {
+      const locPrev = findParentAndIndex(mission, parent);
+      if (!locPrev) return false;
+
+      const { parent: prevDirectParent, container, index } = locPrev;
+
+      // If lane already has a SEQ, insert after `parent`
+      if (prevDirectParent && isType(prevDirectParent, 'seq')) {
+        prevDirectParent.children ??= [];
+        prevDirectParent.children.splice(index + 1, 0, mid);
+      } else {
+        // Wrap the lane element with SEQ(parent, mid)
+        const seq = mk('seq');
+        seq.children = [parent, mid];
+        container.splice(index, 1, seq);
+      }
+      return true;
+    }
+  }
+
+  // 1) If prev & next are adjacent siblings inside a SEQ wrapper, insert into that SEQ
+  if (parent) {
+    const seqHit = findSeqContainerForEdge(mission.steps, parent, child);
+    if (seqHit) {
+      seqHit.seq.children ??= [];
+      seqHit.seq.children.splice(seqHit.nextIndex, 0, mid);
+      return true;
+    }
+  }
+
+  // 2) Top-level
+  if (!parent) {
+    const i = (mission.steps ?? []).indexOf(child);
+    if (i === -1) return false;
+    mission.steps.splice(i, 1, mid);
+    mid.children = [child];
+    return true;
+  }
+
+  // 3) Parent has single SEQ child and edge is inside that SEQ (legacy fast-path)
+  if (parent.children?.length === 1 && isType(parent.children[0], 'seq')) {
+    const seq = parent.children[0];
+    seq.children ??= [];
+    const k = seq.children.indexOf(child);
+    if (k !== -1) {
+      seq.children.splice(k, 0, mid);
+      return true;
+    }
+  }
+
+  // 4) Direct child of parent
+  if (parent.children?.length) {
+    const j = parent.children.indexOf(child);
+    if (j !== -1) {
+      parent.children.splice(j, 1, mid);
+      mid.children = [child];
+      return true;
+    }
+  }
+
+  // 5) Fallbacks (now lane-aware via ensureParallelAfter)
+  const par = ensureParallelAfter(mission, parent);
+  par.children ??= [];
+  const k = par.children.indexOf(child);
+  if (k !== -1) {
+    par.children.splice(k, 1, mid);
+    mid.children = [child];
+    return true;
+  }
+
+  const walk = (arr?: MissionStep[]): boolean => {
+    if (!arr) return false;
+    const i = arr.indexOf(child);
+    if (i !== -1) {
+      arr.splice(i, 1, mid);
+      return true;
+    }
+    return arr.some((s) => walk(s.children));
+  };
+  if (walk(mission.steps)) {
+    mid.children = [child];
+    return true;
+  }
+
+  return false;
+}
