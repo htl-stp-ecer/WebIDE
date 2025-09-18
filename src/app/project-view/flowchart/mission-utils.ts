@@ -1,0 +1,180 @@
+import { Mission } from '../../entities/Mission';
+import { MissionStep } from '../../entities/MissionStep';
+import { isType, mk } from './models';
+
+// Keep helper-style, pure utilities for manipulating Mission/MissionStep trees.
+
+export function ensureTopLevelParallel(mission: Mission): MissionStep {
+  mission.steps ??= [];
+  const first = mission.steps[0];
+  if (first && isType(first, 'parallel')) return first;
+  const par = mk('parallel');
+  if (first) {
+    mission.steps.splice(0, 1, par);
+    par.children = [...(par.children ?? []), first];
+  } else mission.steps.push(par);
+  return par;
+}
+
+export function findParentAndIndex(
+  mission: Mission,
+  target: MissionStep
+): { parent: MissionStep | null; container: MissionStep[]; index: number } | null {
+  const dfs = (arr: MissionStep[] | undefined, parent: MissionStep | null): any => {
+    if (!arr) return null;
+    const idx = arr.indexOf(target);
+    if (idx !== -1) return { parent, container: arr, index: idx };
+    for (const s of arr) {
+      const r = dfs(s.children, s);
+      if (r) return r;
+    }
+    return null;
+  };
+  return dfs(mission.steps, null);
+}
+
+export function detachEverywhere(mission: Mission, target: MissionStep, exceptParent?: MissionStep): void {
+  mission.steps = (mission.steps ?? []).filter(s => s !== target);
+  const walk = (p: MissionStep): void => {
+    const cs = p.children ?? [];
+    if (!cs.length) return;
+    p.children = cs.filter(ch => (exceptParent && p === exceptParent) || ch !== target);
+    (p.children ?? []).forEach(walk);
+  };
+  (mission.steps ?? []).forEach(walk);
+}
+
+export function ensureParallelAfter(mission: Mission, parent: MissionStep | null): MissionStep {
+  // If parent is null, ensure a top-level parallel and return it.
+  if (!parent) return ensureTopLevelParallel(mission);
+
+  // Locate the direct container that holds `parent`
+  const loc = findParentAndIndex(mission, parent);
+  if (!loc) return mk('parallel');
+  const { parent: directParent, container, index } = loc;
+
+  // If `parent` is inside a PARALLEL lane, REUSE that PARALLEL
+  // (Don't create a new PARALLEL "after" the lane.)
+  if (directParent && isType(directParent, 'parallel') && directParent.children === container) {
+    return directParent;
+  }
+
+  // Otherwise behave like before: ensure a PARALLEL right *after* `parent`
+  const next = container[index + 1];
+  if (next && isType(next, 'parallel')) return next;
+
+  const par = mk('parallel');
+  container.splice(index + 1, 0, par);
+
+  // If there was a "next" step, move it into the new parallel as a lane
+  if (next) {
+    container.splice(index + 2, 1);
+    par.children = [...(par.children ?? []), next];
+  }
+  return par;
+}
+
+export function attachToStartWithParallel(mission: Mission, child: MissionStep): boolean {
+  const par = ensureTopLevelParallel(mission);
+  par.children ??= [];
+  detachEverywhere(mission, child);
+  if (!par.children.includes(child)) par.children.push(child);
+  return true;
+}
+
+export function containsStep(root: MissionStep, target: MissionStep): boolean {
+  if (root === target) return true;
+  return (root.children ?? []).some(ch => containsStep(ch, target));
+}
+
+export function findSeqContainerForEdge(
+  steps: MissionStep[] | undefined,
+  prev: MissionStep,
+  next: MissionStep
+): { seq: MissionStep; nextIndex: number } | null {
+  const search = (arr?: MissionStep[]): { seq: MissionStep; nextIndex: number } | null => {
+    if (!arr) return null;
+    for (const s of arr) {
+      if (isType(s, 'seq')) {
+        const cs = s.children ?? [];
+        let prevIdx = -1, nextIdx = -1;
+        for (let i = 0; i < cs.length; i++) {
+          const ch = cs[i];
+          if (prevIdx === -1 && containsStep(ch, prev)) prevIdx = i;
+          if (nextIdx === -1 && containsStep(ch, next)) nextIdx = i;
+          if (prevIdx !== -1 && nextIdx !== -1) break;
+        }
+        if (prevIdx !== -1 && nextIdx !== -1 && prevIdx + 1 === nextIdx) {
+          return { seq: s, nextIndex: nextIdx };
+        }
+      }
+      const deeper = search(s.children);
+      if (deeper) return deeper;
+    }
+    return null;
+  };
+  return search(steps);
+}
+
+export function normalize(mission: Mission, t: 'parallel' | 'seq'): void {
+  const walk = (arr?: MissionStep[]) => {
+    if (!arr) return;
+    for (let i = 0; i < arr.length;) {
+      const s = arr[i];
+      walk(s.children);
+      if (isType(s, t)) {
+        const ch = s.children ?? [];
+        if (ch.length <= 1) {
+          arr.splice(i, 1, ...ch);
+          continue;
+        }
+      }
+      i++;
+    }
+  };
+  mission.steps ??= [];
+  walk(mission.steps);
+}
+
+export function attachChildWithParallel(mission: Mission, parent: MissionStep, child: MissionStep): boolean {
+  if (parent === child) return false;
+
+  const par = ensureParallelAfter(mission, parent); // creates or reuses a parallel right after parent
+  par.children ??= [];
+
+  // If child is itself a parallel, merge its children into the parallel-after-parent
+  if (isType(child, 'parallel')) {
+    par.children.push(...(child.children ?? []));
+    detachEverywhere(mission, child);
+  } else {
+    // detach child from wherever it currently lives and add it as another lane
+    detachEverywhere(mission, child);
+    if (!par.children.includes(child)) par.children.push(child);
+  }
+
+  return true;
+}
+
+export function findNearestParallelAncestor(mission: Mission, step: MissionStep): MissionStep | null {
+  let found: MissionStep | null = null;
+  const dfs = (arr: MissionStep[] | undefined, stack: MissionStep[] = []): boolean => {
+    if (!arr) return false;
+    for (const s of arr) {
+      const stack2 = [...stack, s];
+      if (s === step) {
+        for (let i = stack2.length - 1; i >= 0; i--) {
+          if (isType(stack2[i], 'parallel')) {
+            found = stack2[i];
+            break;
+          }
+        }
+        return true;
+      }
+      if (dfs(s.children, stack2)) return true;
+    }
+    return false;
+  };
+  dfs(mission.steps);
+  return found;
+}
+
