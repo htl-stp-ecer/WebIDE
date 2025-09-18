@@ -304,17 +304,32 @@ export class Flowchart implements AfterViewChecked {
   }
 
   private ensureParallelAfter(mission: Mission, parent: MissionStep): MissionStep {
-    const findContainer = (arr?: MissionStep[]): MissionStep[] | null => {
-      if (!arr) return null; if (arr.includes(parent)) return arr; for (const s of arr) { const f = findContainer(s.children); if (f) return f; } return null;
-    };
-    const container = findContainer(mission.steps); if (!container) return mk('parallel');
-    const idx = container.indexOf(parent); if (idx === -1) return mk('parallel');
-    const next = container[idx + 1];
+    // Locate the direct container that holds `parent`
+    const loc = this.findParentAndIndex(mission, parent);
+    if (!loc) return mk('parallel');
+    const { parent: directParent, container, index } = loc;
+
+    // If `parent` is inside a PARALLEL lane, REUSE that PARALLEL
+    // (Don't create a new PARALLEL "after" the lane.)
+    if (directParent && isType(directParent, 'parallel') && directParent.children === container) {
+      return directParent;
+    }
+
+    // Otherwise behave like before: ensure a PARALLEL right *after* `parent`
+    const next = container[index + 1];
     if (next && isType(next, 'parallel')) return next;
-    const par = mk('parallel'); container.splice(idx + 1, 0, par);
-    if (next) { container.splice(idx + 2, 1); par.children = [...(par.children ?? []), next]; }
+
+    const par = mk('parallel');
+    container.splice(index + 1, 0, par);
+
+    // If there was a "next" step, move it into the new parallel as a lane
+    if (next) {
+      container.splice(index + 2, 1);
+      par.children = [...(par.children ?? []), next];
+    }
     return par;
   }
+
 
   private ensureTopLevelParallel(mission: Mission): MissionStep {
     mission.steps ??= []; const first = mission.steps[0]; if (first && isType(first, 'parallel')) return first;
@@ -383,7 +398,31 @@ export class Flowchart implements AfterViewChecked {
   }
 
   private insertBetween(mission: Mission, parent: MissionStep | null, child: MissionStep, mid: MissionStep): boolean {
-    // 1) If prev & next are adjacent siblings inside a SEQ wrapper, insert into that SEQ (no PARALLEL promotion)
+    // 0) LANE → OUTSIDE: if `parent` is inside a PARALLEL and `child` is outside it,
+    //    insert `mid` INTO THE LANE (wrap with SEQ or insert into existing lane SEQ).
+    if (parent) {
+      const parAncestor = this.findNearestParallelAncestor(mission, parent);
+      if (parAncestor && !this.containsStep(parAncestor, child)) {
+        const locPrev = this.findParentAndIndex(mission, parent);
+        if (!locPrev) return false;
+
+        const { parent: prevDirectParent, container, index } = locPrev;
+
+        // If lane already has a SEQ, insert after `parent`
+        if (prevDirectParent && isType(prevDirectParent, 'seq')) {
+          prevDirectParent.children ??= [];
+          prevDirectParent.children.splice(index + 1, 0, mid);
+        } else {
+          // Wrap the lane element with SEQ(parent, mid)
+          const seq = mk('seq');
+          seq.children = [parent, mid];
+          container.splice(index, 1, seq);
+        }
+        return true;
+      }
+    }
+
+    // 1) If prev & next are adjacent siblings inside a SEQ wrapper, insert into that SEQ
     if (parent) {
       const seqHit = this.findSeqContainerForEdge(mission.steps, parent, child);
       if (seqHit) {
@@ -416,7 +455,7 @@ export class Flowchart implements AfterViewChecked {
       if (j !== -1) { parent.children.splice(j, 1, mid); mid.children = [child]; return true; }
     }
 
-    // 5) Fallbacks
+    // 5) Fallbacks (now lane-aware via ensureParallelAfter)
     const par = this.ensureParallelAfter(mission, parent);
     par.children ??= [];
     const k = par.children.indexOf(child);
@@ -429,6 +468,7 @@ export class Flowchart implements AfterViewChecked {
       return arr.some(s => walk(s.children));
     };
     if (walk(mission.steps)) { mid.children = [child]; return true; }
+
     return false;
   }
 
@@ -462,6 +502,44 @@ export class Flowchart implements AfterViewChecked {
     }
 
     return true;
+  }
+
+
+  private findParentAndIndex(
+    mission: Mission,
+    target: MissionStep
+  ): { parent: MissionStep | null; container: MissionStep[]; index: number } | null {
+    const dfs = (arr: MissionStep[] | undefined, parent: MissionStep | null): any => {
+      if (!arr) return null;
+      const idx = arr.indexOf(target);
+      if (idx !== -1) return { parent, container: arr, index: idx };
+      for (const s of arr) {
+        const r = dfs(s.children, s);
+        if (r) return r;
+      }
+      return null;
+    };
+    return dfs(mission.steps, null);
+  }
+
+  private findNearestParallelAncestor(mission: Mission, step: MissionStep): MissionStep | null {
+    let found: MissionStep | null = null;
+    const dfs = (arr: MissionStep[] | undefined, stack: MissionStep[] = []): boolean => {
+      if (!arr) return false;
+      for (const s of arr) {
+        const stack2 = [...stack, s];
+        if (s === step) {
+          for (let i = stack2.length - 1; i >= 0; i--) {
+            if (isType(stack2[i], 'parallel')) { found = stack2[i]; break; }
+          }
+          return true;
+        }
+        if (dfs(s.children, stack2)) return true;
+      }
+      return false;
+    };
+    dfs(mission.steps);
+    return found;
   }
 
 }
