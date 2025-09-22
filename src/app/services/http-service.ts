@@ -70,4 +70,15 @@ export class HttpService {
   getDetailedMission(projectUUID: string, name: string) {
     return this.http.get<Mission>(`${this.ip}/api/v1/missions/${projectUUID}/detailed/${name}`);
   }
+
+  deleteMission(projectUUID: string, name: string) {
+    return this.http.delete(`${this.ip}/api/v1/missions/${projectUUID}/${name}`)
+  }
+
+  renameMission(projectUUID: string, oldName: string, newName: string) {
+    return this.http.put(`${this.ip}/api/v1/missions/${projectUUID}/rename`, {
+      old_name: oldName,
+      new_name: newName
+    })
+  }
 }

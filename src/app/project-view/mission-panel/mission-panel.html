@@ -1,4 +1,5 @@
 <div class="h-full flex flex-col">
+  <p-contextMenu #missionMenu [model]="contextMenuItems"></p-contextMenu>
   <!-- Timeline Section -->
   <div class="flex-1 overflow-hidden">
     <!-- Fixed Top: setups (and both) -->
@@ -37,6 +38,7 @@
           cdkDrag
           class="flex items-center gap-3 cursor-pointer px-2 py-1 rounded-lg transition-colors"
           (click)="getDetailedMission(item.name)"
+          (contextmenu)="onRightClickMission($event, item)"
           [ngClass]="{
       'bg-blue-100 border border-blue-400 dark:bg-blue-900 dark:border-blue-500':
         currentMission?.name === item.name
