@@ -204,6 +204,11 @@ export class Flowchart implements AfterViewChecked {
 
     const srcId = baseId(e.fOutputId, 'output');
     const dstId = baseId(e.fInputId, 'input');
+
+    // Prevent self-connections (node output -> same node input)
+    if (srcId === dstId) {
+      return;
+    }
     const srcStep = this.nodeIdToStep.get(srcId);
     const dstStep = this.nodeIdToStep.get(dstId);
 
