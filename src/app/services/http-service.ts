@@ -72,7 +72,7 @@ export class HttpService {
   }
 
   deleteMission(projectUUID: string, name: string) {
-    return this.http.delete(`${this.ip}/api/v1/missions/${projectUUID}/${name}`)
+    return this.http.delete(`${this.ip}/api/v1/missions/${projectUUID}/mission/${name}`)
   }
 
   renameMission(projectUUID: string, oldName: string, newName: string) {
