@@ -60,8 +60,11 @@ export class HttpService {
     });
   }
 
-  updateMission(projectUUID: string, mission: Mission) {
-    return this.http.put(`${this.ip}/api/v1/missions/${projectUUID}/update`, mission);
+  updateMissionOrder(projectUUID: string, mission: Mission) {
+    return this.http.put(`${this.ip}/api/v1/missions/${projectUUID}/order`, {
+      mission_name: mission.name,
+      order: mission.order,
+    });
   }
 
   getDetailedMission(projectUUID: string, name: string) {
