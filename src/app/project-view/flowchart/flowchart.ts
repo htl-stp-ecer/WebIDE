@@ -79,6 +79,7 @@ export class Flowchart implements AfterViewChecked {
   private nodeIdToStep = new Map<string, MissionStep>();
   private needsAdjust = false;
   private selectedNodeId = '';
+  private pendingViewportReset = false;
 
   readonly items: MenuItem[] = [{label: 'Delete', icon: 'pi pi-trash', command: () => this.deleteNode()}];
 
@@ -93,8 +94,18 @@ export class Flowchart implements AfterViewChecked {
           connections: this.adHocConnections()
         });
         const saved = newKey ? this.adHocPerMission.get(newKey) : null;
+        // Clear current view immediately to avoid showing cached nodes during switch
+        this.missionNodes.set([]);
+        this.missionConnections.set([]);
+        this.nodes.set([]);
+        this.connections.set([]);
+
+        // Restore ad-hoc layer for the target mission (if any)
         this.adHocNodes.set(saved?.nodes ?? []);
         this.adHocConnections.set(saved?.connections ?? []);
+
+        // Ensure the viewport resets so the Start node is in view
+        this.pendingViewportReset = true;
         this.currentMissionKey = newKey;
       }
 
@@ -110,6 +121,10 @@ export class Flowchart implements AfterViewChecked {
     if (this.needsAdjust) {
       this.needsAdjust = false;
       this.autoLayout();
+    }
+    if (this.pendingViewportReset) {
+      this.pendingViewportReset = false;
+      this.fCanvas()?.resetScaleAndCenter(false);
     }
   }
 
