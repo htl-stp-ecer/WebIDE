@@ -1,5 +1,5 @@
 import { Component, OnInit } from '@angular/core';
-import {ActivatedRoute, Router} from '@angular/router';
+import {Router} from '@angular/router';
 import { HttpService } from '../services/http-service';
 import { FormsModule } from '@angular/forms';
 import { InputText } from 'primeng/inputtext';
@@ -26,7 +26,6 @@ export class ProjectMenu implements OnInit {
   projects: Project[] = [];
 
   constructor(
-    private route: ActivatedRoute,
     private router: Router,
     private http: HttpService,
     private confirmationService: ConfirmationService
