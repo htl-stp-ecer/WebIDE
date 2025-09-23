@@ -130,4 +130,9 @@ export class ProjectMenu implements OnInit {
   redirectToProject(uuid: string) {
     this.router.navigate([this.router.url + "/" + uuid]);
   }
+
+  backToProjects() {
+    this.router.navigate(['/']);
+  }
+
 }

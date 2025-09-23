@@ -1,5 +1,7 @@
-<div class="mt-20 ml-20 mr-20">
-  <div class="text-xl flex items-center gap-2">
+<div class="mt-5 ml-20 mr-20">
+  <p-button label="Back to Start" icon="pi pi-arrow-left" size="small" (onClick)="backToProjects()"></p-button>
+
+  <div class="text-xl flex items-center gap-2 mt-30">
     Name:
     @if (!editingName) {
       <div class="flex items-center gap-1 cursor-pointer hover:text-gray-600" (click)="enableEdit()">
@@ -34,7 +36,7 @@
 
   <p-confirmDialog></p-confirmDialog>
 
-  <div class="mt-40 text-xl">
+  <div class="mt-20 text-xl">
     Projects:
 
     <div class="mt-10 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

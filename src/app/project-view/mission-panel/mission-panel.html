@@ -1,4 +1,6 @@
 <div class="h-full flex flex-col">
+  <p-button label="Back to Projects" icon="pi pi-arrow-left" size="small" (onClick)="backToProjects()"
+  class="mb-2 border-b-2 pb-3 flex items-center justify-center"></p-button>
   <p-contextMenu #missionMenu [model]="contextMenuItems"></p-contextMenu>
   <!-- Timeline Section -->
   <div class="flex-1 overflow-hidden">

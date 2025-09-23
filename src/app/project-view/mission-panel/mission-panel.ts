@@ -1,5 +1,5 @@
 import { Component, OnInit, ViewChild } from '@angular/core';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { HttpService } from '../../services/http-service';
 import { Mission } from '../../entities/Mission';
 import { NotificationService } from '../../services/NotificationService';
@@ -37,11 +37,16 @@ export class MissionPanel implements OnInit {
 
   @ViewChild('missionMenu') missionMenu?: ContextMenu;
 
-  constructor(private route: ActivatedRoute, private http: HttpService, private missionState: MissionStateService) {}
+  constructor(private route: ActivatedRoute, private http: HttpService, private missionState: MissionStateService, private router: Router) {}
 
   ngOnInit(): void {
     this.projectUUID = this.route.snapshot.paramMap.get('uuid');
     this.getMissions();
+  }
+
+  backToProjects() {
+
+    this.router.navigate([this.router.url.split("projects/")[0], 'projects']);
   }
 
   getMissions(): void {
