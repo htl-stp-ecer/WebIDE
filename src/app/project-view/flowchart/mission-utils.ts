@@ -53,9 +53,20 @@ export function ensureParallelAfter(mission: Mission, parent: MissionStep | null
   if (!loc) return mk('parallel');
   const { parent: directParent, container, index } = loc;
 
-  // If `parent` is inside a PARALLEL lane, REUSE that PARALLEL
-  // (Don't create a new PARALLEL "after" the lane.)
   if (directParent && isType(directParent, 'parallel') && directParent.children === container) {
+    const laneCount = (directParent.children ?? []).length;
+    const outer = findParentAndIndex(mission, directParent);
+    if (outer) {
+      const { container: outerContainer, index: outerIndex } = outer;
+      const outerNext = outerContainer[outerIndex + 1];
+      if (!outerNext && laneCount >= 2) {
+        // Create a new PARALLEL right after the PARALLEL group and return it.
+        const afterPar = mk('parallel');
+        outerContainer.splice(outerIndex + 1, 0, afterPar);
+        return afterPar;
+      }
+    }
+    // Not the last group — add as another lane in the same parallel
     return directParent;
   }
 
