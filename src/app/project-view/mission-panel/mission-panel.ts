@@ -5,6 +5,7 @@ import { Mission } from '../../entities/Mission';
 import { NotificationService } from '../../services/NotificationService';
 import { Card } from 'primeng/card';
 import { PrimeTemplate } from 'primeng/api';
+import { ConfirmationService } from 'primeng/api';
 import type { MenuItem } from 'primeng/api';
 import { FormsModule } from '@angular/forms';
 import { InputText } from 'primeng/inputtext';
@@ -14,13 +15,15 @@ import { CdkDragDrop, DragDropModule, moveItemInArray } from '@angular/cdk/drag-
 import {NgClass} from '@angular/common';
 import {MissionStateService} from '../../services/mission-sate-service';
 import { ContextMenu } from 'primeng/contextmenu';
+import {ConfirmDialog} from 'primeng/confirmdialog';
 
 @Component({
   selector: 'app-mission-panel',
   standalone: true,
-  imports: [Card, PrimeTemplate, FormsModule, InputText, Button, Timeline, DragDropModule, NgClass, ContextMenu],
+  imports: [Card, PrimeTemplate, FormsModule, InputText, Button, Timeline, DragDropModule, NgClass, ContextMenu, ConfirmDialog],
   templateUrl: './mission-panel.html',
-  styleUrl: './mission-panel.scss'
+  styleUrl: './mission-panel.scss',
+  providers: [ConfirmationService]
 })
 export class MissionPanel implements OnInit {
   projectUUID: string | null = "";
@@ -37,7 +40,7 @@ export class MissionPanel implements OnInit {
 
   @ViewChild('missionMenu') missionMenu?: ContextMenu;
 
-  constructor(private route: ActivatedRoute, private http: HttpService, private missionState: MissionStateService, private router: Router) {}
+  constructor(private route: ActivatedRoute, private http: HttpService, private missionState: MissionStateService, private router: Router, private confirmationService: ConfirmationService) {}
 
   ngOnInit(): void {
     this.projectUUID = this.route.snapshot.paramMap.get('uuid');
@@ -216,16 +219,23 @@ export class MissionPanel implements OnInit {
   private deleteMissionConfirm() {
     if (!this.contextMission || !this.projectUUID) return;
     const name = this.contextMission.name;
-    const confirmed = window.confirm(`Delete mission "${name}"? This cannot be undone.`);
-    if (!confirmed) return;
-    this.http.deleteMission(this.projectUUID, name).subscribe({
-      next: () => {
-        NotificationService.showSuccess('Mission deleted');
-        this.getMissions();
-      },
-      error: err => {
-        NotificationService.showError('Failed to delete mission');
-        console.error(err);
+    this.confirmationService.confirm({
+      message: 'Are you sure you want to delete this project?',
+      header: 'Confirm Deletion',
+      icon: 'pi pi-exclamation-triangle',
+      acceptButtonStyleClass: 'p-button-danger p-button-sm',
+      rejectButtonStyleClass: 'p-button-secondary p-button-sm',
+      accept: () => {
+        this.http.deleteMission(this.projectUUID!, name).subscribe({
+          next: () => {
+            NotificationService.showSuccess('Mission deleted');
+            this.getMissions();
+          },
+          error: err => {
+            NotificationService.showError('Failed to delete mission');
+            console.error(err);
+          }
+        });
       }
     });
   }
