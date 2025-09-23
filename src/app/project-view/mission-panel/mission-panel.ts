@@ -38,7 +38,7 @@ export class MissionPanel implements OnInit {
   currentMission: Mission | undefined;
   contextMenuItems: MenuItem[] = [];
   private contextMission?: Mission;
-  
+
   // Rename dialog state
   renameDialogVisible = false;
   renameName = '';
@@ -244,7 +244,7 @@ export class MissionPanel implements OnInit {
     if (!this.contextMission || !this.projectUUID) return;
     const name = this.contextMission.name;
     this.confirmationService.confirm({
-      message: 'Are you sure you want to delete this project?',
+      message: 'Are you sure you want to delete this mission?',
       header: 'Confirm Deletion',
       icon: 'pi pi-exclamation-triangle',
       acceptButtonStyleClass: 'p-button-danger p-button-sm',
