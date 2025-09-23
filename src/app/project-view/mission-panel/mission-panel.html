@@ -3,6 +3,26 @@
   class="mb-2 border-b-2 pb-3 flex items-center justify-center"></p-button>
   <p-contextMenu #missionMenu [model]="contextMenuItems"></p-contextMenu>
   <p-confirmDialog></p-confirmDialog>
+  <p-dialog
+    header="Rename Mission"
+    [(visible)]="renameDialogVisible"
+    [modal]="true"
+    [closable]="false"
+    [draggable]="false"
+    [resizable]="false"
+    [style]="{ width: '28rem' }"
+  >
+    <div class="flex flex-col gap-3">
+      <label for="renameInput" class="text-sm text-gray-500">New name</label>
+      <input id="renameInput" [(ngModel)]="renameName" pInputText placeholder="Enter new mission name" />
+    </div>
+    <ng-template pTemplate="footer">
+      <div class="flex justify-end gap-2 w-full">
+        <p-button label="Cancel" severity="secondary" size="small" (onClick)="renameMissionCancel()" [disabled]="renameSubmitting" />
+        <p-button label="Save" severity="success" size="small" (onClick)="renameMissionConfirm()" [loading]="renameSubmitting" />
+      </div>
+    </ng-template>
+  </p-dialog>
   <!-- Timeline Section -->
   <div class="flex-1 overflow-hidden">
     <!-- Fixed Top: setups (and both) -->

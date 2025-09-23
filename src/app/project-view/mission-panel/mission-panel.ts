@@ -16,11 +16,12 @@ import {NgClass} from '@angular/common';
 import {MissionStateService} from '../../services/mission-sate-service';
 import { ContextMenu } from 'primeng/contextmenu';
 import {ConfirmDialog} from 'primeng/confirmdialog';
+import { Dialog } from 'primeng/dialog';
 
 @Component({
   selector: 'app-mission-panel',
   standalone: true,
-  imports: [Card, PrimeTemplate, FormsModule, InputText, Button, Timeline, DragDropModule, NgClass, ContextMenu, ConfirmDialog],
+  imports: [Card, PrimeTemplate, FormsModule, InputText, Button, Timeline, DragDropModule, NgClass, ContextMenu, ConfirmDialog, Dialog],
   templateUrl: './mission-panel.html',
   styleUrl: './mission-panel.scss',
   providers: [ConfirmationService]
@@ -37,6 +38,12 @@ export class MissionPanel implements OnInit {
   currentMission: Mission | undefined;
   contextMenuItems: MenuItem[] = [];
   private contextMission?: Mission;
+  
+  // Rename dialog state
+  renameDialogVisible = false;
+  renameName = '';
+  private renameOriginalName = '';
+  renameSubmitting = false;
 
   @ViewChild('missionMenu') missionMenu?: ContextMenu;
 
@@ -187,31 +194,48 @@ export class MissionPanel implements OnInit {
 
   private renameMissionPrompt() {
     if (!this.contextMission || !this.projectUUID) return;
-    const oldName = this.contextMission.name;
-    const newName = window.prompt('Rename mission', oldName)?.trim();
-    if (newName == null) return; // cancelled
+    this.renameOriginalName = this.contextMission.name;
+    this.renameName = this.renameOriginalName;
+    this.renameDialogVisible = true;
+  }
+
+  renameMissionCancel() {
+    this.renameDialogVisible = false;
+    this.renameSubmitting = false;
+  }
+
+  renameMissionConfirm() {
+    if (!this.projectUUID) return;
+    const newName = this.renameName.trim();
+    const oldName = this.renameOriginalName;
     if (!newName) {
       NotificationService.showError('Mission name cannot be empty');
       return;
     }
-    if (newName === oldName) return;
+    if (newName === oldName) {
+      this.renameDialogVisible = false;
+      return;
+    }
     if (this.missions.some(m => m.name === newName)) {
       NotificationService.showError('A mission with that name already exists');
       return;
     }
+    this.renameSubmitting = true;
     this.http.renameMission(this.projectUUID, oldName, newName).subscribe({
       next: () => {
         NotificationService.showSuccess('Mission renamed');
-        // update current selection if needed
         if (this.currentMission?.name === oldName) {
           this.currentMission = { ...this.currentMission, name: newName } as Mission;
           this.missionState.setMission(this.currentMission);
         }
         this.getMissions();
+        this.renameDialogVisible = false;
+        this.renameSubmitting = false;
       },
       error: err => {
         NotificationService.showError('Failed to rename mission');
         console.error(err);
+        this.renameSubmitting = false;
       }
     });
   }
