@@ -29,10 +29,10 @@ const Noir = definePreset(Aura, {
     colorScheme: {
       light: {
         primary: {
-          color: '{zinc.950}',
-          inverseColor: '#ffffff',
+          color: '{zinc.800}',
+          contrastColor: 'rgba(255,255,255,.92)',
           hoverColor: '{zinc.900}',
-          activeColor: '{zinc.800}'
+          activeColor: '{zinc.950}'
         },
         highlight: {
           background: '{zinc.950}',
@@ -43,8 +43,8 @@ const Noir = definePreset(Aura, {
       },
       dark: {
         primary: {
-          color: '{zinc.50}',
-          inverseColor: '{zinc.950}',
+          color: '{zinc.200}',
+          contrastColor: 'rgba(0,0,0,.87)',
           hoverColor: '{zinc.100}',
           activeColor: '{zinc.200}'
         },
