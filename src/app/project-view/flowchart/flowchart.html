@@ -15,15 +15,15 @@
     <f-canvas fZoom class="flow-canvas">
       <f-connection-for-create
         fType="segment"
-        [fStartColor]="isDarkMode ? '#EEE5E9' : '#131217'"
-        [fEndColor]="isDarkMode ? '#EEE5E9' : '#131217'"
+        [fStartColor]="isDarkMode() ? '#EEE5E9' : '#131217'"
+        [fEndColor]="isDarkMode() ? '#EEE5E9' : '#131217'"
       ></f-connection-for-create>
 
       <f-snap-connection
         [fSnapThreshold]="50"
         fType="segment"
-        [fStartColor]="isDarkMode ? '#EEE5E9' : '#131217'"
-        [fEndColor]="isDarkMode ? '#EEE5E9' : '#131217'"
+        [fStartColor]="isDarkMode() ? '#EEE5E9' : '#131217'"
+        [fEndColor]="isDarkMode() ? '#EEE5E9' : '#131217'"
       ></f-snap-connection>
 
       <!-- Start Node -->
@@ -53,8 +53,8 @@
           fType="segment"
           [fOutputId]="connection.outputId"
           [fInputId]="connection.inputId"
-          [fStartColor]="isDarkMode ? '#EEE5E9' : '#131217'"
-          [fEndColor]="isDarkMode ? '#EEE5E9' : '#131217'"
+          [fStartColor]="isDarkMode() ? '#EEE5E9' : '#131217'"
+          [fEndColor]="isDarkMode() ? '#EEE5E9' : '#131217'"
         ></f-connection>
       }
 

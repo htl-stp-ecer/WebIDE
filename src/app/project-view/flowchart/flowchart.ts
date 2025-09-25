@@ -52,7 +52,8 @@ import { asStepFromPool, initialArgsFromPool, missionStepFromAdHoc } from './ste
   standalone: true
 })
 export class Flowchart implements AfterViewChecked {
-  readonly isDarkMode = matchMedia?.('(prefers-color-scheme: dark)').matches ?? false;
+  // Reflect app theme (class-based, e.g., Tailwind/PrimeNG) instead of OS preference
+  readonly isDarkMode = signal<boolean>(this.readDarkMode());
 
   // Rendered state for <f-flow>
   readonly nodes = signal<FlowNode[]>([]);
@@ -84,6 +85,13 @@ export class Flowchart implements AfterViewChecked {
   readonly items: MenuItem[] = [{label: 'Delete', icon: 'pi pi-trash', command: () => this.deleteNode()}];
 
   constructor(private missionState: MissionStateService, private stepsState: StepsStateService) {
+    // Observe theme class changes on <html> and <body>
+    const onThemeChange = () => this.isDarkMode.set(this.readDarkMode());
+    const mo = new MutationObserver(onThemeChange);
+    try {
+      mo.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+      mo.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+    } catch {}
     effect(() => {
       const mission = this.missionState.currentMission();
       const newKey = mission ? ((mission as any).uuid ?? mission.name) : null;
@@ -114,6 +122,16 @@ export class Flowchart implements AfterViewChecked {
         this.needsAdjust = true;
       }
     });
+  }
+
+  private readDarkMode(): boolean {
+    try {
+      const de = document.documentElement, b = document.body;
+      return !!(de?.classList?.contains('dark') || b?.classList?.contains('dark') ||
+        de?.classList?.contains('p-dark') || b?.classList?.contains('p-dark'));
+    } catch {
+      return false;
+    }
   }
 
   // ----- lifecycle -----

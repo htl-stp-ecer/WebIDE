@@ -51,12 +51,12 @@
   //min-width: 0; /* allow flex children to shrink properly */
 }
 
-@media (prefers-color-scheme: dark) {
-  .node {
-    background: #131217;
-    border-color: #383838;
-    color: #EEE5E9;
-  }
+/* Dark theme (class-based) */
+:host-context(.dark) .node,
+:host-context(.p-dark) .node {
+  background: #131217;
+  border-color: #383838;
+  color: #EEE5E9;
 }
 
 .node-title {
@@ -76,6 +76,12 @@
 }
 .port-top { top: -0.375rem; }
 .port-bottom { bottom: -0.375rem; }
+
+/* Dark theme port color for contrast */
+:host-context(.dark) .port,
+:host-context(.p-dark) .port {
+  background: #EEE5E9;
+}
 
 /* Args */
 .node-args {
@@ -135,13 +141,12 @@
   display: inline-flex;
 }
 
-/* Dark mode inputs */
-@media (prefers-color-scheme: dark) {
-  .arg-input {
-    border-color: #4b5563;
-    background: #1f2937;
-    color: #eee;
-  }
+/* Dark theme inputs (class-based) */
+:host-context(.dark) .arg-input,
+:host-context(.p-dark) .arg-input {
+  border-color: #4b5563;
+  background: #1f2937;
+  color: #eee;
 }
 
 /* Ensure PrimeNG context menu never steals layout height */
