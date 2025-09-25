@@ -138,4 +138,29 @@
 
   <!-- Append to body so it never shifts layout -->
   <p-contextMenu #cm [model]="items" [appendTo]="'body'"></p-contextMenu>
+
+  <!-- Floating toolbar (IntelliJ-like) -->
+  <div class="run-toolbar">
+    <button class="ide-btn" (click)="onRun('normal')" aria-label="Run" pTooltip="Run" tooltipPosition="left">
+      <svg viewBox="0 0 32 32" aria-hidden="true" focusable="false" class="icon-run">
+        <polygon points="10,6 10,26 24,16" />
+      </svg>
+    </button>
+    <button class="ide-btn debug" (click)="onRun('debug')" aria-label="Debug" pTooltip="Debug" tooltipPosition="left">
+      <!-- Debug bug icon -->
+      <svg viewBox="0 0 32 32" aria-hidden="true" focusable="false" class="icon-debug" xmlns="http://www.w3.org/2000/svg">
+        <g fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="16" cy="18" r="7" />
+          <circle cx="16" cy="9" r="3" />
+          <line x1="16" y1="12" x2="16" y2="25" />
+          <line x1="9" y1="15" x2="4" y2="13" />
+          <line x1="23" y1="15" x2="28" y2="13" />
+          <line x1="9" y1="21" x2="4" y2="23" />
+          <line x1="23" y1="21" x2="28" y2="23" />
+          <line x1="14" y1="6" x2="12" y2="4" />
+          <line x1="18" y1="6" x2="20" y2="4" />
+        </g>
+      </svg>
+    </button>
+  </div>
 </div>

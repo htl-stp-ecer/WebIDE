@@ -7,7 +7,9 @@ import {
   viewChild,
   ViewChildren,
   ElementRef,
-  ViewChild
+  ViewChild,
+  Output,
+  EventEmitter
 } from '@angular/core';
 import {
   FCanvasComponent,
@@ -72,6 +74,7 @@ export class Flowchart implements AfterViewChecked {
   fCanvas = viewChild(FCanvasComponent);
   @ViewChildren('nodeElement') nodeEls!: QueryList<ElementRef<HTMLDivElement>>;
   @ViewChild('cm') cm!: ContextMenu;
+  @Output() run = new EventEmitter<{ mode: 'normal' | 'debug' }>();
 
   private readonly START_NODE = 'start-node' as const;
   private readonly START_OUT = 'start-node-output' as const;
@@ -380,6 +383,15 @@ export class Flowchart implements AfterViewChecked {
     if (insertBetween(mission, parentStep, childStep, midStep)) {
       this.rebuildFromMission(mission);
       this.needsAdjust = true;
+    }
+  }
+
+  onRun(mode: 'normal' | 'debug'): void {
+    try {
+      this.run.emit({ mode });
+      console.log(`[Flowchart] Run requested: ${mode}`);
+    } catch (e) {
+      console.error('Run failed', e);
     }
   }
 }

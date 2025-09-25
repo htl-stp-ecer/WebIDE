@@ -14,7 +14,51 @@
   width: 100%;
 }
 
-/* Make sure f-flow / canvas consume all space and have zero margin/padding */
+/* IntelliJ-like floating toolbar */
+.run-toolbar {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  z-index: 20;
+  display: flex;
+  gap: 0.5rem;
+  background: rgba(17, 24, 39, 0.6); /* slate-900/60 */
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 9999px;
+  padding: 0.25rem 0.35rem;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.25);
+  backdrop-filter: saturate(1.2) blur(4px);
+}
+
+:host-context(.dark) .run-toolbar,
+:host-context(.p-dark) .run-toolbar {
+  background: rgba(31, 41, 55, 0.7); /* gray-800/70 */
+  border-color: rgba(255,255,255,0.08);
+}
+
+.ide-btn {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  border: 1px solid #3d4448;
+  outline: none;
+  cursor: pointer;
+  transition: transform .06s ease, background-color .12s ease, border-color .12s ease, box-shadow .12s ease;
+  background: #2f3437;
+  color: #e5e7eb;
+}
+
+.ide-btn svg { width: 18px; height: 18px; display: block; }
+.ide-btn svg { fill: currentColor; }
+.ide-btn.debug svg { stroke: currentColor; }
+
+.ide-btn:hover { background: #58a83c; border-color: #428b30; }
+.ide-btn:active { transform: translateY(1px); }
+.ide-btn:focus { box-shadow: 0 0 0 2px rgba(98,181,67,.35); }
+
 :host ::ng-deep f-flow.flow-root,
 :host ::ng-deep f-canvas.flow-canvas,
 :host ::ng-deep f-background.flow-bg {
