@@ -124,7 +124,7 @@ export class HttpService {
     const httpUrl = `${this.ip}/api/v1/missions/${projectUUID}/run/${name}?simulate=1`;
     const wsUrl = this.toWebSocketUrl(httpUrl);
 
-    return new Observable<any>((observer) => {
+    return new Observable<WebSocketResponse>((observer) => {
       let socket: WebSocket | null = null;
       try {
         socket = new WebSocket(wsUrl);
@@ -134,7 +134,7 @@ export class HttpService {
       }
 
       socket.onopen = () => {
-        observer.next({ type: 'open' });
+        observer.next({ type: 'open', name: "open", index: 0 });
       };
 
       socket.onmessage = (ev: MessageEvent) => {
@@ -161,5 +161,9 @@ export class HttpService {
         } catch {}
       };
     });
+  }
+
+  stopMission(projectUUID: string): Observable<any> {
+    return this.http.post(`${this.ip}/api/v1/missions/${projectUUID}/stop`, {});
   }
 }

@@ -55,9 +55,44 @@
 .ide-btn svg { fill: currentColor; }
 .ide-btn.debug svg { stroke: currentColor; }
 
-.ide-btn:hover { background: #58a83c; border-color: #428b30; }
+.ide-btn:hover { background: #3a4044; border-color: #4e5559; }
 .ide-btn:active { transform: translateY(1px); }
-.ide-btn:focus { box-shadow: 0 0 0 2px rgba(98,181,67,.35); }
+.ide-btn:focus { box-shadow: 0 0 0 2px rgba(148,163,184,.35); }
+.ide-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.ide-btn.run {
+  background: #3fa652;
+  border-color: #2f7f38;
+  color: #fff;
+}
+
+.ide-btn.run:hover {
+  background: #58a83c;
+  border-color: #3f7d2f;
+}
+
+.ide-btn.run:focus {
+  box-shadow: 0 0 0 2px rgba(98,181,67,.35);
+}
+
+.ide-btn.stop {
+  background: #db5860;
+  border-color: #bb424a;
+  color: #fff;
+}
+
+.ide-btn.stop:hover {
+  background: #e0555d;
+  border-color: #a33a41;
+}
+
+.ide-btn.stop:focus {
+  box-shadow: 0 0 0 2px rgba(219,88,96,.35);
+}
 
 :host ::ng-deep f-flow.flow-root,
 :host ::ng-deep f-canvas.flow-canvas,

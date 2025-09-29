@@ -141,12 +141,18 @@
 
   <!-- Floating toolbar (IntelliJ-like) -->
   <div class="run-toolbar">
-    <button class="ide-btn" (click)="onRun('normal')" aria-label="Run" pTooltip="Run" tooltipPosition="left">
-      <svg viewBox="0 0 32 32" aria-hidden="true" focusable="false" class="icon-run">
-        <polygon points="10,6 10,26 24,16" />
-      </svg>
-    </button>
-    <button class="ide-btn debug" (click)="onRun('debug')" aria-label="Debug" pTooltip="Debug" tooltipPosition="left">
+    @if (!isRunActive()) {
+      <button class="ide-btn run" (click)="onRun('normal')" aria-label="Run" pTooltip="Run" tooltipPosition="left">
+        <svg viewBox="0 0 32 32" aria-hidden="true" focusable="false" class="icon-run">
+          <polygon points="10,6 10,26 24,16" />
+        </svg>
+      </button>
+    } @else {
+      <button class="ide-btn stop" (click)="stopRun()" aria-label="Stop" pTooltip="Stop" tooltipPosition="left">
+        <i class="pi pi-stop"></i>
+      </button>
+    }
+    <button class="ide-btn debug" (click)="onRun('debug')" aria-label="Debug" pTooltip="Debug" tooltipPosition="left" [disabled]="isRunActive()">
       <!-- Debug bug icon -->
       <svg viewBox="0 0 32 32" aria-hidden="true" focusable="false" class="icon-debug" xmlns="http://www.w3.org/2000/svg">
         <g fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">

@@ -1,6 +1,7 @@
 import {
   AfterViewChecked,
   Component,
+  OnDestroy,
   effect,
   QueryList,
   signal,
@@ -30,6 +31,7 @@ import {ContextMenuModule, ContextMenu} from 'primeng/contextmenu';
 import {MenuItem} from 'primeng/api';
 import {Tooltip} from 'primeng/tooltip';
 import {FormsModule} from '@angular/forms';
+import { Subscription } from 'rxjs';
 
 // Shared models and helpers
 import { Connection, FlowNode, Step, baseId, toVal } from './models';
@@ -53,13 +55,14 @@ import {ActivatedRoute} from '@angular/router';
   styleUrl: './flowchart.scss',
   standalone: true
 })
-export class Flowchart implements AfterViewChecked {
+export class Flowchart implements AfterViewChecked, OnDestroy {
   // Reflect app theme (class-based, e.g., Tailwind/PrimeNG) instead of OS preference
   readonly isDarkMode = signal<boolean>(this.readDarkMode());
 
   // Rendered state for <f-flow>
   readonly nodes = signal<FlowNode[]>([]);
   readonly connections = signal<Connection[]>([]);
+  readonly isRunActive = signal(false);
 
   // Mission vs ad-hoc layers
   private readonly missionNodes = signal<FlowNode[]>([]);
@@ -70,6 +73,7 @@ export class Flowchart implements AfterViewChecked {
   // Per-mission ad-hoc memory
   private readonly adHocPerMission = new Map<string, { nodes: FlowNode[]; connections: Connection[] }>();
   private currentMissionKey: string | null = null;
+  private runSubscription: Subscription | null = null;
 
   fCanvas = viewChild(FCanvasComponent);
   @ViewChildren('nodeElement') nodeEls!: QueryList<ElementRef<HTMLDivElement>>;
@@ -388,11 +392,64 @@ export class Flowchart implements AfterViewChecked {
     }
   }
 
+  ngOnDestroy(): void {
+    this.stopRun();
+  }
+
+  stopRun(): void {
+    const hadSubscription = !!this.runSubscription;
+    const wasActive = this.isRunActive();
+
+    if (!hadSubscription && !wasActive) {
+      return;
+    }
+
+    this.runSubscription?.unsubscribe();
+    this.runSubscription = null;
+    this.isRunActive.set(false);
+
+    if (this.projectUUID) {
+      this.http.stopMission(this.projectUUID).subscribe({
+        error: err => console.error('Failed to stop mission', err),
+      });
+    }
+  }
+
   onRun(mode: 'normal' | 'debug'): void {
     if (mode === 'normal') {
-      this.http.runMission(this.projectUUID!, this.currentMissionKey!).subscribe()
+      if (!this.projectUUID || !this.currentMissionKey) {
+        console.warn('Run aborted: missing project or mission identifier.');
+        return;
+      }
+
+      if (this.runSubscription) {
+        this.runSubscription.unsubscribe();
+        this.runSubscription = null;
+      }
+      this.isRunActive.set(false);
+
+      const projectId = this.projectUUID;
+      const missionName = this.currentMissionKey;
+
+      this.isRunActive.set(true);
+      this.runSubscription = this.http.runMission(projectId, missionName).subscribe({
+        next: event => {
+          if (event && typeof event === 'object' && 'type' in event && (event as any).type === 'open') {
+            this.isRunActive.set(true);
+          }
+        },
+        error: err => {
+          console.error('Mission run failed', err);
+          this.isRunActive.set(false);
+          this.runSubscription = null;
+        },
+        complete: () => {
+          this.isRunActive.set(false);
+          this.runSubscription = null;
+        },
+      });
     } else {
-      console.log("Debug!")
+      console.log('Debug!');
     }
   }
 }
