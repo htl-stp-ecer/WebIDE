@@ -55,7 +55,6 @@ export class MissionPanel implements OnInit {
   }
 
   backToProjects() {
-
     this.router.navigate([this.router.url.split("projects/")[0], 'projects']);
   }
 

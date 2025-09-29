@@ -8,8 +8,6 @@ import {
   ViewChildren,
   ElementRef,
   ViewChild,
-  Output,
-  EventEmitter
 } from '@angular/core';
 import {
   FCanvasComponent,
@@ -45,6 +43,8 @@ import { computeAutoLayout } from './layout-utils';
 import { rebuildMissionView } from './mission-builder';
 import { insertBetween } from './mission-utils';
 import { asStepFromPool, initialArgsFromPool, missionStepFromAdHoc } from './step-utils';
+import {HttpService} from '../../services/http-service';
+import {ActivatedRoute} from '@angular/router';
 
 @Component({
   selector: 'app-flowchart',
@@ -74,7 +74,6 @@ export class Flowchart implements AfterViewChecked {
   fCanvas = viewChild(FCanvasComponent);
   @ViewChildren('nodeElement') nodeEls!: QueryList<ElementRef<HTMLDivElement>>;
   @ViewChild('cm') cm!: ContextMenu;
-  @Output() run = new EventEmitter<{ mode: 'normal' | 'debug' }>();
 
   private readonly START_NODE = 'start-node' as const;
   private readonly START_OUT = 'start-node-output' as const;
@@ -84,11 +83,14 @@ export class Flowchart implements AfterViewChecked {
   private needsAdjust = false;
   private selectedNodeId = '';
   private pendingViewportReset = false;
+  private projectUUID: string | null = '';
 
   readonly items: MenuItem[] = [{label: 'Delete', icon: 'pi pi-trash', command: () => this.deleteNode()}];
 
-  constructor(private missionState: MissionStateService, private stepsState: StepsStateService) {
+  constructor(private missionState: MissionStateService, private stepsState: StepsStateService, private http: HttpService, private route: ActivatedRoute) {
     // Observe theme class changes on <html> and <body>
+
+    this.projectUUID = route.snapshot.paramMap.get('uuid');
     const onThemeChange = () => this.isDarkMode.set(this.readDarkMode());
     const mo = new MutationObserver(onThemeChange);
     try {
@@ -387,11 +389,10 @@ export class Flowchart implements AfterViewChecked {
   }
 
   onRun(mode: 'normal' | 'debug'): void {
-    try {
-      this.run.emit({ mode });
-      console.log(`[Flowchart] Run requested: ${mode}`);
-    } catch (e) {
-      console.error('Run failed', e);
+    if (mode === 'normal') {
+      this.http.runMission(this.projectUUID!, this.currentMissionKey!).subscribe()
+    } else {
+      console.log("Debug!")
     }
   }
 }

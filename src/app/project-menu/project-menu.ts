@@ -94,7 +94,6 @@ export class ProjectMenu implements OnInit {
     })
   }
 
-
   addingProject = false;
   newProjectName = "";
 
