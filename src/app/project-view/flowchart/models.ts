@@ -10,6 +10,7 @@ export interface FlowNode {
   position: { x: number; y: number };
   step: Step;
   args: Record<string, boolean | string | number | null>;
+  path?: number[];
 }
 
 // The `Step` interface is provided by the steps state domain at runtime.
@@ -33,4 +34,3 @@ export const isType = (s: MissionStep | null | undefined, t: 'parallel' | 'seq')
 export const mk = (t: 'parallel' | 'seq'): MissionStep => ({ step_type: t, function_name: t, arguments: [], children: [] });
 export const baseId = (id: string, kind: 'input' | 'output') => kind === 'output' ? (id === 'start-node-output' ? 'start-node' : id.replace(/-output$/, '')) : id.replace(/-input$/, '');
 export const toVal = (t: string, v: string) => t === 'bool' ? v.toLowerCase() === 'true' : t === 'float' ? (parseFloat(v) || null) : v;
-

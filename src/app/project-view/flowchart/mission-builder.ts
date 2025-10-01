@@ -9,17 +9,20 @@ export function rebuildMissionView(
   oldStepToNodeId: Map<MissionStep, string>,
   asStep: (ms: MissionStep) => Step,
   initialArgs: (ms: MissionStep) => Record<string, boolean | string | number | null>,
-  startOutputId: string
+  startOutputId: string,
+  resolvePath?: (ms: MissionStep) => number[] | undefined,
 ): {
   nodes: FlowNode[];
   connections: Connection[];
   stepToNodeId: Map<MissionStep, string>;
   nodeIdToStep: Map<string, MissionStep>;
+  pathToNodeId: Map<string, string>;
 } {
   const nodes: FlowNode[] = [];
   const conns: Connection[] = [];
   const stepToNodeId = new Map<MissionStep, string>();
   const nodeIdToStep = new Map<string, MissionStep>();
+  const pathToNodeId = new Map<string, string>();
 
   const build = (
     steps: MissionStep[],
@@ -27,7 +30,9 @@ export function rebuildMissionView(
   ): { entryIds: string[]; exitIds: string[] } => {
     const entries: string[] = [];
     const exits: string[] = [];
-    for (const s of steps) {
+    for (let idx = 0; idx < steps.length; idx += 1) {
+      const s = steps[idx];
+      const path = resolvePath?.(s);
       if (isType(s, 'seq')) {
         let incoming = parentExits;
         const first: string[] = [];
@@ -59,7 +64,11 @@ export function rebuildMissionView(
         position: { x: 0, y: 0 },
         step: asStep(s),
         args: initialArgs(s),
+        path,
       });
+      if (path?.length) {
+        pathToNodeId.set(path.join('.'), id);
+      }
       parentExits.forEach((pid) => conns.push({ id: generateGuid(), outputId: pid, inputId }));
       const childExit = s.children?.length ? build(s.children, [outputId]).exitIds : [outputId];
       entries.push(inputId);
@@ -71,6 +80,5 @@ export function rebuildMissionView(
   let exits: string[] = [startOutputId];
   for (const top of mission.steps) exits = build([top], exits).exitIds;
 
-  return { nodes, connections: conns, stepToNodeId, nodeIdToStep };
+  return { nodes, connections: conns, stepToNodeId, nodeIdToStep, pathToNodeId };
 }
-

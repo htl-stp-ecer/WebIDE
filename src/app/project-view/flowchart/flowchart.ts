@@ -84,10 +84,16 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
 
   private stepToNodeId = new Map<MissionStep, string>();
   private nodeIdToStep = new Map<string, MissionStep>();
+  private pathToNodeId = new Map<string, string>();
+  private stepPaths = new Map<MissionStep, number[]>();
+  private plannedStepsByIndex = new Map<number, string>();
+  private plannedStepsByOrder = new Map<number, string>();
   private needsAdjust = false;
   private selectedNodeId = '';
   private pendingViewportReset = false;
   private projectUUID: string | null = '';
+
+  private readonly completedNodeIds = signal<Set<string>>(new Set());
 
   readonly items: MenuItem[] = [{label: 'Delete', icon: 'pi pi-trash', command: () => this.deleteNode()}];
 
@@ -208,20 +214,165 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
   }
 
   private rebuildFromMission(mission: Mission): void {
-    console.log(mission)
+    this.computeStepPaths(mission);
     const old = new Map(this.stepToNodeId);
     const res = rebuildMissionView(
       mission,
       old,
       (ms) => asStepFromPool(ms, this.stepsState.currentSteps() ?? []),
       (ms) => initialArgsFromPool(ms, this.stepsState.currentSteps() ?? []),
-      this.START_OUT
+      this.START_OUT,
+      (ms) => this.stepPaths.get(ms),
     );
     this.stepToNodeId = res.stepToNodeId;
     this.nodeIdToStep = res.nodeIdToStep;
+    this.pathToNodeId = res.pathToNodeId;
     this.missionNodes.set(res.nodes);
     this.missionConnections.set(res.connections);
     this.recomputeMergedView();
+    this.clearRunVisuals();
+  }
+
+  private computeStepPaths(mission: Mission | null): void {
+    this.stepPaths = new Map();
+    if (!mission) {
+      return;
+    }
+
+    const visit = (steps: MissionStep[] | undefined, prefix: number[]): void => {
+      (steps ?? []).forEach((step, idx) => {
+        const path = [...prefix, idx + 1];
+        this.stepPaths.set(step, path);
+        if (step.children?.length) {
+          visit(step.children, path);
+        }
+      });
+    };
+
+    visit(mission.steps, []);
+  }
+
+  private clearRunVisuals(): void {
+    this.completedNodeIds.set(new Set<string>());
+    this.plannedStepsByIndex.clear();
+    this.plannedStepsByOrder.clear();
+  }
+
+  isNodeCompleted(nodeId: string): boolean {
+    return this.completedNodeIds().has(nodeId);
+  }
+
+  private cachePlannedSteps(payload: unknown): void {
+    this.plannedStepsByIndex.clear();
+    this.plannedStepsByOrder.clear();
+
+    const steps = (payload as any)?.steps;
+    if (!Array.isArray(steps)) {
+      return;
+    }
+
+    steps.forEach((step: any, idx: number) => {
+      const pathKey = this.normalizePathKey(step?.path);
+      if (!pathKey) {
+        return;
+      }
+
+      const timelineIdx = Number(step?.index);
+      if (Number.isInteger(timelineIdx)) {
+        this.plannedStepsByIndex.set(timelineIdx, pathKey);
+      }
+
+      const sequentialIdx = idx + 1;
+      this.plannedStepsByOrder.set(sequentialIdx, pathKey);
+    });
+  }
+
+  private normalizePathKey(raw: unknown): string | undefined {
+    if (!Array.isArray(raw)) {
+      return undefined;
+    }
+
+    const parts: number[] = [];
+    for (const part of raw) {
+      const num = Number(part);
+      if (!Number.isInteger(num) || num <= 0) {
+        return undefined;
+      }
+      parts.push(num);
+    }
+
+    return parts.length ? parts.join('.') : undefined;
+  }
+
+  private recordCompletedPathKey(pathKey?: string | null): void {
+    if (!pathKey) {
+      return;
+    }
+
+    const nodeId = this.pathToNodeId.get(pathKey);
+    if (!nodeId) {
+      return;
+    }
+
+    this.completedNodeIds.update((prev) => {
+      if (prev.has(nodeId)) {
+        return prev;
+      }
+      const next = new Set(prev);
+      next.add(nodeId);
+      return next;
+    });
+  }
+
+  private resolvePathKeyFromEvent(event: any): string | undefined {
+    const direct = this.normalizePathKey(event?.path);
+    if (direct) {
+      return direct;
+    }
+
+    const timelineIdx = Number(event?.timeline_index);
+    if (Number.isInteger(timelineIdx)) {
+      const viaTimeline = this.plannedStepsByIndex.get(timelineIdx);
+      if (viaTimeline) {
+        return viaTimeline;
+      }
+    }
+
+    const seqIdx = Number(event?.index);
+    if (Number.isInteger(seqIdx)) {
+      return this.plannedStepsByIndex.get(seqIdx) ?? this.plannedStepsByOrder.get(seqIdx);
+    }
+
+    return undefined;
+  }
+
+  private handleStepEvent(event: any): void {
+    const pathKey = this.resolvePathKeyFromEvent(event);
+    this.recordCompletedPathKey(pathKey);
+  }
+
+  private handleRunEvent(event: any): void {
+    if (!event || typeof event !== 'object') {
+      return;
+    }
+
+    switch ((event as any).type) {
+      case 'open':
+        this.isRunActive.set(true);
+        break;
+      case 'planned_steps':
+        this.cachePlannedSteps(event);
+        break;
+      case 'step':
+        this.handleStepEvent(event);
+        break;
+      case 'exit':
+      case 'error':
+        this.isRunActive.set(false);
+        break;
+      default:
+        break;
+    }
   }
 
   onCreateNode(e: FCreateNodeEvent) {
@@ -426,18 +577,15 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
         this.runSubscription.unsubscribe();
         this.runSubscription = null;
       }
-      this.isRunActive.set(false);
+
+      this.clearRunVisuals();
 
       const projectId = this.projectUUID;
       const missionName = this.currentMissionKey;
 
       this.isRunActive.set(true);
       this.runSubscription = this.http.runMission(projectId, missionName).subscribe({
-        next: event => {
-          if (event && typeof event === 'object' && 'type' in event && (event as any).type === 'open') {
-            this.isRunActive.set(true);
-          }
-        },
+        next: event => this.handleRunEvent(event),
         error: err => {
           console.error('Mission run failed', err);
           this.isRunActive.set(false);

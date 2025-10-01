@@ -66,6 +66,7 @@
           [fNodeId]="node.id"
           [fNodePosition]="node.position"
           class="node"
+          [class.node-completed]="isNodeCompleted(node.id)"
           [attr.data-node-id]="node.id"
           (contextmenu)="onRightClick($event, node.id)"
           (fNodePositionChange)="onNodeMoved(node.id, $event)"
