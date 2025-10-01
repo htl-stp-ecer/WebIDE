@@ -85,6 +85,7 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
   private stepToNodeId = new Map<MissionStep, string>();
   private nodeIdToStep = new Map<string, MissionStep>();
   private pathToNodeId = new Map<string, string>();
+  private pathToConnectionIds = new Map<string, string[]>();
   private stepPaths = new Map<MissionStep, number[]>();
   private plannedStepsByIndex = new Map<number, string>();
   private plannedStepsByOrder = new Map<number, string>();
@@ -94,6 +95,7 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
   private projectUUID: string | null = '';
 
   private readonly completedNodeIds = signal<Set<string>>(new Set());
+  private readonly completedConnectionIds = signal<Set<string>>(new Set());
 
   readonly items: MenuItem[] = [{label: 'Delete', icon: 'pi pi-trash', command: () => this.deleteNode()}];
 
@@ -227,6 +229,7 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
     this.stepToNodeId = res.stepToNodeId;
     this.nodeIdToStep = res.nodeIdToStep;
     this.pathToNodeId = res.pathToNodeId;
+    this.pathToConnectionIds = res.pathToConnectionIds;
     this.missionNodes.set(res.nodes);
     this.missionConnections.set(res.connections);
     this.recomputeMergedView();
@@ -254,12 +257,17 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
 
   private clearRunVisuals(): void {
     this.completedNodeIds.set(new Set<string>());
+    this.completedConnectionIds.set(new Set<string>());
     this.plannedStepsByIndex.clear();
     this.plannedStepsByOrder.clear();
   }
 
   isNodeCompleted(nodeId: string): boolean {
     return this.completedNodeIds().has(nodeId);
+  }
+
+  isConnectionCompleted(connectionId: string): boolean {
+    return this.completedConnectionIds().has(connectionId);
   }
 
   private cachePlannedSteps(payload: unknown): void {
@@ -322,6 +330,25 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
       next.add(nodeId);
       return next;
     });
+
+    const connIds = this.pathToConnectionIds.get(pathKey) ?? [];
+    if (connIds.length) {
+      this.completedConnectionIds.update((prev) => {
+        let needsCopy = false;
+        for (const id of connIds) {
+          if (!prev.has(id)) {
+            needsCopy = true;
+            break;
+          }
+        }
+        if (!needsCopy) {
+          return prev;
+        }
+        const next = new Set(prev);
+        connIds.forEach(id => next.add(id));
+        return next;
+      });
+    }
   }
 
   private resolvePathKeyFromEvent(event: any): string | undefined {

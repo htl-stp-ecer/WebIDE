@@ -55,6 +55,7 @@
           [fInputId]="connection.inputId"
           [fStartColor]="isDarkMode() ? '#EEE5E9' : '#131217'"
           [fEndColor]="isDarkMode() ? '#EEE5E9' : '#131217'"
+          [class.connection-completed]="isConnectionCompleted(connection.id)"
         ></f-connection>
       }
 

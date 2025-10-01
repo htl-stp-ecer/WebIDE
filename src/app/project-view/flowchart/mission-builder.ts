@@ -17,12 +17,14 @@ export function rebuildMissionView(
   stepToNodeId: Map<MissionStep, string>;
   nodeIdToStep: Map<string, MissionStep>;
   pathToNodeId: Map<string, string>;
+  pathToConnectionIds: Map<string, string[]>;
 } {
   const nodes: FlowNode[] = [];
   const conns: Connection[] = [];
   const stepToNodeId = new Map<MissionStep, string>();
   const nodeIdToStep = new Map<string, MissionStep>();
   const pathToNodeId = new Map<string, string>();
+  const pathToConnectionIds = new Map<string, string[]>();
 
   const build = (
     steps: MissionStep[],
@@ -58,6 +60,7 @@ export function rebuildMissionView(
       nodeIdToStep.set(id, s);
       const inputId = `${id}-input`;
       const outputId = `${id}-output`;
+      const pathKey = path?.length ? path.join('.') : undefined;
       nodes.push({
         id,
         text: s.function_name,
@@ -66,10 +69,18 @@ export function rebuildMissionView(
         args: initialArgs(s),
         path,
       });
-      if (path?.length) {
-        pathToNodeId.set(path.join('.'), id);
+      if (pathKey) {
+        pathToNodeId.set(pathKey, id);
       }
-      parentExits.forEach((pid) => conns.push({ id: generateGuid(), outputId: pid, inputId }));
+      parentExits.forEach((pid) => {
+        const connId = generateGuid();
+        conns.push({ id: connId, outputId: pid, inputId });
+        if (pathKey) {
+          const existing = pathToConnectionIds.get(pathKey) ?? [];
+          existing.push(connId);
+          pathToConnectionIds.set(pathKey, existing);
+        }
+      });
       const childExit = s.children?.length ? build(s.children, [outputId]).exitIds : [outputId];
       entries.push(inputId);
       exits.push(...childExit);
@@ -80,5 +91,5 @@ export function rebuildMissionView(
   let exits: string[] = [startOutputId];
   for (const top of mission.steps) exits = build([top], exits).exitIds;
 
-  return { nodes, connections: conns, stepToNodeId, nodeIdToStep, pathToNodeId };
+  return { nodes, connections: conns, stepToNodeId, nodeIdToStep, pathToNodeId, pathToConnectionIds };
 }
