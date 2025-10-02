@@ -100,33 +100,34 @@
                     [hideDelay]="50"
                     tooltipStyleClass="!max-w-[24rem] !break-words"
                   >
-                    {{ arg.name }} ({{ arg.type }})
+                    {{ arg.name }}
                   </label>
 
-                  @if (arg.type === 'bool') {
-                    <p-checkbox
-                      [(ngModel)]="node.args[arg.name]"
-                      [binary]="true"
-                      class="mx-auto"
-                    ></p-checkbox>
-                  } @else if (arg.type === 'str') {
-                    <input
-                      pInputText
-                      [(ngModel)]="node.args[arg.name]"
-                      class="arg-input"
-                      [placeholder]="arg.default || ('Enter ' + arg.name)"
-                    />
-                  } @else if (arg.type === 'float') {
-                    <p-inputNumber
-                      [(ngModel)]="node.args[arg.name]"
-                      mode="decimal"
-                      [minFractionDigits]="1"
-                      [maxFractionDigits]="2"
-                      styleClass="arg-number"
-                      inputStyleClass="arg-input"
-                      [placeholder]="'Enter ' + arg.name"
-                    ></p-inputNumber>
-                  }
+                  <div class="arg-control">
+                    @if (arg.type === 'bool') {
+                      <p-checkbox
+                        [(ngModel)]="node.args[arg.name]"
+                        [binary]="true"
+                      ></p-checkbox>
+                    } @else if (arg.type === 'str') {
+                      <input
+                        pInputText
+                        [(ngModel)]="node.args[arg.name]"
+                        class="arg-input"
+                        [placeholder]="arg.default || ('Enter ' + arg.name)"
+                      />
+                    } @else if (arg.type === 'float') {
+                      <p-inputNumber
+                        [(ngModel)]="node.args[arg.name]"
+                        mode="decimal"
+                        [minFractionDigits]="1"
+                        [maxFractionDigits]="2"
+                        styleClass="arg-number"
+                        inputStyleClass="arg-input"
+                        [placeholder]="'Enter ' + arg.name"
+                      ></p-inputNumber>
+                    }
+                  </div>
                 </div>
               }
             </div>
@@ -178,3 +179,4 @@
     </button>
   </div>
 </div>
+

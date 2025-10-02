@@ -124,9 +124,14 @@
 /* Node styling */
 .node {
   position: relative;
-  width: 12rem; /* w-48 */
+  display: inline-flex;
+  flex-direction: column;
+  align-items: stretch;
+  width: 15rem;
+  min-width: 8rem;
+  max-width: 24rem;
   padding: 1rem; /* p-4 */
-  text-align: center;
+  text-align: left;
 
   background: #eee5e9;
   border: 1px solid #383838;
@@ -163,6 +168,7 @@
 .node-title {
   font-weight: 600;
   word-break: break-word;
+  text-align: center;
 }
 
 /* Ports */
@@ -194,10 +200,20 @@
 }
 
 .arg {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
+  display: grid;
+  grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
+  align-items: center;
+  column-gap: 0.5rem;
+  row-gap: 0.25rem;
   min-width: 0; /* critical to allow children to max at 100% */
+}
+
+.arg-control {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  width: 100%;
 }
 
 /* Truncated label */
@@ -206,6 +222,9 @@
   font-weight: 500;
 
   display: block;
+  justify-self: start;
+  text-align: left;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

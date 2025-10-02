@@ -9,8 +9,8 @@ export function computeAutoLayout(
   stepToNodeId: Map<MissionStep, string>,
   heights: Map<string, number>,
   startNodeId: string,
-  laneWidth = 200,
-  vGap = 100
+  laneWidth = 300,
+  vGap = 75
 ): FlowNode[] {
   if (!mission) return nodes;
   const newNodes = nodes.map(n => ({ ...n, position: { ...n.position } }));
