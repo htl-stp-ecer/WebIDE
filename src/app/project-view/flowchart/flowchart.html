@@ -56,7 +56,13 @@
           [fStartColor]="isDarkMode() ? '#EEE5E9' : '#131217'"
           [fEndColor]="isDarkMode() ? '#EEE5E9' : '#131217'"
           [class.connection-completed]="isConnectionCompleted(connection.id)"
-        ></f-connection>
+        >
+          <svg viewBox="0 0 6 7" fMarker [type]="eMarkerType.END" class="dark:fill-white"
+               [height]="14" [width]="12"
+               [refX]="11" [refY]="7" markerUnits="strokeWidth" orient="auto">
+            <path d="M0.000391006 0L6 3.5L0.000391006 7L0.000391006 0Z"/>
+          </svg>
+        </f-connection>
       }
 
       <!-- Nodes (mission + ad-hoc merged in TS) -->

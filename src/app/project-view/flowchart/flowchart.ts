@@ -11,6 +11,7 @@ import {
   ViewChild,
 } from '@angular/core';
 import {
+  EFMarkerType,
   FCanvasComponent,
   FCreateConnectionEvent,
   FCreateNodeEvent,
@@ -58,6 +59,7 @@ import {ActivatedRoute} from '@angular/router';
 export class Flowchart implements AfterViewChecked, OnDestroy {
   // Reflect app theme (class-based, e.g., Tailwind/PrimeNG) instead of OS preference
   readonly isDarkMode = signal<boolean>(this.readDarkMode());
+  protected readonly eMarkerType = EFMarkerType;
 
   // Rendered state for <f-flow>
   readonly nodes = signal<FlowNode[]>([]);
