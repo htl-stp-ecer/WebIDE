@@ -41,6 +41,8 @@ import {
   detachEverywhere,
   normalize,
   attachChildWithParallel,
+  attachChildSequentially,
+  shouldAppendSequentially,
 } from './mission-utils';
 import { computeAutoLayout } from './layout-utils';
 import { rebuildMissionView } from './mission-builder';
@@ -442,7 +444,13 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
       this.stepToNodeId.set(mStep, n.id); // keep visual continuity
 
       if (parent) {
-        attachChildWithParallel(mission, parent, mStep);   // <-- was attachChildWithSeq
+        let attached = false;
+        if (shouldAppendSequentially(mission, parent)) {
+          attached = attachChildSequentially(mission, parent, mStep);
+        }
+        if (!attached) {
+          attachChildWithParallel(mission, parent, mStep);
+        }
       } else {
         (mission.steps ??= []).push(mStep);
       }

@@ -166,6 +166,50 @@ export function attachChildWithParallel(mission: Mission, parent: MissionStep, c
   return true;
 }
 
+export function shouldAppendSequentially(mission: Mission, parent: MissionStep): boolean {
+  if (!parent) return false;
+
+  const hasDirectChildren = (parent.children ?? []).length > 0;
+  if (hasDirectChildren) return false;
+
+  const loc = findParentAndIndex(mission, parent);
+  if (!loc) return true;
+
+  const { parent: directParent, container, index } = loc;
+
+  // Inside a PARALLEL lane, siblings are other lanes, not sequential steps.
+  if (directParent && isType(directParent, 'parallel')) {
+    return true;
+  }
+
+  // Otherwise, only append when there is no sequential sibling after the parent.
+  return container[index + 1] === undefined;
+}
+
+export function attachChildSequentially(mission: Mission, parent: MissionStep, child: MissionStep): boolean {
+  if (parent === child) return false;
+
+  detachEverywhere(mission, child);
+
+  parent.children ??= [];
+  if (!parent.children.length) {
+    parent.children.push(child);
+    return true;
+  }
+
+  const first = parent.children[0];
+  if (isType(first, 'seq')) {
+    first.children ??= [];
+    if (!first.children.includes(child)) first.children.push(child);
+    return true;
+  }
+
+  const seq = mk('seq');
+  seq.children = [...parent.children, child];
+  parent.children = [seq];
+  return true;
+}
+
 export function findNearestParallelAncestor(mission: Mission, step: MissionStep): MissionStep | null {
   let found: MissionStep | null = null;
   const dfs = (arr: MissionStep[] | undefined, stack: MissionStep[] = []): boolean => {
