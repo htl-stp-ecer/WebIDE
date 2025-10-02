@@ -20,6 +20,7 @@
 /* Top toolbar anchored to the flowchart */
 .run-toolbar {
   display: flex;
+  justify-content: space-between;
   align-items: center;
   gap: 0.75rem;
   padding: 0.65rem 1rem;
@@ -31,6 +32,11 @@
   width: 100%;
   position: relative;
   z-index: 5;
+}
+
+.toolbar-right {
+  display: flex;
+  gap: .5rem;
 }
 
 :host-context(.dark) .run-toolbar,
