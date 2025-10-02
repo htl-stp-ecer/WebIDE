@@ -9,7 +9,7 @@ export function computeAutoLayout(
   stepToNodeId: Map<MissionStep, string>,
   heights: Map<string, number>,
   startNodeId: string,
-  laneWidth = 300,
+  laneWidth = 275,
   vGap = 75
 ): FlowNode[] {
   if (!mission) return nodes;
