@@ -29,6 +29,7 @@
     "@foblex/2d": "^1.2.1",
     "@foblex/flow": "^17.5.3",
     "@foblex/mediator": "^1.1.3",
+    "@foblex/mutator": "^1.0.7",
     "@foblex/platform": "^1.0.4",
     "@foblex/utils": "^1.1.1",
     "@ngx-translate/core": "^16.0.4",

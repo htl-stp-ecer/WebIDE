@@ -3,7 +3,12 @@
   <!-- Flow toolbar -->
   <div class="run-toolbar">
     <div class="toolbar-left">
-
+      <button class="ide-btn undo mr-1" (click)="undo()" aria-label="Undo" pTooltip="Undo" tooltipPosition="bottom" [disabled]="!canUndoSignal()">
+        <i class="pi pi-undo"></i>
+      </button>
+      <button class="ide-btn redo" (click)="redo()" aria-label="Redo" pTooltip="Redo" tooltipPosition="bottom" [disabled]="!canRedoSignal()">
+        <i class="pi pi-undo-alt"></i>
+      </button>
     </div>
     <div class="toolbar-right">
       @if (!isRunActive()) {
@@ -189,4 +194,3 @@
   <p-contextMenu #cm [model]="items" [appendTo]="'body'"></p-contextMenu>
 
 </div>
-

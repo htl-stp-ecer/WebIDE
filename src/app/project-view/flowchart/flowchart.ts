@@ -2,6 +2,7 @@ import {
   AfterViewChecked,
   Component,
   OnDestroy,
+  Signal,
   effect,
   QueryList,
   signal,
@@ -49,6 +50,7 @@ import { rebuildMissionView } from './mission-builder';
 import { insertBetween } from './mission-utils';
 import { asStepFromPool, initialArgsFromPool, missionStepFromAdHoc } from './step-utils';
 import {HttpService} from '../../services/http-service';
+import { FlowHistory, FlowSnapshot } from './flow-history';
 import {ActivatedRoute} from '@angular/router';
 
 @Component({
@@ -56,6 +58,7 @@ import {ActivatedRoute} from '@angular/router';
   imports: [FFlowComponent, FFlowModule, InputNumberModule, CheckboxModule, InputTextModule, ContextMenuModule, Tooltip, FormsModule],
   templateUrl: './flowchart.html',
   styleUrl: './flowchart.scss',
+  providers: [FlowHistory],
   standalone: true
 })
 export class Flowchart implements AfterViewChecked, OnDestroy {
@@ -103,10 +106,22 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
 
   readonly items: MenuItem[] = [{label: 'Delete', icon: 'pi pi-trash', command: () => this.deleteNode()}];
 
-  constructor(private missionState: MissionStateService, private stepsState: StepsStateService, private http: HttpService, private route: ActivatedRoute) {
+  private historyInitialized = false;
+  private isRestoringHistory = false;
+  private ignoreMissionEffect = false;
+  private isHistoryTraversal = false;
+
+  protected canUndoSignal!: Signal<boolean>;
+  protected canRedoSignal!: Signal<boolean>;
+
+  constructor(private missionState: MissionStateService, private stepsState: StepsStateService, private http: HttpService, private route: ActivatedRoute, private readonly history: FlowHistory) {
     // Observe theme class changes on <html> and <body>
 
     this.projectUUID = route.snapshot.paramMap.get('uuid');
+    this.history.initialize(this.buildSnapshot());
+    this.historyInitialized = true;
+    this.canUndoSignal = this.history.canUndo;
+    this.canRedoSignal = this.history.canRedo;
     const onThemeChange = () => this.isDarkMode.set(this.readDarkMode());
     const mo = new MutationObserver(onThemeChange);
     try {
@@ -115,34 +130,155 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
     } catch {}
     effect(() => {
       const mission = this.missionState.currentMission();
+      if (this.isRestoringHistory) {
+        return;
+      }
+      if (this.ignoreMissionEffect) {
+        this.ignoreMissionEffect = false;
+        return;
+      }
       const newKey = mission ? ((mission as any).uuid ?? mission.name) : null;
+      const missionChanged = newKey !== this.currentMissionKey;
 
-      if (newKey !== this.currentMissionKey) {
-        if (this.currentMissionKey) this.adHocPerMission.set(this.currentMissionKey, {
-          nodes: this.adHocNodes(),
-          connections: this.adHocConnections()
-        });
+      if (missionChanged) {
+        if (this.currentMissionKey) {
+          this.adHocPerMission.set(this.currentMissionKey, {
+            nodes: this.cloneNodes(this.adHocNodes()),
+            connections: this.cloneConnections(this.adHocConnections())
+          });
+        }
         const saved = newKey ? this.adHocPerMission.get(newKey) : null;
-        // Clear current view immediately to avoid showing cached nodes during switch
         this.missionNodes.set([]);
         this.missionConnections.set([]);
         this.nodes.set([]);
         this.connections.set([]);
-
-        // Restore ad-hoc layer for the target mission (if any)
-        this.adHocNodes.set(saved?.nodes ?? []);
-        this.adHocConnections.set(saved?.connections ?? []);
-
-        // Ensure the viewport resets so the Start node is in view
+        this.adHocNodes.set(this.cloneNodes(saved?.nodes ?? []));
+        this.adHocConnections.set(this.cloneConnections(saved?.connections ?? []));
         this.pendingViewportReset = true;
         this.currentMissionKey = newKey;
+        this.historyInitialized = false;
       }
 
       if (mission) {
         this.rebuildFromMission(mission);
         this.needsAdjust = true;
+      } else {
+        this.missionNodes.set([]);
+        this.missionConnections.set([]);
+        this.nodes.set([]);
+        this.connections.set([]);
+      }
+
+      if (missionChanged) {
+        this.resetHistoryWithCurrentState();
       }
     });
+
+    effect(() => {
+      this.history.changes();
+      if (!this.isHistoryTraversal) {
+        return;
+      }
+      const snapshot = this.history.getSnapshot();
+      this.applyHistorySnapshot(snapshot);
+      this.isHistoryTraversal = false;
+    });
+  }
+
+  protected undo(): void {
+    if (!this.canUndoSignal()) {
+      return;
+    }
+    this.isHistoryTraversal = true;
+    this.history.undo();
+  }
+
+  protected redo(): void {
+    if (!this.canRedoSignal()) {
+      return;
+    }
+    this.isHistoryTraversal = true;
+    this.history.redo();
+  }
+
+  private recordHistory(notifier: string): void {
+    if (this.isRestoringHistory) {
+      return;
+    }
+    const snapshot = this.buildSnapshot();
+    if (!this.historyInitialized) {
+      this.history.initialize(snapshot);
+      this.historyInitialized = true;
+      return;
+    }
+    this.history.update(snapshot, notifier);
+  }
+
+  private resetHistoryWithCurrentState(): void {
+    const snapshot = this.buildSnapshot();
+    this.history.initialize(snapshot);
+    this.historyInitialized = true;
+  }
+
+  private applyHistorySnapshot(snapshot: FlowSnapshot): void {
+    this.isRestoringHistory = true;
+    try {
+      const missionClone = this.cloneMission(snapshot.mission);
+      this.ignoreMissionEffect = true;
+      this.missionState.currentMission.set(missionClone);
+      this.ignoreMissionEffect = false;
+      const missionNodes = this.cloneNodes(snapshot.missionNodes);
+      const missionConnections = this.cloneConnections(snapshot.missionConnections);
+      const adHocNodes = this.cloneNodes(snapshot.adHocNodes);
+      const adHocConnections = this.cloneConnections(snapshot.adHocConnections);
+      this.missionNodes.set(missionNodes);
+      this.missionConnections.set(missionConnections);
+      this.adHocNodes.set(adHocNodes);
+      this.adHocConnections.set(adHocConnections);
+      if (this.currentMissionKey) {
+        this.adHocPerMission.set(this.currentMissionKey, {
+          nodes: this.cloneNodes(adHocNodes),
+          connections: this.cloneConnections(adHocConnections)
+        });
+      }
+      this.recomputeMergedView();
+      this.needsAdjust = true;
+      this.historyInitialized = true;
+    } finally {
+      this.isRestoringHistory = false;
+    }
+  }
+
+  private buildSnapshot(): FlowSnapshot {
+    return {
+      mission: this.cloneMission(this.missionState.currentMission()),
+      missionNodes: this.cloneNodes(this.missionNodes()),
+      missionConnections: this.cloneConnections(this.missionConnections()),
+      adHocNodes: this.cloneNodes(this.adHocNodes()),
+      adHocConnections: this.cloneConnections(this.adHocConnections()),
+    };
+  }
+
+  private cloneNodes(nodes: FlowNode[] | undefined): FlowNode[] {
+    return this.clonePlain(nodes ?? []);
+  }
+
+  private cloneConnections(connections: Connection[] | undefined): Connection[] {
+    return this.clonePlain(connections ?? []);
+  }
+
+  private cloneMission(mission: Mission | null): Mission | null {
+    return mission ? this.clonePlain(mission) : null;
+  }
+
+  private clonePlain<T>(value: T): T {
+    if (value === null || value === undefined) {
+      return value;
+    }
+    if (typeof structuredClone === 'function') {
+      return structuredClone(value);
+    }
+    return JSON.parse(JSON.stringify(value)) as T;
   }
 
   private readDarkMode(): boolean {
@@ -207,8 +343,15 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
       sig.set(next);
       return true;
     };
-    if (!upd(this.adHocNodes)) upd(this.missionNodes);
+    let changed = upd(this.adHocNodes);
+    if (!changed) {
+      changed = upd(this.missionNodes);
+    }
+    if (!changed) {
+      return;
+    }
     this.recomputeMergedView();
+    this.recordHistory('move-node');
   }
 
   // ----- layout (transparent wrappers skipped) -----
@@ -419,6 +562,7 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
     }]);
     this.recomputeMergedView();
     this.needsAdjust = true;
+    this.recordHistory('create-node');
   }
 
   addConnection(e: FCreateConnectionEvent): void {
@@ -458,6 +602,7 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
       this.cleanupAdHocNode(n.id);
       this.rebuildFromMission(mission);
       this.needsAdjust = true;
+      this.recordHistory('promote-node');
       return true;
     };
 
@@ -477,6 +622,7 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
       ) {
         this.rebuildFromMission(mission);
         this.needsAdjust = true;
+        this.recordHistory('attach-to-start');
         return;
       }
     }
@@ -488,6 +634,7 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
     if (srcStep && dstStep && attachChildWithParallel(mission, srcStep, dstStep)) {
       this.rebuildFromMission(mission);
       this.needsAdjust = true;
+      this.recordHistory('connect-existing-steps');
       return;
     }
 
@@ -497,6 +644,7 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
       {id: generateGuid(), outputId: e.fOutputId, inputId: e.fInputId}
     ]);
     this.recomputeMergedView();
+    this.recordHistory('create-adhoc-connection');
   }
 
 
@@ -512,13 +660,17 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
     if (!id) return;
     const step = this.nodeIdToStep.get(id), mission = this.missionState.currentMission();
 
+    let changed = false;
+
     if (step && mission) {
+      let removed = false;
       const remove = (arr?: MissionStep[]) => {
         if (!arr) return;
         for (let i = 0; i < arr.length;) {
           const s = arr[i];
           if (s === step) {
             arr.splice(i, 1);
+            removed = true;
             continue;
           }
           remove(s.children);
@@ -526,14 +678,27 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
         }
       };
       remove(mission.steps);
-      normalize(mission, 'parallel');
-      normalize(mission, 'seq');
-      this.rebuildFromMission(mission);
+      if (removed) {
+        normalize(mission, 'parallel');
+        normalize(mission, 'seq');
+        this.rebuildFromMission(mission);
+        changed = true;
+      }
     } else {
+      const before = this.adHocNodes().length;
       this.cleanupAdHocNode(id);
-      this.recomputeMergedView();
+      if (this.adHocNodes().length !== before) {
+        this.recomputeMergedView();
+        changed = true;
+      }
     }
+
+    if (!changed) {
+      return;
+    }
+
     this.needsAdjust = true;
+    this.recordHistory('delete-node');
   }
 
   // extracted helpers from mission-utils.ts used below
@@ -550,6 +715,7 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
       updated.push({id: generateGuid(), outputId: `${nodeId}-output`, inputId: prevIn});
       this.adHocConnections.set(updated);
       this.recomputeMergedView();
+      this.recordHistory('split-adhoc-connection');
       return;
     }
 
@@ -577,6 +743,7 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
     if (insertBetween(mission, parentStep, childStep, midStep)) {
       this.rebuildFromMission(mission);
       this.needsAdjust = true;
+      this.recordHistory('split-mission-connection');
     }
   }
 
