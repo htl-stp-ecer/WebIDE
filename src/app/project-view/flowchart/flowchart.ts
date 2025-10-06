@@ -51,8 +51,8 @@ import { rebuildMissionView } from './mission-builder';
 import { insertBetween } from './mission-utils';
 import { asStepFromPool, initialArgsFromPool, missionStepFromAdHoc } from './step-utils';
 import {HttpService} from '../../services/http-service';
-import { FlowHistory } from './flow-history';
 import {ActivatedRoute} from '@angular/router';
+import {FlowHistory} from '../../entities/flow-history';
 
 @Component({
   selector: 'app-flowchart',

@@ -1,8 +1,8 @@
 import { WritableSignal } from '@angular/core';
 import { Mission } from '../../entities/Mission';
 import { MissionStateService } from '../../services/mission-sate-service';
-import { FlowHistory, FlowSnapshot } from './flow-history';
 import { Connection, FlowNode } from './models';
+import {FlowHistory, FlowSnapshot} from '../../entities/flow-history';
 
 interface FlowchartHistoryContext {
   missionState: MissionStateService;
