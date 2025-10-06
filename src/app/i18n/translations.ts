@@ -73,6 +73,9 @@ export const enTranslations = {
     START_NODE: 'Start',
     ENTER_VALUE: 'Enter {{ value }}',
     NEW_NODE: 'New Node',
+    ORIENTATION: 'Orientation',
+    ORIENTATION_VERTICAL: 'Vertical',
+    ORIENTATION_HORIZONTAL: 'Horizontal',
   },
 };
 
@@ -151,6 +154,9 @@ export const deTranslations = {
     START_NODE: 'Start',
     ENTER_VALUE: '{{ value }} eingeben',
     NEW_NODE: 'Neuer Knoten',
+    ORIENTATION: 'Ausrichtung',
+    ORIENTATION_VERTICAL: 'Vertikal',
+    ORIENTATION_HORIZONTAL: 'Horizontal',
   },
 };
 

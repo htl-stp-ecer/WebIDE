@@ -13,6 +13,8 @@ export interface FlowNode {
   path?: number[];
 }
 
+export type FlowOrientation = 'vertical' | 'horizontal';
+
 // The `Step` interface is provided by the steps state domain at runtime.
 // We declare a minimal shape here to keep helpers typed.
 export interface StepArgDef {

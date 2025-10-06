@@ -1,6 +1,6 @@
 import { Mission } from '../../entities/Mission';
 import { MissionStep } from '../../entities/MissionStep';
-import { FlowNode } from './models';
+import { FlowNode, FlowOrientation } from './models';
 import { isType } from './models';
 
 export function computeAutoLayout(
@@ -9,8 +9,10 @@ export function computeAutoLayout(
   stepToNodeId: Map<MissionStep, string>,
   heights: Map<string, number>,
   startNodeId: string,
+  orientation: FlowOrientation = 'vertical',
   laneWidth = 275,
-  vGap = 75
+  vGap = 75,
+  hGap = 110
 ): FlowNode[] {
   if (!mission) return nodes;
   const newNodes = nodes.map(n => ({ ...n, position: { ...n.position } }));
@@ -21,12 +23,23 @@ export function computeAutoLayout(
   };
 
   const hStart = heights.get(startNodeId) ?? 80;
-  let y = hStart + 100;
+  const rootGap = orientation === 'vertical' ? 100 : hGap;
+  let y = hStart + rootGap;
 
-  const layout = (steps: MissionStep[], start: { x: number; y: number }, w = laneWidth, gap = vGap): { maxY: number } => {
+  const effectiveGap = orientation === 'vertical' ? vGap : hGap;
+
+  const layout = (steps: MissionStep[], start: { x: number; y: number }, w = laneWidth, gap = effectiveGap): { maxY: number } => {
     if (!steps.length) return { maxY: start.y };
-    const nodeH = (s: MissionStep) => (isType(s, 'parallel') || isType(s, 'seq') ? 0 : heights.get(stepToNodeId.get(s) ?? '') ?? 80);
-    const hs = steps.map(nodeH), maxH = Math.max(0, ...hs), totalW = (steps.length - 1) * w, x0 = start.x - totalW / 2;
+    const nodeH = (s: MissionStep) => {
+      if (orientation !== 'vertical') {
+        return 0;
+      }
+      return (isType(s, 'parallel') || isType(s, 'seq')) ? 0 : heights.get(stepToNodeId.get(s) ?? '') ?? 80;
+    };
+    const hs = steps.map(nodeH);
+    const maxH = orientation === 'vertical' ? Math.max(0, ...hs) : 0;
+    const totalW = (steps.length - 1) * w;
+    const x0 = start.x - totalW / 2;
     let maxY = start.y;
 
     steps.forEach((s, i) => {
@@ -47,15 +60,29 @@ export function computeAutoLayout(
       }
       const id = stepToNodeId.get(s);
       if (id) setPos(id, { x, y: start.y });
-      const belowY = start.y + Math.max(hs[i] || 0, maxH) + gap;
+      const span = orientation === 'vertical' ? Math.max(hs[i] || 0, maxH) : 0;
+      const belowY = start.y + span + gap;
       maxY = Math.max(maxY, s.children?.length ? layout(s.children, { x, y: belowY }, w, gap).maxY : start.y + (hs[i] || 0));
     });
     return { maxY };
   };
 
   for (const s of mission.steps) {
-    y = layout([s], { x: 300, y }).maxY + 100;
+    y = layout([s], { x: 300, y }).maxY + rootGap;
   }
+
+  if (orientation === 'horizontal') {
+    return newNodes.map(node => {
+      const height = heights.get(node.id) ?? 80;
+      return {
+        ...node,
+        position: {
+          x: node.position.y,
+          y: node.position.x - height / 2,
+        },
+      };
+    });
+  }
+
   return newNodes;
 }
-

@@ -20,7 +20,7 @@
 /* Top toolbar anchored to the flowchart */
 .run-toolbar {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-start;
   align-items: center;
   gap: 0.75rem;
   padding: 0.65rem 1rem;
@@ -35,9 +35,69 @@
   z-index: 5;
 }
 
+.toolbar-left,
 .toolbar-right {
   display: flex;
   gap: .5rem;
+  align-items: center;
+}
+
+.toolbar-middle {
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.toolbar-right {
+  margin-left: auto;
+}
+
+:host ::ng-deep .orientation-select {
+  display: inline-flex;
+  border-radius: 9999px;
+  overflow: hidden;
+}
+
+:host ::ng-deep .orientation-select .p-button {
+  background: #2f3437;
+  border: 1px solid #3d4448;
+  color: #e5e7eb;
+  height: 32px;
+  padding: 0 0.75rem;
+  font-size: 0.85rem;
+  transition: background-color .12s ease, border-color .12s ease, color .12s ease;
+}
+
+:host ::ng-deep .orientation-select .p-button:not(.p-highlight):hover {
+  background: #3a4044;
+  border-color: #4e5559;
+}
+
+:host ::ng-deep .orientation-select .p-button.p-highlight {
+  background: #3fa652;
+  border-color: #2f7f38;
+  color: #fff;
+}
+
+:host-context(.dark) ::ng-deep .orientation-select .p-button,
+:host-context(.p-dark) ::ng-deep .orientation-select .p-button {
+  background: #1f2426;
+  border-color: #3d4448;
+  color: #f5f5f5;
+}
+
+:host-context(.dark) ::ng-deep .orientation-select .p-button:not(.p-highlight):hover,
+:host-context(.p-dark) ::ng-deep .orientation-select .p-button:not(.p-highlight):hover {
+  background: #293033;
+  border-color: #4e5559;
+}
+
+:host-context(.dark) ::ng-deep .orientation-select .p-button.p-highlight,
+:host-context(.p-dark) ::ng-deep .orientation-select .p-button.p-highlight {
+  background: #3fa652;
+  border-color: #2f7f38;
+  color: #fff;
 }
 
 :host-context(.dark) .run-toolbar,
@@ -188,6 +248,17 @@
 }
 .port-top { top: -0.375rem; }
 .port-bottom { bottom: -0.375rem; }
+.port-left {
+  top: 50%;
+  left: -0.375rem;
+  transform: translateY(-50%);
+}
+.port-right {
+  top: 50%;
+  right: -0.375rem;
+  left: auto;
+  transform: translateY(-50%);
+}
 
 /* Dark theme port color for contrast */
 :host-context(.dark) .port,

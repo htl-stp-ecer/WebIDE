@@ -22,6 +22,17 @@
         <i class="pi pi-undo inline-block" style="transform: scaleX(-1)"></i>
       </button>
     </div>
+    <div class="toolbar-middle">
+      <p-selectButton
+        [options]="orientationOptions"
+        [ngModel]="orientation()"
+        optionLabel="label"
+        optionValue="value"
+        (ngModelChange)="onOrientationChange($event)"
+        [attr.aria-label]="'FLOWCHART.ORIENTATION' | translate"
+        styleClass="orientation-select"
+      ></p-selectButton>
+    </div>
     <div class="toolbar-right">
       @if (!isRunActive()) {
         <button
@@ -102,7 +113,7 @@
       <div
         fNode
         [fNodeId]="'start-node'"
-        [fNodePosition]="{ x: 300, y: 0 }"
+        [fNodePosition]="startNodePosition()"
         class="node"
         [attr.data-node-id]="'start-node'"
         #nodeElement
@@ -110,10 +121,12 @@
         <div class="node-title">{{ 'FLOWCHART.START_NODE' | translate }}</div>
         <div
           fNodeOutput
-          fOutputConnectableSide="bottom"
+          [fOutputConnectableSide]="isVerticalOrientation() ? 'bottom' : 'right'"
           [fOutputId]="'start-node-output'"
           [fOutputMultiple]="true"
-          class="port port-bottom"
+          class="port"
+          [class.port-bottom]="isVerticalOrientation()"
+          [class.port-right]="!isVerticalOrientation()"
         ></div>
       </div>
 
@@ -154,9 +167,11 @@
         >
           <div
             fNodeInput
-            fInputConnectableSide="top"
+            [fInputConnectableSide]="isVerticalOrientation() ? 'top' : 'left'"
             [fInputId]="node.id + '-input'"
-            class="port port-top"
+            class="port"
+            [class.port-top]="isVerticalOrientation()"
+            [class.port-left]="!isVerticalOrientation()"
           ></div>
 
           <div class="node-title">{{ node.text }}</div>
@@ -208,10 +223,12 @@
 
           <div
             fNodeOutput
-            fOutputConnectableSide="bottom"
+            [fOutputConnectableSide]="isVerticalOrientation() ? 'bottom' : 'right'"
             [fOutputId]="node.id + '-output'"
             [fOutputMultiple]="true"
-            class="port port-bottom"
+            class="port"
+            [class.port-bottom]="isVerticalOrientation()"
+            [class.port-right]="!isVerticalOrientation()"
           ></div>
         </div>
       }

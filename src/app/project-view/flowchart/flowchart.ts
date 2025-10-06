@@ -32,6 +32,7 @@ import {StepsStateService} from '../../services/steps-state-service';
 import {ContextMenuModule, ContextMenu} from 'primeng/contextmenu';
 import {MenuItem} from 'primeng/api';
 import {Tooltip} from 'primeng/tooltip';
+import {SelectButtonModule} from 'primeng/selectbutton';
 import {FormsModule} from '@angular/forms';
 import { FlowchartHistoryManager } from './flowchart-history-manager';
 import { FlowchartRunManager } from './flowchart-run-manager';
@@ -39,7 +40,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { Subscription } from 'rxjs';
 
 // Shared models and helpers
-import { Connection, FlowNode, Step, baseId, toVal } from './models';
+import { Connection, FlowNode, FlowOrientation, Step, baseId, toVal } from './models';
 import {
   attachToStartWithParallel,
   detachEverywhere,
@@ -58,7 +59,7 @@ import {FlowHistory} from '../../entities/flow-history';
 
 @Component({
   selector: 'app-flowchart',
-  imports: [FFlowComponent, FFlowModule, InputNumberModule, CheckboxModule, InputTextModule, ContextMenuModule, Tooltip, FormsModule, TranslateModule],
+  imports: [FFlowComponent, FFlowModule, InputNumberModule, CheckboxModule, InputTextModule, ContextMenuModule, Tooltip, SelectButtonModule, FormsModule, TranslateModule],
   templateUrl: './flowchart.html',
   styleUrl: './flowchart.scss',
   providers: [FlowHistory],
@@ -73,6 +74,12 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
   readonly nodes = signal<FlowNode[]>([]);
   readonly connections = signal<Connection[]>([]);
   readonly isRunActive = signal(false);
+  protected readonly orientation = signal<FlowOrientation>('vertical');
+  protected orientationOptions: { label: string; value: FlowOrientation }[] = [];
+  private readonly layoutSpacing = {
+    vertical: { laneWidth: 275, gap: 75 },
+    horizontal: { laneWidth: 275, gap: 350 },
+  } as const;
 
   // Mission vs ad-hoc layers
   private readonly missionNodes = signal<FlowNode[]>([]);
@@ -100,6 +107,7 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
   private selectedNodeId = '';
   private pendingViewportReset = false;
   private projectUUID: string | null = '';
+  private lastNodeHeights = new Map<string, number>();
 
   readonly items: MenuItem[] = [];
   private langChangeSub?: Subscription;
@@ -118,7 +126,11 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
     this.projectUUID = route.snapshot.paramMap.get('uuid');
 
     this.updateNodeContextMenuItems();
-    this.langChangeSub = this.translate.onLangChange.subscribe(() => this.updateNodeContextMenuItems());
+    this.updateOrientationOptions();
+    this.langChangeSub = this.translate.onLangChange.subscribe(() => {
+      this.updateNodeContextMenuItems();
+      this.updateOrientationOptions();
+    });
 
     this.historyManager = new FlowchartHistoryManager({
       missionState: this.missionState,
@@ -192,6 +204,34 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
     });
   }
 
+  private updateOrientationOptions(): void {
+    this.orientationOptions = [
+      { label: this.translate.instant('FLOWCHART.ORIENTATION_VERTICAL'), value: 'vertical' as FlowOrientation },
+      { label: this.translate.instant('FLOWCHART.ORIENTATION_HORIZONTAL'), value: 'horizontal' as FlowOrientation },
+    ];
+  }
+
+  protected onOrientationChange(value: FlowOrientation | null): void {
+    if (!value || value === this.orientation()) {
+      return;
+    }
+    this.orientation.set(value);
+    this.needsAdjust = true;
+    this.pendingViewportReset = true;
+  }
+
+  protected isVerticalOrientation(): boolean {
+    return this.orientation() === 'vertical';
+  }
+
+  protected startNodePosition(): { x: number; y: number } {
+    if (this.isVerticalOrientation()) {
+      return { x: 300, y: 0 };
+    }
+    const height = this.getNodeHeight(this.START_NODE);
+    return { x: 0, y: 300 - height / 2 };
+  }
+
   protected undo(): void {
     if (!this.canUndoSignal()) {
       return;
@@ -241,7 +281,24 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
       const id = el.nativeElement.dataset['nodeId'];
       if (id) m.set(id, el.nativeElement.offsetHeight || 80);
     });
+    this.lastNodeHeights = m;
     return m;
+  }
+
+  private getNodeHeight(nodeId: string, fallback = 80): number {
+    const cached = this.lastNodeHeights.get(nodeId);
+    if (cached !== undefined) {
+      return cached;
+    }
+    let height = fallback;
+    this.nodeEls.forEach(el => {
+      const id = el.nativeElement.dataset['nodeId'];
+      if (id === nodeId) {
+        height = el.nativeElement.offsetHeight || fallback;
+      }
+    });
+    this.lastNodeHeights.set(nodeId, height);
+    return height;
   }
 
   private cleanupAdHocNode(id: string): void {
@@ -285,7 +342,23 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
   private autoLayout(): void {
     const mission = this.missionState.currentMission();
     const h = this.heights();
-    const laidOut = computeAutoLayout(mission, this.nodes(), this.stepToNodeId, h, this.START_NODE);
+    const spacing = this.isVerticalOrientation()
+      ? this.layoutSpacing.vertical
+      : this.layoutSpacing.horizontal;
+    const verticalGap = spacing.gap;
+    const laneWidth = spacing.laneWidth;
+    const horizontalGap = spacing.gap;
+    const laidOut = computeAutoLayout(
+      mission,
+      this.nodes(),
+      this.stepToNodeId,
+      h,
+      this.START_NODE,
+      this.orientation(),
+      laneWidth,
+      verticalGap,
+      horizontalGap
+    );
     this.nodes.set(laidOut);
   }
 
