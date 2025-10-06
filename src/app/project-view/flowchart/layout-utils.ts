@@ -72,7 +72,11 @@ export function computeAutoLayout(
   }
 
   if (orientation === 'horizontal') {
+    const missionNodeIds = new Set<string>(stepToNodeId.values());
     return newNodes.map(node => {
+      if (!missionNodeIds.has(node.id)) {
+        return node;
+      }
       const height = heights.get(node.id) ?? 80;
       return {
         ...node,

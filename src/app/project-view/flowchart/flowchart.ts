@@ -342,12 +342,11 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
   private autoLayout(): void {
     const mission = this.missionState.currentMission();
     const h = this.heights();
-    const spacing = this.isVerticalOrientation()
-      ? this.layoutSpacing.vertical
-      : this.layoutSpacing.horizontal;
-    const verticalGap = spacing.gap;
-    const laneWidth = spacing.laneWidth;
-    const horizontalGap = spacing.gap;
+    const laneWidth = this.isVerticalOrientation()
+      ? this.layoutSpacing.vertical.laneWidth
+      : this.layoutSpacing.horizontal.laneWidth;
+    const verticalGap = this.layoutSpacing.vertical.gap;
+    const horizontalGap = this.layoutSpacing.horizontal.gap;
     const laidOut = computeAutoLayout(
       mission,
       this.nodes(),
