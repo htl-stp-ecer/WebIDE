@@ -121,15 +121,9 @@
   padding: 0 !important;
 }
 
-
-:host ::ng-deep f-connection.connection-completed path {
-  stroke: #22c55e !important;
-  stroke-width: 3px;
-}
-
 :host-context(.dark) ::ng-deep f-connection.connection-completed path,
 :host-context(.p-dark) ::ng-deep f-connection.connection-completed path {
-  stroke: #4ade80 !important;
+  fill: #4ade80;
 }
 
 /* Node styling */
