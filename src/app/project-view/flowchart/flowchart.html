@@ -7,7 +7,7 @@
         <i class="pi pi-undo"></i>
       </button>
       <button class="ide-btn redo" (click)="redo()" aria-label="Redo" pTooltip="Redo" tooltipPosition="bottom" [disabled]="!canRedoSignal()">
-        <i class="pi pi-undo-alt"></i>
+        <i class="pi pi-undo inline-block" style="transform: scaleX(-1)"></i>
       </button>
     </div>
     <div class="toolbar-right">
@@ -25,7 +25,7 @@
       <button class="ide-btn debug" (click)="onRun('debug')" aria-label="Debug" pTooltip="Debug" tooltipPosition="left" [disabled]="isRunActive()">
         <!-- Debug bug icon -->
         <svg viewBox="0 0 32 32" aria-hidden="true" focusable="false" class="icon-debug" xmlns="http://www.w3.org/2000/svg">
-          <g fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <g class="group-fill" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="16" cy="18" r="7" />
             <circle cx="16" cy="9" r="3" />
             <line x1="16" y1="12" x2="16" y2="25" />
