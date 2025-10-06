@@ -1,4 +1,4 @@
-import { ApplicationConfig, provideBrowserGlobalErrorListeners, provideZoneChangeDetection } from '@angular/core';
+import { ApplicationConfig, importProvidersFrom, provideBrowserGlobalErrorListeners, provideZoneChangeDetection } from '@angular/core';
 import { provideRouter } from '@angular/router';
 
 import { routes } from './app.routes';
@@ -6,10 +6,11 @@ import {provideAnimationsAsync} from '@angular/platform-browser/animations/async
 import {providePrimeNG} from 'primeng/config';
 import Aura from '@primeuix/themes/aura';
 import {definePreset} from '@primeuix/themes';
-import {provideTranslateService} from '@ngx-translate/core';
+import { TranslateLoader, TranslateModule, provideTranslateService } from '@ngx-translate/core';
 import {PortInterceptor} from './interceptors/PortInterceptor';
 import {HTTP_INTERCEPTORS, provideHttpClient, withFetch, withInterceptorsFromDi} from '@angular/common/http';
 import {MessageService} from 'primeng/api';
+import { StaticTranslateLoader } from './i18n/static-translate-loader';
 
 const Noir = definePreset(Aura, {
   semantic: {
@@ -75,6 +76,13 @@ export const appConfig: ApplicationConfig = {
     provideBrowserGlobalErrorListeners(),
     provideZoneChangeDetection({ eventCoalescing: true }),
     provideRouter(routes),
+    importProvidersFrom(TranslateModule.forRoot({
+      loader: {
+        provide: TranslateLoader,
+        useClass: StaticTranslateLoader,
+      },
+      defaultLanguage: 'en'
+    })),
     provideTranslateService(),
     provideHttpClient(withFetch(), withInterceptorsFromDi()),
     {

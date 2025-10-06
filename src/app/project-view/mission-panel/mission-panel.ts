@@ -17,11 +17,12 @@ import {MissionStateService} from '../../services/mission-sate-service';
 import { ContextMenu } from 'primeng/contextmenu';
 import {ConfirmDialog} from 'primeng/confirmdialog';
 import { Dialog } from 'primeng/dialog';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
 @Component({
   selector: 'app-mission-panel',
   standalone: true,
-  imports: [Card, PrimeTemplate, FormsModule, InputText, Button, Timeline, DragDropModule, NgClass, ContextMenu, ConfirmDialog, Dialog],
+  imports: [Card, PrimeTemplate, FormsModule, InputText, Button, Timeline, DragDropModule, NgClass, ContextMenu, ConfirmDialog, Dialog, TranslateModule],
   templateUrl: './mission-panel.html',
   styleUrl: './mission-panel.scss',
   providers: [ConfirmationService]
@@ -47,7 +48,14 @@ export class MissionPanel implements OnInit {
 
   @ViewChild('missionMenu') missionMenu?: ContextMenu;
 
-  constructor(private route: ActivatedRoute, private http: HttpService, private missionState: MissionStateService, private router: Router, private confirmationService: ConfirmationService) {}
+  constructor(
+    private route: ActivatedRoute,
+    private http: HttpService,
+    private missionState: MissionStateService,
+    private router: Router,
+    private confirmationService: ConfirmationService,
+    private translate: TranslateService
+  ) {}
 
   ngOnInit(): void {
     this.projectUUID = this.route.snapshot.paramMap.get('uuid');
@@ -66,7 +74,10 @@ export class MissionPanel implements OnInit {
         this.getDetailedMission(result[0].name)
       },
       error: error => {
-        NotificationService.showError("Could not get missions");
+        NotificationService.showError(
+          this.translate.instant('MISSION.ERROR_LOAD_MISSIONS'),
+          this.translate.instant('COMMON.ERROR')
+        );
         console.log(error);
       }
     });
@@ -117,12 +128,18 @@ export class MissionPanel implements OnInit {
     }
     this.http.createMission(this.projectUUID!, this.newMissionName).subscribe({
       next: (res) => {
-        NotificationService.showSuccess("Mission created successfully.");
+        NotificationService.showSuccess(
+          this.translate.instant('MISSION.CREATE_SUCCESS'),
+          this.translate.instant('COMMON.SUCCESS')
+        );
         this.getMissions();
         this.addingMission = false;
       },
       error: err => {
-        NotificationService.showError("Could not create mission");
+        NotificationService.showError(
+          this.translate.instant('MISSION.CREATE_ERROR'),
+          this.translate.instant('COMMON.ERROR')
+        );
         console.error(err);
       }
     });
@@ -159,10 +176,16 @@ export class MissionPanel implements OnInit {
         // Apply updates locally after success without touching setup/shutdown
         this.middleMissions = updatedMiddle;
         this.missionTimelineData = [...this.topMissions, ...this.middleMissions, ...this.bottomMissions];
-        NotificationService.showSuccess("Order updated");
+        NotificationService.showSuccess(
+          this.translate.instant('MISSION.ORDER_UPDATE_SUCCESS'),
+          this.translate.instant('COMMON.SUCCESS')
+        );
       })
       .catch(err => {
-        NotificationService.showError("Failed to update order");
+        NotificationService.showError(
+          this.translate.instant('MISSION.ORDER_UPDATE_ERROR'),
+          this.translate.instant('COMMON.ERROR')
+        );
         console.error(err);
       });
   }
@@ -178,12 +201,12 @@ export class MissionPanel implements OnInit {
     this.contextMission = mission;
     this.contextMenuItems = [
       {
-        label: 'Rename',
+        label: this.translate.instant('COMMON.RENAME'),
         icon: 'pi pi-pencil',
         command: () => this.renameMissionPrompt()
       },
       {
-        label: 'Delete',
+        label: this.translate.instant('COMMON.DELETE'),
         icon: 'pi pi-trash',
         command: () => this.deleteMissionConfirm()
       }
@@ -208,7 +231,10 @@ export class MissionPanel implements OnInit {
     const newName = this.renameName.trim();
     const oldName = this.renameOriginalName;
     if (!newName) {
-      NotificationService.showError('Mission name cannot be empty');
+      NotificationService.showError(
+        this.translate.instant('MISSION.NAME_REQUIRED'),
+        this.translate.instant('COMMON.ERROR')
+      );
       return;
     }
     if (newName === oldName) {
@@ -216,13 +242,19 @@ export class MissionPanel implements OnInit {
       return;
     }
     if (this.missions.some(m => m.name === newName)) {
-      NotificationService.showError('A mission with that name already exists');
+      NotificationService.showError(
+        this.translate.instant('MISSION.NAME_EXISTS'),
+        this.translate.instant('COMMON.ERROR')
+      );
       return;
     }
     this.renameSubmitting = true;
     this.http.renameMission(this.projectUUID, oldName, newName).subscribe({
       next: () => {
-        NotificationService.showSuccess('Mission renamed');
+        NotificationService.showSuccess(
+          this.translate.instant('MISSION.RENAME_SUCCESS'),
+          this.translate.instant('COMMON.SUCCESS')
+        );
         if (this.currentMission?.name === oldName) {
           this.currentMission = { ...this.currentMission, name: newName } as Mission;
           this.missionState.setMission(this.currentMission);
@@ -232,7 +264,10 @@ export class MissionPanel implements OnInit {
         this.renameSubmitting = false;
       },
       error: err => {
-        NotificationService.showError('Failed to rename mission');
+        NotificationService.showError(
+          this.translate.instant('MISSION.RENAME_ERROR'),
+          this.translate.instant('COMMON.ERROR')
+        );
         console.error(err);
         this.renameSubmitting = false;
       }
@@ -243,19 +278,25 @@ export class MissionPanel implements OnInit {
     if (!this.contextMission || !this.projectUUID) return;
     const name = this.contextMission.name;
     this.confirmationService.confirm({
-      message: 'Are you sure you want to delete this mission?',
-      header: 'Confirm Deletion',
+      message: this.translate.instant('MISSION.CONFIRM_DELETE_MESSAGE'),
+      header: this.translate.instant('COMMON.CONFIRM_DELETION'),
       icon: 'pi pi-exclamation-triangle',
       acceptButtonStyleClass: 'p-button-danger p-button-sm',
       rejectButtonStyleClass: 'p-button-secondary p-button-sm',
       accept: () => {
         this.http.deleteMission(this.projectUUID!, name).subscribe({
           next: () => {
-            NotificationService.showSuccess('Mission deleted');
+            NotificationService.showSuccess(
+              this.translate.instant('MISSION.DELETE_SUCCESS'),
+              this.translate.instant('COMMON.SUCCESS')
+            );
             this.getMissions();
           },
           error: err => {
-            NotificationService.showError('Failed to delete mission');
+            NotificationService.showError(
+              this.translate.instant('MISSION.DELETE_ERROR'),
+              this.translate.instant('COMMON.ERROR')
+            );
             console.error(err);
           }
         });

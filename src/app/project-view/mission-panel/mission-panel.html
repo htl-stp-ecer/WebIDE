@@ -1,10 +1,10 @@
 <div class="h-full flex flex-col">
-  <p-button label="Back to Projects" icon="pi pi-arrow-left" size="small" (onClick)="backToProjects()"
+  <p-button [label]="'MISSION.BACK_TO_PROJECTS' | translate" icon="pi pi-arrow-left" size="small" (onClick)="backToProjects()"
   class="mb-2 border-b-2 pb-3 flex items-center justify-center"></p-button>
   <p-contextMenu #missionMenu [model]="contextMenuItems"></p-contextMenu>
   <p-confirmDialog></p-confirmDialog>
   <p-dialog
-    header="Rename Mission"
+    [header]="'MISSION.RENAME_DIALOG_TITLE' | translate"
     [(visible)]="renameDialogVisible"
     [modal]="true"
     [closable]="false"
@@ -13,13 +13,13 @@
     [style]="{ width: '28rem' }"
   >
     <div class="flex flex-col gap-3">
-      <label for="renameInput" class="text-sm text-gray-500">New name</label>
-      <input id="renameInput" [(ngModel)]="renameName" pInputText placeholder="Enter new mission name" />
+      <label for="renameInput" class="text-sm text-gray-500">{{ 'MISSION.RENAME_NEW_NAME_LABEL' | translate }}</label>
+      <input id="renameInput" [(ngModel)]="renameName" pInputText [placeholder]="'MISSION.RENAME_PLACEHOLDER' | translate" />
     </div>
     <ng-template pTemplate="footer">
       <div class="flex justify-end gap-2 w-full">
-        <p-button label="Cancel" severity="secondary" size="small" (onClick)="renameMissionCancel()" [disabled]="renameSubmitting" />
-        <p-button label="Save" severity="success" size="small" (onClick)="renameMissionConfirm()" [loading]="renameSubmitting" />
+        <p-button [label]="'COMMON.CANCEL' | translate" severity="secondary" size="small" (onClick)="renameMissionCancel()" [disabled]="renameSubmitting" />
+        <p-button [label]="'COMMON.SAVE' | translate" severity="success" size="small" (onClick)="renameMissionConfirm()" [loading]="renameSubmitting" />
       </div>
     </ng-template>
   </p-dialog>
@@ -104,7 +104,7 @@
         (click)="enableAddMission()">
         <button class="flex flex-col items-center justify-center w-full py-4 text-gray-500 hover:text-gray-700">
           <i class="pi pi-plus text-3xl mb-2"></i>
-          <span class="text-lg font-medium">Add Mission</span>
+          <span class="text-lg font-medium">{{ 'MISSION.ADD_MISSION' | translate }}</span>
         </button>
       </p-card>
     } @else {
@@ -112,16 +112,16 @@
         <div class="flex flex-col space-y-4 w-full">
           <input [(ngModel)]="newMissionName"
                  pInputText
-                 placeholder="Mission name"
+                 [placeholder]="'MISSION.NEW_MISSION_PLACEHOLDER' | translate"
                  class="w-full"/>
           <div class="flex justify-end gap-2">
+              <p-button
+                [label]="'COMMON.CANCEL' | translate"
+                size="small"
+                severity="secondary"
+                (onClick)="cancelAddMission()"/>
             <p-button
-              label="Cancel"
-              size="small"
-              severity="secondary"
-              (onClick)="cancelAddMission()"/>
-            <p-button
-              label="Save"
+              [label]="'COMMON.SAVE' | translate"
               size="small"
               severity="success"
               (onClick)="createMission()"/>

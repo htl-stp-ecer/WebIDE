@@ -5,17 +5,19 @@
 
   @if (ip) {
     <div class="text-base dark:text-gray-200 text-gray-800">
-      {{deviceInfo?.hostname || 'Unnamed Device' }}
+      {{ deviceInfo?.hostname || ('COMMON.UNNAMED_DEVICE' | translate) }}
       <span class="text-sm text-gray-400">
         {{ip}}
       </span>
       <span class="ml-5">
         @if (deviceInfo?.battery_percent! > 0) {
-          Online
+          {{ 'COMMON.ONLINE' | translate }}
           <span class="inline-block w-3 h-3 bg-green-500 rounded-full ml-1 align-middle mb-1"></span>
-          <span class="text-sm text-gray-400 ml-2">({{deviceInfo?.battery_percent}}%)</span>
+          <span class="text-sm text-gray-400 ml-2">
+            {{ 'NAVBAR.BATTERY_PERCENT' | translate:{ value: deviceInfo?.battery_percent } }}
+          </span>
         } @else {
-          Offline
+          {{ 'COMMON.OFFLINE' | translate }}
           <span class="inline-block w-3 h-3 bg-red-500 rounded-full ml-2 align-middle mb-1"></span>
         }
       </span>
@@ -30,7 +32,8 @@
       optionLabel="label"
       optionValue="value"
       (onChange)="changeLanguage($event.value)"
-      class="language-selector">
+      class="language-selector"
+      [attr.aria-label]="'NAVBAR.LANGUAGE_SELECTOR' | translate">
     </p-select>
 
     <p-button

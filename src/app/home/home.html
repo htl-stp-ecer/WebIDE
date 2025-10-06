@@ -1,12 +1,12 @@
 <div class="flex flex-col items-center justify-center text-2xl mt-20">
   <p class="mb-4">
-    Connect to device
+    {{ 'HOME.CONNECT_TO_DEVICE' | translate }}
   </p>
 
   <div class="relative w-1/4">
     <p-inputgroup class="flex-1">
-      <input [(ngModel)]="ip" pInputText placeholder="IP Address (1.1.1.1)">
-      <p-button label="go" (onClick)="tryConnecting(ip)" [disabled]="loading"></p-button>
+      <input [(ngModel)]="ip" pInputText [placeholder]="'HOME.IP_PLACEHOLDER' | translate">
+      <p-button [label]="'HOME.CONNECT_BUTTON' | translate" (onClick)="tryConnecting(ip)" [disabled]="loading"></p-button>
     </p-inputgroup>
 
     @if (loading) {
@@ -17,17 +17,17 @@
   </div>
 
   <p class="mt-6 text-center">
-    On the wombat, click <br>
-    Settings > Wifi > Device Info
+    {{ 'HOME.DEVICE_INSTRUCTIONS_LINE1' | translate }} <br>
+    {{ 'HOME.DEVICE_INSTRUCTIONS_LINE2' | translate }}
   </p>
 </div>
 
 
 <div class="mt-40 text-xl ml-20 mr-20">
-  Previous Connections:
+  {{ 'HOME.PREVIOUS_CONNECTIONS' | translate }}
 
   @if (previousConnections.length == 0) {
-    <div class="text-xl text-center mt-20 text-gray-400">No previous connections</div>
+    <div class="text-xl text-center mt-20 text-gray-400">{{ 'HOME.NO_PREVIOUS_CONNECTIONS' | translate }}</div>
   }
 
   <div class="mt-10 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -37,18 +37,21 @@
          transition-all duration-300 cursor-pointer" (click)="tryConnecting(connection.ip)">
         <div class="flex items-center justify-between">
           <div>
-            <div class="text-lg font-semibold">{{ connection.hostname || 'Unnamed Device' }} <span class="text-sm text-gray-500 ml-5">{{ connection.ip }}</span></div>
+            <div class="text-lg font-semibold">{{ connection.hostname || ('COMMON.UNNAMED_DEVICE' | translate) }} <span class="text-sm text-gray-500 ml-5">{{ connection.ip }}</span></div>
 
             <p class="text-base text-gray-400 flex items-center">
-              Status:
+              {{ 'COMMON.STATUS' | translate }}
               @if (connection.battery_percent > 0) {
                 <span class="flex items-center ml-2">
-                  Online ({{connection.battery_percent}}%)
+                  {{ 'COMMON.ONLINE' | translate }}
+                  <span class="text-sm text-gray-400 ml-2">
+                    {{ 'HOME.BATTERY_PERCENT' | translate:{ value: connection.battery_percent } }}
+                  </span>
                   <span class="w-3 h-3 bg-green-500 rounded-full ml-2 mt-1"></span>
                 </span>
               } @else {
                 <span class="flex items-center ml-2">
-                  Offline
+                  {{ 'COMMON.OFFLINE' | translate }}
                   <span class="w-3 h-3 bg-red-500 rounded-full ml-2 mt-1"></span>
                 </span>
               }
@@ -59,7 +62,8 @@
           <div class="flex items-center space-x-3">
             <button
               class="text-red-500 hover:text-red-700 cursor-pointer"
-              (click)="removeConnection(connection.ip); $event.stopPropagation()">
+              (click)="removeConnection(connection.ip); $event.stopPropagation()"
+              [attr.aria-label]="'HOME.DELETE_CONNECTION' | translate">
               <i class="pi pi-trash text-lg"></i>
             </button>
           </div>

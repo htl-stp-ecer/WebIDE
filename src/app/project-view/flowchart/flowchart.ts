@@ -35,6 +35,8 @@ import {Tooltip} from 'primeng/tooltip';
 import {FormsModule} from '@angular/forms';
 import { FlowchartHistoryManager } from './flowchart-history-manager';
 import { FlowchartRunManager } from './flowchart-run-manager';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { Subscription } from 'rxjs';
 
 // Shared models and helpers
 import { Connection, FlowNode, Step, baseId, toVal } from './models';
@@ -56,7 +58,7 @@ import {FlowHistory} from '../../entities/flow-history';
 
 @Component({
   selector: 'app-flowchart',
-  imports: [FFlowComponent, FFlowModule, InputNumberModule, CheckboxModule, InputTextModule, ContextMenuModule, Tooltip, FormsModule],
+  imports: [FFlowComponent, FFlowModule, InputNumberModule, CheckboxModule, InputTextModule, ContextMenuModule, Tooltip, FormsModule, TranslateModule],
   templateUrl: './flowchart.html',
   styleUrl: './flowchart.scss',
   providers: [FlowHistory],
@@ -99,13 +101,24 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
   private pendingViewportReset = false;
   private projectUUID: string | null = '';
 
-  readonly items: MenuItem[] = [{label: 'Delete', icon: 'pi pi-trash', command: () => this.deleteNode()}];
+  readonly items: MenuItem[] = [];
+  private langChangeSub?: Subscription;
 
   protected canUndoSignal!: Signal<boolean>;
   protected canRedoSignal!: Signal<boolean>;
 
-  constructor(private missionState: MissionStateService, private stepsState: StepsStateService, private http: HttpService, private route: ActivatedRoute, private readonly history: FlowHistory) {
+  constructor(
+    private missionState: MissionStateService,
+    private stepsState: StepsStateService,
+    private http: HttpService,
+    private route: ActivatedRoute,
+    private readonly history: FlowHistory,
+    private translate: TranslateService
+  ) {
     this.projectUUID = route.snapshot.paramMap.get('uuid');
+
+    this.updateNodeContextMenuItems();
+    this.langChangeSub = this.translate.onLangChange.subscribe(() => this.updateNodeContextMenuItems());
 
     this.historyManager = new FlowchartHistoryManager({
       missionState: this.missionState,
@@ -168,6 +181,14 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
         return;
       }
       this.historyManager.applySnapshotFromHistory();
+    });
+  }
+
+  private updateNodeContextMenuItems(): void {
+    this.items.splice(0, this.items.length, {
+      label: this.translate.instant('COMMON.DELETE'),
+      icon: 'pi pi-trash',
+      command: () => this.deleteNode()
     });
   }
 
@@ -323,7 +344,7 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
     step?.arguments?.forEach(a => args[a.name] = toVal(a.type, String((a.default ?? '') !== '' ? a.default : '')));
     this.adHocNodes.set([...this.adHocNodes(), {
       id: generateGuid(),
-      text: step?.name ?? 'New Node',
+      text: step?.name ?? this.translate.instant('FLOWCHART.NEW_NODE'),
       position: e.rect,
       step,
       args
@@ -517,6 +538,7 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
 
   ngOnDestroy(): void {
     this.stopRun();
+    this.langChangeSub?.unsubscribe();
   }
 
   stopRun(): void {

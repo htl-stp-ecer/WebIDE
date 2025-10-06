@@ -9,11 +9,12 @@ import { Card } from 'primeng/card';
 import { ConfirmDialog } from 'primeng/confirmdialog';
 import { ConfirmationService } from 'primeng/api';
 import {NgClass} from '@angular/common';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
 @Component({
   selector: 'app-project-menu',
   standalone: true,
-  imports: [FormsModule, InputText, Button, Card, ConfirmDialog, NgClass],
+  imports: [FormsModule, InputText, Button, Card, ConfirmDialog, NgClass, TranslateModule],
   templateUrl: './project-menu.html',
   styleUrl: './project-menu.scss',
   providers: [ConfirmationService] // required for PrimeNG
@@ -28,7 +29,8 @@ export class ProjectMenu implements OnInit {
   constructor(
     private router: Router,
     private http: HttpService,
-    private confirmationService: ConfirmationService
+    private confirmationService: ConfirmationService,
+    private translate: TranslateService
   ) {}
 
   ngOnInit() {
@@ -62,7 +64,10 @@ export class ProjectMenu implements OnInit {
         NotificationService.showSuccess(res.message);
       },
       error: err => {
-        NotificationService.showError("Could not save hostname")
+        NotificationService.showError(
+          this.translate.instant('PROJECT_MENU.SAVE_HOSTNAME_ERROR'),
+          this.translate.instant('COMMON.ERROR')
+        )
         console.log(err)
       }
     })
@@ -70,8 +75,8 @@ export class ProjectMenu implements OnInit {
 
   confirmDelete(uuid: string) {
     this.confirmationService.confirm({
-      message: 'Are you sure you want to delete this project?',
-      header: 'Confirm Deletion',
+      message: this.translate.instant('PROJECT_MENU.CONFIRM_DELETE_MESSAGE'),
+      header: this.translate.instant('COMMON.CONFIRM_DELETION'),
       icon: 'pi pi-exclamation-triangle',
       acceptButtonStyleClass: 'p-button-danger p-button-sm',
       rejectButtonStyleClass: 'p-button-secondary p-button-sm',
@@ -84,11 +89,17 @@ export class ProjectMenu implements OnInit {
   private deleteProject(uuid: string) {
     this.http.deleteProject(uuid).subscribe({
       next: () => {
-        NotificationService.showSuccess("Project deleted successfully.");
+        NotificationService.showSuccess(
+          this.translate.instant('PROJECT_MENU.DELETE_SUCCESS'),
+          this.translate.instant('COMMON.SUCCESS')
+        );
         this.projects = this.projects.filter(project => project.uuid !== uuid)
       },
       error: err => {
-        NotificationService.showError("Could not delete project")
+        NotificationService.showError(
+          this.translate.instant('PROJECT_MENU.DELETE_ERROR'),
+          this.translate.instant('COMMON.ERROR')
+        )
         console.log(err)
       }
     })
@@ -108,18 +119,27 @@ export class ProjectMenu implements OnInit {
 
   createProject() {
     if (!this.newProjectName.trim()) {
-      NotificationService.showError("Project name cannot be empty");
+      NotificationService.showError(
+        this.translate.instant('PROJECT_MENU.NAME_REQUIRED'),
+        this.translate.instant('COMMON.ERROR')
+      );
       return;
     }
 
     this.http.createProject(this.newProjectName).subscribe({
       next: (project: Project) => {
-        NotificationService.showSuccess("Project created successfully.");
+        NotificationService.showSuccess(
+          this.translate.instant('PROJECT_MENU.CREATE_SUCCESS'),
+          this.translate.instant('COMMON.SUCCESS')
+        );
         this.projects = [...this.projects, project];
         this.addingProject = false;
       },
       error: err => {
-        NotificationService.showError("Could not create project");
+        NotificationService.showError(
+          this.translate.instant('PROJECT_MENU.CREATE_ERROR'),
+          this.translate.instant('COMMON.ERROR')
+        );
         console.error(err);
       }
     });

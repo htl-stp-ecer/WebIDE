@@ -10,6 +10,7 @@ import { ProgressSpinner } from 'primeng/progressspinner';
 import { Router } from '@angular/router';
 import { NotificationService } from '../services/NotificationService';
 import { interval, Subscription } from 'rxjs';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
 @Component({
   selector: 'app-home',
@@ -20,6 +21,7 @@ import { interval, Subscription } from 'rxjs';
     FormsModule,
     Card,
     ProgressSpinner,
+    TranslateModule,
   ],
   templateUrl: './home.html',
   styleUrl: './home.scss'
@@ -33,7 +35,8 @@ export class Home implements OnInit, OnDestroy {
   constructor(
     private httpService: HttpService,
     private messageService: MessageService,
-    private router: Router
+    private router: Router,
+    private translate: TranslateService
   ) {
     const connections = localStorage.getItem("previousConnections");
     if (connections) {
@@ -94,7 +97,10 @@ export class Home implements OnInit, OnDestroy {
       error: (err) => {
         this.loading = false;
         console.error(err);
-        NotificationService.showError('Failed to connect to device');
+        NotificationService.showError(
+          this.translate.instant('HOME.CONNECT_ERROR'),
+          this.translate.instant('COMMON.ERROR')
+        );
       }
     });
   }

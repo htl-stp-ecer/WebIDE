@@ -1,11 +1,12 @@
 import { Component, computed, OnInit, signal, OnDestroy } from '@angular/core';
 import { Button } from "primeng/button";
 import { Select } from "primeng/select";
-import { TranslateService } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { FormsModule } from '@angular/forms';
 import {ActivatedRoute, Router, NavigationEnd, RouterLink, RouterLinkActive} from '@angular/router';
 import { filter, Subscription, interval, switchMap, takeUntil, Subject } from 'rxjs';
 import { HttpService } from '../services/http-service';
+import { enTranslations, deTranslations } from '../i18n/translations';
 
 @Component({
   selector: 'app-navbar',
@@ -14,7 +15,8 @@ import { HttpService } from '../services/http-service';
     Select,
     FormsModule,
     RouterLink,
-    RouterLinkActive
+    RouterLinkActive,
+    TranslateModule
   ],
   templateUrl: './navbar.html',
   styleUrl: './navbar.scss'
@@ -42,6 +44,8 @@ export class Navbar implements OnInit, OnDestroy {
     private router: Router,
     private http: HttpService
   ) {
+    translate.setTranslation('en', enTranslations, true);
+    translate.setTranslation('de', deTranslations, true);
     translate.addLangs(['en', 'de']);
     translate.setDefaultLang('en');
 
