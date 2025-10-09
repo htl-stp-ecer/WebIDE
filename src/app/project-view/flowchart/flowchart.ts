@@ -115,6 +115,8 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
   protected canUndoSignal!: Signal<boolean>;
   protected canRedoSignal!: Signal<boolean>;
 
+  protected useAutoLayout = true;
+
   constructor(
     private missionState: MissionStateService,
     private stepsState: StepsStateService,
@@ -260,6 +262,10 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
 
   // ----- lifecycle -----
   ngAfterViewChecked(): void {
+    if (!this.useAutoLayout) {
+      return
+    }
+
     if (this.needsAdjust) {
       this.needsAdjust = false;
       this.autoLayout();
@@ -271,6 +277,10 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
   }
 
   onLoaded() {
+    if (!this.useAutoLayout) {
+      return
+    }
+
     this.fCanvas()?.resetScaleAndCenter(false);
   }
 
@@ -323,8 +333,10 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
       const i = arr.findIndex(n => n.id === nodeId);
       if (i < 0) return false;
       const next = arr.slice();
-      next[i] = {...next[i], position: {x: pos.x, y: pos.y}};
-      sig.set(next);
+      if (this.useAutoLayout) {
+        next[i] = {...next[i], position: {x: pos.x, y: pos.y}};
+        sig.set(next);
+      }
       return true;
     };
     let changed = upd(this.adHocNodes);
@@ -334,7 +346,9 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
     if (!changed) {
       return;
     }
-    this.recomputeMergedView();
+    if (this.useAutoLayout) {
+      this.recomputeMergedView();
+    }
     this.historyManager.recordHistory('move-node');
   }
 

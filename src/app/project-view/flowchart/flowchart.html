@@ -32,6 +32,10 @@
         [attr.aria-label]="'FLOWCHART.ORIENTATION' | translate"
         styleClass="orientation-select"
       ></p-selectButton>
+      <div class="ml-2">
+        <p-check-box inputId="autoLayout" [binary]="true" [(ngModel)]="useAutoLayout"></p-check-box>
+        <label for="autoLayout" class="ml-2">{{'FLOWCHART.AUTO_LAYOUT' | translate}}</label>
+      </div>
     </div>
     <div class="toolbar-right">
       @if (!isRunActive()) {
