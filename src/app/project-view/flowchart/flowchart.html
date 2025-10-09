@@ -91,149 +91,149 @@
       (fCreateNode)="onCreateNode($event)"
       (fCreateConnection)="addConnection($event)"
     >
-    <f-background class="flow-bg">
-      <f-circle-pattern color="#4a5565"></f-circle-pattern>
-    </f-background>
+      <f-background class="flow-bg">
+        <f-circle-pattern color="#4a5565"></f-circle-pattern>
+      </f-background>
 
-    <f-canvas fZoom class="flow-canvas">
-      <f-connection-for-create
-        fType="segment"
-        [fStartColor]="isDarkMode() ? '#EEE5E9' : '#131217'"
-        [fEndColor]="isDarkMode() ? '#EEE5E9' : '#131217'"
-      ></f-connection-for-create>
-
-      <f-snap-connection
-        [fSnapThreshold]="50"
-        fType="segment"
-        [fStartColor]="isDarkMode() ? '#EEE5E9' : '#131217'"
-        [fEndColor]="isDarkMode() ? '#EEE5E9' : '#131217'"
-      ></f-snap-connection>
-
-      <!-- Start Node -->
-      <div
-        fNode
-        [fNodeId]="'start-node'"
-        [fNodePosition]="startNodePosition()"
-        class="node"
-        [attr.data-node-id]="'start-node'"
-        #nodeElement
-      >
-        <div class="node-title">{{ 'FLOWCHART.START_NODE' | translate }}</div>
-        <div
-          fNodeOutput
-          [fOutputConnectableSide]="isVerticalOrientation() ? 'bottom' : 'right'"
-          [fOutputId]="'start-node-output'"
-          [fOutputMultiple]="true"
-          class="port"
-          [class.port-bottom]="isVerticalOrientation()"
-          [class.port-right]="!isVerticalOrientation()"
-        ></div>
-      </div>
-
-      <!-- Connections (mission + ad-hoc merged in TS) -->
-      @for (connection of connections(); track connection.outputId + '-' + connection.inputId) {
-        <f-connection
-          [fConnectionId]="connection.id"
-          [fReassignDisabled]="true"
+      <f-canvas fZoom class="flow-canvas">
+        <f-connection-for-create
           fType="segment"
-          [fOutputId]="connection.outputId"
-          [fInputId]="connection.inputId"
           [fStartColor]="isDarkMode() ? '#EEE5E9' : '#131217'"
           [fEndColor]="isDarkMode() ? '#EEE5E9' : '#131217'"
-          [class.connection-completed]="isConnectionCompleted(connection.id)"
-        >
-          <svg viewBox="0 0 6 7" fMarker [type]="eMarkerType.END" [class]="isConnectionCompleted(connection.id) ? 'fill-[#4ade80]' : 'dark:fill-white'"
-               markerUnits="userSpaceOnUse"
-               [height]="14" [width]="12"
-               [refX]="11" [refY]="7" orient="auto">
-            <path d="M0.000391006 0L6 3.5L0.000391006 7L0.000391006 0Z"/>
-          </svg>
-        </f-connection>
-      }
+        ></f-connection-for-create>
 
-      <!-- Nodes (mission + ad-hoc merged in TS) -->
-      @for (node of nodes(); track node.id) {
+        <f-snap-connection
+          [fSnapThreshold]="50"
+          fType="segment"
+          [fStartColor]="isDarkMode() ? '#EEE5E9' : '#131217'"
+          [fEndColor]="isDarkMode() ? '#EEE5E9' : '#131217'"
+        ></f-snap-connection>
+
+        <!-- Start Node -->
         <div
           fNode
-          fDragHandle
-          [fNodeId]="node.id"
-          [fNodePosition]="node.position"
+          [fNodeId]="'start-node'"
+          [fNodePosition]="startNodePosition()"
           class="node"
-          [class.node-completed]="isNodeCompleted(node.id)"
-          [attr.data-node-id]="node.id"
-          (contextmenu)="onRightClick($event, node.id)"
-          (fNodePositionChange)="onNodeMoved(node.id, $event)"
+          [attr.data-node-id]="'start-node'"
           #nodeElement
         >
-          <div
-            fNodeInput
-            [fInputConnectableSide]="isVerticalOrientation() ? 'top' : 'left'"
-            [fInputId]="node.id + '-input'"
-            class="port"
-            [class.port-top]="isVerticalOrientation()"
-            [class.port-left]="!isVerticalOrientation()"
-          ></div>
-
-          <div class="node-title">{{ node.text }}</div>
-
-          @if (node.step.arguments && node.step.arguments.length > 0) {
-            <div class="node-args">
-              @for (arg of node.step.arguments; track arg.name) {
-                <div class="arg">
-                  <label
-                    class="arg-label"
-                    pTooltip="{{ arg.name }} ({{ arg.type }})"
-                    tooltipPosition="top"
-                    [showDelay]="150"
-                    [hideDelay]="50"
-                    tooltipStyleClass="!max-w-[24rem] !break-words"
-                  >
-                    {{ arg.name }}
-                  </label>
-
-                  <div class="arg-control">
-                    @if (arg.type === 'bool') {
-                      <p-checkbox
-                        [(ngModel)]="node.args[arg.name]"
-                        [binary]="true"
-                      ></p-checkbox>
-                    } @else if (arg.type === 'str') {
-                      <input
-                        pInputText
-                        [(ngModel)]="node.args[arg.name]"
-                        class="arg-input"
-                        [placeholder]="arg.default || ('FLOWCHART.ENTER_VALUE' | translate:{ value: arg.name })"
-                      />
-                    } @else if (arg.type === 'float') {
-                      <p-inputNumber
-                        [(ngModel)]="node.args[arg.name]"
-                        mode="decimal"
-                        [minFractionDigits]="1"
-                        [maxFractionDigits]="2"
-                        styleClass="arg-number"
-                        inputStyleClass="arg-input"
-                        [placeholder]="'FLOWCHART.ENTER_VALUE' | translate:{ value: arg.name }"
-                      ></p-inputNumber>
-                    }
-                  </div>
-                </div>
-              }
-            </div>
-          }
-
+          <div class="node-title">{{ 'FLOWCHART.START_NODE' | translate }}</div>
           <div
             fNodeOutput
             [fOutputConnectableSide]="isVerticalOrientation() ? 'bottom' : 'right'"
-            [fOutputId]="node.id + '-output'"
+            [fOutputId]="'start-node-output'"
             [fOutputMultiple]="true"
             class="port"
             [class.port-bottom]="isVerticalOrientation()"
             [class.port-right]="!isVerticalOrientation()"
           ></div>
         </div>
-      }
-    </f-canvas>
-  </f-flow>
+
+        <!-- Connections (mission + ad-hoc merged in TS) -->
+        @for (connection of connections(); track connection.outputId + '-' + connection.inputId) {
+          <f-connection
+            [fConnectionId]="connection.id"
+            [fReassignDisabled]="true"
+            fType="segment"
+            [fOutputId]="connection.outputId"
+            [fInputId]="connection.inputId"
+            [fStartColor]="isDarkMode() ? '#EEE5E9' : '#131217'"
+            [fEndColor]="isDarkMode() ? '#EEE5E9' : '#131217'"
+            [class.connection-completed]="isConnectionCompleted(connection.id)"
+          >
+            <svg viewBox="0 0 6 7" fMarker [type]="eMarkerType.END" [class]="isConnectionCompleted(connection.id) ? 'fill-[#4ade80]' : 'dark:fill-white'"
+                 markerUnits="userSpaceOnUse"
+                 [height]="14" [width]="12"
+                 [refX]="11" [refY]="7" orient="auto">
+              <path d="M0.000391006 0L6 3.5L0.000391006 7L0.000391006 0Z"/>
+            </svg>
+          </f-connection>
+        }
+
+        <!-- Nodes (mission + ad-hoc merged in TS) -->
+        @for (node of nodes(); track node.id) {
+          <div
+            fNode
+            fDragHandle
+            [fNodeId]="node.id"
+            [fNodePosition]="node.position"
+            class="node"
+            [class.node-completed]="isNodeCompleted(node.id)"
+            [attr.data-node-id]="node.id"
+            (contextmenu)="onRightClick($event, node.id)"
+            (fNodePositionChange)="onNodeMoved(node.id, $event)"
+            #nodeElement
+          >
+            <div
+              fNodeInput
+              [fInputConnectableSide]="isVerticalOrientation() ? 'top' : 'left'"
+              [fInputId]="node.id + '-input'"
+              class="port"
+              [class.port-top]="isVerticalOrientation()"
+              [class.port-left]="!isVerticalOrientation()"
+            ></div>
+
+            <div class="node-title">{{ node.text }}</div>
+
+            @if (node.step.arguments && node.step.arguments.length > 0) {
+              <div class="node-args">
+                @for (arg of node.step.arguments; track arg.name) {
+                  <div class="arg">
+                    <label
+                      class="arg-label"
+                      pTooltip="{{ arg.name }} ({{ arg.type }})"
+                      tooltipPosition="top"
+                      [showDelay]="150"
+                      [hideDelay]="50"
+                      tooltipStyleClass="!max-w-[24rem] !break-words"
+                    >
+                      {{ arg.name }}
+                    </label>
+
+                    <div class="arg-control">
+                      @if (arg.type === 'bool') {
+                        <p-checkbox
+                          [(ngModel)]="node.args[arg.name]"
+                          [binary]="true"
+                        ></p-checkbox>
+                      } @else if (arg.type === 'str') {
+                        <input
+                          pInputText
+                          [(ngModel)]="node.args[arg.name]"
+                          class="arg-input"
+                          [placeholder]="arg.default || ('FLOWCHART.ENTER_VALUE' | translate:{ value: arg.name })"
+                        />
+                      } @else if (arg.type === 'float') {
+                        <p-inputNumber
+                          [(ngModel)]="node.args[arg.name]"
+                          mode="decimal"
+                          [minFractionDigits]="1"
+                          [maxFractionDigits]="2"
+                          styleClass="arg-number"
+                          inputStyleClass="arg-input"
+                          [placeholder]="'FLOWCHART.ENTER_VALUE' | translate:{ value: arg.name }"
+                        ></p-inputNumber>
+                      }
+                    </div>
+                  </div>
+                }
+              </div>
+            }
+
+            <div
+              fNodeOutput
+              [fOutputConnectableSide]="isVerticalOrientation() ? 'bottom' : 'right'"
+              [fOutputId]="node.id + '-output'"
+              [fOutputMultiple]="true"
+              class="port"
+              [class.port-bottom]="isVerticalOrientation()"
+              [class.port-right]="!isVerticalOrientation()"
+            ></div>
+          </div>
+        }
+      </f-canvas>
+    </f-flow>
   </div>
 
   <!-- Append to body so it never shifts layout -->
