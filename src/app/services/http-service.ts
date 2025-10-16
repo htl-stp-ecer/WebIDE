@@ -48,7 +48,14 @@ export class HttpService {
   }
 
   changeHostname(newName: string) {
-    return this.http.put<any>(`${this.ip}/api/v1/device/hostname`, { hostname: newName });
+    return this.http.put<ConnectionInfo>(`${this.ip}/api/v1/device/hostname`, { hostname: newName });
+  }
+
+  updateDeviceDimensions(widthCm: number, lengthCm: number) {
+    return this.http.put<ConnectionInfo>(`${this.ip}/api/v1/device/dimensions`, {
+      width_cm: widthCm,
+      length_cm: lengthCm,
+    });
   }
 
   getAllProjects() {

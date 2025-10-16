@@ -24,6 +24,10 @@ export class ProjectMenu implements OnInit {
   tempName: string = ""
   editingName = false;
 
+  tempWidth: string = "";
+  tempLength: string = "";
+  editingDimensions = false;
+
   projects: Project[] = [];
 
   constructor(
@@ -37,6 +41,8 @@ export class ProjectMenu implements OnInit {
     this.http.getDeviceInfoDefault().subscribe(deviceInfo => {
       this.connectionInfo = deviceInfo;
       this.tempName = deviceInfo.hostname
+      this.tempWidth = this.toDimensionString(deviceInfo.width_cm);
+      this.tempLength = this.toDimensionString(deviceInfo.length_cm);
     });
 
     this.http.getAllProjects().subscribe(projects => {
@@ -61,7 +67,14 @@ export class ProjectMenu implements OnInit {
   saveHostname(newName: string) {
     this.http.changeHostname(newName).subscribe({
       next: res => {
-        NotificationService.showSuccess(res.message);
+        this.connectionInfo = res;
+        this.tempName = res.hostname;
+        this.tempWidth = this.toDimensionString(res.width_cm);
+        this.tempLength = this.toDimensionString(res.length_cm);
+        NotificationService.showSuccess(
+          this.translate.instant('PROJECT_MENU.SAVE_HOSTNAME_SUCCESS'),
+          this.translate.instant('COMMON.SUCCESS')
+        );
       },
       error: err => {
         NotificationService.showError(
@@ -71,6 +84,85 @@ export class ProjectMenu implements OnInit {
         console.log(err)
       }
     })
+  }
+
+  get canSaveDimensions(): boolean {
+    if (!this.connectionInfo) {
+      return false;
+    }
+
+    return this.parseDimension(this.tempWidth) !== undefined &&
+      this.parseDimension(this.tempLength) !== undefined;
+  }
+
+  enableDimensionsEdit() {
+    if (!this.connectionInfo) {
+      return;
+    }
+
+    this.editingDimensions = true;
+    this.tempWidth = this.toDimensionString(this.connectionInfo.width_cm);
+    this.tempLength = this.toDimensionString(this.connectionInfo.length_cm);
+  }
+
+  cancelDimensionsEdit() {
+    this.editingDimensions = false;
+    this.tempWidth = this.toDimensionString(this.connectionInfo?.width_cm);
+    this.tempLength = this.toDimensionString(this.connectionInfo?.length_cm);
+  }
+
+  saveDimensions() {
+    const width = this.parseDimension(this.tempWidth);
+    const length = this.parseDimension(this.tempLength);
+
+    if (width === undefined || length === undefined) {
+      NotificationService.showError(
+        this.translate.instant('PROJECT_MENU.INVALID_DIMENSIONS'),
+        this.translate.instant('COMMON.ERROR')
+      );
+      return;
+    }
+
+    this.http.updateDeviceDimensions(width, length).subscribe({
+      next: (info: ConnectionInfo) => {
+        this.connectionInfo = info;
+        this.tempWidth = this.toDimensionString(info.width_cm);
+        this.tempLength = this.toDimensionString(info.length_cm);
+        this.editingDimensions = false;
+        NotificationService.showSuccess(
+          this.translate.instant('PROJECT_MENU.SAVE_DIMENSIONS_SUCCESS'),
+          this.translate.instant('COMMON.SUCCESS')
+        );
+      },
+      error: err => {
+        NotificationService.showError(
+          this.translate.instant('PROJECT_MENU.SAVE_DIMENSIONS_ERROR'),
+          this.translate.instant('COMMON.ERROR')
+        );
+        console.error(err);
+      }
+    })
+  }
+
+  private parseDimension(value: string): number | undefined {
+    if (value === undefined || value === null || value === '') {
+      return undefined;
+    }
+
+    const parsed = Number(value);
+    if (Number.isNaN(parsed) || parsed < 0) {
+      return undefined;
+    }
+
+    return parsed;
+  }
+
+  private toDimensionString(value: number | undefined | null): string {
+    return value === undefined || value === null ? '' : value.toString();
+  }
+
+  formatDimension(value: number | undefined | null): string {
+    return value === undefined || value === null ? '--' : value.toString();
   }
 
   confirmDelete(uuid: string) {
