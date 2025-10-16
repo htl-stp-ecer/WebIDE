@@ -166,4 +166,8 @@ export class HttpService {
   stopMission(projectUUID: string): Observable<any> {
     return this.http.post(`${this.ip}/api/v1/missions/${projectUUID}/stop`, {});
   }
+
+  saveMission(projectUUID: string, mission: Mission) {
+    return this.http.put(`${this.ip}/api/v1/missions/${projectUUID}/update`, mission);
+  }
 }

@@ -56,6 +56,7 @@ import { asStepFromPool, initialArgsFromPool, missionStepFromAdHoc } from './ste
 import {HttpService} from '../../services/http-service';
 import {ActivatedRoute} from '@angular/router';
 import {FlowHistory} from '../../entities/flow-history';
+import {NotificationService} from '../../services/NotificationService';
 
 @Component({
   selector: 'app-flowchart',
@@ -115,7 +116,26 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
   protected canUndoSignal!: Signal<boolean>;
   protected canRedoSignal!: Signal<boolean>;
 
-  protected useAutoLayout = true;
+  private _useAutoLayout = this.readStoredAutoLayout();
+
+  protected get useAutoLayout(): boolean {
+    return this._useAutoLayout;
+  }
+
+  protected set useAutoLayout(value: boolean) {
+    if (this._useAutoLayout === value) {
+      return;
+    }
+    this._useAutoLayout = value;
+    try {
+      localStorage.setItem('useAutoLayout', JSON.stringify(value));
+    } catch {}
+    if (value) {
+      this.needsAdjust = true;
+      this.pendingViewportReset = true;
+    }
+  }
+
 
   constructor(
     private missionState: MissionStateService,
@@ -260,6 +280,15 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
     }
   }
 
+  private readStoredAutoLayout(): boolean {
+    try {
+      const stored = localStorage.getItem('useAutoLayout');
+      return stored === null ? true : stored === 'true';
+    } catch {
+      return true;
+    }
+  }
+
   // ----- lifecycle -----
   ngAfterViewChecked(): void {
     if (!this.useAutoLayout) {
@@ -350,6 +379,7 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
       this.recomputeMergedView();
     }
     this.historyManager.recordHistory('move-node');
+    this.onSave()
   }
 
   // ----- layout (transparent wrappers skipped) -----
@@ -625,6 +655,19 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
   ngOnDestroy(): void {
     this.stopRun();
     this.langChangeSub?.unsubscribe();
+  }
+
+  onSave(): void {
+    const mission = this.missionState.currentMission();
+    if (mission == null || this.projectUUID == null) return
+    this.http.saveMission(this.projectUUID, mission).subscribe(
+      _ => {
+
+      },
+      error => {
+        NotificationService.showError("Could not save settings", error.toString())
+      }
+    )
   }
 
   stopRun(): void {

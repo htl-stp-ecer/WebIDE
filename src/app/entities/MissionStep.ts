@@ -6,5 +6,9 @@ export interface MissionStep {
     value: string,
     type: string,
   }[],
+  position?: {
+    x: number,
+    y: number,
+  },
   children: MissionStep[],
 }
