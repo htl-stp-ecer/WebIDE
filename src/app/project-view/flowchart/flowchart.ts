@@ -133,6 +133,8 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
     if (value) {
       this.needsAdjust = true;
       this.pendingViewportReset = true;
+    } else {
+      this.recomputeMergedView();
     }
   }
 
@@ -357,14 +359,25 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
 
   // ----- movement -----
   onNodeMoved(nodeId: string, pos: IPoint) {
+    const setStepPosition = () => {
+      if (this.useAutoLayout) {
+        return;
+      }
+      const step = this.nodeIdToStep.get(nodeId);
+      if (step) {
+        step.position = { x: pos.x, y: pos.y };
+      }
+    };
+
     const upd = (sig: typeof this.adHocNodes | typeof this.missionNodes) => {
       const arr = sig();
       const i = arr.findIndex(n => n.id === nodeId);
       if (i < 0) return false;
       const next = arr.slice();
-      if (this.useAutoLayout) {
-        next[i] = {...next[i], position: {x: pos.x, y: pos.y}};
-        sig.set(next);
+      next[i] = { ...next[i], position: { x: pos.x, y: pos.y } };
+      sig.set(next);
+      if (sig === this.missionNodes) {
+        setStepPosition();
       }
       return true;
     };
@@ -375,9 +388,7 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
     if (!changed) {
       return;
     }
-    if (this.useAutoLayout) {
-      this.recomputeMergedView();
-    }
+    this.recomputeMergedView();
     this.historyManager.recordHistory('move-node');
     this.onSave()
   }
@@ -661,9 +672,7 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
     const mission = this.missionState.currentMission();
     if (mission == null || this.projectUUID == null) return
     this.http.saveMission(this.projectUUID, mission).subscribe(
-      _ => {
-
-      },
+      _ => {},
       error => {
         NotificationService.showError("Could not save settings", error.toString())
       }

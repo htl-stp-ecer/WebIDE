@@ -64,7 +64,10 @@ export function rebuildMissionView(
       nodes.push({
         id,
         text: s.function_name,
-        position: { x: 0, y: 0 },
+        position: {
+          x: s.position?.x ?? 0,
+          y: s.position?.y ?? 0,
+        },
         step: asStep(s),
         args: initialArgs(s),
         path,

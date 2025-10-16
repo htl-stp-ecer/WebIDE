@@ -34,7 +34,10 @@ export function missionStepFromAdHoc(n: FlowNode): MissionStep {
     step_type: lc(n.step?.name) === 'parallel' ? 'parallel' : '',
     function_name: n.step?.name || n.text,
     arguments: args,
+    position: {
+      x: n.position?.x ?? 0,
+      y: n.position?.y ?? 0,
+    },
     children: []
   };
 }
-
