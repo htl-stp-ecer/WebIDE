@@ -33,6 +33,12 @@ export interface Step {
 
 export const lc = (s?: string | null) => (s ?? '').toLowerCase();
 export const isType = (s: MissionStep | null | undefined, t: 'parallel' | 'seq') => !!s && (lc(s.function_name) === t || lc(s.step_type) === t);
-export const mk = (t: 'parallel' | 'seq'): MissionStep => ({ step_type: t, function_name: t, arguments: [], children: [] });
+export const mk = (t: 'parallel' | 'seq'): MissionStep => ({
+  step_type: t,
+  function_name: t,
+  arguments: [],
+  position: { x: 0, y: 0 },
+  children: [],
+});
 export const baseId = (id: string, kind: 'input' | 'output') => kind === 'output' ? (id === 'start-node-output' ? 'start-node' : id.replace(/-output$/, '')) : id.replace(/-input$/, '');
 export const toVal = (t: string, v: string) => t === 'bool' ? v.toLowerCase() === 'true' : t === 'float' ? (parseFloat(v) || null) : v;
