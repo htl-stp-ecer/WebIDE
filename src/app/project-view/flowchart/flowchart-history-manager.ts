@@ -1,7 +1,7 @@
 import { WritableSignal } from '@angular/core';
 import { Mission } from '../../entities/Mission';
 import { MissionStateService } from '../../services/mission-sate-service';
-import { Connection, FlowNode } from './models';
+import { Connection, FlowComment, FlowNode } from './models';
 import {FlowHistory, FlowSnapshot} from '../../entities/flow-history';
 
 interface FlowchartHistoryContext {
@@ -11,6 +11,7 @@ interface FlowchartHistoryContext {
   missionConnections: WritableSignal<Connection[]>;
   adHocNodes: WritableSignal<FlowNode[]>;
   adHocConnections: WritableSignal<Connection[]>;
+  comments: WritableSignal<FlowComment[]>;
   nodes: WritableSignal<FlowNode[]>;
   connections: WritableSignal<Connection[]>;
   recomputeMergedView(): void;
@@ -19,7 +20,7 @@ interface FlowchartHistoryContext {
 }
 
 export class FlowchartHistoryManager {
-  private readonly adHocPerMission = new Map<string, { nodes: FlowNode[]; connections: Connection[] }>();
+  private readonly adHocPerMission = new Map<string, { nodes: FlowNode[]; connections: Connection[]; comments: FlowComment[] }>();
   private currentMissionKey: string | null = null;
   private historyInitialized = false;
   private isRestoringHistory = false;
@@ -52,6 +53,7 @@ export class FlowchartHistoryManager {
         this.adHocPerMission.set(this.currentMissionKey, {
           nodes: this.cloneNodes(this.ctx.adHocNodes()),
           connections: this.cloneConnections(this.ctx.adHocConnections()),
+          comments: this.cloneComments(this.ctx.comments()),
         });
       }
 
@@ -63,6 +65,7 @@ export class FlowchartHistoryManager {
       this.ctx.connections.set([]);
       this.ctx.adHocNodes.set(this.cloneNodes(saved?.nodes ?? []));
       this.ctx.adHocConnections.set(this.cloneConnections(saved?.connections ?? []));
+      this.ctx.comments.set(this.cloneComments(saved?.comments ?? []));
       this.ctx.markViewportResetPending();
       this.currentMissionKey = newKey;
       this.historyInitialized = false;
@@ -76,6 +79,7 @@ export class FlowchartHistoryManager {
     this.ctx.missionConnections.set([]);
     this.ctx.nodes.set([]);
     this.ctx.connections.set([]);
+    this.ctx.comments.set([]);
   }
 
   recordHistory(notifier: string): void {
@@ -125,16 +129,19 @@ export class FlowchartHistoryManager {
       const missionConnections = this.cloneConnections(snapshot.missionConnections);
       const adHocNodes = this.cloneNodes(snapshot.adHocNodes);
       const adHocConnections = this.cloneConnections(snapshot.adHocConnections);
+      const comments = this.cloneComments(snapshot.comments);
 
       this.ctx.missionNodes.set(missionNodes);
       this.ctx.missionConnections.set(missionConnections);
       this.ctx.adHocNodes.set(adHocNodes);
       this.ctx.adHocConnections.set(adHocConnections);
+      this.ctx.comments.set(comments);
 
       if (this.currentMissionKey) {
         this.adHocPerMission.set(this.currentMissionKey, {
           nodes: this.cloneNodes(adHocNodes),
           connections: this.cloneConnections(adHocConnections),
+          comments: this.cloneComments(comments),
         });
       }
 
@@ -153,6 +160,7 @@ export class FlowchartHistoryManager {
       missionConnections: this.cloneConnections(this.ctx.missionConnections()),
       adHocNodes: this.cloneNodes(this.ctx.adHocNodes()),
       adHocConnections: this.cloneConnections(this.ctx.adHocConnections()),
+      comments: this.cloneComments(this.ctx.comments()),
     };
   }
 
@@ -162,6 +170,10 @@ export class FlowchartHistoryManager {
 
   private cloneConnections(connections: Connection[] | undefined): Connection[] {
     return this.clonePlain(connections ?? []);
+  }
+
+  private cloneComments(comments: FlowComment[] | undefined): FlowComment[] {
+    return this.clonePlain(comments ?? []);
   }
 
   private cloneMission(mission: Mission | null): Mission | null {

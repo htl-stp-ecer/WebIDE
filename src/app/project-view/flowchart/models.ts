@@ -13,6 +13,12 @@ export interface FlowNode {
   path?: number[];
 }
 
+export interface FlowComment {
+  id: string;
+  position: { x: number; y: number };
+  text: string;
+}
+
 export type FlowOrientation = 'vertical' | 'horizontal';
 
 // The `Step` interface is provided by the steps state domain at runtime.

@@ -211,6 +211,68 @@
   box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.35);
 }
 
+.comment-node {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: 14rem;
+  min-width: 10rem;
+  max-width: 22rem;
+  padding: 0.75rem;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  border-radius: 0.75rem;
+  color: #111827;
+  box-shadow: 0 8px 16px rgba(15, 23, 42, 0.18);
+  backdrop-filter: blur(6px);
+  cursor: default;
+}
+
+.comment-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  cursor: grab;
+  user-select: none;
+  color: inherit;
+}
+
+.comment-header:active {
+  cursor: grabbing;
+}
+
+.comment-header .pi {
+  font-size: 0.95rem;
+}
+
+.comment-text {
+  display: block;
+  width: 100%;
+  min-height: 6rem;
+  resize: none;
+  border: 1px solid rgba(148, 163, 184, 0.6);
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.6rem;
+  font-size: 0.875rem;
+  line-height: 1.4;
+  background: rgba(255, 255, 255, 0.9);
+  color: inherit;
+  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.06);
+  font-family: inherit;
+}
+
+.comment-text:focus {
+  outline: none;
+  border-color: #3fa652;
+  box-shadow: 0 0 0 2px rgba(63, 166, 82, 0.2);
+}
+
+.comment-text::placeholder {
+  color: rgba(100, 116, 139, 0.8);
+}
+
 :host-context(.dark) .node.node-completed,
 :host-context(.p-dark) .node.node-completed {
   border-color: #4ade80;
@@ -223,6 +285,14 @@
   background: #131217;
   border-color: #383838;
   color: #EEE5E9;
+}
+
+:host-context(.dark) .comment-node,
+:host-context(.p-dark) .comment-node {
+  background: rgba(17, 24, 39, 0.9);
+  border-color: rgba(148, 163, 184, 0.35);
+  color: #e2e8f0;
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.55);
 }
 
 .node-title {
@@ -338,6 +408,19 @@
   border-color: #4b5563;
   background: #1f2937;
   color: #eee;
+}
+
+:host-context(.dark) .comment-text,
+:host-context(.p-dark) .comment-text {
+  background: rgba(15, 23, 42, 0.65);
+  border-color: rgba(100, 116, 139, 0.7);
+  color: #e2e8f0;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+:host-context(.dark) .comment-text::placeholder,
+:host-context(.p-dark) .comment-text::placeholder {
+  color: rgba(148, 163, 184, 0.75);
 }
 
 /* Ensure PrimeNG context menu never steals layout height */

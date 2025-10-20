@@ -40,7 +40,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { Subscription } from 'rxjs';
 
 // Shared models and helpers
-import { Connection, FlowNode, FlowOrientation, Step, baseId, toVal } from './models';
+import { Connection, FlowComment, FlowNode, FlowOrientation, Step, baseId, toVal } from './models';
 import {
   attachToStartWithParallel,
   detachEverywhere,
@@ -74,6 +74,7 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
   // Rendered state for <f-flow>
   readonly nodes = signal<FlowNode[]>([]);
   readonly connections = signal<Connection[]>([]);
+  readonly comments = signal<FlowComment[]>([]);
   readonly isRunActive = signal(false);
   protected readonly orientation = signal<FlowOrientation>('vertical');
   protected orientationOptions: { label: string; value: FlowOrientation }[] = [];
@@ -106,17 +107,25 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
   private stepPaths = new Map<MissionStep, number[]>();
   private needsAdjust = false;
   private selectedNodeId = '';
+  private selectedCommentId = '';
   private pendingViewportReset = false;
   private projectUUID: string | null = '';
   private lastNodeHeights = new Map<string, number>();
 
-  readonly items: MenuItem[] = [];
+  items: MenuItem[] = [];
+  private nodeContextMenuItems: MenuItem[] = [];
+  private commentContextMenuItems: MenuItem[] = [];
+  private canvasContextMenuItems: MenuItem[] = [];
+  private contextMenuEventPosition: { clientX: number; clientY: number } | null = null;
+  private commentDraftTexts = new Map<string, string>();
   private langChangeSub?: Subscription;
 
   protected canUndoSignal!: Signal<boolean>;
   protected canRedoSignal!: Signal<boolean>;
 
   private _useAutoLayout = this.readStoredAutoLayout();
+  protected commentHeaderLabel = 'Comment';
+  protected commentPlaceholder = 'Write a comment...';
 
   protected get useAutoLayout(): boolean {
     return this._useAutoLayout;
@@ -149,10 +158,10 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
   ) {
     this.projectUUID = route.snapshot.paramMap.get('uuid');
 
-    this.updateNodeContextMenuItems();
+    this.refreshContextMenuTemplates();
     this.updateOrientationOptions();
     this.langChangeSub = this.translate.onLangChange.subscribe(() => {
-      this.updateNodeContextMenuItems();
+      this.refreshContextMenuTemplates();
       this.updateOrientationOptions();
     });
 
@@ -163,6 +172,7 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
       missionConnections: this.missionConnections,
       adHocNodes: this.adHocNodes,
       adHocConnections: this.adHocConnections,
+      comments: this.comments,
       nodes: this.nodes,
       connections: this.connections,
       recomputeMergedView: () => this.recomputeMergedView(),
@@ -195,6 +205,9 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
       }
 
       const missionChanged = this.historyManager.prepareForMission(mission);
+      if (missionChanged) {
+        this.commentDraftTexts.clear();
+      }
 
       if (mission) {
         this.rebuildFromMission(mission);
@@ -220,12 +233,39 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
     });
   }
 
-  private updateNodeContextMenuItems(): void {
-    this.items.splice(0, this.items.length, {
-      label: this.translate.instant('COMMON.DELETE'),
+  private refreshContextMenuTemplates(): void {
+    const deleteLabel = this.translate.instant('COMMON.DELETE');
+    const commentLabelRaw = this.translate.instant('FLOWCHART.COMMENT');
+    const addCommentLabelRaw = this.translate.instant('FLOWCHART.ADD_COMMENT');
+    const addCommentLabel = addCommentLabelRaw === 'FLOWCHART.ADD_COMMENT' ? 'Add Comment' : addCommentLabelRaw;
+    const placeholderRaw = this.translate.instant('FLOWCHART.COMMENT_PLACEHOLDER');
+
+    this.commentHeaderLabel = commentLabelRaw === 'FLOWCHART.COMMENT' ? 'Comment' : commentLabelRaw;
+    this.commentPlaceholder = placeholderRaw === 'FLOWCHART.COMMENT_PLACEHOLDER' ? 'Write a comment...' : placeholderRaw;
+
+    this.nodeContextMenuItems = [{
+      label: deleteLabel,
       icon: 'pi pi-trash',
-      command: () => this.deleteNode()
-    });
+      command: () => this.deleteNode(),
+    }];
+
+    this.commentContextMenuItems = [{
+      label: deleteLabel,
+      icon: 'pi pi-trash',
+      command: () => this.deleteComment(),
+    }];
+
+    this.canvasContextMenuItems = [{
+      label: addCommentLabel,
+      icon: 'pi pi-comment',
+      command: () => this.createCommentFromContextMenu(),
+    }];
+
+    this.setContextMenuItems(this.nodeContextMenuItems);
+  }
+
+  private setContextMenuItems(items: MenuItem[]): void {
+    this.items = [...items];
   }
 
   private updateOrientationOptions(): void {
@@ -563,10 +603,130 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
   }
 
 
+  // ----- comments -----
+  onCanvasContextMenu(ev: MouseEvent): void {
+    if ((ev.target as HTMLElement | null)?.closest('.node, .comment-node')) {
+      return;
+    }
+    ev.preventDefault();
+    ev.stopPropagation();
+    this.selectedNodeId = '';
+    this.selectedCommentId = '';
+    this.contextMenuEventPosition = { clientX: ev.clientX, clientY: ev.clientY };
+    this.setContextMenuItems(this.canvasContextMenuItems);
+    this.cm.show(ev);
+  }
+
+  onCommentRightClick(ev: MouseEvent, commentId: string): void {
+    const target = ev.target as HTMLElement | null;
+    if (target?.closest('.comment-text')) {
+      ev.stopPropagation();
+      return;
+    }
+    ev.preventDefault();
+    ev.stopPropagation();
+    this.selectedNodeId = '';
+    this.selectedCommentId = commentId;
+    this.contextMenuEventPosition = { clientX: ev.clientX, clientY: ev.clientY };
+    this.setContextMenuItems(this.commentContextMenuItems);
+    this.cm.show(ev);
+  }
+
+  protected onCommentMoved(commentId: string, pos: IPoint): void {
+    const comments = this.comments();
+    const idx = comments.findIndex(c => c.id === commentId);
+    if (idx === -1) {
+      return;
+    }
+    const updated = comments.slice();
+    updated[idx] = { ...updated[idx], position: { x: pos.x, y: pos.y } };
+    this.comments.set(updated);
+    this.historyManager.recordHistory('move-comment');
+  }
+
+  protected onCommentTextChange(commentId: string, text: string): void {
+    const comments = this.comments();
+    const idx = comments.findIndex(c => c.id === commentId);
+    if (idx === -1) {
+      return;
+    }
+    const updated = comments.slice();
+    updated[idx] = { ...updated[idx], text };
+    this.comments.set(updated);
+  }
+
+  protected onCommentFocus(commentId: string): void {
+    const comment = this.comments().find(c => c.id === commentId);
+    if (!comment) {
+      return;
+    }
+    this.commentDraftTexts.set(commentId, comment.text);
+  }
+
+  protected onCommentBlur(commentId: string): void {
+    const initial = this.commentDraftTexts.get(commentId);
+    const comment = this.comments().find(c => c.id === commentId);
+    if (comment && initial !== undefined && initial !== comment.text) {
+      this.historyManager.recordHistory('edit-comment');
+    }
+    this.commentDraftTexts.delete(commentId);
+  }
+
+  private createCommentFromContextMenu(): void {
+    if (!this.contextMenuEventPosition) {
+      return;
+    }
+    const position = this.toCanvasPoint(this.contextMenuEventPosition);
+    this.addComment(position);
+    this.contextMenuEventPosition = null;
+  }
+
+  private addComment(position: IPoint): void {
+    const id = `comment-${generateGuid()}`;
+    const newComment: FlowComment = { id, position: { x: position.x, y: position.y }, text: '' };
+    this.comments.set([...this.comments(), newComment]);
+    this.selectedCommentId = id;
+    this.historyManager.recordHistory('create-comment');
+  }
+
+  private deleteComment(): void {
+    const id = this.selectedCommentId;
+    if (!id) {
+      return;
+    }
+    const before = this.comments().length;
+    this.comments.set(this.comments().filter(c => c.id !== id));
+    this.commentDraftTexts.delete(id);
+    this.selectedCommentId = '';
+    if (this.comments().length !== before) {
+      this.historyManager.recordHistory('delete-comment');
+    }
+  }
+
+  private toCanvasPoint(point: { clientX: number; clientY: number }): IPoint {
+    const canvas = this.fCanvas();
+    if (!canvas) {
+      return { x: point.clientX, y: point.clientY };
+    }
+    const rect = canvas.hostElement.getBoundingClientRect();
+    const transform = canvas.transform;
+    const scale = transform?.scale ?? 1;
+    const offsetX = (transform?.position?.x ?? 0) + (transform?.scaledPosition?.x ?? 0);
+    const offsetY = (transform?.position?.y ?? 0) + (transform?.scaledPosition?.y ?? 0);
+    return {
+      x: (point.clientX - rect.left - offsetX) / scale,
+      y: (point.clientY - rect.top - offsetY) / scale,
+    };
+  }
+
   // ----- context menu -----
   onRightClick(ev: MouseEvent, nodeId: string) {
     ev.preventDefault();
+    ev.stopPropagation();
     this.selectedNodeId = nodeId;
+    this.selectedCommentId = '';
+    this.contextMenuEventPosition = { clientX: ev.clientX, clientY: ev.clientY };
+    this.setContextMenuItems(this.nodeContextMenuItems);
     this.cm.show(ev);
   }
 
@@ -612,6 +772,7 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
       return;
     }
 
+    this.selectedNodeId = '';
     this.needsAdjust = true;
     this.historyManager.recordHistory('delete-node');
   }
