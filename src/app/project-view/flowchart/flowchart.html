@@ -100,7 +100,7 @@
         <f-circle-pattern color="#4a5565"></f-circle-pattern>
       </f-background>
 
-      <f-canvas fZoom class="flow-canvas">
+      <f-canvas fZoom class="flow-canvas" (fCanvasChange)="onCanvasTransformChange($event)">
         <f-connection-for-create
           fType="segment"
           [fStartColor]="isDarkMode() ? '#EEE5E9' : '#131217'"
@@ -238,34 +238,35 @@
           </div>
         }
 
-        @for (comment of comments(); track comment.id) {
-          <div
-            fNode
-            [fNodeId]="comment.id"
-            [fNodePosition]="comment.position"
-            class="comment-node"
-            [attr.data-comment-id]="comment.id"
-            (contextmenu)="onCommentRightClick($event, comment.id)"
-            (fNodePositionChange)="onCommentMoved(comment.id, $event)"
-          >
-            <div class="comment-header" fDragHandle>
-              <i class="pi pi-comment"></i>
-              <span>{{ commentHeaderLabel }}</span>
-            </div>
-
-            <textarea
-              class="comment-text"
-              [ngModel]="comment.text"
-              (ngModelChange)="onCommentTextChange(comment.id, $event)"
-              (focus)="onCommentFocus(comment.id)"
-              (blur)="onCommentBlur(comment.id)"
-              [placeholder]="commentPlaceholder"
-              rows="4"
-            ></textarea>
-          </div>
-        }
       </f-canvas>
     </f-flow>
+    <div class="comment-layer">
+      @for (comment of comments(); track comment.id) {
+        <div
+          class="comment-node"
+          [style.transform]="commentTransform(comment)"
+          [attr.data-comment-id]="comment.id"
+          (contextmenu)="onCommentRightClick($event, comment.id)"
+        >
+          <div class="comment-header" (pointerdown)="onCommentPointerDown($event, comment.id)">
+            <i class="pi pi-comment"></i>
+            <span>{{ commentHeaderLabel }}</span>
+          </div>
+
+          <textarea
+            class="comment-text"
+            #commentTextarea
+            [ngModel]="comment.text"
+            (ngModelChange)="onCommentTextChange(comment.id, $event)"
+            (focus)="onCommentFocus(comment.id)"
+            (blur)="onCommentBlur(comment.id)"
+            [placeholder]="commentPlaceholder"
+            rows="4"
+            [attr.data-comment-id]="comment.id"
+          ></textarea>
+        </div>
+      }
+    </div>
   </div>
 
   <!-- Append to body so it never shifts layout -->
