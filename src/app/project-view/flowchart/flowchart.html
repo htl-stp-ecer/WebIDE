@@ -100,7 +100,7 @@
         <f-circle-pattern color="#4a5565"></f-circle-pattern>
       </f-background>
 
-      <f-canvas fZoom class="flow-canvas" (fCanvasChange)="onCanvasTransformChange($event)">
+      <f-canvas fZoom class="flow-canvas">
         <f-connection-for-create
           fType="segment"
           [fStartColor]="isDarkMode() ? '#EEE5E9' : '#131217'"

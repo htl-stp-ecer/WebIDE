@@ -13,7 +13,6 @@ import {
 } from '@angular/core';
 import {
   EFMarkerType,
-  FCanvasChangeEvent,
   FCanvasComponent,
   FCreateConnectionEvent,
   FCreateNodeEvent,
@@ -120,7 +119,6 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
   private canvasContextMenuItems: MenuItem[] = [];
   private contextMenuEventPosition: { clientX: number; clientY: number } | null = null;
   private commentDraftTexts = new Map<string, string>();
-  private readonly canvasTransform = signal<{ position: IPoint; scale: number }>({ position: { x: 0, y: 0 }, scale: 1 });
   private langChangeSub?: Subscription;
 
   protected canUndoSignal!: Signal<boolean>;
@@ -353,13 +351,11 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
   onLoaded() {
     if (!this.useAutoLayout) {
       this.fCanvas()?.emitCanvasChangeEvent();
-      this.syncCanvasTransform();
       return;
     }
 
     this.fCanvas()?.resetScaleAndCenter(false);
     this.fCanvas()?.emitCanvasChangeEvent();
-    this.syncCanvasTransform();
   }
 
   // ----- dom helpers -----
@@ -617,7 +613,6 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
     }
     ev.preventDefault();
     ev.stopPropagation();
-    this.syncCanvasTransform();
     this.selectedNodeId = '';
     this.selectedCommentId = '';
     this.contextMenuEventPosition = { clientX: ev.clientX, clientY: ev.clientY };
@@ -633,7 +628,6 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
     }
     ev.preventDefault();
     ev.stopPropagation();
-    this.syncCanvasTransform();
     this.selectedNodeId = '';
     this.selectedCommentId = commentId;
     this.contextMenuEventPosition = { clientX: ev.clientX, clientY: ev.clientY };
@@ -673,7 +667,6 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
     if (!this.contextMenuEventPosition) {
       return;
     }
-    this.syncCanvasTransform();
     const position = this.toCanvasPoint(this.contextMenuEventPosition);
     this.addComment(position);
     this.cm.hide();
@@ -721,21 +714,45 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
       return { x: point.clientX, y: point.clientY };
     }
     const rect = canvas.hostElement.getBoundingClientRect();
-    const transform = this.canvasTransform();
-    const scale = transform.scale || 1;
-    const offsetX = transform.position.x;
-    const offsetY = transform.position.y;
-    return {
-      x: (point.clientX - rect.left - offsetX) / scale,
-      y: (point.clientY - rect.top - offsetY) / scale,
-    };
-  }
+    const localX = point.clientX - rect.left;
+    const localY = point.clientY - rect.top;
 
-  protected onCanvasTransformChange(event: FCanvasChangeEvent): void {
-    this.canvasTransform.set({
-      position: { x: event.position.x, y: event.position.y },
-      scale: event.scale || 1,
-    });
+    let transformValue = 'none';
+    try {
+      transformValue = getComputedStyle(canvas.hostElement).transform;
+    } catch {}
+
+    if (!transformValue || transformValue === 'none') {
+      const scale = this.fCanvas()?.transform?.scale ?? 1;
+      return { x: localX / scale, y: localY / scale };
+    }
+
+    const match = transformValue.match(/matrix\(([^)]+)\)/);
+    if (match) {
+      const parts = match[1].split(',').map(v => Number.parseFloat(v.trim()));
+      if (parts.length >= 6 && !parts.some(Number.isNaN)) {
+        const [a, b, c, d] = parts;
+        const scaleX = Math.sqrt(a * a + b * b) || 1;
+        const scaleY = Math.sqrt(c * c + d * d) || 1;
+        return { x: localX / scaleX, y: localY / scaleY };
+      }
+    }
+
+    if (transformValue.startsWith('matrix3d')) {
+      const win = typeof window !== 'undefined' ? window : undefined;
+      const MatrixCtor: any = win?.DOMMatrix || (win as any)?.WebKitCSSMatrix || (win as any)?.MSCSSMatrix;
+      if (MatrixCtor) {
+        try {
+          const matrix = new MatrixCtor(transformValue);
+          const scaleX = Math.sqrt(matrix.m11 * matrix.m11 + matrix.m12 * matrix.m12) || 1;
+          const scaleY = Math.sqrt(matrix.m21 * matrix.m21 + matrix.m22 * matrix.m22) || 1;
+          return { x: localX / scaleX, y: localY / scaleY };
+        } catch {}
+      }
+    }
+
+    const scale = this.fCanvas()?.transform?.scale ?? 1;
+    return { x: localX / scale, y: localY / scale };
   }
 
   private focusCommentTextarea(id: string): void {
@@ -743,23 +760,6 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
       const ref = this.commentTextareas?.toArray().find(t => t.nativeElement.dataset['commentId'] === id);
       ref?.nativeElement.focus();
     }, 0);
-  }
-
-  private syncCanvasTransform(): void {
-    const canvas = this.fCanvas();
-    if (!canvas) {
-      return;
-    }
-    const transform = canvas.transform;
-    const pos = transform?.position ?? { x: 0, y: 0 };
-    const scaled = transform?.scaledPosition ?? { x: 0, y: 0 };
-    this.canvasTransform.set({
-      position: {
-        x: (pos.x ?? 0) + (scaled.x ?? 0),
-        y: (pos.y ?? 0) + (scaled.y ?? 0),
-      },
-      scale: transform?.scale ?? 1,
-    });
   }
 
   // ----- context menu -----
