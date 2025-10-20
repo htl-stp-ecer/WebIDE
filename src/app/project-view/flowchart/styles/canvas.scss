@@ -1,0 +1,19 @@
+:host ::ng-deep f-flow.flow-root,
+:host ::ng-deep f-canvas.flow-canvas,
+:host ::ng-deep f-background.flow-bg {
+  display: block;
+  height: 100%;
+  width: 100%;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+:host ::ng-deep f-flow.flow-root > * {
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+:host-context(.dark) ::ng-deep f-connection.connection-completed path,
+:host-context(.p-dark) ::ng-deep f-connection.connection-completed path {
+  stroke: #4ade80;
+}

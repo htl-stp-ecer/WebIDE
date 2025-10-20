@@ -1,72 +1,31 @@
 <div class="flow-wrapper">
-
-  <!-- Flow toolbar -->
   <div class="run-toolbar">
     <div class="toolbar-left">
-      <button
-        class="ide-btn undo mr-1"
-        (click)="undo()"
-        [attr.aria-label]="'FLOWCHART.UNDO' | translate"
-        [pTooltip]="'FLOWCHART.UNDO' | translate"
-        tooltipPosition="bottom"
-        [disabled]="!canUndoSignal()">
+      <button class="ide-btn undo mr-1" (click)="actions.undo()" [attr.aria-label]="'FLOWCHART.UNDO'|translate" [pTooltip]="'FLOWCHART.UNDO'|translate" tooltipPosition="bottom" [disabled]="!canUndoSignal?.()">
         <i class="pi pi-undo"></i>
       </button>
-      <button
-        class="ide-btn redo"
-        (click)="redo()"
-        [attr.aria-label]="'FLOWCHART.REDO' | translate"
-        [pTooltip]="'FLOWCHART.REDO' | translate"
-        tooltipPosition="bottom"
-        [disabled]="!canRedoSignal()">
-        <i class="pi pi-undo inline-block" style="transform: scaleX(-1)"></i>
+      <button class="ide-btn redo" (click)="actions.redo()" [attr.aria-label]="'FLOWCHART.REDO'|translate" [pTooltip]="'FLOWCHART.REDO'|translate" tooltipPosition="bottom" [disabled]="!canRedoSignal?.()">
+        <i class="pi pi-undo inline-block" style="transform:scaleX(-1)"></i>
       </button>
     </div>
     <div class="toolbar-middle">
-      <p-selectButton
-        [options]="orientationOptions"
-        [ngModel]="orientation()"
-        optionLabel="label"
-        optionValue="value"
-        (ngModelChange)="onOrientationChange($event)"
-        [attr.aria-label]="'FLOWCHART.ORIENTATION' | translate"
-        styleClass="orientation-select"
-      ></p-selectButton>
+      <p-selectButton [options]="orientationOptions" [ngModel]="orientation()" optionLabel="label" optionValue="value" (ngModelChange)="actions.onOrientationChange($event)" [attr.aria-label]="'FLOWCHART.ORIENTATION'|translate" styleClass="orientation-select"></p-selectButton>
       <div class="ml-2">
         <p-check-box inputId="autoLayout" [binary]="true" [(ngModel)]="useAutoLayout"></p-check-box>
-        <label for="autoLayout" class="ml-2">{{'FLOWCHART.AUTO_LAYOUT' | translate}}</label>
+        <label for="autoLayout" class="ml-2">{{'FLOWCHART.AUTO_LAYOUT'|translate}}</label>
       </div>
     </div>
     <div class="toolbar-right">
       @if (!isRunActive()) {
-        <button
-          class="ide-btn run text-end"
-          (click)="onRun('normal')"
-          [attr.aria-label]="'FLOWCHART.RUN' | translate"
-          [pTooltip]="'FLOWCHART.RUN' | translate"
-          tooltipPosition="left">
-          <svg viewBox="0 0 32 32" aria-hidden="true" focusable="false" class="icon-run">
-            <polygon points="10,6 10,26 24,16" />
-          </svg>
+        <button class="ide-btn run text-end" (click)="actions.onRun('normal')" [attr.aria-label]="'FLOWCHART.RUN'|translate" [pTooltip]="'FLOWCHART.RUN'|translate" tooltipPosition="left">
+          <svg viewBox="0 0 32 32" aria-hidden="true" focusable="false" class="icon-run"><polygon points="10,6 10,26 24,16" /></svg>
         </button>
       } @else {
-        <button
-          class="ide-btn stop"
-          (click)="stopRun()"
-          [attr.aria-label]="'FLOWCHART.STOP' | translate"
-          [pTooltip]="'FLOWCHART.STOP' | translate"
-          tooltipPosition="left">
+        <button class="ide-btn stop" (click)="actions.stopRun()" [attr.aria-label]="'FLOWCHART.STOP'|translate" [pTooltip]="'FLOWCHART.STOP'|translate" tooltipPosition="left">
           <i class="pi pi-stop"></i>
         </button>
       }
-      <button
-        class="ide-btn debug"
-        (click)="onRun('debug')"
-        [attr.aria-label]="'FLOWCHART.DEBUG' | translate"
-        [pTooltip]="'FLOWCHART.DEBUG' | translate"
-        tooltipPosition="left"
-        [disabled]="isRunActive()">
-        <!-- Debug bug icon -->
+      <button class="ide-btn debug" (click)="actions.onRun('debug')" [attr.aria-label]="'FLOWCHART.DEBUG'|translate" [pTooltip]="'FLOWCHART.DEBUG'|translate" tooltipPosition="left" [disabled]="isRunActive()">
         <svg viewBox="0 0 32 32" aria-hidden="true" focusable="false" class="icon-debug" xmlns="http://www.w3.org/2000/svg">
           <g class="group-fill" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="16" cy="18" r="7" />
@@ -81,197 +40,64 @@
           </g>
         </svg>
       </button>
-
     </div>
   </div>
 
-  <div class="flow-surface" (contextmenu)="onCanvasContextMenu($event)">
-    <f-flow
-      class="flow-root"
-      fDraggable
-      fEmitOnNodeIntersect
-      (fNodeIntersectedWithConnections)="onNodeIntersectedWithConnection($event)"
-      (fLoaded)="onLoaded()"
-      (fCreateNode)="onCreateNode($event)"
-      (fCreateConnection)="addConnection($event)"
-      (fDragEnded)="onSave()"
-    >
-      <f-background class="flow-bg">
-        <f-circle-pattern color="#4a5565"></f-circle-pattern>
-      </f-background>
-
+  <div class="flow-surface" (contextmenu)="actions.onCanvasContextMenu($event)">
+    <f-flow class="flow-root" fDraggable fEmitOnNodeIntersect (fNodeIntersectedWithConnections)="actions.onNodeIntersected($event)" (fLoaded)="actions.onLoaded()" (fCreateNode)="actions.onCreateNode($event)" (fCreateConnection)="actions.addConnection($event)" (fDragEnded)="actions.onSave()">
+      <f-background class="flow-bg"><f-circle-pattern color="#4a5565"></f-circle-pattern></f-background>
       <f-canvas fZoom class="flow-canvas">
-        <f-connection-for-create
-          fType="segment"
-          [fStartColor]="isDarkMode() ? '#EEE5E9' : '#131217'"
-          [fEndColor]="isDarkMode() ? '#EEE5E9' : '#131217'"
-        ></f-connection-for-create>
+        <f-connection-for-create fType="segment" [fStartColor]="isDarkMode() ? '#EEE5E9' : '#131217'" [fEndColor]="isDarkMode() ? '#EEE5E9' : '#131217'"></f-connection-for-create>
+        <f-snap-connection [fSnapThreshold]="50" fType="segment" [fStartColor]="isDarkMode() ? '#EEE5E9' : '#131217'" [fEndColor]="isDarkMode() ? '#EEE5E9' : '#131217'"></f-snap-connection>
 
-        <f-snap-connection
-          [fSnapThreshold]="50"
-          fType="segment"
-          [fStartColor]="isDarkMode() ? '#EEE5E9' : '#131217'"
-          [fEndColor]="isDarkMode() ? '#EEE5E9' : '#131217'"
-        ></f-snap-connection>
-
-        <!-- Start Node -->
-        <div
-          fNode
-          [fNodeId]="'start-node'"
-          [fNodePosition]="startNodePosition()"
-          class="node"
-          [attr.data-node-id]="'start-node'"
-          #nodeElement
-        >
-          <div class="node-title">{{ 'FLOWCHART.START_NODE' | translate }}</div>
-          <div
-            fNodeOutput
-            [fOutputConnectableSide]="isVerticalOrientation() ? 'bottom' : 'right'"
-            [fOutputId]="'start-node-output'"
-            [fOutputMultiple]="true"
-            class="port"
-            [class.port-bottom]="isVerticalOrientation()"
-            [class.port-right]="!isVerticalOrientation()"
-          ></div>
+        <div fNode [fNodeId]="'start-node'" [fNodePosition]="actions.startNodePosition()" class="node" [attr.data-node-id]="'start-node'" #nodeElement>
+          <div class="node-title">{{'FLOWCHART.START_NODE'|translate}}</div>
+          <div fNodeOutput [fOutputConnectableSide]="actions.isVertical() ? 'bottom' : 'right'" [fOutputId]="'start-node-output'" [fOutputMultiple]="true" class="port" [class.port-bottom]="actions.isVertical()" [class.port-right]="!actions.isVertical()"></div>
         </div>
 
-        <!-- Connections (mission + ad-hoc merged in TS) -->
         @for (connection of connections(); track connection.outputId + '-' + connection.inputId) {
-          <f-connection
-            [fConnectionId]="connection.id"
-            [fReassignDisabled]="true"
-            fType="segment"
-            [fOutputId]="connection.outputId"
-            [fInputId]="connection.inputId"
-            [fStartColor]="isDarkMode() ? '#EEE5E9' : '#131217'"
-            [fEndColor]="isDarkMode() ? '#EEE5E9' : '#131217'"
-            [class.connection-completed]="isConnectionCompleted(connection.id)"
-          >
-            <svg viewBox="0 0 6 7" fMarker [type]="eMarkerType.END" [class]="isConnectionCompleted(connection.id) ? 'fill-[#4ade80]' : 'dark:fill-white'"
-                 markerUnits="userSpaceOnUse"
-                 [height]="14" [width]="12"
-                 [refX]="11" [refY]="7" orient="auto">
-              <path d="M0.000391006 0L6 3.5L0.000391006 7L0.000391006 0Z"/>
+          <f-connection [fConnectionId]="connection.id" [fReassignDisabled]="true" fType="segment" [fOutputId]="connection.outputId" [fInputId]="connection.inputId" [fStartColor]="isDarkMode() ? '#EEE5E9' : '#131217'" [fEndColor]="isDarkMode() ? '#EEE5E9' : '#131217'" [class.connection-completed]="actions.isConnectionCompleted(connection.id)">
+            <svg viewBox="0 0 6 7" fMarker [type]="eMarkerType.END" [class]="actions.isConnectionCompleted(connection.id) ? 'fill-[#4ade80]' : 'dark:fill-white'" markerUnits="userSpaceOnUse" [height]="14" [width]="12" [refX]="11" [refY]="7" orient="auto">
+              <path d="M0.000391006 0L6 3.5L0.000391006 7L0.000391006 0Z" />
             </svg>
           </f-connection>
         }
 
-        <!-- Nodes (mission + ad-hoc merged in TS) -->
         @for (node of nodes(); track node.id) {
-          <div
-            fNode
-            fDragHandle
-            [fNodeId]="node.id"
-            [fNodePosition]="node.position"
-            class="node"
-            [class.node-completed]="isNodeCompleted(node.id)"
-            [attr.data-node-id]="node.id"
-            (contextmenu)="onRightClick($event, node.id)"
-            (fNodePositionChange)="onNodeMoved(node.id, $event)"
-            #nodeElement
-          >
-            <div
-              fNodeInput
-              [fInputConnectableSide]="isVerticalOrientation() ? 'top' : 'left'"
-              [fInputId]="node.id + '-input'"
-              class="port"
-              [class.port-top]="isVerticalOrientation()"
-              [class.port-left]="!isVerticalOrientation()"
-            ></div>
-
+          <div fNode fDragHandle [fNodeId]="node.id" [fNodePosition]="node.position" class="node" [class.node-completed]="actions.isNodeCompleted(node.id)" [attr.data-node-id]="node.id" (contextmenu)="actions.onRightClick($event, node.id)" (fNodePositionChange)="actions.onNodeMoved(node.id, $event)" #nodeElement>
+            <div fNodeInput [fInputConnectableSide]="actions.isVertical() ? 'top' : 'left'" [fInputId]="node.id + '-input'" class="port" [class.port-top]="actions.isVertical()" [class.port-left]="!actions.isVertical()"></div>
             <div class="node-title">{{ node.text }}</div>
-
-            @if (node.step.arguments && node.step.arguments.length > 0) {
+            @if (node.step.arguments.length) {
               <div class="node-args">
                 @for (arg of node.step.arguments; track arg.name) {
                   <div class="arg">
-                    <label
-                      class="arg-label"
-                      pTooltip="{{ arg.name }} ({{ arg.type }})"
-                      tooltipPosition="top"
-                      [showDelay]="150"
-                      [hideDelay]="50"
-                      tooltipStyleClass="!max-w-[24rem] !break-words"
-                    >
-                      {{ arg.name }}
-                    </label>
-
+                    <label class="arg-label" pTooltip="{{arg.name}} ({{arg.type}})" tooltipPosition="top" [showDelay]="150" [hideDelay]="50" tooltipStyleClass="!max-w-[24rem] !break-words">{{ arg.name }}</label>
                     <div class="arg-control">
                       @if (arg.type === 'bool') {
-                        <p-checkbox
-                          [(ngModel)]="node.args[arg.name]"
-                          [binary]="true"
-                        ></p-checkbox>
+                        <p-checkbox [(ngModel)]="node.args[arg.name]" [binary]="true"></p-checkbox>
                       } @else if (arg.type === 'str') {
-                        <input
-                          pInputText
-                          [(ngModel)]="node.args[arg.name]"
-                          class="arg-input"
-                          [placeholder]="arg.default || ('FLOWCHART.ENTER_VALUE' | translate:{ value: arg.name })"
-                        />
+                        <input pInputText [(ngModel)]="node.args[arg.name]" class="arg-input" [placeholder]="arg.default || ('FLOWCHART.ENTER_VALUE'|translate:{value:arg.name})" />
                       } @else if (arg.type === 'float') {
-                        <p-inputNumber
-                          [(ngModel)]="node.args[arg.name]"
-                          mode="decimal"
-                          [minFractionDigits]="1"
-                          [maxFractionDigits]="2"
-                          styleClass="arg-number"
-                          inputStyleClass="arg-input"
-                          [placeholder]="'FLOWCHART.ENTER_VALUE' | translate:{ value: arg.name }"
-                        ></p-inputNumber>
+                        <p-inputNumber [(ngModel)]="node.args[arg.name]" mode="decimal" [minFractionDigits]="1" [maxFractionDigits]="2" styleClass="arg-number" inputStyleClass="arg-input" [placeholder]="'FLOWCHART.ENTER_VALUE'|translate:{value:arg.name}"></p-inputNumber>
                       }
                     </div>
                   </div>
                 }
               </div>
             }
-
-            <div
-              fNodeOutput
-              [fOutputConnectableSide]="isVerticalOrientation() ? 'bottom' : 'right'"
-              [fOutputId]="node.id + '-output'"
-              [fOutputMultiple]="true"
-              class="port"
-              [class.port-bottom]="isVerticalOrientation()"
-              [class.port-right]="!isVerticalOrientation()"
-            ></div>
+            <div fNodeOutput [fOutputConnectableSide]="actions.isVertical() ? 'bottom' : 'right'" [fOutputId]="node.id + '-output'" [fOutputMultiple]="true" class="port" [class.port-bottom]="actions.isVertical()" [class.port-right]="!actions.isVertical()"></div>
           </div>
         }
 
         @for (comment of comments(); track comment.id) {
-          <div
-            fNode
-            [fNodeId]="comment.id"
-            [fNodePosition]="comment.position"
-            class="comment-node"
-            [attr.data-comment-id]="comment.id"
-            (contextmenu)="onCommentRightClick($event, comment.id)"
-            (fNodePositionChange)="onCommentPositionChanged(comment.id, $event)"
-          >
-            <div class="comment-header" fDragHandle>
-              <i class="pi pi-comment"></i>
-              <span>{{ commentHeaderLabel }}</span>
-            </div>
-
-            <textarea
-              class="comment-text"
-              #commentTextarea
-              [ngModel]="comment.text"
-              (ngModelChange)="onCommentTextChange(comment.id, $event)"
-              (focus)="onCommentFocus(comment.id)"
-              (blur)="onCommentBlur(comment.id)"
-              [placeholder]="commentPlaceholder"
-              rows="4"
-              [attr.data-comment-id]="comment.id"
-            ></textarea>
+          <div fNode [fNodeId]="comment.id" [fNodePosition]="comment.position" class="comment-node" [attr.data-comment-id]="comment.id" (contextmenu)="actions.onCommentRightClick($event, comment.id)" (fNodePositionChange)="actions.onCommentPositionChanged(comment.id, $event)">
+            <div class="comment-header" fDragHandle><i class="pi pi-comment"></i><span>{{ commentHeaderLabel }}</span></div>
+            <textarea class="comment-text" #commentTextarea [ngModel]="comment.text" (ngModelChange)="actions.onCommentTextChange(comment.id, $event)" (focus)="actions.onCommentFocus(comment.id)" (blur)="actions.onCommentBlur(comment.id)" [placeholder]="commentPlaceholder" rows="4" [attr.data-comment-id]="comment.id"></textarea>
           </div>
         }
-
       </f-canvas>
     </f-flow>
   </div>
 
-  <!-- Append to body so it never shifts layout -->
-  <p-contextMenu #cm [model]="items" [appendTo]="'body'"></p-contextMenu>
-
+  <p-contextMenu #cm [model]="contextMenu.items" [appendTo]="'body'"></p-contextMenu>
 </div>

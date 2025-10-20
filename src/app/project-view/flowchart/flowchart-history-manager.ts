@@ -1,24 +1,8 @@
-import { WritableSignal } from '@angular/core';
 import { Mission } from '../../entities/Mission';
-import { MissionStateService } from '../../services/mission-sate-service';
 import { Connection, FlowComment, FlowNode } from './models';
-import {FlowHistory, FlowSnapshot} from '../../entities/flow-history';
-
-interface FlowchartHistoryContext {
-  missionState: MissionStateService;
-  history: FlowHistory;
-  missionNodes: WritableSignal<FlowNode[]>;
-  missionConnections: WritableSignal<Connection[]>;
-  adHocNodes: WritableSignal<FlowNode[]>;
-  adHocConnections: WritableSignal<Connection[]>;
-  comments: WritableSignal<FlowComment[]>;
-  nodes: WritableSignal<FlowNode[]>;
-  connections: WritableSignal<Connection[]>;
-  recomputeMergedView(): void;
-  markNeedsAdjust(): void;
-  markViewportResetPending(): void;
-}
-
+import { FlowSnapshot } from '../../entities/flow-history';
+import { cloneConnections, cloneMission, cloneNodes, cloneComments } from './history-clone';
+import type { FlowchartHistoryContext } from './flowchart-history-context';
 export class FlowchartHistoryManager {
   private readonly adHocPerMission = new Map<string, { nodes: FlowNode[]; connections: Connection[]; comments: FlowComment[] }>();
   private currentMissionKey: string | null = null;
@@ -28,11 +12,9 @@ export class FlowchartHistoryManager {
   private isHistoryTraversal = false;
 
   constructor(private readonly ctx: FlowchartHistoryContext) {}
-
   getMissionKey(): string | null {
     return this.currentMissionKey;
   }
-
   shouldProcessMissionEffect(): boolean {
     if (this.isRestoringHistory) {
       return false;
@@ -43,7 +25,6 @@ export class FlowchartHistoryManager {
     }
     return true;
   }
-
   prepareForMission(mission: Mission | null): boolean {
     const newKey = this.buildMissionKey(mission);
     const missionChanged = newKey !== this.currentMissionKey;
@@ -51,21 +32,20 @@ export class FlowchartHistoryManager {
     if (missionChanged) {
       if (this.currentMissionKey) {
         this.adHocPerMission.set(this.currentMissionKey, {
-          nodes: this.cloneNodes(this.ctx.adHocNodes()),
-          connections: this.cloneConnections(this.ctx.adHocConnections()),
-          comments: this.cloneComments(this.ctx.comments()),
+          nodes: cloneNodes(this.ctx.adHocNodes()),
+          connections: cloneConnections(this.ctx.adHocConnections()),
+          comments: cloneComments(this.ctx.comments()),
         });
       }
 
       const saved = newKey ? this.adHocPerMission.get(newKey) : null;
-
       this.ctx.missionNodes.set([]);
       this.ctx.missionConnections.set([]);
       this.ctx.nodes.set([]);
       this.ctx.connections.set([]);
-      this.ctx.adHocNodes.set(this.cloneNodes(saved?.nodes ?? []));
-      this.ctx.adHocConnections.set(this.cloneConnections(saved?.connections ?? []));
-      this.ctx.comments.set(this.cloneComments(saved?.comments ?? []));
+      this.ctx.adHocNodes.set(cloneNodes(saved?.nodes ?? []));
+      this.ctx.adHocConnections.set(cloneConnections(saved?.connections ?? []));
+      this.ctx.comments.set(cloneComments(saved?.comments ?? []));
       this.ctx.markViewportResetPending();
       this.currentMissionKey = newKey;
       this.historyInitialized = false;
@@ -73,7 +53,6 @@ export class FlowchartHistoryManager {
 
     return missionChanged;
   }
-
   clearFlowState(): void {
     this.ctx.missionNodes.set([]);
     this.ctx.missionConnections.set([]);
@@ -81,7 +60,6 @@ export class FlowchartHistoryManager {
     this.ctx.connections.set([]);
     this.ctx.comments.set([]);
   }
-
   recordHistory(notifier: string): void {
     if (this.isRestoringHistory) {
       return;
@@ -96,40 +74,35 @@ export class FlowchartHistoryManager {
 
     this.ctx.history.update(snapshot, notifier);
   }
-
   resetHistoryWithCurrentState(): void {
     const snapshot = this.buildSnapshot();
     this.ctx.history.initialize(snapshot);
     this.historyInitialized = true;
   }
-
   beginHistoryTraversal(): void {
     this.isHistoryTraversal = true;
   }
-
   isTraversingHistory(): boolean {
     return this.isHistoryTraversal;
   }
-
   applySnapshotFromHistory(): void {
     const snapshot = this.ctx.history.getSnapshot();
     this.applyHistorySnapshot(snapshot);
     this.isHistoryTraversal = false;
   }
-
   private applyHistorySnapshot(snapshot: FlowSnapshot): void {
     this.isRestoringHistory = true;
     try {
-      const missionClone = this.cloneMission(snapshot.mission);
+      const missionClone = cloneMission(snapshot.mission);
       this.ignoreMissionEffect = true;
       this.ctx.missionState.currentMission.set(missionClone);
       this.ignoreMissionEffect = false;
 
-      const missionNodes = this.cloneNodes(snapshot.missionNodes);
-      const missionConnections = this.cloneConnections(snapshot.missionConnections);
-      const adHocNodes = this.cloneNodes(snapshot.adHocNodes);
-      const adHocConnections = this.cloneConnections(snapshot.adHocConnections);
-      const comments = this.cloneComments(snapshot.comments);
+      const missionNodes = cloneNodes(snapshot.missionNodes);
+      const missionConnections = cloneConnections(snapshot.missionConnections);
+      const adHocNodes = cloneNodes(snapshot.adHocNodes);
+      const adHocConnections = cloneConnections(snapshot.adHocConnections);
+      const comments = cloneComments(snapshot.comments);
 
       this.ctx.missionNodes.set(missionNodes);
       this.ctx.missionConnections.set(missionConnections);
@@ -139,9 +112,9 @@ export class FlowchartHistoryManager {
 
       if (this.currentMissionKey) {
         this.adHocPerMission.set(this.currentMissionKey, {
-          nodes: this.cloneNodes(adHocNodes),
-          connections: this.cloneConnections(adHocConnections),
-          comments: this.cloneComments(comments),
+          nodes: cloneNodes(adHocNodes),
+          connections: cloneConnections(adHocConnections),
+          comments: cloneComments(comments),
         });
       }
 
@@ -152,44 +125,16 @@ export class FlowchartHistoryManager {
       this.isRestoringHistory = false;
     }
   }
-
   private buildSnapshot(): FlowSnapshot {
     return {
-      mission: this.cloneMission(this.ctx.missionState.currentMission()),
-      missionNodes: this.cloneNodes(this.ctx.missionNodes()),
-      missionConnections: this.cloneConnections(this.ctx.missionConnections()),
-      adHocNodes: this.cloneNodes(this.ctx.adHocNodes()),
-      adHocConnections: this.cloneConnections(this.ctx.adHocConnections()),
-      comments: this.cloneComments(this.ctx.comments()),
+      mission: cloneMission(this.ctx.missionState.currentMission()),
+      missionNodes: cloneNodes(this.ctx.missionNodes()),
+      missionConnections: cloneConnections(this.ctx.missionConnections()),
+      adHocNodes: cloneNodes(this.ctx.adHocNodes()),
+      adHocConnections: cloneConnections(this.ctx.adHocConnections()),
+      comments: cloneComments(this.ctx.comments()),
     };
   }
-
-  private cloneNodes(nodes: FlowNode[] | undefined): FlowNode[] {
-    return this.clonePlain(nodes ?? []);
-  }
-
-  private cloneConnections(connections: Connection[] | undefined): Connection[] {
-    return this.clonePlain(connections ?? []);
-  }
-
-  private cloneComments(comments: FlowComment[] | undefined): FlowComment[] {
-    return this.clonePlain(comments ?? []);
-  }
-
-  private cloneMission(mission: Mission | null): Mission | null {
-    return mission ? this.clonePlain(mission) : null;
-  }
-
-  private clonePlain<T>(value: T): T {
-    if (value === null || value === undefined) {
-      return value;
-    }
-    if (typeof structuredClone === 'function') {
-      return structuredClone(value);
-    }
-    return JSON.parse(JSON.stringify(value)) as T;
-  }
-
   private buildMissionKey(mission: Mission | null): string | null {
     if (!mission) {
       return null;
