@@ -390,7 +390,6 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
     }
     this.recomputeMergedView();
     this.historyManager.recordHistory('move-node');
-    this.onSave()
   }
 
   // ----- layout (transparent wrappers skipped) -----
