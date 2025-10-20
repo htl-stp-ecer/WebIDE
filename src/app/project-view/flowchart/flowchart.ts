@@ -121,15 +121,6 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
   private contextMenuEventPosition: { clientX: number; clientY: number } | null = null;
   private commentDraftTexts = new Map<string, string>();
   private readonly canvasTransform = signal<{ position: IPoint; scale: number }>({ position: { x: 0, y: 0 }, scale: 1 });
-  private commentDragMoveListener?: (event: PointerEvent) => void;
-  private commentDragUpListener?: (event: PointerEvent) => void;
-  private commentDragCancelListener?: () => void;
-  private activeCommentDrag: {
-    id: string;
-    start: IPoint;
-    pointerStart: { x: number; y: number };
-    hasMoved: boolean;
-  } | null = null;
   private langChangeSub?: Subscription;
 
   protected canUndoSignal!: Signal<boolean>;
@@ -219,7 +210,6 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
       const missionChanged = this.historyManager.prepareForMission(mission);
       if (missionChanged) {
         this.commentDraftTexts.clear();
-        this.stopCommentDrag(false);
       }
 
       if (mission) {
@@ -347,7 +337,7 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
   // ----- lifecycle -----
   ngAfterViewChecked(): void {
     if (!this.useAutoLayout) {
-      return
+      return;
     }
 
     if (this.needsAdjust) {
@@ -364,7 +354,7 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
     if (!this.useAutoLayout) {
       this.fCanvas()?.emitCanvasChangeEvent();
       this.syncCanvasTransform();
-      return
+      return;
     }
 
     this.fCanvas()?.resetScaleAndCenter(false);
@@ -627,7 +617,7 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
     }
     ev.preventDefault();
     ev.stopPropagation();
-    this.stopCommentDrag(false);
+    this.syncCanvasTransform();
     this.selectedNodeId = '';
     this.selectedCommentId = '';
     this.contextMenuEventPosition = { clientX: ev.clientX, clientY: ev.clientY };
@@ -643,7 +633,7 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
     }
     ev.preventDefault();
     ev.stopPropagation();
-    this.stopCommentDrag(false);
+    this.syncCanvasTransform();
     this.selectedNodeId = '';
     this.selectedCommentId = commentId;
     this.contextMenuEventPosition = { clientX: ev.clientX, clientY: ev.clientY };
@@ -683,7 +673,7 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
     if (!this.contextMenuEventPosition) {
       return;
     }
-    this.stopCommentDrag(false);
+    this.syncCanvasTransform();
     const position = this.toCanvasPoint(this.contextMenuEventPosition);
     this.addComment(position);
     this.cm.hide();
@@ -699,6 +689,18 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
     this.focusCommentTextarea(id);
   }
 
+  protected onCommentPositionChanged(commentId: string, pos: IPoint): void {
+    const comments = this.comments();
+    const idx = comments.findIndex(c => c.id === commentId);
+    if (idx === -1) {
+      return;
+    }
+    const updated = comments.slice();
+    updated[idx] = { ...updated[idx], position: { x: pos.x, y: pos.y } };
+    this.comments.set(updated);
+    this.historyManager.recordHistory('move-comment');
+  }
+
   private deleteComment(): void {
     const id = this.selectedCommentId;
     if (!id) {
@@ -708,7 +710,6 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
     this.comments.set(this.comments().filter(c => c.id !== id));
     this.commentDraftTexts.delete(id);
     this.selectedCommentId = '';
-    this.stopCommentDrag(false);
     if (this.comments().length !== before) {
       this.historyManager.recordHistory('delete-comment');
     }
@@ -720,22 +721,14 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
       return { x: point.clientX, y: point.clientY };
     }
     const rect = canvas.hostElement.getBoundingClientRect();
-    const transform = canvas.transform;
-    const scale = transform?.scale ?? 1;
-    const offsetX = (transform?.position?.x ?? 0) + (transform?.scaledPosition?.x ?? 0);
-    const offsetY = (transform?.position?.y ?? 0) + (transform?.scaledPosition?.y ?? 0);
+    const transform = this.canvasTransform();
+    const scale = transform.scale || 1;
+    const offsetX = transform.position.x;
+    const offsetY = transform.position.y;
     return {
       x: (point.clientX - rect.left - offsetX) / scale,
       y: (point.clientY - rect.top - offsetY) / scale,
     };
-  }
-
-  protected commentTransform(comment: FlowComment): string {
-    const transform = this.canvasTransform();
-    const scale = transform.scale || 1;
-    const x = transform.position.x + comment.position.x * scale;
-    const y = transform.position.y + comment.position.y * scale;
-    return `translate3d(${x}px, ${y}px, 0) scale(${scale})`;
   }
 
   protected onCanvasTransformChange(event: FCanvasChangeEvent): void {
@@ -750,92 +743,6 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
       const ref = this.commentTextareas?.toArray().find(t => t.nativeElement.dataset['commentId'] === id);
       ref?.nativeElement.focus();
     }, 0);
-  }
-
-  onCommentPointerDown(ev: PointerEvent, commentId: string): void {
-    if (ev.pointerType === 'mouse' && ev.button !== 0) {
-      return;
-    }
-    const comment = this.comments().find(c => c.id === commentId);
-    if (!comment) {
-      return;
-    }
-    const win = typeof window !== 'undefined' ? window : null;
-    if (!win) {
-      return;
-    }
-    this.selectedCommentId = commentId;
-    this.selectedNodeId = '';
-    ev.preventDefault();
-    ev.stopPropagation();
-    this.stopCommentDrag(false);
-    this.activeCommentDrag = {
-      id: commentId,
-      start: { x: comment.position.x, y: comment.position.y },
-      pointerStart: { x: ev.clientX, y: ev.clientY },
-      hasMoved: false,
-    };
-    this.commentDragMoveListener = (event: PointerEvent) => this.onCommentPointerMove(event);
-    this.commentDragUpListener = (event: PointerEvent) => this.onCommentPointerUp(event);
-    this.commentDragCancelListener = () => this.stopCommentDrag(false);
-    win.addEventListener('pointermove', this.commentDragMoveListener, { passive: false });
-    win.addEventListener('pointerup', this.commentDragUpListener, { passive: false });
-    win.addEventListener('pointercancel', this.commentDragCancelListener, { passive: false });
-  }
-
-  private onCommentPointerMove(ev: PointerEvent): void {
-    if (!this.activeCommentDrag) {
-      return;
-    }
-    ev.preventDefault();
-    const { id, start, pointerStart } = this.activeCommentDrag;
-    const scale = this.canvasTransform().scale || 1;
-    const dx = (ev.clientX - pointerStart.x) / scale;
-    const dy = (ev.clientY - pointerStart.y) / scale;
-    this.updateCommentPosition(id, { x: start.x + dx, y: start.y + dy });
-    this.activeCommentDrag.hasMoved = true;
-  }
-
-  private onCommentPointerUp(ev: PointerEvent): void {
-    if (!this.activeCommentDrag) {
-      this.stopCommentDrag(false);
-      return;
-    }
-    ev.preventDefault();
-    const moved = this.activeCommentDrag.hasMoved;
-    this.stopCommentDrag(moved);
-  }
-
-  private stopCommentDrag(commit: boolean): void {
-    const win = typeof window !== 'undefined' ? window : null;
-    if (this.commentDragMoveListener && win) {
-      win.removeEventListener('pointermove', this.commentDragMoveListener);
-      this.commentDragMoveListener = undefined;
-    }
-    if (this.commentDragUpListener && win) {
-      win.removeEventListener('pointerup', this.commentDragUpListener);
-      this.commentDragUpListener = undefined;
-    }
-    if (this.commentDragCancelListener && win) {
-      win.removeEventListener('pointercancel', this.commentDragCancelListener);
-      this.commentDragCancelListener = undefined;
-    }
-    const dragged = this.activeCommentDrag;
-    this.activeCommentDrag = null;
-    if (commit && dragged?.hasMoved) {
-      this.historyManager.recordHistory('move-comment');
-    }
-  }
-
-  private updateCommentPosition(commentId: string, position: IPoint): void {
-    const comments = this.comments();
-    const idx = comments.findIndex(c => c.id === commentId);
-    if (idx === -1) {
-      return;
-    }
-    const next = comments.slice();
-    next[idx] = { ...next[idx], position };
-    this.comments.set(next);
   }
 
   private syncCanvasTransform(): void {
@@ -961,7 +868,6 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
 
   ngOnDestroy(): void {
     this.stopRun();
-    this.stopCommentDrag(false);
     this.langChangeSub?.unsubscribe();
   }
 

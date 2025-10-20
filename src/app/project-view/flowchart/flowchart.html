@@ -238,35 +238,37 @@
           </div>
         }
 
+        @for (comment of comments(); track comment.id) {
+          <div
+            fNode
+            [fNodeId]="comment.id"
+            [fNodePosition]="comment.position"
+            class="comment-node"
+            [attr.data-comment-id]="comment.id"
+            (contextmenu)="onCommentRightClick($event, comment.id)"
+            (fNodePositionChange)="onCommentPositionChanged(comment.id, $event)"
+          >
+            <div class="comment-header" fDragHandle>
+              <i class="pi pi-comment"></i>
+              <span>{{ commentHeaderLabel }}</span>
+            </div>
+
+            <textarea
+              class="comment-text"
+              #commentTextarea
+              [ngModel]="comment.text"
+              (ngModelChange)="onCommentTextChange(comment.id, $event)"
+              (focus)="onCommentFocus(comment.id)"
+              (blur)="onCommentBlur(comment.id)"
+              [placeholder]="commentPlaceholder"
+              rows="4"
+              [attr.data-comment-id]="comment.id"
+            ></textarea>
+          </div>
+        }
+
       </f-canvas>
     </f-flow>
-    <div class="comment-layer">
-      @for (comment of comments(); track comment.id) {
-        <div
-          class="comment-node"
-          [style.transform]="commentTransform(comment)"
-          [attr.data-comment-id]="comment.id"
-          (contextmenu)="onCommentRightClick($event, comment.id)"
-        >
-          <div class="comment-header" (pointerdown)="onCommentPointerDown($event, comment.id)">
-            <i class="pi pi-comment"></i>
-            <span>{{ commentHeaderLabel }}</span>
-          </div>
-
-          <textarea
-            class="comment-text"
-            #commentTextarea
-            [ngModel]="comment.text"
-            (ngModelChange)="onCommentTextChange(comment.id, $event)"
-            (focus)="onCommentFocus(comment.id)"
-            (blur)="onCommentBlur(comment.id)"
-            [placeholder]="commentPlaceholder"
-            rows="4"
-            [attr.data-comment-id]="comment.id"
-          ></textarea>
-        </div>
-      }
-    </div>
   </div>
 
   <!-- Append to body so it never shifts layout -->
