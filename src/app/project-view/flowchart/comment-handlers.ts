@@ -77,6 +77,57 @@ export function handleCommentPositionChanged(flow: Flowchart, commentId: string,
   updated[index] = { ...updated[index], position: { x: pos.x, y: pos.y } };
   flow.comments.set(updated);
   flow.historyManager.recordHistory('move-comment');
+
+  const comment = updated[index];
+  const nodes = flow.nodes();
+  const orientation = flow.orientation();
+
+  const sortedNodes = nodes.slice().sort((a, b) => {
+    if (orientation === 'horizontal') {
+      return a.position.x - b.position.x;
+    } else {
+      return a.position.y - b.position.y;
+    }
+  });
+
+  let beforeNode: string | null = null;
+  let afterNode: string | null = null;
+
+  for (let i = 0; i < sortedNodes.length; i++) {
+    const node = sortedNodes[i];
+    const nextNode = sortedNodes[i + 1];
+
+    const position = orientation === 'horizontal' ? 'x' : 'y';
+    const commentPosition = comment.position[position];
+    const nodePosition = node.position[position];
+
+    if (commentPosition < nodePosition) {
+      afterNode = node.text;
+      if(i > 0) {
+        beforeNode = sortedNodes[i-1].text;
+      }
+      break;
+    }
+
+    if(nextNode) {
+      const nextNodePosition = nextNode.position[position];
+      if (commentPosition > nodePosition && commentPosition < nextNodePosition) {
+        beforeNode = node.text;
+        afterNode = nextNode.text;
+        break;
+      }
+    } else {
+        beforeNode = node.text;
+    }
+  }
+
+  if (beforeNode && afterNode) {
+    console.log(`Comment is between ${beforeNode} and ${afterNode}`);
+  } else if (beforeNode) {
+    console.log(`Comment is after ${beforeNode}`);
+  } else if (afterNode) {
+    console.log(`Comment is before ${afterNode}`);
+  }
 }
 export function deleteComment(flow: Flowchart): void {
   const id = flow.contextMenu.selectedCommentId;
