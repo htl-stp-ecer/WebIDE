@@ -1,7 +1,7 @@
 import { Mission } from '../../entities/Mission';
 import { MissionStep } from '../../entities/MissionStep';
 import { FlowNode, FlowOrientation } from './models';
-import { isType } from './models';
+import { isBreakpoint, isType } from './models';
 
 export function computeAutoLayout(
   mission: Mission | null | undefined,
@@ -34,7 +34,10 @@ export function computeAutoLayout(
       if (orientation !== 'vertical') {
         return 0;
       }
-      return (isType(s, 'parallel') || isType(s, 'seq')) ? 0 : heights.get(stepToNodeId.get(s) ?? '') ?? 80;
+      if (isType(s, 'parallel') || isType(s, 'seq') || isBreakpoint(s)) {
+        return 0;
+      }
+      return heights.get(stepToNodeId.get(s) ?? '') ?? 80;
     };
     const hs = steps.map(nodeH);
     const maxH = orientation === 'vertical' ? Math.max(0, ...hs) : 0;
@@ -56,6 +59,13 @@ export function computeAutoLayout(
       }
       if (isType(s, 'parallel')) {
         if (s.children?.length) maxY = Math.max(maxY, layout(s.children, { x, y: start.y }, w, gap).maxY);
+        return;
+      }
+      if (isBreakpoint(s)) {
+        if (s.children?.length) {
+          const result = layout(s.children, { x, y: start.y }, w, gap);
+          maxY = Math.max(maxY, result.maxY);
+        }
         return;
       }
       const id = stepToNodeId.get(s);

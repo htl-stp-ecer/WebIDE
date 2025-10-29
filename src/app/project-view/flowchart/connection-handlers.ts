@@ -13,7 +13,7 @@ import {
 } from './mission-utils';
 import { missionStepFromAdHoc } from './step-utils';
 import { cleanupAdHocNode, recomputeMergedView } from './view-merger';
-import { START_NODE_ID } from './constants';
+import { LAYOUT_SPACING, START_NODE_ID } from './constants';
 import { MissionStep } from '../../entities/MissionStep';
 import { rebuildFromMission } from './mission-handlers';
 import { Mission } from '../../entities/Mission';
@@ -150,16 +150,44 @@ export function handleAddBreakpoint(flow: Flowchart): void {
   const childNodeId = connection.targetNodeId;
   if (!childNodeId) return;
 
+  const existingNodes = flow.nodes();
+  const parentNode = connection.sourceNodeId ? existingNodes.find(n => n.id === connection.sourceNodeId) ?? null : null;
+  const childNode = existingNodes.find(n => n.id === childNodeId) ?? null;
   const childStep = flow.lookups.nodeIdToStep.get(childNodeId);
   if (!childStep) return;
 
   const parentNodeId = connection.sourceNodeId ?? null;
   const parentStep = parentNodeId ? flow.lookups.nodeIdToStep.get(parentNodeId) ?? null : null;
 
+  let storedPosition: { x: number; y: number } | undefined;
+  if (childNode?.position) {
+    storedPosition = { x: childNode.position.x, y: childNode.position.y };
+  } else if (childStep.position) {
+    storedPosition = {
+      x: childStep.position.x ?? 0,
+      y: childStep.position.y ?? 0,
+    };
+  } else if (parentNode?.position) {
+    const orientation = flow.orientation();
+    const parentHeight = flow.lookups.lastNodeHeights.get(parentNode.id) ?? 80;
+    if (orientation === 'vertical') {
+      storedPosition = {
+        x: parentNode.position.x,
+        y: parentNode.position.y + parentHeight + LAYOUT_SPACING.vertical.gap,
+      };
+    } else {
+      storedPosition = {
+        x: parentNode.position.x + parentHeight + LAYOUT_SPACING.horizontal.gap,
+        y: parentNode.position.y,
+      };
+    }
+  }
+
   const breakpointStep: MissionStep = {
     step_type: 'breakpoint',
     function_name: 'breakpoint',
     arguments: [],
+    position: storedPosition,
     children: [childStep],
   };
 
@@ -188,6 +216,7 @@ export function handleRemoveBreakpoint(flow: Flowchart): void {
   const breakpointStep = breakpointPathKey ? findStepByPath(mission, breakpointPathKey) : null;
   if (!breakpointStep || !isBreakpoint(breakpointStep)) return;
 
+  const oldPosition = breakpointStep.position ? { ...breakpointStep.position } : null;
   const child = breakpointStep.children?.[0] ?? null;
   const loc = findParentAndIndex(mission, breakpointStep);
   if (!loc) return;
@@ -196,6 +225,9 @@ export function handleRemoveBreakpoint(flow: Flowchart): void {
   if (!container) return;
 
   if (child) {
+    if (oldPosition) {
+      child.position = { ...oldPosition };
+    }
     container.splice(index, 1, child);
   } else {
     container.splice(index, 1);
