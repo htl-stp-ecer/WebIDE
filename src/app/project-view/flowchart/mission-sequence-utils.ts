@@ -70,6 +70,18 @@ export function insertBetween(
   child: MissionStep,
   mid: MissionStep
 ): boolean {
+  const ensureChildAttached = () => {
+    mid.children ??= [];
+    if (!mid.children.includes(child)) {
+      mid.children.push(child);
+    }
+  };
+
+  const finalizeInsertion = () => {
+    ensureChildAttached();
+    detachEverywhere(mission, child, mid);
+  };
+
   if (parent) {
     const parAncestor = findNearestParallelAncestor(mission, parent);
     if (parAncestor && !containsStep(parAncestor, child)) {
@@ -84,6 +96,7 @@ export function insertBetween(
         seq.children = [parent, mid];
         container.splice(index, 1, seq);
       }
+      finalizeInsertion();
       return true;
     }
 
@@ -91,6 +104,7 @@ export function insertBetween(
     if (seqHit) {
       seqHit.seq.children ??= [];
       seqHit.seq.children.splice(seqHit.nextIndex, 0, mid);
+      finalizeInsertion();
       return true;
     }
   }
@@ -98,7 +112,7 @@ export function insertBetween(
     const i = (mission.steps ?? []).indexOf(child);
     if (i === -1) return false;
     mission.steps.splice(i, 1, mid);
-    mid.children = [child];
+    finalizeInsertion();
     return true;
   }
 
@@ -108,6 +122,7 @@ export function insertBetween(
     const k = seq.children.indexOf(child);
     if (k !== -1) {
       seq.children.splice(k, 0, mid);
+      finalizeInsertion();
       return true;
     }
   }
@@ -116,7 +131,7 @@ export function insertBetween(
     const j = parent.children.indexOf(child);
     if (j !== -1) {
       parent.children.splice(j, 1, mid);
-      mid.children = [child];
+      finalizeInsertion();
       return true;
     }
   }
@@ -125,7 +140,7 @@ export function insertBetween(
   const k = par.children.indexOf(child);
   if (k !== -1) {
     par.children.splice(k, 1, mid);
-    mid.children = [child];
+    finalizeInsertion();
     return true;
   }
   const walk = (arr?: MissionStep[]): boolean => {
@@ -133,14 +148,10 @@ export function insertBetween(
     const idx = arr.indexOf(child);
     if (idx !== -1) {
       arr.splice(idx, 1, mid);
+      finalizeInsertion();
       return true;
     }
     return arr.some(s => walk(s.children));
   };
-  if (walk(mission.steps)) {
-    mid.children = [child];
-    return true;
-  }
-
-  return false;
+  return walk(mission.steps);
 }

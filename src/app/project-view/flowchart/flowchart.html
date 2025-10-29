@@ -55,7 +55,7 @@
           <div fNodeOutput [fOutputConnectableSide]="actions.isVertical() ? 'bottom' : 'right'" [fOutputId]="'start-node-output'" [fOutputMultiple]="true" class="port" [class.port-bottom]="actions.isVertical()" [class.port-right]="!actions.isVertical()"></div>
         </div>
 
-        @for (connection of connections(); track connection.outputId + '-' + connection.inputId) {
+        @for (connection of connections(); track connection.id) {
           <f-connection [fConnectionId]="connection.id" [fReassignDisabled]="true" fType="segment" [fOutputId]="connection.outputId" [fInputId]="connection.inputId" [fStartColor]="isDarkMode() ? '#EEE5E9' : '#131217'" [fEndColor]="isDarkMode() ? '#EEE5E9' : '#131217'" [class.connection-completed]="actions.isConnectionCompleted(connection.id)" [attr.data-connection-id]="connection.id" (contextmenu)="actions.onConnectionRightClick($event, connection.id)">
             @if (connection.hasBreakpoint) {
               <div fConnectionCenter class="connection-breakpoint-indicator"></div>
