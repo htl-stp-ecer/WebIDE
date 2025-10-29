@@ -7,7 +7,7 @@ import { handleOrientationChange, isVerticalOrientation } from './orientation-ha
 import { handleUndo, handleRedo } from './history-handlers';
 import { handleNodeMoved } from './mission-handlers';
 import { handleCreateNode, deleteNode as removeNode } from './node-handlers';
-import { handleAddBreakpoint, handleAddConnection, handleNodeIntersected as handleSplitConnection } from './connection-handlers';
+import { handleAddBreakpoint, handleAddConnection, handleNodeIntersected as handleSplitConnection, handleRemoveBreakpoint } from './connection-handlers';
 import {
   handleCanvasContextMenu,
   handleCommentRightClick,
@@ -47,6 +47,7 @@ export interface FlowchartActions {
   focusCommentTextarea(id: string): void;
   onRightClick(event: MouseEvent, nodeId: string): void;
   addBreakpointToConnection(): void;
+  removeBreakpointFromConnection(): void;
   deleteNode(): void;
   isNodeCompleted(id: string): boolean;
   isConnectionCompleted(id: string): boolean;
@@ -80,6 +81,7 @@ export function createFlowchartActions(flow: Flowchart): FlowchartActions {
     focusCommentTextarea: id => focusCommentField(flow, id),
     onRightClick: (event, nodeId) => handleNodeContextMenu(flow, event, nodeId),
     addBreakpointToConnection: () => handleAddBreakpoint(flow),
+    removeBreakpointFromConnection: () => handleRemoveBreakpoint(flow),
     deleteNode: () => removeNode(flow),
     isNodeCompleted: id => isNodeCompleted(flow, id),
     isConnectionCompleted: id => isConnectionCompleted(flow, id),

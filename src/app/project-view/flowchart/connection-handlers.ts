@@ -1,13 +1,14 @@
 import type { Flowchart } from './flowchart';
 import { FCreateConnectionEvent, FNodeIntersectedWithConnections } from '@foblex/flow';
 import { generateGuid } from '@foblex/utils';
-import { baseId } from './models';
+import { baseId, isBreakpoint } from './models';
 import {
   attachChildSequentially,
   attachChildWithParallel,
   attachToStartWithParallel,
   detachEverywhere,
   insertBetween,
+  findParentAndIndex,
   shouldAppendSequentially,
 } from './mission-utils';
 import { missionStepFromAdHoc } from './step-utils';
@@ -15,6 +16,7 @@ import { cleanupAdHocNode, recomputeMergedView } from './view-merger';
 import { START_NODE_ID } from './constants';
 import { MissionStep } from '../../entities/MissionStep';
 import { rebuildFromMission } from './mission-handlers';
+import { Mission } from '../../entities/Mission';
 
 export function handleAddConnection(flow: Flowchart, event: FCreateConnectionEvent): void {
   if (!event.fInputId) return;
@@ -170,4 +172,56 @@ export function handleAddBreakpoint(flow: Flowchart): void {
   flow.historyManager.recordHistory('add-breakpoint');
   flow.contextMenu.resetSelection();
   flow.cm?.hide();
+}
+
+export function handleRemoveBreakpoint(flow: Flowchart): void {
+  const connectionId = flow.contextMenu.selectedConnectionId;
+  if (!connectionId) return;
+
+  const mission = flow.missionState.currentMission();
+  if (!mission) return;
+
+  const connection = flow.missionConnections().find(c => c.id === connectionId);
+  if (!connection || !connection.hasBreakpoint) return;
+
+  const breakpointPathKey = connection.breakpointPathKey;
+  const breakpointStep = breakpointPathKey ? findStepByPath(mission, breakpointPathKey) : null;
+  if (!breakpointStep || !isBreakpoint(breakpointStep)) return;
+
+  const child = breakpointStep.children?.[0] ?? null;
+  const loc = findParentAndIndex(mission, breakpointStep);
+  if (!loc) return;
+
+  const { container, index } = loc;
+  if (!container) return;
+
+  if (child) {
+    container.splice(index, 1, child);
+  } else {
+    container.splice(index, 1);
+  }
+
+  rebuildFromMission(flow, mission);
+  flow.layoutFlags.needsAdjust = true;
+  flow.historyManager.recordHistory('remove-breakpoint');
+  flow.contextMenu.resetSelection();
+  flow.cm?.hide();
+}
+
+function findStepByPath(mission: Mission, pathKey: string): MissionStep | null {
+  if (!pathKey) return null;
+  const indices = pathKey.split('.').map(part => Number.parseInt(part, 10) - 1);
+  if (indices.some(num => Number.isNaN(num) || num < 0)) return null;
+
+  let current: MissionStep | undefined;
+  let container: MissionStep[] | undefined = mission.steps;
+
+  for (const idx of indices) {
+    if (!container || idx >= container.length) {
+      return null;
+    }
+    current = container[idx];
+    container = current.children;
+  }
+  return current ?? null;
 }

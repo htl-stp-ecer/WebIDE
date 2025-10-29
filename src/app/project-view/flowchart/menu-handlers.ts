@@ -1,11 +1,13 @@
 import type { Flowchart } from './flowchart';
 import type { FlowOrientation } from './models';
+import type { MenuItem } from 'primeng/api';
 
 export function refreshContextMenus(flow: Flowchart): void {
   const deleteLabel = flow.translate.instant('COMMON.DELETE');
   const commentLabel = translateLabel(flow, 'FLOWCHART.COMMENT', 'Comment');
   const addCommentLabel = translateLabel(flow, 'FLOWCHART.ADD_COMMENT', 'Add Comment');
   const addBreakpointLabel = translateLabel(flow, 'FLOWCHART.ADD_BREAKPOINT', 'Add Breakpoint');
+  const removeBreakpointLabel = translateLabel(flow, 'FLOWCHART.REMOVE_BREAKPOINT', 'Remove Breakpoint');
   const placeholder = translateLabel(flow, 'FLOWCHART.COMMENT_PLACEHOLDER', 'Write a comment...');
 
   flow.contextMenu.nodeItems = [{
@@ -26,11 +28,18 @@ export function refreshContextMenus(flow: Flowchart): void {
     command: () => flow.actions.createCommentFromContextMenu(),
   }];
 
-  flow.contextMenu.connectionItems = [{
-    label: addBreakpointLabel,
-    icon: 'pi pi-circle-fill',
-    command: () => flow.actions.addBreakpointToConnection(),
-  }];
+  flow.contextMenu.connectionItems = [
+    {
+      label: addBreakpointLabel,
+      icon: 'pi pi-circle-fill',
+      command: () => flow.actions.addBreakpointToConnection(),
+    },
+    {
+      label: removeBreakpointLabel,
+      icon: 'pi pi-times',
+      command: () => flow.actions.removeBreakpointFromConnection(),
+    },
+  ];
 
   flow.contextMenu.setItems(flow.contextMenu.nodeItems);
   flow.commentHeaderLabel = commentLabel;
@@ -58,11 +67,21 @@ export function handleConnectionContextMenu(flow: Flowchart, event: MouseEvent, 
   flow.contextMenu.selectConnection(connectionId, { clientX: event.clientX, clientY: event.clientY });
   const isMissionConnection = flow.missionConnections().some(c => c.id === connectionId);
   const connection = flow.connections().find(c => c.id === connectionId);
-  const items = flow.contextMenu.connectionItems.map(item => ({
-    ...item,
-    disabled: !isMissionConnection || !!connection?.hasBreakpoint,
-  }));
-  flow.contextMenu.setItems(items);
+  const [addItem, removeItem] = flow.contextMenu.connectionItems;
+  const menu: MenuItem[] = [];
+  if (addItem) {
+    menu.push({
+      ...addItem,
+      disabled: !isMissionConnection || !!connection?.hasBreakpoint,
+    });
+  }
+  if (removeItem) {
+    menu.push({
+      ...removeItem,
+      disabled: !isMissionConnection || !connection?.hasBreakpoint,
+    });
+  }
+  flow.contextMenu.setItems(menu);
   flow.cm.show(event);
 }
 
