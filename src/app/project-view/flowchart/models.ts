@@ -17,6 +17,8 @@ export interface FlowComment {
   id: string;
   position: { x: number; y: number };
   text: string;
+  beforePath?: string | null;
+  afterPath?: string | null;
 }
 
 export type FlowOrientation = 'vertical' | 'horizontal';

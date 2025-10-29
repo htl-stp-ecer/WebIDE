@@ -1,7 +1,21 @@
-import type { Flowchart } from './flowchart';
-import { IPoint } from '@foblex/2d';
-import { generateGuid } from '@foblex/utils';
-import { FlowComment } from './models';
+import type {Flowchart} from './flowchart';
+import {IPoint} from '@foblex/2d';
+import {generateGuid} from '@foblex/utils';
+import {FlowComment, FlowNode} from './models';
+
+function syncMissionComments(flow: Flowchart, comments: FlowComment[]): void {
+  const mission = flow.missionState.currentMission();
+  if (!mission) {
+    return;
+  }
+  mission.comments = comments.map(comment => ({
+    id: comment.id,
+    text: comment.text,
+    position: {x: comment.position.x, y: comment.position.y},
+    before_path: comment.beforePath ?? null,
+    after_path: comment.afterPath ?? null,
+  }));
+}
 
 export function handleCanvasContextMenu(flow: Flowchart, event: MouseEvent): void {
   if ((event.target as HTMLElement | null)?.closest('.node, .comment-node')) {
@@ -35,6 +49,7 @@ export function handleCommentTextChange(flow: Flowchart, commentId: string, text
   const updated = comments.slice();
   updated[index] = { ...updated[index], text };
   flow.comments.set(updated);
+  syncMissionComments(flow, updated);
 }
 export function handleCommentFocus(flow: Flowchart, commentId: string): void {
   const comment = flow.comments().find(c => c.id === commentId);
@@ -61,8 +76,16 @@ export function createCommentFromContextMenu(flow: Flowchart): void {
 }
 export function addComment(flow: Flowchart, point: IPoint): void {
   const id = `comment-${generateGuid()}`;
-  const comment: FlowComment = { id, position: { x: point.x, y: point.y }, text: '' };
-  flow.comments.set([...flow.comments(), comment]);
+  const comment: FlowComment = {
+    id,
+    position: { x: point.x, y: point.y },
+    text: '',
+    beforePath: null,
+    afterPath: null,
+  };
+  const updated = [...flow.comments(), comment];
+  flow.comments.set(updated);
+  syncMissionComments(flow, updated);
   flow.contextMenu.selectedCommentId = id;
   flow.historyManager.recordHistory('create-comment');
   focusCommentTextarea(flow, id);
@@ -74,60 +97,67 @@ export function handleCommentPositionChanged(flow: Flowchart, commentId: string,
     return;
   }
   const updated = comments.slice();
-  updated[index] = { ...updated[index], position: { x: pos.x, y: pos.y } };
-  flow.comments.set(updated);
-  flow.historyManager.recordHistory('move-comment');
+  const withPosition: FlowComment = {
+    ...updated[index],
+    position: { x: pos.x, y: pos.y },
+  };
 
-  const comment = updated[index];
-  const nodes = flow.nodes();
+  const stepNodes: FlowNode[] = flow.nodes().filter(n => Array.isArray(n.path) && n.path.length) as FlowNode[];
   const orientation = flow.orientation();
+  const axis: 'x' | 'y' = orientation === 'horizontal' ? 'x' : 'y';
+  const sortedNodes = stepNodes.slice().sort((a, b) => a.position[axis] - b.position[axis]);
+  const commentCoord = pos[axis];
 
-  const sortedNodes = nodes.slice().sort((a, b) => {
-    if (orientation === 'horizontal') {
-      return a.position.x - b.position.x;
-    } else {
-      return a.position.y - b.position.y;
-    }
-  });
-
-  let beforeNode: string | null = null;
-  let afterNode: string | null = null;
+  let beforeNode: FlowNode | undefined;
+  let afterNode: FlowNode | undefined;
 
   for (let i = 0; i < sortedNodes.length; i++) {
     const node = sortedNodes[i];
-    const nextNode = sortedNodes[i + 1];
+    const nodeCoord = node.position[axis];
 
-    const position = orientation === 'horizontal' ? 'x' : 'y';
-    const commentPosition = comment.position[position];
-    const nodePosition = node.position[position];
-
-    if (commentPosition < nodePosition) {
-      afterNode = node.text;
-      if(i > 0) {
-        beforeNode = sortedNodes[i-1].text;
+    if (commentCoord < nodeCoord) {
+      afterNode = node;
+      if (i > 0) {
+        beforeNode = sortedNodes[i - 1];
       }
       break;
     }
 
-    if(nextNode) {
-      const nextNodePosition = nextNode.position[position];
-      if (commentPosition > nodePosition && commentPosition < nextNodePosition) {
-        beforeNode = node.text;
-        afterNode = nextNode.text;
-        break;
-      }
-    } else {
-        beforeNode = node.text;
+    const nextNode = sortedNodes[i + 1];
+    if (!nextNode) {
+      beforeNode = node;
+      break;
+    }
+
+    const nextCoord = nextNode.position[axis];
+    if (commentCoord >= nodeCoord && commentCoord < nextCoord) {
+      beforeNode = node;
+      afterNode = nextNode;
+      break;
     }
   }
 
-  if (beforeNode && afterNode) {
-    console.log(`Comment is between ${beforeNode} and ${afterNode}`);
-  } else if (beforeNode) {
-    console.log(`Comment is after ${beforeNode}`);
-  } else if (afterNode) {
-    console.log(`Comment is before ${afterNode}`);
+  if (!afterNode && sortedNodes.length) {
+    if (commentCoord < sortedNodes[0].position[axis]) {
+      afterNode = sortedNodes[0];
+    } else {
+      beforeNode = sortedNodes[sortedNodes.length - 1];
+    }
   }
+
+  const toPath = (node: FlowNode | undefined): string | null => {
+    const path = node?.path;
+    return path && path.length ? path.join('.') : null;
+  };
+
+  updated[index] = {
+    ...withPosition,
+    beforePath: toPath(beforeNode),
+    afterPath: toPath(afterNode),
+  };
+  flow.comments.set(updated);
+  syncMissionComments(flow, updated);
+  flow.historyManager.recordHistory('move-comment');
 }
 export function deleteComment(flow: Flowchart): void {
   const id = flow.contextMenu.selectedCommentId;
@@ -135,10 +165,12 @@ export function deleteComment(flow: Flowchart): void {
     return;
   }
   const before = flow.comments().length;
-  flow.comments.set(flow.comments().filter(c => c.id !== id));
+  const updated = flow.comments().filter(c => c.id !== id);
+  flow.comments.set(updated);
   flow.contextMenu.commentDrafts.delete(id);
   flow.contextMenu.selectedCommentId = '';
   if (flow.comments().length !== before) {
+    syncMissionComments(flow, updated);
     flow.historyManager.recordHistory('delete-comment');
   }
 }

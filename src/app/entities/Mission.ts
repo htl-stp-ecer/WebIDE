@@ -1,4 +1,5 @@
-import {MissionStep} from './MissionStep';
+import { MissionStep } from './MissionStep';
+import { MissionComment } from './MissionComment';
 
 export interface Mission {
   "name": string,
@@ -6,4 +7,5 @@ export interface Mission {
   "is_shutdown": boolean,
   "order": number,
   "steps": MissionStep[],
+  "comments"?: MissionComment[],
 }
