@@ -134,3 +134,40 @@ export function handleNodeIntersected(flow: Flowchart, event: FNodeIntersectedWi
     flow.historyManager.recordHistory('split-mission-connection');
   }
 }
+
+export function handleAddBreakpoint(flow: Flowchart): void {
+  const connectionId = flow.contextMenu.selectedConnectionId;
+  if (!connectionId) return;
+
+  const mission = flow.missionState.currentMission();
+  if (!mission) return;
+
+  const connection = flow.missionConnections().find(c => c.id === connectionId);
+  if (!connection || connection.hasBreakpoint) return;
+
+  const childNodeId = connection.targetNodeId;
+  if (!childNodeId) return;
+
+  const childStep = flow.lookups.nodeIdToStep.get(childNodeId);
+  if (!childStep) return;
+
+  const parentNodeId = connection.sourceNodeId ?? null;
+  const parentStep = parentNodeId ? flow.lookups.nodeIdToStep.get(parentNodeId) ?? null : null;
+
+  const breakpointStep: MissionStep = {
+    step_type: 'breakpoint',
+    function_name: 'breakpoint',
+    arguments: [],
+    children: [childStep],
+  };
+
+  if (!insertBetween(mission, parentStep, childStep, breakpointStep)) {
+    return;
+  }
+
+  rebuildFromMission(flow, mission);
+  flow.layoutFlags.needsAdjust = true;
+  flow.historyManager.recordHistory('add-breakpoint');
+  flow.contextMenu.resetSelection();
+  flow.cm?.hide();
+}

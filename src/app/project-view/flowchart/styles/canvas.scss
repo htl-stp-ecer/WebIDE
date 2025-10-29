@@ -17,3 +17,19 @@
 :host-context(.p-dark) ::ng-deep f-connection.connection-completed path {
   stroke: #4ade80;
 }
+
+:host ::ng-deep .connection-breakpoint-indicator {
+  width: 12px;
+  height: 12px;
+  border-radius: 9999px;
+  background-color: #ef4444;
+  border: 2px solid #ffffff;
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.35);
+  pointer-events: none;
+}
+
+:host-context(.dark) ::ng-deep .connection-breakpoint-indicator,
+:host-context(.p-dark) ::ng-deep .connection-breakpoint-indicator {
+  border-color: #1f2937;
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.55);
+}

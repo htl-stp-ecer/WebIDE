@@ -7,7 +7,7 @@ import { handleOrientationChange, isVerticalOrientation } from './orientation-ha
 import { handleUndo, handleRedo } from './history-handlers';
 import { handleNodeMoved } from './mission-handlers';
 import { handleCreateNode, deleteNode as removeNode } from './node-handlers';
-import { handleAddConnection, handleNodeIntersected as handleSplitConnection } from './connection-handlers';
+import { handleAddBreakpoint, handleAddConnection, handleNodeIntersected as handleSplitConnection } from './connection-handlers';
 import {
   handleCanvasContextMenu,
   handleCommentRightClick,
@@ -22,7 +22,7 @@ import {
 } from './comment-handlers';
 import { isNodeCompleted, isConnectionCompleted, handleRun, handleStop } from './run-handlers';
 import { handleSave } from './save-handlers';
-import { handleNodeContextMenu } from './menu-handlers';
+import { handleNodeContextMenu, handleConnectionContextMenu } from './menu-handlers';
 
 export interface FlowchartActions {
   onLoaded(): void;
@@ -35,6 +35,7 @@ export interface FlowchartActions {
   onCreateNode(event: FCreateNodeEvent): void;
   addConnection(event: FCreateConnectionEvent): void;
   onNodeIntersected(event: FNodeIntersectedWithConnections): void;
+  onConnectionRightClick(event: MouseEvent, connectionId: string): void;
   onCanvasContextMenu(event: MouseEvent): void;
   onCommentRightClick(event: MouseEvent, id: string): void;
   onCommentTextChange(id: string, value: string): void;
@@ -45,6 +46,7 @@ export interface FlowchartActions {
   deleteComment(): void;
   focusCommentTextarea(id: string): void;
   onRightClick(event: MouseEvent, nodeId: string): void;
+  addBreakpointToConnection(): void;
   deleteNode(): void;
   isNodeCompleted(id: string): boolean;
   isConnectionCompleted(id: string): boolean;
@@ -66,6 +68,7 @@ export function createFlowchartActions(flow: Flowchart): FlowchartActions {
     onCreateNode: event => handleCreateNode(flow, event),
     addConnection: event => handleAddConnection(flow, event),
     onNodeIntersected: event => handleSplitConnection(flow, event),
+    onConnectionRightClick: (event, connectionId) => handleConnectionContextMenu(flow, event, connectionId),
     onCanvasContextMenu: event => handleCanvasContextMenu(flow, event),
     onCommentRightClick: (event, id) => handleCommentRightClick(flow, event, id),
     onCommentTextChange: (id, value) => handleCommentTextChange(flow, id, value),
@@ -76,6 +79,7 @@ export function createFlowchartActions(flow: Flowchart): FlowchartActions {
     deleteComment: () => removeComment(flow),
     focusCommentTextarea: id => focusCommentField(flow, id),
     onRightClick: (event, nodeId) => handleNodeContextMenu(flow, event, nodeId),
+    addBreakpointToConnection: () => handleAddBreakpoint(flow),
     deleteNode: () => removeNode(flow),
     isNodeCompleted: id => isNodeCompleted(flow, id),
     isConnectionCompleted: id => isConnectionCompleted(flow, id),

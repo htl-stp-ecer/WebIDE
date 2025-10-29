@@ -1,8 +1,8 @@
 import { Mission } from '../../entities/Mission';
 import { MissionStep } from '../../entities/MissionStep';
-import { Connection, FlowNode, Step } from './models';
 import { generateGuid } from '@foblex/utils';
-import { isType } from './models';
+import { Connection, FlowNode, Step, baseId, isBreakpoint, isType } from './models';
+import { START_NODE_ID } from './constants';
 
 export function rebuildMissionView(
   mission: Mission,
@@ -26,23 +26,27 @@ export function rebuildMissionView(
   const pathToNodeId = new Map<string, string>();
   const pathToConnectionIds = new Map<string, string[]>();
 
+  type ExitRef = { id: string; breakpointPathKey?: string | null };
+  const toPathKey = (path?: number[]) => (path && path.length ? path.join('.') : null);
+
   const build = (
     steps: MissionStep[],
-    parentExits: string[]
-  ): { entryIds: string[]; exitIds: string[] } => {
-    const entries: string[] = [];
-    const exits: string[] = [];
+    parentExits: ExitRef[]
+  ): { entryRefs: ExitRef[]; exitRefs: ExitRef[] } => {
+    const entries: ExitRef[] = [];
+    const exits: ExitRef[] = [];
     for (let idx = 0; idx < steps.length; idx += 1) {
       const s = steps[idx];
       const path = resolvePath?.(s);
+      const pathKey = toPathKey(path);
       if (isType(s, 'seq')) {
         let incoming = parentExits;
-        const first: string[] = [];
-        let last: string[] = incoming;
+        const first: ExitRef[] = [];
+        let last: ExitRef[] = incoming;
         (s.children ?? []).forEach((ch, i) => {
           const r = build([ch], incoming);
-          if (i === 0) first.push(...r.entryIds);
-          incoming = last = r.exitIds;
+          if (i === 0 && r.entryRefs.length) first.push(...r.entryRefs);
+          incoming = last = r.exitRefs;
         });
         if (first.length) entries.push(...first);
         exits.push(...(last.length ? last : parentExits));
@@ -50,8 +54,18 @@ export function rebuildMissionView(
       }
       if (isType(s, 'parallel')) {
         const r = build(s.children ?? [], parentExits);
-        entries.push(...r.entryIds);
-        exits.push(...r.exitIds);
+        if (r.entryRefs.length) entries.push(...r.entryRefs);
+        exits.push(...(r.exitRefs.length ? r.exitRefs : parentExits));
+        continue;
+      }
+      if (isBreakpoint(s)) {
+        const breakpointExits = parentExits.map(exit => ({
+          id: exit.id,
+          breakpointPathKey: pathKey ?? exit.breakpointPathKey ?? null,
+        }));
+        const r = build(s.children ?? [], breakpointExits);
+        if (r.entryRefs.length) entries.push(...r.entryRefs);
+        exits.push(...(r.exitRefs.length ? r.exitRefs : breakpointExits));
         continue;
       }
 
@@ -60,7 +74,6 @@ export function rebuildMissionView(
       nodeIdToStep.set(id, s);
       const inputId = `${id}-input`;
       const outputId = `${id}-output`;
-      const pathKey = path?.length ? path.join('.') : undefined;
       nodes.push({
         id,
         text: s.function_name,
@@ -75,24 +88,40 @@ export function rebuildMissionView(
       if (pathKey) {
         pathToNodeId.set(pathKey, id);
       }
-      parentExits.forEach((pid) => {
+      parentExits.forEach((exit) => {
         const connId = generateGuid();
-        conns.push({ id: connId, outputId: pid, inputId });
+        const sourceNode = baseId(exit.id, 'output');
+        const connection: Connection = {
+          id: connId,
+          outputId: exit.id,
+          inputId,
+          sourceNodeId: sourceNode === START_NODE_ID ? null : sourceNode,
+          targetNodeId: id,
+          targetPathKey: pathKey ?? null,
+        };
+        const breakpointPathKey = exit.breakpointPathKey ?? null;
+        if (breakpointPathKey) {
+          connection.hasBreakpoint = true;
+          connection.breakpointPathKey = breakpointPathKey;
+        }
+        conns.push(connection);
         if (pathKey) {
           const existing = pathToConnectionIds.get(pathKey) ?? [];
           existing.push(connId);
           pathToConnectionIds.set(pathKey, existing);
         }
       });
-      const childExit = s.children?.length ? build(s.children, [outputId]).exitIds : [outputId];
-      entries.push(inputId);
-      exits.push(...childExit);
+      const childResult = s.children?.length
+        ? build(s.children, [{ id: outputId }])
+        : { entryRefs: [] as ExitRef[], exitRefs: [{ id: outputId } as ExitRef] };
+      entries.push({ id: inputId });
+      exits.push(...(childResult.exitRefs.length ? childResult.exitRefs : [{ id: outputId }]));
     }
-    return { entryIds: entries, exitIds: exits };
+    return { entryRefs: entries, exitRefs: exits };
   };
 
-  let exits: string[] = [startOutputId];
-  for (const top of mission.steps) exits = build([top], exits).exitIds;
+  let exits: ExitRef[] = [{ id: startOutputId }];
+  for (const top of mission.steps ?? []) exits = build([top], exits).exitRefs;
 
   return { nodes, connections: conns, stepToNodeId, nodeIdToStep, pathToNodeId, pathToConnectionIds };
 }

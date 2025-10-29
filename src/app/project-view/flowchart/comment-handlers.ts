@@ -2,6 +2,7 @@ import type {Flowchart} from './flowchart';
 import {IPoint} from '@foblex/2d';
 import {generateGuid} from '@foblex/utils';
 import {FlowComment, FlowNode} from './models';
+import {handleConnectionContextMenu} from './menu-handlers';
 
 function syncMissionComments(flow: Flowchart, comments: FlowComment[]): void {
   const mission = flow.missionState.currentMission();
@@ -21,12 +22,44 @@ export function handleCanvasContextMenu(flow: Flowchart, event: MouseEvent): voi
   if ((event.target as HTMLElement | null)?.closest('.node, .comment-node')) {
     return;
   }
+  const connectionId = findNearbyConnection(flow, event);
+  if (connectionId) {
+    handleConnectionContextMenu(flow, event, connectionId);
+    return;
+  }
   event.preventDefault();
   event.stopPropagation();
   flow.contextMenu.resetSelection();
   flow.contextMenu.eventPosition = { clientX: event.clientX, clientY: event.clientY };
   flow.contextMenu.setItems(flow.contextMenu.canvasItems);
   flow.cm.show(event);
+}
+
+const CONNECTION_HIT_PADDING = 16;
+
+function findNearbyConnection(flow: Flowchart, event: MouseEvent): string | null {
+  const offsets = [
+    { dx: 0, dy: 0 },
+    { dx: CONNECTION_HIT_PADDING, dy: 0 },
+    { dx: -CONNECTION_HIT_PADDING, dy: 0 },
+    { dx: 0, dy: CONNECTION_HIT_PADDING },
+    { dx: 0, dy: -CONNECTION_HIT_PADDING },
+    { dx: CONNECTION_HIT_PADDING, dy: CONNECTION_HIT_PADDING },
+    { dx: -CONNECTION_HIT_PADDING, dy: CONNECTION_HIT_PADDING },
+    { dx: CONNECTION_HIT_PADDING, dy: -CONNECTION_HIT_PADDING },
+    { dx: -CONNECTION_HIT_PADDING, dy: -CONNECTION_HIT_PADDING },
+  ];
+
+  for (const offset of offsets) {
+    const candidate = document.elementFromPoint(event.clientX + offset.dx, event.clientY + offset.dy) as HTMLElement | null;
+    const connectionEl = candidate?.closest?.('f-connection[data-connection-id]');
+    if (connectionEl) {
+      const id = connectionEl.getAttribute('data-connection-id');
+      if (id) return id;
+    }
+  }
+
+  return null;
 }
 export function handleCommentRightClick(flow: Flowchart, event: MouseEvent, commentId: string): void {
   const target = event.target as HTMLElement | null;

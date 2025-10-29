@@ -56,7 +56,10 @@
         </div>
 
         @for (connection of connections(); track connection.outputId + '-' + connection.inputId) {
-          <f-connection [fConnectionId]="connection.id" [fReassignDisabled]="true" fType="segment" [fOutputId]="connection.outputId" [fInputId]="connection.inputId" [fStartColor]="isDarkMode() ? '#EEE5E9' : '#131217'" [fEndColor]="isDarkMode() ? '#EEE5E9' : '#131217'" [class.connection-completed]="actions.isConnectionCompleted(connection.id)">
+          <f-connection [fConnectionId]="connection.id" [fReassignDisabled]="true" fType="segment" [fOutputId]="connection.outputId" [fInputId]="connection.inputId" [fStartColor]="isDarkMode() ? '#EEE5E9' : '#131217'" [fEndColor]="isDarkMode() ? '#EEE5E9' : '#131217'" [class.connection-completed]="actions.isConnectionCompleted(connection.id)" [attr.data-connection-id]="connection.id" (contextmenu)="actions.onConnectionRightClick($event, connection.id)">
+            @if (connection.hasBreakpoint) {
+              <div fConnectionCenter class="connection-breakpoint-indicator"></div>
+            }
             <svg viewBox="0 0 6 7" fMarker [type]="eMarkerType.END" [class]="actions.isConnectionCompleted(connection.id) ? 'fill-[#4ade80]' : 'dark:fill-white'" markerUnits="userSpaceOnUse" [height]="14" [width]="12" [refX]="11" [refY]="7" orient="auto">
               <path d="M0.000391006 0L6 3.5L0.000391006 7L0.000391006 0Z" />
             </svg>

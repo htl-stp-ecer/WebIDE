@@ -2,7 +2,16 @@ import { MissionStep } from '../../entities/MissionStep';
 
 // Shared models and helpers for the flowchart component
 
-export type Connection = { id: string; outputId: string; inputId: string };
+export interface Connection {
+  id: string;
+  outputId: string;
+  inputId: string;
+  sourceNodeId?: string | null;
+  targetNodeId?: string | null;
+  targetPathKey?: string | null;
+  hasBreakpoint?: boolean;
+  breakpointPathKey?: string | null;
+}
 
 export interface FlowNode {
   id: string;
@@ -40,7 +49,8 @@ export interface Step {
 }
 
 export const lc = (s?: string | null) => (s ?? '').toLowerCase();
-export const isType = (s: MissionStep | null | undefined, t: 'parallel' | 'seq') => !!s && (lc(s.function_name) === t || lc(s.step_type) === t);
+export const isType = (s: MissionStep | null | undefined, t: 'parallel' | 'seq' | 'breakpoint') => !!s && (lc(s.function_name) === t || lc(s.step_type) === t);
+export const isBreakpoint = (s: MissionStep | null | undefined) => isType(s, 'breakpoint');
 export const mk = (t: 'parallel' | 'seq'): MissionStep => ({
   step_type: t,
   function_name: t,
