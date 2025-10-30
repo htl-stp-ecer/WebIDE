@@ -41,6 +41,8 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
   readonly connections = signal<Connection[]>([]);
   readonly comments = signal<FlowComment[]>([]);
   readonly isRunActive = signal(false);
+  readonly debugState = signal<'idle' | 'running' | 'paused'>('idle');
+  readonly breakpointInfo = signal<Record<string, unknown> | null>(null);
   readonly missionNodes = signal<FlowNode[]>([]);
   readonly missionConnections = signal<Connection[]>([]);
   readonly adHocNodes = signal<FlowNode[]>([]);

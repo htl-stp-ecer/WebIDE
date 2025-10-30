@@ -15,3 +15,7 @@ export function handleRun(flow: Flowchart, mode: 'normal' | 'debug'): void {
 export function handleStop(flow: Flowchart): void {
   flow.runManager.stopRun();
 }
+
+export function handleContinueDebug(flow: Flowchart): void {
+  flow.runManager.onDebugContinue();
+}

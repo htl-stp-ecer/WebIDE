@@ -21,24 +21,34 @@
           <svg viewBox="0 0 32 32" aria-hidden="true" focusable="false" class="icon-run"><polygon points="10,6 10,26 24,16" /></svg>
         </button>
       } @else {
-        <button class="ide-btn stop" (click)="actions.stopRun()" [attr.aria-label]="'FLOWCHART.STOP'|translate" [pTooltip]="'FLOWCHART.STOP'|translate" tooltipPosition="left">
+        <button class="ide-btn stop mr-1" (click)="actions.stopRun()" [attr.aria-label]="'FLOWCHART.STOP'|translate" [pTooltip]="'FLOWCHART.STOP'|translate" tooltipPosition="left">
           <i class="pi pi-stop"></i>
         </button>
       }
-      <button class="ide-btn debug" (click)="actions.onRun('debug')" [attr.aria-label]="'FLOWCHART.DEBUG'|translate" [pTooltip]="'FLOWCHART.DEBUG'|translate" tooltipPosition="left" [disabled]="isRunActive()">
-        <svg viewBox="0 0 32 32" aria-hidden="true" focusable="false" class="icon-debug" xmlns="http://www.w3.org/2000/svg">
-          <g class="group-fill" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="16" cy="18" r="7" />
-            <circle cx="16" cy="9" r="3" />
-            <line x1="16" y1="12" x2="16" y2="25" />
-            <line x1="9" y1="15" x2="4" y2="13" />
-            <line x1="23" y1="15" x2="28" y2="13" />
-            <line x1="9" y1="21" x2="4" y2="23" />
-            <line x1="23" y1="21" x2="28" y2="23" />
-            <line x1="14" y1="6" x2="12" y2="4" />
-            <line x1="18" y1="6" x2="20" y2="4" />
-          </g>
-        </svg>
+      <button
+        class="ide-btn debug"
+        (click)="isRunActive() ? actions.continueDebug() : actions.onRun('debug')"
+        [attr.aria-label]="isRunActive() && debugState() === 'paused' ? ('FLOWCHART.CONTINUE'|translate) : ('FLOWCHART.DEBUG'|translate)"
+        [pTooltip]="isRunActive() && debugState() === 'paused' ? ('FLOWCHART.CONTINUE'|translate) : ('FLOWCHART.DEBUG'|translate)"
+        tooltipPosition="left"
+        [disabled]="isRunActive() && debugState() !== 'paused'">
+        @if (isRunActive() && debugState() === 'paused') {
+          <i class="pi pi-step-forward"></i>
+        } @else {
+          <svg viewBox="0 0 32 32" aria-hidden="true" focusable="false" class="icon-debug" xmlns="http://www.w3.org/2000/svg">
+            <g class="group-fill" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="16" cy="18" r="7" />
+              <circle cx="16" cy="9" r="3" />
+              <line x1="16" y1="12" x2="16" y2="25" />
+              <line x1="9" y1="15" x2="4" y2="13" />
+              <line x1="23" y1="15" x2="28" y2="13" />
+              <line x1="9" y1="21" x2="4" y2="23" />
+              <line x1="23" y1="21" x2="28" y2="23" />
+              <line x1="14" y1="6" x2="12" y2="4" />
+              <line x1="18" y1="6" x2="20" y2="4" />
+            </g>
+          </svg>
+        }
       </button>
     </div>
   </div>

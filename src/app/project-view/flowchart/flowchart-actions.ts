@@ -20,7 +20,7 @@ import {
   focusCommentTextarea as focusCommentField,
   toCanvasPoint,
 } from './comment-handlers';
-import { isNodeCompleted, isConnectionCompleted, handleRun, handleStop } from './run-handlers';
+import { isNodeCompleted, isConnectionCompleted, handleRun, handleStop, handleContinueDebug } from './run-handlers';
 import { handleSave } from './save-handlers';
 import { handleNodeContextMenu, handleConnectionContextMenu } from './menu-handlers';
 
@@ -55,6 +55,7 @@ export interface FlowchartActions {
   onSave(): void;
   onRun(mode: 'normal' | 'debug'): void;
   stopRun(): void;
+  continueDebug(): void;
 }
 
 export function createFlowchartActions(flow: Flowchart): FlowchartActions {
@@ -89,5 +90,6 @@ export function createFlowchartActions(flow: Flowchart): FlowchartActions {
     onSave: () => handleSave(flow),
     onRun: mode => handleRun(flow, mode),
     stopRun: () => handleStop(flow),
+    continueDebug: () => handleContinueDebug(flow),
   };
 }

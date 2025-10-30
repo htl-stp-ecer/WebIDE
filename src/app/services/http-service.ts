@@ -3,6 +3,12 @@ import { HttpClient } from '@angular/common/http';
 import { BehaviorSubject, Observable } from 'rxjs';
 import {Mission} from '../entities/Mission';
 
+interface RunMissionOptions {
+  simulate?: boolean;
+  debug?: boolean;
+  onSocket?: (socket: WebSocket | null) => void;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -127,14 +133,24 @@ export class HttpService {
     }
   }
 
-  runMission(projectUUID: string, name: string): Observable<any> {
-    const httpUrl = `${this.ip}/api/v1/missions/${projectUUID}/run/${name}?simulate=1`;
+  runMission(projectUUID: string, name: string, options?: RunMissionOptions): Observable<WebSocketResponse> {
+    const params: string[] = [];
+    const shouldSimulate = options?.simulate ?? true;
+    if (shouldSimulate) {
+      params.push('simulate=1');
+    }
+    if (options?.debug) {
+      params.push('debug=1');
+    }
+    const query = params.length ? `?${params.join('&')}` : '';
+    const httpUrl = `${this.ip}/api/v1/missions/${projectUUID}/run/${name}${query}`;
     const wsUrl = this.toWebSocketUrl(httpUrl);
 
     return new Observable<WebSocketResponse>((observer) => {
       let socket: WebSocket | null = null;
       try {
         socket = new WebSocket(wsUrl);
+        options?.onSocket?.(socket);
       } catch (err) {
         observer.error(err);
         return undefined;
@@ -160,12 +176,14 @@ export class HttpService {
 
       socket.onclose = () => {
         observer.complete();
+        options?.onSocket?.(null);
       };
 
       return () => {
         try {
           socket?.close(1000, 'Client unsubscribed');
         } catch {}
+        options?.onSocket?.(null);
       };
     });
   }

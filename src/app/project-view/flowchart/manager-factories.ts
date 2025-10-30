@@ -28,6 +28,8 @@ export function createRunManager(flow: Flowchart): FlowchartRunManager {
   return new FlowchartRunManager({
     http: flow.http,
     isRunActive: flow.isRunActive,
+    debugState: flow.debugState,
+    breakpointInfo: flow.breakpointInfo,
     getProjectUUID: () => flow.projectUUID,
     getMissionKey: () => flow.historyManager.getMissionKey(),
   });
