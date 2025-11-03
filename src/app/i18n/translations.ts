@@ -84,6 +84,7 @@ export const enTranslations = {
     ORIENTATION_VERTICAL: 'Vertical',
     ORIENTATION_HORIZONTAL: 'Horizontal',
     AUTO_LAYOUT: 'Auto layout',
+    CONTINUE: 'Continue',
   },
 };
 
@@ -173,6 +174,7 @@ export const deTranslations = {
     ORIENTATION_VERTICAL: 'Vertikal',
     ORIENTATION_HORIZONTAL: 'Horizontal',
     AUTO_LAYOUT: 'Auto-Layout',
+    CONTINUE: 'Weiter',
   },
 };
 
