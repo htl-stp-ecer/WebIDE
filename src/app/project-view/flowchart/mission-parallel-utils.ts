@@ -20,9 +20,37 @@ export function ensureTopLevelParallel(mission: Mission): MissionStep {
 export function ensureParallelAfter(mission: Mission, parent: MissionStep | null): MissionStep {
   if (!parent) return ensureTopLevelParallel(mission);
 
+  if (isType(parent, 'seq')) {
+    parent.children ??= [];
+    const firstChild = parent.children[0];
+    if (!firstChild) {
+      const par = mk('parallel');
+      parent.children.unshift(par);
+      return par;
+    }
+    if (isType(firstChild, 'parallel')) return firstChild;
+    const par = mk('parallel');
+    parent.children.splice(0, 1, par);
+    par.children = [firstChild];
+    return par;
+  }
+
   const loc = findParentAndIndex(mission, parent);
   if (!loc) return mk('parallel');
   const { parent: directParent, container, index } = loc;
+
+  if (
+    directParent &&
+    isType(directParent, 'seq') &&
+    directParent.children === container &&
+    index === 0
+  ) {
+    if (isType(parent, 'parallel')) return parent;
+    const par = mk('parallel');
+    container.splice(index, 1, par);
+    par.children = [parent];
+    return par;
+  }
 
   if (directParent && isType(directParent, 'parallel') && directParent.children === container) {
     const laneCount = (directParent.children ?? []).length;
@@ -41,6 +69,19 @@ export function ensureParallelAfter(mission: Mission, parent: MissionStep | null
 
   const next = container[index + 1];
   if (next && isType(next, 'parallel')) return next;
+  if (next && isType(next, 'seq')) {
+    next.children ??= [];
+    const firstSeqChild = next.children[0];
+    if (firstSeqChild && isType(firstSeqChild, 'parallel')) return firstSeqChild;
+    const parInsideSeq = mk('parallel');
+    if (firstSeqChild) {
+      next.children.splice(0, 1, parInsideSeq);
+      parInsideSeq.children = [firstSeqChild];
+    } else {
+      next.children.unshift(parInsideSeq);
+    }
+    return parInsideSeq;
+  }
 
   const par = mk('parallel');
   container.splice(index + 1, 0, par);
