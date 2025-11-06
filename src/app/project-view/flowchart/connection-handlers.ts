@@ -1,7 +1,7 @@
 import type { Flowchart } from './flowchart';
 import { FCreateConnectionEvent, FNodeIntersectedWithConnections } from '@foblex/flow';
 import { generateGuid } from '@foblex/utils';
-import { baseId, isBreakpoint } from './models';
+import { baseId, isBreakpoint, mk, isType } from './models';
 import {
   attachChildSequentially,
   attachChildWithParallel,
@@ -10,6 +10,7 @@ import {
   insertBetween,
   findParentAndIndex,
   shouldAppendSequentially,
+  containsStep,
 } from './mission-utils';
 import { missionStepFromAdHoc } from './step-utils';
 import { cleanupAdHocNode, recomputeMergedView } from './view-merger';
@@ -122,6 +123,25 @@ export function handleNodeIntersected(flow: Flowchart, event: FNodeIntersectedWi
   const childStep = childNodeId ? flow.lookups.nodeIdToStep.get(childNodeId) ?? null : null;
   if (!childStep) return;
 
+  const isInsideParallelBranch = (step: MissionStep | null): boolean => {
+    let current = step;
+    while (current) {
+      const loc = findParentAndIndex(mission, current);
+      const directParent = loc?.parent ?? null;
+      if (!directParent) return false;
+      if (isType(directParent, 'parallel')) return true;
+      current = directParent;
+    }
+    return false;
+  };
+
+  let effectiveParent = parentStep;
+  const parentWithinParallel = isInsideParallelBranch(effectiveParent);
+  if (effectiveParent && !containsStep(effectiveParent, childStep) && !parentWithinParallel) {
+    const childLoc = findParentAndIndex(mission, childStep);
+    effectiveParent = childLoc?.parent ?? null;
+  }
+
   let midStep = flow.lookups.nodeIdToStep.get(nodeId) ?? null;
   if (!midStep) {
     const adhocNode = flow.adHocNodes().find(n => n.id === nodeId);
@@ -131,12 +151,31 @@ export function handleNodeIntersected(flow: Flowchart, event: FNodeIntersectedWi
     cleanupAdHocNode(flow, adhocNode.id);
   }
 
-  if (midStep === parentStep || midStep === childStep) {
+  if (midStep === effectiveParent || midStep === childStep) {
+    return;
+  }
+
+  const parentLoc = effectiveParent ? findParentAndIndex(mission, effectiveParent) : null;
+  if (
+    effectiveParent &&
+    parentLoc &&
+    parentLoc.parent &&
+    isType(parentLoc.parent, 'parallel') &&
+    !(effectiveParent.children?.length) &&
+    parentStep &&
+    !containsStep(parentStep, childStep)
+  ) {
+    const seqWrapper = mk('seq');
+    seqWrapper.children = [parentStep!, midStep];
+    parentLoc.container.splice(parentLoc.index, 1, seqWrapper);
+    rebuildFromMission(flow, mission);
+    flow.layoutFlags.needsAdjust = true;
+    flow.historyManager.recordHistory('split-mission-connection');
     return;
   }
 
   detachEverywhere(mission, midStep);
-  if (insertBetween(mission, parentStep, childStep, midStep)) {
+  if (insertBetween(mission, effectiveParent, childStep, midStep)) {
     rebuildFromMission(flow, mission);
     flow.layoutFlags.needsAdjust = true;
     flow.historyManager.recordHistory('split-mission-connection');

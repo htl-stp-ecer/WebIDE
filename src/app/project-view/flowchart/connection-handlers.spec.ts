@@ -2,13 +2,14 @@ import { signal } from '@angular/core';
 import { FCreateConnectionEvent, FNodeIntersectedWithConnections } from '@foblex/flow';
 import { Mission } from '../../entities/Mission';
 import { MissionStep } from '../../entities/MissionStep';
-import { FlowNode, Connection, Step, baseId } from './models';
+import { FlowNode, Connection, Step, baseId, isType } from './models';
 import { Flowchart } from './flowchart';
 import { FlowchartLookupState } from './lookups';
 import { handleAddConnection, handleNodeIntersected } from './connection-handlers';
 import { recomputeMergedView } from './view-merger';
 import { rebuildFromMission } from './mission-handlers';
 import { insertBetween, attachChildSequentially } from './mission-sequence-utils';
+import { attachChildWithParallel } from './mission-parallel-utils';
 
 const createStep = (
   name: string,
@@ -134,13 +135,9 @@ describe('connection-handlers', () => {
       expect(missionSteps.length).toBe(2);
       expect(missionSteps[0]).toBe(stepA);
 
-      const parallelStep = missionSteps[1];
-      expect(parallelStep.step_type).toBe('parallel');
-      expect(parallelStep.children?.length).toBe(1);
-
-      const insertedStep = parallelStep.children?.[0];
+      const insertedStep = missionSteps[1];
       expect(insertedStep?.function_name).toBe('X');
-      expect(insertedStep?.children?.[0]).toBe(stepB);
+      expect(insertedStep.children?.[0]).toBe(stepB);
       expect(flow.historyManager.recordHistory).toHaveBeenCalledWith('split-mission-connection');
 
       const adHocNode2: FlowNode = {
@@ -161,13 +158,100 @@ describe('connection-handlers', () => {
       const event2 = new FNodeIntersectedWithConnections(adHocNode2.id, [connectionToStepB!.id]);
       handleNodeIntersected(flow, event2);
 
-      const parallelAfterSecondInsert = mission.steps[1];
-      const firstLaneStep = parallelAfterSecondInsert.children?.[0];
-      expect(firstLaneStep?.function_name).toBe('X');
-      const nestedInsertedStep = firstLaneStep?.children?.[0];
+      const chainParent = mission.steps[1];
+      expect(chainParent?.function_name).toBe('X');
+      const nestedInsertedStep = chainParent.children?.[0];
       expect(nestedInsertedStep?.function_name).toBe('Y');
       expect(nestedInsertedStep?.children?.[0]).toBe(stepB);
     });
+
+    it('inserts node into parallel lane sequence when splitting lane exit', () => {
+      const laneOne = createStep('Lane-1');
+      const laneTwo = createStep('Lane-2');
+      const laneSeq = createStep('Lane-Seq', [], [laneOne, laneTwo], 'seq');
+      const otherLane = createStep('Other-Lane');
+      const parallel = createStep('Parallel', [], [laneSeq, otherLane], 'parallel');
+      const tail = createStep('Tail');
+
+      const mission: Mission = {
+        name: 'mission',
+        is_setup: false,
+        is_shutdown: false,
+        order: 0,
+        steps: [parallel, tail],
+        comments: [],
+      };
+
+      const flow = createTestFlow({ mission });
+
+      rebuildFromMission(flow, mission);
+      recomputeMergedView(flow);
+
+      const adHocNode: FlowNode = {
+        id: 'adhoc-parallel',
+        text: 'Insert',
+        position: { x: 0, y: 0 },
+        step: { name: 'Insert', arguments: [] },
+        args: {},
+      };
+
+      flow.adHocNodes.set([...flow.adHocNodes(), adHocNode]);
+      recomputeMergedView(flow);
+
+      const laneTwoNodeId = flow.lookups.stepToNodeId.get(laneTwo)!;
+      const tailNodeId = flow.lookups.stepToNodeId.get(tail)!;
+      const targetConnection = flow.connections().find(
+        c => c.sourceNodeId === laneTwoNodeId && c.targetNodeId === tailNodeId
+      );
+      expect(targetConnection).toBeTruthy();
+
+      const event = new FNodeIntersectedWithConnections(adHocNode.id, [targetConnection!.id]);
+
+      handleNodeIntersected(flow, event);
+
+      const laneChildren = laneSeq.children ?? [];
+      expect(laneChildren.length).toBe(3);
+      expect(laneChildren[0]).toBe(laneOne);
+      expect(laneChildren[1]).toBe(laneTwo);
+
+      const insertedStep = laneChildren[2];
+      expect(insertedStep?.function_name).toBe('Insert');
+      expect(insertedStep?.children?.[0]).toBe(tail);
+      expect(mission.steps?.some(step => step === insertedStep)).toBeFalse();
+      expect(flow.historyManager.recordHistory).toHaveBeenCalledWith('split-mission-connection');
+    });
+  });
+
+  it('keeps downstream node outside parallel when adding new parallel child', () => {
+    const tail = createStep('N4');
+    const laneA = createStep('N2');
+    const laneB = createStep('N3');
+    const parallel = createStep('parallel', [], [laneA, laneB], 'parallel');
+    const seq = createStep('seq', [], [parallel, tail], 'seq');
+    const parent = createStep('Parent', [], [seq]);
+
+    const mission: Mission = {
+      name: 'mission',
+      is_setup: false,
+      is_shutdown: false,
+      order: 0,
+      steps: [parent],
+      comments: [],
+    };
+
+    const newLane = createStep('N5');
+
+    const result = attachChildWithParallel(mission, parallel, newLane);
+    expect(result).toBeTrue();
+
+    const parallelChildren = parallel.children ?? [];
+    expect(parallelChildren.some(ch => ch === laneA)).toBeTrue();
+    expect(parallelChildren.some(ch => ch === laneB)).toBeTrue();
+    expect(parallelChildren.some(ch => ch === newLane)).toBeTrue();
+
+    const seqChildren = seq.children ?? [];
+    expect(seqChildren.length).toBe(2);
+    expect(seqChildren[1]).toBe(tail);
   });
 
   it('successfully inserts between every connection in a sample mission', () => {
@@ -301,5 +385,42 @@ describe('connection-handlers', () => {
         baseId(conn.inputId, 'input') === n4Id
     );
     expect(n3ToN4).toBeTruthy();
+  });
+
+  it('inserting between a parallel lane and downstream node keeps tail outside parallel', () => {
+    const tail = createStep('N4');
+    const laneA = createStep('N2');
+    const laneB = createStep('N3');
+    const parallel = createStep('parallel', [], [laneA, laneB], 'parallel');
+    const seq = createStep('seq', [], [parallel, tail], 'seq');
+    const parent = createStep('Parent', [], [seq]);
+
+    const mission: Mission = {
+      name: 'mission',
+      is_setup: false,
+      is_shutdown: false,
+      order: 0,
+      steps: [parent],
+      comments: [],
+    };
+
+    const mid = createStep('NewNode');
+    const inserted = insertBetween(mission, laneA, tail, mid);
+    expect(inserted).toBeTrue();
+
+    const seqChildren = seq.children ?? [];
+    expect(seqChildren.length).toBe(2);
+    expect(seqChildren[0]).toBe(parallel);
+    expect(seqChildren[1]).toBe(tail);
+
+    const parallelChildren = parallel.children ?? [];
+    expect(parallelChildren.length).toBe(2);
+    const wrappedLane = parallelChildren.find(ch => isType(ch, 'seq'));
+    expect(wrappedLane).toBeTruthy();
+    expect(wrappedLane?.children?.[0]).toBe(laneA);
+    expect(wrappedLane?.children?.[1]).toBe(mid);
+
+    const untouchedLane = parallelChildren.find(ch => ch === laneB || (ch.children?.includes(laneB)));
+    expect(untouchedLane).toBe(laneB);
   });
 });

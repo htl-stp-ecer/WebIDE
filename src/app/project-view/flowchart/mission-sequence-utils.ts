@@ -84,6 +84,20 @@ export function insertBetween(
 
   if (parent) {
     const parAncestor = findNearestParallelAncestor(mission, parent);
+    const parentLoc = findParentAndIndex(mission, parent);
+
+    if (
+      parentLoc &&
+      parentLoc.parent &&
+      isType(parentLoc.parent, 'parallel') &&
+      !(parent.children?.length)
+    ) {
+      const seqWrapper = mk('seq');
+      seqWrapper.children = [parent, mid];
+      parentLoc.container.splice(parentLoc.index, 1, seqWrapper);
+      return true;
+    }
+
     if (parAncestor && !containsStep(parAncestor, child)) {
       const locPrev = findParentAndIndex(mission, parent);
       if (!locPrev) return false;

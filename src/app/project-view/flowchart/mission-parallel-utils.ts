@@ -105,6 +105,7 @@ export function attachChildWithParallel(mission: Mission, parent: MissionStep, c
 
   const children = parent.children ?? [];
   if (
+    !isType(parent, 'parallel') &&
     children.length === 1 &&
     !isType(children[0], 'seq') &&
     !isType(children[0], 'parallel')
