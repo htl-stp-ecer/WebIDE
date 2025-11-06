@@ -109,9 +109,17 @@ export function insertBetween(
     }
   }
   if (!parent) {
-    const i = (mission.steps ?? []).indexOf(child);
-    if (i === -1) return false;
-    mission.steps.splice(i, 1, mid);
+    mission.steps ??= [];
+    const topLevelIndex = mission.steps.indexOf(child);
+    if (topLevelIndex !== -1) {
+      mission.steps.splice(topLevelIndex, 1, mid);
+      finalizeInsertion();
+      return true;
+    }
+
+    const loc = findParentAndIndex(mission, child);
+    if (!loc) return false;
+    loc.container.splice(loc.index, 1, mid);
     finalizeInsertion();
     return true;
   }

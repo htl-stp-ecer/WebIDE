@@ -18,6 +18,10 @@
   stroke: #4ade80;
 }
 
+:host ::ng-deep f-connection .f-connection-group circle[f-connection-drag-handle-end] {
+  display: none;
+}
+
 :host ::ng-deep .connection-breakpoint-indicator {
   width: 12px;
   height: 12px;

@@ -102,6 +102,34 @@ export function attachToStartWithParallel(mission: Mission, child: MissionStep):
 
 export function attachChildWithParallel(mission: Mission, parent: MissionStep, child: MissionStep): boolean {
   if (parent === child) return false;
+
+  const children = parent.children ?? [];
+  if (
+    children.length === 1 &&
+    !isType(children[0], 'seq') &&
+    !isType(children[0], 'parallel')
+  ) {
+    const existing = children[0];
+    const tail = existing.children ? [...existing.children] : [];
+    existing.children = [];
+
+    const par = mk('parallel');
+    par.children = [existing];
+
+    detachEverywhere(mission, child);
+    par.children.push(child);
+
+    if (tail.length) {
+      const seq = mk('seq');
+      seq.children = [par, ...tail];
+      parent.children = [seq];
+    } else {
+      parent.children = [par];
+    }
+
+    return true;
+  }
+
   const par = ensureParallelAfter(mission, parent);
   par.children ??= [];
 

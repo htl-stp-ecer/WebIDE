@@ -6,7 +6,7 @@ import { rebuildMissionView } from './mission-builder';
 import { asStepFromPool, initialArgsFromPool } from './step-utils';
 import { recomputeMergedView } from './view-merger';
 import { START_OUTPUT_ID } from './constants';
-import { FlowComment } from './models';
+import { FlowComment, FlowNode } from './models';
 
 function toFlowComments(comments: MissionComment[] | undefined): FlowComment[] {
   if (!Array.isArray(comments)) {
@@ -83,27 +83,31 @@ export function rebuildFromMission(flow: Flowchart, mission: Mission): void {
 }
 
 export function handleNodeMoved(flow: Flowchart, nodeId: string, pos: { x: number; y: number }): void {
-  const update = (signal: typeof flow.adHocNodes | typeof flow.missionNodes) => {
-    const nodes = signal();
-    const index = nodes.findIndex(n => n.id === nodeId);
-    if (index === -1) {
-      return false;
-    }
-    const copy = nodes.slice();
-    copy[index] = { ...copy[index], position: { x: pos.x, y: pos.y } };
-    signal.set(copy);
-    if (signal === flow.missionNodes) {
-      const step = flow.lookups.nodeIdToStep.get(nodeId);
-      if (step && !flow.useAutoLayout) {
-        step.position = { x: pos.x, y: pos.y };
-      }
-    }
-    return true;
+  let touched = false;
+  let missionNodeMoved = false;
+
+  const updatePositions = (nodes: FlowNode[], isMission: boolean) => {
+    const node = nodes.find(n => n.id === nodeId);
+    if (!node) return;
+    node.position = { x: pos.x, y: pos.y };
+    touched = true;
+    if (isMission) missionNodeMoved = true;
   };
 
-  if (!update(flow.adHocNodes) && !update(flow.missionNodes)) {
+  updatePositions(flow.adHocNodes(), false);
+  updatePositions(flow.missionNodes(), true);
+  updatePositions(flow.nodes(), false);
+
+  if (!touched) {
     return;
   }
-  recomputeMergedView(flow);
+
+  if (missionNodeMoved) {
+    const step = flow.lookups.nodeIdToStep.get(nodeId);
+    if (step && !flow.useAutoLayout) {
+      step.position = { x: pos.x, y: pos.y };
+    }
+  }
+
   flow.historyManager.recordHistory('move-node');
 }

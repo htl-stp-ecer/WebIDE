@@ -109,11 +109,17 @@ export function handleNodeIntersected(flow: Flowchart, event: FNodeIntersectedWi
   const connection = flow.connections().find(c => c.id === hitId);
   if (!connection) return;
 
-  const srcBase = baseId(connection.outputId, 'output');
-  const dstBase = baseId(connection.inputId, 'input');
+  const parentNodeId =
+    connection.sourceNodeId ??
+    (connection.outputId ? baseId(connection.outputId, 'output') : null);
+  const childNodeId =
+    connection.targetNodeId ??
+    (connection.inputId ? baseId(connection.inputId, 'input') : null);
 
-  const parentStep = srcBase === START_NODE_ID ? null : flow.lookups.nodeIdToStep.get(srcBase) ?? null;
-  const childStep = flow.lookups.nodeIdToStep.get(dstBase);
+  const parentStep = parentNodeId === START_NODE_ID || !parentNodeId
+    ? null
+    : flow.lookups.nodeIdToStep.get(parentNodeId) ?? null;
+  const childStep = childNodeId ? flow.lookups.nodeIdToStep.get(childNodeId) ?? null : null;
   if (!childStep) return;
 
   let midStep = flow.lookups.nodeIdToStep.get(nodeId) ?? null;
