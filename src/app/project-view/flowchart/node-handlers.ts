@@ -1,8 +1,8 @@
 import type { Flowchart } from './flowchart';
 import { FCreateNodeEvent } from '@foblex/flow';
 import { generateGuid } from '@foblex/utils';
-import { Step, toVal } from './models';
-import { normalize } from './mission-utils';
+import { Step, toVal, isType } from './models';
+import { normalize, findParentAndIndex } from './mission-utils';
 import { cleanupAdHocNode, recomputeMergedView } from './view-merger';
 import { MissionStep } from '../../entities/MissionStep';
 import { Mission } from '../../entities/Mission';
@@ -65,23 +65,28 @@ export function deleteNode(flow: Flowchart): void {
   flow.historyManager.recordHistory('delete-node');
 }
 function removeMissionStep(mission: Mission, step: MissionStep): boolean {
-  const visit = (steps?: MissionStep[]): boolean => {
-    if (!steps) {
-      return false;
-    }
-    for (let i = 0; i < steps.length;) {
-      const current = steps[i];
-      if (current === step) {
-        steps.splice(i, 1);
-        return true;
-      }
-      if (visit(current.children)) {
-        return true;
-      }
-      i++;
-    }
+  const location = findParentAndIndex(mission, step);
+  if (!location) {
     return false;
-  };
+  }
 
-  return visit(mission.steps);
+  const { container, index } = location;
+  if (!container) {
+    return false;
+  }
+
+  const shouldPromoteChild =
+    !isType(step, 'parallel') &&
+    !isType(step, 'seq') &&
+    !isType(step, 'breakpoint') &&
+    (step.children?.length === 1);
+
+  const replacement = shouldPromoteChild ? step.children![0] : null;
+  if (replacement) {
+    container.splice(index, 1, replacement);
+  } else {
+    container.splice(index, 1);
+  }
+
+  return true;
 }
