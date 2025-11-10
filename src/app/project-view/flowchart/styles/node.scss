@@ -34,14 +34,33 @@
   height: 0.75rem;
   background: #383838;
   border-radius: 9999px;
-  left: 50%;
-  transform: translateX(-50%);
 }
 
-.port-top { top: -0.375rem; }
-.port-bottom { bottom: -0.375rem; }
-.port-left { top: 50%; left: -0.375rem; transform: translateY(-50%); }
-.port-right { top: 50%; right: -0.375rem; transform: translateY(-50%); }
+.port-top,
+.port-bottom {
+  left: calc(50% - 0.375rem);
+}
+
+.port-top {
+  top: -0.375rem;
+}
+
+.port-bottom {
+  bottom: -0.375rem;
+}
+
+.port-left,
+.port-right {
+  top: calc(50% - 0.375rem);
+}
+
+.port-left {
+  left: -0.375rem;
+}
+
+.port-right {
+  right: -0.375rem;
+}
 
 .node-args {
   display: flex;
