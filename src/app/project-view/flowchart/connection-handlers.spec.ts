@@ -216,13 +216,67 @@ describe('connection-handlers', () => {
 
       const insertedStep = laneChildren[2];
       expect(insertedStep?.function_name).toBe('Insert');
-      expect(insertedStep?.children?.[0]).toBe(tail);
-      expect(mission.steps?.some(step => step === insertedStep)).toBeFalse();
+      expect(insertedStep?.children?.length ?? 0).toBe(0);
+      expect(mission.steps?.[1]).toBe(tail);
       expect(flow.historyManager.recordHistory).toHaveBeenCalledWith('split-mission-connection');
-    });
   });
 
-  it('keeps downstream node outside parallel when adding new parallel child', () => {
+  it('keeps downstream node outside parallel when splitting lane wrapped in seq', () => {
+    const laneStep = createStep('Lane');
+    const laneSeq = createStep('Lane-Seq', [], [laneStep], 'seq');
+    const otherLane = createStep('Other-Lane');
+    const parallel = createStep('Parallel', [], [laneSeq, otherLane], 'parallel');
+    const tail = createStep('Tail');
+    const rootSeq = createStep('Root-Seq', [], [parallel, tail], 'seq');
+
+    const mission: Mission = {
+      name: 'mission',
+      is_setup: false,
+      is_shutdown: false,
+      order: 0,
+      steps: [rootSeq],
+      comments: [],
+    };
+
+    const flow = createTestFlow({ mission });
+    rebuildFromMission(flow, mission);
+    recomputeMergedView(flow);
+
+    const adHocNode: FlowNode = {
+      id: 'adhoc-lane',
+      text: 'InsertLane',
+      position: { x: 0, y: 0 },
+      step: { name: 'InsertLane', arguments: [] },
+      args: {},
+    };
+
+    flow.adHocNodes.set([...flow.adHocNodes(), adHocNode]);
+    recomputeMergedView(flow);
+
+    const laneNodeId = flow.lookups.stepToNodeId.get(laneStep)!;
+    const tailNodeId = flow.lookups.stepToNodeId.get(tail)!;
+    const targetConnection = flow.connections().find(
+      c => c.sourceNodeId === laneNodeId && c.targetNodeId === tailNodeId
+    );
+    expect(targetConnection).toBeTruthy();
+
+    const event = new FNodeIntersectedWithConnections(adHocNode.id, [targetConnection!.id]);
+    handleNodeIntersected(flow, event);
+
+    const laneChildren = laneSeq.children ?? [];
+    expect(laneChildren.length).toBe(2);
+    expect(laneChildren[0]).toBe(laneStep);
+    const insertedLaneStep = laneChildren[1];
+    expect(insertedLaneStep?.function_name).toBe('InsertLane');
+
+    const rootSeqChildren = rootSeq.children ?? [];
+    expect(rootSeqChildren.length).toBe(2);
+    expect(rootSeqChildren[0]).toBe(parallel);
+    expect(rootSeqChildren[1]).toBe(tail);
+  });
+});
+
+it('keeps downstream node outside parallel when adding new parallel child', () => {
     const tail = createStep('N4');
     const laneA = createStep('N2');
     const laneB = createStep('N3');
@@ -385,6 +439,38 @@ describe('connection-handlers', () => {
         baseId(conn.inputId, 'input') === n4Id
     );
     expect(n3ToN4).toBeTruthy();
+  });
+
+  it('appends sequentially inside a parallel lane without moving downstream steps', () => {
+    const laneStep = createStep('Lane');
+    const laneSeq = createStep('seq', [], [laneStep], 'seq');
+    const otherLane = createStep('OtherLane');
+    const parallel = createStep('parallel', [], [laneSeq, otherLane], 'parallel');
+    const tail = createStep('Tail');
+
+    const mission: Mission = {
+      name: 'mission',
+      is_setup: false,
+      is_shutdown: false,
+      order: 0,
+      steps: [parallel, tail],
+      comments: [],
+    };
+
+    const newStep = createStep('Inserted');
+    const attached = attachChildSequentially(mission, laneStep, newStep);
+    expect(attached).toBeTrue();
+
+    const seqChildren = laneSeq.children ?? [];
+    expect(seqChildren.length).toBe(2);
+    expect(seqChildren[0]).toBe(laneStep);
+    expect(seqChildren[1]).toBe(newStep);
+
+    const parallelChildren = parallel.children ?? [];
+    expect(parallelChildren.length).toBe(2);
+    expect(parallelChildren[1]).toBe(otherLane);
+
+    expect(mission.steps?.[1]).toBe(tail);
   });
 
   it('inserting between a parallel lane and downstream node keeps tail outside parallel', () => {

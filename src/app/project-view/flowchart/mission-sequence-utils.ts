@@ -17,7 +17,22 @@ export function shouldAppendSequentially(mission: Mission, parent: MissionStep):
 export function attachChildSequentially(mission: Mission, parent: MissionStep, child: MissionStep): boolean {
   if (parent === child) return false;
 
+  const parentLoc = findParentAndIndex(mission, parent);
+  const parentIsInsideSeq = parentLoc?.parent && isType(parentLoc.parent, 'seq');
+
   detachEverywhere(mission, child);
+
+  if (parentIsInsideSeq && parentLoc) {
+    const seqParent = parentLoc.parent!;
+    seqParent.children ??= [];
+    const existing = seqParent.children.indexOf(child);
+    if (existing !== -1) {
+      seqParent.children.splice(existing, 1);
+    }
+    seqParent.children.splice(parentLoc.index + 1, 0, child);
+    return true;
+  }
+
   parent.children ??= [];
   if (!parent.children.length) {
     parent.children.push(child);
@@ -70,7 +85,19 @@ export function insertBetween(
   child: MissionStep,
   mid: MissionStep
 ): boolean {
+  const parentLoc = parent ? findParentAndIndex(mission, parent) : null;
+  const childLoc = findParentAndIndex(mission, child);
+  const parentContainsChild = parent ? containsStep(parent, child) : false;
+  const sharesContainerWithParent = !!(
+    parent &&
+    parentLoc &&
+    childLoc &&
+    parentLoc.container === childLoc.container
+  );
+  const shouldReparentChild = !parent || parentContainsChild || sharesContainerWithParent || !childLoc;
+
   const ensureChildAttached = () => {
+    if (!shouldReparentChild) return;
     mid.children ??= [];
     if (!mid.children.includes(child)) {
       mid.children.push(child);
@@ -78,13 +105,13 @@ export function insertBetween(
   };
 
   const finalizeInsertion = () => {
+    if (!shouldReparentChild) return;
     ensureChildAttached();
     detachEverywhere(mission, child, mid);
   };
 
   if (parent) {
     const parAncestor = findNearestParallelAncestor(mission, parent);
-    const parentLoc = findParentAndIndex(mission, parent);
 
     if (
       parentLoc &&
