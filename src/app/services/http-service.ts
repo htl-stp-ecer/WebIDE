@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { BehaviorSubject, Observable } from 'rxjs';
 import {Mission} from '../entities/Mission';
+import { TypeDefinition } from '../entities/TypeDefinition';
 
 interface RunMissionOptions {
   simulate?: boolean;
@@ -78,6 +79,10 @@ export class HttpService {
 
   getAllSteps() {
     return this.http.get<Step[]>(`${this.ip}/api/v1/steps`);
+  }
+
+  getTypeDefinitions() {
+    return this.http.get<TypeDefinition[]>(`${this.ip}/api/v1/type-definitions`);
   }
 
   getAllMissions(projectUUID: string) {

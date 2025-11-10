@@ -118,6 +118,10 @@
   max-width: 100%;
 }
 
+:host ::ng-deep .node .p-select.arg-dropdown {
+  width: 100%;
+}
+
 :host ::ng-deep .node .p-checkbox {
   display: inline-flex;
 }

@@ -7,6 +7,7 @@ import { handleOrientationChange, isVerticalOrientation } from './orientation-ha
 import { handleUndo, handleRedo } from './history-handlers';
 import { handleNodeMoved } from './mission-handlers';
 import { handleCreateNode, deleteNode as removeNode } from './node-handlers';
+import { handleArgumentChange } from './argument-handlers';
 import { handleAddBreakpoint, handleAddConnection, handleNodeIntersected as handleSplitConnection, handleRemoveBreakpoint } from './connection-handlers';
 import {
   handleCanvasContextMenu,
@@ -56,6 +57,7 @@ export interface FlowchartActions {
   onRun(mode: 'normal' | 'debug'): void;
   stopRun(): void;
   continueDebug(): void;
+  onArgumentChange(nodeId: string, argName: string, index: number, value: unknown): void;
 }
 
 export function createFlowchartActions(flow: Flowchart): FlowchartActions {
@@ -91,5 +93,6 @@ export function createFlowchartActions(flow: Flowchart): FlowchartActions {
     onRun: mode => handleRun(flow, mode),
     stopRun: () => handleStop(flow),
     continueDebug: () => handleContinueDebug(flow),
+    onArgumentChange: (nodeId, argName, index, value) => handleArgumentChange(flow, nodeId, argName, index, value),
   };
 }

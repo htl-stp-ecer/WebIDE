@@ -1,4 +1,4 @@
-import { AfterViewChecked, Component, ElementRef, OnDestroy, QueryList, Signal, ViewChild, ViewChildren, signal, viewChild } from '@angular/core';
+import { AfterViewChecked, Component, ElementRef, OnDestroy, OnInit, QueryList, Signal, ViewChild, ViewChildren, signal, viewChild } from '@angular/core';
 import { EFMarkerType, FCanvasComponent, FFlowComponent, FFlowModule } from '@foblex/flow';
 import { ContextMenu, ContextMenuModule } from 'primeng/contextmenu';
 import { CheckboxModule } from 'primeng/checkbox';
@@ -26,16 +26,25 @@ import { initializeFlowchart } from './flowchart-init';
 import { handleAfterViewChecked } from './layout-handlers';
 import { recomputeMergedView } from './view-merger';
 import { createFlowchartActions, FlowchartActions } from './flowchart-actions';
+import { TypeDefinition } from '../../entities/TypeDefinition';
+import {Select} from 'primeng/select';
+
+interface DefinitionOption {
+  label: string;
+  value: string;
+}
+
+type DefinitionGroups = Partial<Record<string, DefinitionOption[]>>;
 
 @Component({
   selector: 'app-flowchart',
-  imports: [FFlowComponent, FFlowModule, InputNumberModule, CheckboxModule, InputTextModule, ContextMenuModule, Tooltip, SelectButtonModule, FormsModule, TranslateModule],
+  imports: [FFlowComponent, FFlowModule, InputNumberModule, CheckboxModule, InputTextModule, ContextMenuModule, Tooltip, SelectButtonModule, FormsModule, TranslateModule, Select],
   templateUrl: './flowchart.html',
   styleUrl: './flowchart.scss',
   providers: [FlowHistory],
   standalone: true,
 })
-export class Flowchart implements AfterViewChecked, OnDestroy {
+export class Flowchart implements AfterViewChecked, OnDestroy, OnInit {
   readonly isDarkMode = signal<boolean>(readDarkMode());
   readonly nodes = signal<FlowNode[]>([]);
   readonly connections = signal<Connection[]>([]);
@@ -53,6 +62,7 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
   readonly layoutFlags: LayoutFlags = createLayoutFlags();
   readonly historyManager: FlowchartHistoryManager;
   readonly runManager: FlowchartRunManager;
+  readonly typeDefinitionOptions = signal<DefinitionGroups>({});
   actions!: FlowchartActions;
   readonly eMarkerType = EFMarkerType;
   orientationOptions: { label: string; value: FlowOrientation }[] = [];
@@ -67,6 +77,7 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
   projectUUID: string | null = null;
   langChangeSub?: Subscription;
   themeObserver?: MutationObserver;
+  typeDefinitionsSub?: Subscription;
   private _useAutoLayout = readStoredAutoLayout();
 
   constructor(
@@ -81,6 +92,10 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
     this.runManager = createRunManager(this);
     this.actions = createFlowchartActions(this);
     initializeFlowchart(this);
+  }
+
+  ngOnInit(): void {
+    this.loadTypeDefinitions();
   }
 
   get useAutoLayout(): boolean {
@@ -107,5 +122,28 @@ export class Flowchart implements AfterViewChecked, OnDestroy {
     this.actions.stopRun();
     this.langChangeSub?.unsubscribe();
     this.themeObserver?.disconnect();
+    this.typeDefinitionsSub?.unsubscribe();
+  }
+
+  private loadTypeDefinitions(): void {
+    this.typeDefinitionsSub?.unsubscribe();
+    this.typeDefinitionsSub = this.http.getTypeDefinitions().subscribe({
+      next: defs => this.typeDefinitionOptions.set(this.groupDefinitionsByType(defs)),
+      error: () => this.typeDefinitionOptions.set({}),
+    });
+  }
+
+  private groupDefinitionsByType(definitions: TypeDefinition[]): DefinitionGroups {
+    const grouped: DefinitionGroups = {};
+    definitions.forEach(def => {
+      const typeName = (def.type ?? '').toString();
+      const options = grouped[typeName] ?? (grouped[typeName] = []);
+      options.push({ label: def.name, value: def.name });
+    });
+    Object.values(grouped).forEach(opts => {
+      if (!opts) return;
+      opts.sort((a, b) => a.label.localeCompare(b.label));
+    });
+    return grouped;
   }
 }

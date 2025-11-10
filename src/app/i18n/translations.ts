@@ -85,6 +85,8 @@ export const enTranslations = {
     ORIENTATION_HORIZONTAL: 'Horizontal',
     AUTO_LAYOUT: 'Auto layout',
     CONTINUE: 'Continue',
+    SELECT_TYPE_DEFINITION: 'Select {{ type }} definition',
+    NO_TYPE_DEFINITIONS: 'No {{ type }} definitions available',
   },
 };
 
@@ -175,6 +177,8 @@ export const deTranslations = {
     ORIENTATION_HORIZONTAL: 'Horizontal',
     AUTO_LAYOUT: 'Auto-Layout',
     CONTINUE: 'Weiter',
+    SELECT_TYPE_DEFINITION: '{{ type }}-Definition auswählen',
+    NO_TYPE_DEFINITIONS: 'Keine {{ type }}-Definitionen verfügbar',
   },
 };
 
