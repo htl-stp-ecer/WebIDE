@@ -33,6 +33,14 @@ export function attachChildSequentially(mission: Mission, parent: MissionStep, c
     return true;
   }
 
+  if (parentLoc && !parentLoc.parent) {
+    const { container, index } = parentLoc;
+    if (container) {
+      container.splice(index + 1, 0, child);
+      return true;
+    }
+  }
+
   parent.children ??= [];
   if (!parent.children.length) {
     parent.children.push(child);
@@ -94,7 +102,13 @@ export function insertBetween(
     childLoc &&
     parentLoc.container === childLoc.container
   );
-  const shouldReparentChild = !parent || parentContainsChild || sharesContainerWithParent || !childLoc;
+
+  if (childLoc?.container && (!parent || (sharesContainerWithParent && !parentContainsChild))) {
+    childLoc.container.splice(childLoc.index, 0, mid);
+    return true;
+  }
+
+  const shouldReparentChild = !parent || parentContainsChild || !childLoc;
 
   const ensureChildAttached = () => {
     if (!shouldReparentChild) return;
@@ -151,13 +165,11 @@ export function insertBetween(
   }
   if (!parent) {
     mission.steps ??= [];
-    const topLevelIndex = mission.steps.indexOf(child);
-    if (topLevelIndex !== -1) {
-      mission.steps.splice(topLevelIndex, 1, mid);
+    if (!childLoc || !childLoc.container) {
+      mission.steps.push(mid);
       finalizeInsertion();
       return true;
     }
-
     const loc = findParentAndIndex(mission, child);
     if (!loc) return false;
     loc.container.splice(loc.index, 1, mid);

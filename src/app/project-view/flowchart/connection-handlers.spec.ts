@@ -132,12 +132,13 @@ describe('connection-handlers', () => {
       handleNodeIntersected(flow, event);
 
       const missionSteps = mission.steps;
-      expect(missionSteps.length).toBe(2);
+      expect(missionSteps.length).toBe(3);
       expect(missionSteps[0]).toBe(stepA);
 
       const insertedStep = missionSteps[1];
       expect(insertedStep?.function_name).toBe('X');
-      expect(insertedStep.children?.[0]).toBe(stepB);
+      expect(insertedStep.children?.length ?? 0).toBe(0);
+      expect(missionSteps[2]).toBe(stepB);
       expect(flow.historyManager.recordHistory).toHaveBeenCalledWith('split-mission-connection');
 
       const adHocNode2: FlowNode = {
@@ -158,11 +159,14 @@ describe('connection-handlers', () => {
       const event2 = new FNodeIntersectedWithConnections(adHocNode2.id, [connectionToStepB!.id]);
       handleNodeIntersected(flow, event2);
 
-      const chainParent = mission.steps[1];
-      expect(chainParent?.function_name).toBe('X');
-      const nestedInsertedStep = chainParent.children?.[0];
+      const updatedSteps = mission.steps;
+      expect(updatedSteps.length).toBe(4);
+      expect(updatedSteps[0]).toBe(stepA);
+      expect(updatedSteps[1]).toBe(insertedStep);
+      const nestedInsertedStep = updatedSteps[2];
       expect(nestedInsertedStep?.function_name).toBe('Y');
-      expect(nestedInsertedStep?.children?.[0]).toBe(stepB);
+      expect(nestedInsertedStep?.children?.length ?? 0).toBe(0);
+      expect(updatedSteps[3]).toBe(stepB);
     });
 
     it('inserts node into parallel lane sequence when splitting lane exit', () => {
@@ -439,6 +443,50 @@ it('keeps downstream node outside parallel when adding new parallel child', () =
         baseId(conn.inputId, 'input') === n4Id
     );
     expect(n3ToN4).toBeTruthy();
+  });
+
+  it('appends a new top-level step when connecting from the tail node', () => {
+    const step1 = createStep('First');
+    const step2 = createStep('Second');
+    const mission: Mission = {
+      name: 'mission',
+      is_setup: false,
+      is_shutdown: false,
+      order: 0,
+      steps: [step1, step2],
+      comments: [],
+    };
+
+    const flow = createTestFlow({ mission });
+    rebuildFromMission(flow, mission);
+    recomputeMergedView(flow);
+
+    const adHocNode: FlowNode = {
+      id: 'adhoc-tail',
+      text: 'Third',
+      position: { x: 180, y: 120 },
+      step: { name: 'Third', arguments: [] },
+      args: {},
+    };
+
+    flow.adHocNodes.set([...flow.adHocNodes(), adHocNode]);
+    recomputeMergedView(flow);
+
+    const step2NodeId = flow.lookups.stepToNodeId.get(step2)!;
+    const event = new FCreateConnectionEvent(
+      `${step2NodeId}-output`,
+      `${adHocNode.id}-input`,
+      { x: 0, y: 0 }
+    );
+
+    handleAddConnection(flow, event);
+
+    expect(mission.steps.length).toBe(3);
+    expect(mission.steps[0]).toBe(step1);
+    expect(mission.steps[1]).toBe(step2);
+    const appendedStep = mission.steps[2];
+    expect(appendedStep?.function_name).toBe('Third');
+    expect(step2.children?.length ?? 0).toBe(0);
   });
 
   it('appends sequentially inside a parallel lane without moving downstream steps', () => {
