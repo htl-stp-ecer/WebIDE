@@ -77,8 +77,8 @@ export class HttpService {
     return this.http.post<Project>(`${this.ip}/api/v1/projects`, { name: newProject });
   }
 
-  getAllSteps() {
-    return this.http.get<Step[]>(`${this.ip}/api/v1/steps`);
+  getAllSteps(uuid: string) {
+    return this.http.get<Step[]>(`${this.ip}/api/v1/steps/?project_uuid=${uuid}`);
   }
 
   getTypeDefinitions() {

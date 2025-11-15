@@ -2,6 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { FExternalItemDirective } from '@foblex/flow';
 import { HttpService } from '../../services/http-service';
 import { StepsStateService } from '../../services/steps-state-service';
+import {ActivatedRoute} from '@angular/router';
 
 interface StepGroup {
   headline: string;
@@ -19,10 +20,10 @@ interface StepGroup {
 export class StepPanel implements OnInit {
   stepGroups: StepGroup[] = [];
 
-  constructor(private http: HttpService, private stepStateService: StepsStateService) {}
+  constructor(private http: HttpService, private stepStateService: StepsStateService, private route: ActivatedRoute) {}
 
   ngOnInit(): void {
-    this.http.getAllSteps().subscribe(steps => {
+    this.http.getAllSteps(this.route.snapshot.paramMap.get('uuid')!).subscribe(steps => {
       this.stepStateService.setSteps(steps);
       this.groupSteps(steps);
     });
