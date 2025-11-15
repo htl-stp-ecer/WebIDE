@@ -20,7 +20,13 @@ export function findParentAndIndex(
 }
 
 export function detachEverywhere(mission: Mission, target: MissionStep, exceptParent?: MissionStep): void {
-  mission.steps = (mission.steps ?? []).filter(s => s !== target);
+  const steps = mission.steps ?? [];
+  const filteredTopLevel = steps.filter(s => s !== target);
+  if (filteredTopLevel.length !== steps.length) {
+    mission.steps = filteredTopLevel;
+  } else {
+    mission.steps = steps;
+  }
   const walk = (p: MissionStep): void => {
     const cs = p.children ?? [];
     if (!cs.length) return;

@@ -8,7 +8,7 @@ import { FlowchartLookupState } from './lookups';
 import { handleAddConnection, handleNodeIntersected } from './connection-handlers';
 import { recomputeMergedView } from './view-merger';
 import { rebuildFromMission } from './mission-handlers';
-import { insertBetween, attachChildSequentially } from './mission-sequence-utils';
+import { insertBetween, attachChildSequentially, shouldAppendSequentially } from './mission-sequence-utils';
 import { attachChildWithParallel } from './mission-parallel-utils';
 
 const createStep = (
@@ -421,6 +421,7 @@ it('keeps downstream node outside parallel when adding new parallel child', () =
     );
 
     handleAddConnection(flow, event);
+    console.log('step1 children after', step1.children);
 
     const updatedMission = flow.missionState.currentMission()!;
     const seqStep = updatedMission.steps[0].children?.[0];
@@ -556,5 +557,25 @@ it('keeps downstream node outside parallel when adding new parallel child', () =
 
     const untouchedLane = parallelChildren.find(ch => ch === laneB || (ch.children?.includes(laneB)));
     expect(untouchedLane).toBe(laneB);
+  });
+
+  it('treats trailing structural siblings as empty when checking sequential append eligibility', () => {
+    const tail = createStep('Tail');
+    const emptySeq = createStep('SeqWrapper', [], [], 'seq');
+    const emptyParallel = createStep('ParallelWrapper', [], [], 'parallel');
+    const breakPoint = createStep('BreakpointWrapper', [], [], 'breakpoint');
+    emptyParallel.children = [createStep('NestedSeq', [], [], 'seq')];
+    breakPoint.children = [createStep('NestedParallel', [], [], 'parallel')];
+
+    const mission: Mission = {
+      name: 'mission',
+      is_setup: false,
+      is_shutdown: false,
+      order: 0,
+      steps: [tail, emptySeq, emptyParallel, breakPoint],
+      comments: [],
+    };
+
+    expect(shouldAppendSequentially(mission, tail)).toBeTrue();
   });
 });

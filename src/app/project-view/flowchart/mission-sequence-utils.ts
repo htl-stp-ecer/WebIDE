@@ -1,8 +1,25 @@
 import { Mission } from '../../entities/Mission';
 import { MissionStep } from '../../entities/MissionStep';
-import { isType, mk } from './models';
+import { isType, mk, isBreakpoint } from './models';
 import { containsStep, detachEverywhere, findNearestParallelAncestor, findParentAndIndex } from './mission-tree-utils';
 import { ensureParallelAfter } from './mission-parallel-utils';
+
+const isStructural = (step?: MissionStep | null): boolean =>
+  !!step && (isType(step, 'parallel') || isType(step, 'seq') || isBreakpoint(step));
+
+const hasExecutableDescendant = (step?: MissionStep | null): boolean => {
+  if (!step) return false;
+  if (!isStructural(step)) return true;
+  return (step.children ?? []).some(child => hasExecutableDescendant(child));
+};
+
+const hasExecutableSiblingAfter = (arr: MissionStep[] | undefined, startIndex: number): boolean => {
+  if (!arr) return false;
+  for (let i = startIndex; i < arr.length; i += 1) {
+    if (hasExecutableDescendant(arr[i])) return true;
+  }
+  return false;
+};
 
 export function shouldAppendSequentially(mission: Mission, parent: MissionStep): boolean {
   if (!parent || (parent.children ?? []).length > 0) return false;
@@ -12,7 +29,7 @@ export function shouldAppendSequentially(mission: Mission, parent: MissionStep):
 
   const { parent: directParent, container, index } = loc;
   if (directParent && isType(directParent, 'parallel')) return true;
-  return container[index + 1] === undefined;
+  return !hasExecutableSiblingAfter(container, index + 1);
 }
 export function attachChildSequentially(mission: Mission, parent: MissionStep, child: MissionStep): boolean {
   if (parent === child) return false;
@@ -33,14 +50,6 @@ export function attachChildSequentially(mission: Mission, parent: MissionStep, c
     return true;
   }
 
-  if (parentLoc && !parentLoc.parent) {
-    const { container, index } = parentLoc;
-    if (container) {
-      container.splice(index + 1, 0, child);
-      return true;
-    }
-  }
-
   parent.children ??= [];
   if (!parent.children.length) {
     parent.children.push(child);
@@ -58,6 +67,7 @@ export function attachChildSequentially(mission: Mission, parent: MissionStep, c
   seq.children = [...parent.children, child];
   parent.children = [seq];
   return true;
+
 }
 export function findSeqContainerForEdge(
   steps: MissionStep[] | undefined,

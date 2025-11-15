@@ -44,6 +44,7 @@ export function handleAddConnection(flow: Flowchart, event: FCreateConnectionEve
         attached = attachChildSequentially(mission, parent, missionStep);
       }
       if (!attached) {
+        console.log('attachChildWithParallel invoked for', parent.function_name);
         attachChildWithParallel(mission, parent, missionStep);
       }
     } else {
