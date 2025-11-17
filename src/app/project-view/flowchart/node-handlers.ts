@@ -12,7 +12,7 @@ export function handleCreateNode(flow: Flowchart, event: FCreateNodeEvent): void
   const step = event.data as Step;
   const args: Record<string, boolean | string | number | null> = {};
   step?.arguments?.forEach(arg => {
-    args[arg.name] = toVal(arg.type, String((arg.default ?? '') !== '' ? arg.default : ''));
+    args[arg.name] = toVal(arg.type, arg.default ?? '');
   });
 
   flow.adHocNodes.set([

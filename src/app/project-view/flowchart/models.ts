@@ -59,4 +59,32 @@ export const mk = (t: 'parallel' | 'seq'): MissionStep => ({
   children: [],
 });
 export const baseId = (id: string, kind: 'input' | 'output') => kind === 'output' ? (id === 'start-node-output' ? 'start-node' : id.replace(/-output$/, '')) : id.replace(/-input$/, '');
-export const toVal = (t: string, v: string) => t === 'bool' ? v.toLowerCase() === 'true' : t === 'float' ? (parseFloat(v) || null) : v;
+const toNumber = (input: unknown) => {
+  if (typeof input === 'number') {
+    return Number.isFinite(input) ? input : null;
+  }
+  if (typeof input === 'string' && input.trim() !== '') {
+    const parsed = Number(input);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+};
+
+export const toVal = (t: string | undefined, v: unknown) => {
+  if (v == null || v === '') {
+    return null;
+  }
+  const kind = (t ?? '').toLowerCase();
+  if (kind === 'bool' || kind === 'boolean') {
+    return typeof v === 'boolean' ? v : String(v).toLowerCase() === 'true';
+  }
+  if (kind === 'float' || kind === 'number') {
+    const parsed = toNumber(v);
+    return parsed === null ? null : parsed;
+  }
+  if (kind === 'int' || kind === 'integer') {
+    const parsed = toNumber(v);
+    return parsed === null ? null : Math.trunc(parsed);
+  }
+  return typeof v === 'string' ? v : String(v);
+};

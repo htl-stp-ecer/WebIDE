@@ -10,7 +10,6 @@ export function handleArgumentChange(flow: Flowchart, nodeId: string, argName: s
   const storedName = argKey || `arg${argIndex}`;
   const argType = node?.step?.arguments?.[argIndex]?.type;
   const resolvedValue = resolveControlValue(rawValue, argType);
-  const persistedValue = resolvedValue == null ? '' : String(resolvedValue);
   const currentValue = node?.args?.[argKey] ?? null;
 
   if (node) {
@@ -24,12 +23,13 @@ export function handleArgumentChange(flow: Flowchart, nodeId: string, argName: s
   if (missionStep) {
     const targetArg = ensureMissionArgument(missionStep, argIndex, storedName, argType);
     if (!changed) {
-      changed = !valuesEqual(normalizeStoredValue(targetArg.value), persistedValue);
+      const storedValue = resolveControlValue(targetArg.value, argType);
+      changed = !valuesEqual(storedValue, resolvedValue);
     }
     if (!changed) {
       return;
     }
-    targetArg.value = persistedValue as any;
+    targetArg.value = resolvedValue;
     flow.historyManager.recordHistory('update-argument');
     return;
   }
@@ -81,7 +81,7 @@ function ensureMissionArgument(step: MissionStep, index: number, name: string, a
   if (!step.arguments[index]) {
     step.arguments[index] = {
       name,
-      value: '',
+      value: null,
       type: argType ?? 'str',
     };
   } else {
@@ -93,10 +93,6 @@ function ensureMissionArgument(step: MissionStep, index: number, name: string, a
     }
   }
   return step.arguments[index];
-}
-
-function normalizeStoredValue(value: unknown): string {
-  return value == null ? '' : String(value);
 }
 
 function valuesEqual(a: unknown, b: unknown): boolean {

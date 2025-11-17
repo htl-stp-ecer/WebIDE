@@ -3,7 +3,7 @@ export interface MissionStep {
   function_name: string,
   arguments: {
     name: string,
-    value: string,
+    value: string | number | boolean | null,
     type: string,
   }[],
   position?: {

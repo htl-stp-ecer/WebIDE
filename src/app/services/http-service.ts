@@ -142,7 +142,7 @@ export class HttpService {
     const params: string[] = [];
     const shouldSimulate = options?.simulate ?? true;
     if (shouldSimulate) {
-      params.push('simulate=1');
+      // params.push('simulate=1');
     }
     if (options?.debug) {
       params.push('debug=1');

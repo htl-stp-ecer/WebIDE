@@ -19,15 +19,21 @@ export function asStepFromPool(ms: MissionStep, pool: Step[]): Step {
 
 export function initialArgsFromPool(ms: MissionStep, pool: Step[]): Record<string, boolean | string | number | null> {
   const match = pool.find(s => s.name === ms.function_name);
-  return match
-    ? Object.fromEntries(match.arguments.map((sa, i) => [sa.name, toVal(sa.type, String(ms.arguments[i]?.value ?? sa.default ?? ''))]))
-    : Object.fromEntries(ms.arguments.map((a, i) => [a.name || `arg${i}`, toVal(a.type, String(a.value ?? ''))]));
+  if (match) {
+    return Object.fromEntries(match.arguments.map((sa, i) => {
+      const storedArg = ms.arguments[i];
+      const hasValue = storedArg !== undefined;
+      const source = hasValue ? storedArg!.value : (sa.default ?? '');
+      return [sa.name, toVal(sa.type, source)];
+    }));
+  }
+  return Object.fromEntries(ms.arguments.map((a, i) => [a.name || `arg${i}`, toVal(a.type, a.value)]));
 }
 
 export function missionStepFromAdHoc(n: FlowNode): MissionStep {
   const args = Object.entries(n.args || {}).map(([name, v]) => ({
     name,
-    value: v == null ? '' : String(v),
+    value: v == null ? null : v,
     type: n.step?.arguments?.find(a => a.name === name)?.type ?? 'str'
   }));
   return {
