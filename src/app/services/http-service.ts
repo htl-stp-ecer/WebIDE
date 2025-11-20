@@ -145,7 +145,7 @@ export class HttpService {
       // params.push('simulate=1');
     }
     if (options?.debug) {
-      params.push('debug=1');
+      // params.push('debug=1');
     }
     const query = params.length ? `?${params.join('&')}` : '';
     const httpUrl = `${this.ip}/api/v1/missions/${projectUUID}/run/${name}${query}`;
