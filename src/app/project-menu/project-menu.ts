@@ -1,5 +1,5 @@
 import { Component, OnInit } from '@angular/core';
-import {Router} from '@angular/router';
+import {ActivatedRoute, Router} from '@angular/router';
 import { HttpService } from '../services/http-service';
 import { FormsModule } from '@angular/forms';
 import { InputText } from 'primeng/inputtext';
@@ -10,6 +10,7 @@ import { ConfirmDialog } from 'primeng/confirmdialog';
 import { ConfirmationService } from 'primeng/api';
 import {NgClass} from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { decodeRouteIp, encodeRouteIp } from '../services/route-ip-serializer';
 
 @Component({
   selector: 'app-project-menu',
@@ -32,6 +33,7 @@ export class ProjectMenu implements OnInit {
 
   constructor(
     private router: Router,
+    private route: ActivatedRoute,
     private http: HttpService,
     private confirmationService: ConfirmationService,
     private translate: TranslateService
@@ -238,7 +240,14 @@ export class ProjectMenu implements OnInit {
   }
 
   redirectToProject(uuid: string) {
-    this.router.navigate([this.router.url + "/" + uuid]);
+    const ipParam = this.route.snapshot.paramMap.get('ip');
+    const decodedIp = decodeRouteIp(ipParam);
+    if (!decodedIp) {
+      console.warn('Cannot redirect to project view: missing IP route parameter');
+      return;
+    }
+
+    this.router.navigate(['/', encodeRouteIp(decodedIp), 'projects', uuid]);
   }
 
   backToProjects() {

@@ -7,6 +7,7 @@ import {ActivatedRoute, Router, NavigationEnd, RouterLink, RouterLinkActive} fro
 import { filter, Subscription, interval, switchMap, takeUntil, Subject } from 'rxjs';
 import { HttpService } from '../services/http-service';
 import { enTranslations, deTranslations } from '../i18n/translations';
+import { decodeRouteIp } from '../services/route-ip-serializer';
 
 @Component({
   selector: 'app-navbar',
@@ -68,11 +69,14 @@ export class Navbar implements OnInit, OnDestroy {
           route = route.firstChild;
         }
 
-        const newIp = route.snapshot.paramMap.get('ip');
+        const newIpRaw = route.snapshot.paramMap.get('ip');
+        const newIp = decodeRouteIp(newIpRaw);
 
         if (newIp !== this.ip) {
           this.ip = newIp;
-          this.http.setIp(newIp!)
+          if (newIp) {
+            this.http.setIp(newIp);
+          }
           this.deviceInfo = undefined;
           this.restartPolling();
         }
