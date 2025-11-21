@@ -28,6 +28,10 @@ export function shouldAppendSequentially(mission: Mission, parent: MissionStep):
   if (!loc) return true;
 
   const { parent: directParent, container, index } = loc;
+  const isTopLevel = !directParent;
+  const isLastInContainer = index === (container.length - 1);
+  if (isTopLevel && isLastInContainer) return false;
+
   if (directParent && isType(directParent, 'parallel')) return true;
   return !hasExecutableSiblingAfter(container, index + 1);
 }
