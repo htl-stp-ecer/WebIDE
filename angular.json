@@ -39,16 +39,17 @@
 							"budgets": [
 								{
 									"type": "initial",
-									"maximumWarning": "500kB",
-									"maximumError": "1MB"
+									"maximumWarning": "2B",
+									"maximumError": "6MB"
 								},
 								{
 									"type": "anyComponentStyle",
-									"maximumWarning": "4kB",
-									"maximumError": "8kB"
+									"maximumWarning": "18kB",
+									"maximumError": "20kB"
 								}
 							],
-							"outputHashing": "all"
+							"outputHashing": "all",
+              "baseHref": "/WebIDE/"
 						},
 						"development": {
 							"optimization": false,

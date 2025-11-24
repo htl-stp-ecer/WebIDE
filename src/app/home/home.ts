@@ -11,6 +11,7 @@ import { Router } from '@angular/router';
 import { NotificationService } from '../services/NotificationService';
 import { interval, Subscription } from 'rxjs';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { encodeRouteIp } from '../services/route-ip-serializer';
 
 @Component({
   selector: 'app-home',
@@ -77,12 +78,17 @@ export class Home implements OnInit, OnDestroy {
   }
 
   tryConnecting(ip: string) {
+    const targetIp = (ip || '').trim();
+    if (!targetIp) {
+      return;
+    }
+
     this.loading = true;
-    this.httpService.getDeviceInfo(ip).subscribe({
+    this.httpService.getDeviceInfo(targetIp).subscribe({
       next: (res) => {
         this.loading = false;
-        const existing = this.previousConnections.find(c => c.ip === ip);
-        res.ip = ip;
+        const existing = this.previousConnections.find(c => c.ip === targetIp);
+        res.ip = targetIp;
 
         if (existing) {
           existing.hostname = res.hostname;
@@ -92,7 +98,7 @@ export class Home implements OnInit, OnDestroy {
         }
 
         this.saveToLocalStorage();
-        this.router.navigate([ip + "/projects"]);
+        this.router.navigate(['/', encodeRouteIp(targetIp), 'projects']);
       },
       error: (err) => {
         this.loading = false;
