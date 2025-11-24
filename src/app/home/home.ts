@@ -161,12 +161,12 @@ export class Home implements OnInit, OnDestroy {
       if (!url.port) {
         url.port = '8000';
       }
-      url.pathname = '/api/v1/confirm';
+      url.pathname = '/api/v1/device/confirm';
       url.search = '';
       url.hash = '';
       return url.toString();
     } catch {
-      return `http://${ip}/api/v1/confirm`;
+      return `http://${ip}/api/v1/device/confirm`;
     }
   }
 }
