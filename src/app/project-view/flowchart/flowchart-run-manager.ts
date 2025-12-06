@@ -1,4 +1,4 @@
-import { WritableSignal } from '@angular/core';
+import { WritableSignal, signal } from '@angular/core';
 import { Subscription } from 'rxjs';
 import { HttpService } from '../../services/http-service';
 import { RunPathTracker } from './run-path-tracker';
@@ -24,6 +24,15 @@ interface FlowchartRunContext {
   getMissionKey(): string | null;
 }
 
+export interface StepTiming {
+  id: string;
+  index: number;
+  label?: string;
+  path?: string;
+  durationMs: number;
+  timestampMs: number;
+}
+
 export class FlowchartRunManager {
   private readonly tracker = new RunPathTracker();
   private runSubscription: Subscription | null = null;
@@ -31,6 +40,13 @@ export class FlowchartRunManager {
   private currentMode: 'normal' | 'debug' | null = null;
   private paused = false;
   private bufferedEvents: unknown[] = [];
+  private runStartMs: number | null = null;
+  private lastStepTimestampMs: number | null = null;
+  private pathToNodeId: Map<string, string> = new Map();
+
+  readonly stepTimings = signal<StepTiming[]>([]);
+  readonly maxStepDurationMs = signal(0);
+  readonly nodeTimings = signal<Map<string, StepTiming>>(new Map());
 
   constructor(private readonly ctx: FlowchartRunContext) {}
 
@@ -91,6 +107,8 @@ export class FlowchartRunManager {
 
   updatePathLookups(pathToNodeId: Map<string, string>, pathToConnectionIds: Map<string, string[]>): void {
     this.tracker.updateLookups(pathToNodeId, pathToConnectionIds);
+    this.pathToNodeId = new Map(pathToNodeId);
+    this.nodeTimings.set(new Map());
   }
 
   clearRunVisuals(): void {
@@ -105,6 +123,10 @@ export class FlowchartRunManager {
     return this.tracker.isConnectionCompleted(connectionId);
   }
 
+  getNodeTiming(nodeId: string): StepTiming | undefined {
+    return this.nodeTimings().get(nodeId);
+  }
+
   handleRunEvent(event: unknown): void {
     if (!event || typeof event !== 'object') return;
     if (this.paused) {
@@ -115,8 +137,12 @@ export class FlowchartRunManager {
   }
 
   private processEvent(payload: Record<string, unknown>): void {
+    this.logEventTimestamp(payload);
     const type = String((payload as { type?: unknown }).type ?? '');
     switch (type) {
+      case 'started':
+        this.markRunStart(payload);
+        break;
       case 'open':
         this.ctx.isRunActive.set(true);
         if (this.currentMode === 'debug') {
@@ -129,6 +155,7 @@ export class FlowchartRunManager {
         break;
       case 'step':
         this.tracker.handleStepEvent(payload);
+        this.recordStepTiming(payload);
         if (
           this.currentMode === 'debug' &&
           !this.paused &&
@@ -148,6 +175,24 @@ export class FlowchartRunManager {
         break;
       default:
         break;
+    }
+  }
+
+  private logEventTimestamp(payload: Record<string, unknown>): void {
+    const type = String((payload as { type?: unknown }).type ?? '');
+    if (type !== 'step') return;
+
+    const parsedMs = this.extractTimestampMs(payload) ?? Date.now();
+    const ts = new Date(parsedMs);
+
+    const label = (payload['display_label'] as string) || (payload['name'] as string);
+    const path = Array.isArray(payload['path']) ? (payload['path'] as unknown[]).join('.') : undefined;
+    const summary = label || path ? { label: label || path } : undefined;
+
+    if (summary) {
+      console.log(`[Flowchart] Step event at ${ts.toISOString()}`, summary, payload);
+    } else {
+      console.log(`[Flowchart] Step event at ${ts.toISOString()}`, payload);
     }
   }
 
@@ -183,6 +228,7 @@ export class FlowchartRunManager {
     this.runSubscription = null;
 
     this.clearRunVisuals();
+    this.resetTimingData();
     this.ctx.isRunActive.set(true);
     this.ctx.debugState.set('idle');
     this.ctx.breakpointInfo.set(null);
@@ -249,5 +295,69 @@ export class FlowchartRunManager {
     for (const event of queue) {
       this.handleRunEvent(event);
     }
+  }
+
+  private markRunStart(payload: Record<string, unknown>): void {
+    const ts = this.extractTimestampMs(payload) ?? Date.now();
+    this.runStartMs = ts;
+    this.lastStepTimestampMs = null;
+  }
+
+  private recordStepTiming(payload: Record<string, unknown>): void {
+    const tsMs = this.extractTimestampMs(payload) ?? Date.now();
+    if (this.runStartMs === null) {
+      this.runStartMs = tsMs;
+    }
+
+    const prevTs = this.lastStepTimestampMs ?? this.runStartMs;
+    const durationMs = prevTs !== null ? Math.max(0, tsMs - prevTs) : 0;
+    this.lastStepTimestampMs = tsMs;
+    const label = (payload['display_label'] as string) || (payload['name'] as string) || (payload['step_type'] as string);
+    const pathArr = Array.isArray(payload['path']) ? payload['path'] as unknown[] : undefined;
+    const path = pathArr ? pathArr.join('.') : undefined;
+    const index = Number((payload as { index?: unknown }).index) || this.stepTimings().length + 1;
+
+    const entry: StepTiming = {
+      id: `${index}-${path || label || 'step'}`,
+      index,
+      label: label || undefined,
+      path,
+      durationMs,
+      timestampMs: tsMs,
+    };
+
+    this.stepTimings.update(prev => [...prev, entry]);
+    this.maxStepDurationMs.update(prev => Math.max(prev, durationMs));
+
+    if (path) {
+      const nodeId = this.pathToNodeId.get(path);
+      if (nodeId) {
+        this.nodeTimings.update(prev => {
+          const next = new Map(prev);
+          next.set(nodeId, entry);
+          return next;
+        });
+      }
+    }
+  }
+
+  private extractTimestampMs(payload: Record<string, unknown>): number | null {
+    const raw = (payload as { timestamp?: unknown }).timestamp;
+    if (typeof raw === 'number') {
+      return raw * 1000;
+    }
+    if (typeof raw === 'string') {
+      const parsed = Date.parse(raw);
+      return Number.isFinite(parsed) ? parsed : null;
+    }
+    return null;
+  }
+
+  private resetTimingData(): void {
+    this.runStartMs = null;
+    this.lastStepTimestampMs = null;
+    this.stepTimings.set([]);
+    this.maxStepDurationMs.set(0);
+    this.nodeTimings.set(new Map());
   }
 }

@@ -53,6 +53,21 @@
     </div>
   </div>
 
+  <div class="view-toggle-bar">
+    @for (toggle of viewToggleOptions; track toggle.key) {
+      <button
+        type="button"
+        class="toggle-chip"
+        [class.active]="isToggleEnabled(toggle.key)"
+        (click)="toggleViewOption(toggle.key)"
+        [attr.aria-label]="toggle.label"
+        [pTooltip]="toggle.label"
+        tooltipPosition="bottom">
+        <i [class]="toggle.icon || 'pi pi-sliders-h'" class="toggle-icon"></i>
+      </button>
+    }
+  </div>
+
   <div class="flow-surface" (contextmenu)="actions.onCanvasContextMenu($event)">
     <f-flow class="flow-root" fDraggable fEmitOnNodeIntersect (fNodeIntersectedWithConnections)="actions.onNodeIntersected($event)" (fLoaded)="actions.onLoaded()" (fCreateNode)="actions.onCreateNode($event)" (fCreateConnection)="actions.addConnection($event)" (fDragEnded)="actions.onSave()">
       <f-background class="flow-bg"><f-circle-pattern color="#4a5565"></f-circle-pattern></f-background>
@@ -80,6 +95,11 @@
           <div fNode fDragHandle [fNodeId]="node.id" [fNodePosition]="node.position" class="node" [class.node-completed]="actions.isNodeCompleted(node.id)" [attr.data-node-id]="node.id" (contextmenu)="actions.onRightClick($event, node.id)" (fNodePositionChange)="actions.onNodeMoved(node.id, $event)" #nodeElement>
             <div fNodeInput [fInputConnectableSide]="actions.isVertical() ? 'top' : 'left'" [fInputId]="node.id + '-input'" class="port" [class.port-top]="actions.isVertical()" [class.port-left]="!actions.isVertical()"></div>
             <div class="node-title">{{ node.text }}</div>
+            @if (isToggleEnabled('timestamps') ? runManager.getNodeTiming(node.id) : null; as timing) {
+              <div class="node-timing" [pTooltip]="timing.label || timing.path || ('FLOWCHART.STEP'|translate)" tooltipPosition="top" [showDelay]="120" [hideDelay]="50">
+                {{ (timing.durationMs / 1000) | number:'1.2-2' }}s
+              </div>
+            }
             @if (node.step.arguments.length) {
               <div class="node-args">
                 @for (arg of node.step.arguments; track arg.name; let idx = $index) {
@@ -123,6 +143,44 @@
         }
       </f-canvas>
     </f-flow>
+
+    @if (runManager.stepTimings().length && isToggleEnabled('timestamps')) {
+      <div class="step-timing-panel">
+        <div class="panel-header">
+          <span>Step times</span>
+          <div class="panel-switch">
+            <button type="button" class="panel-switch-btn" [class.active]="timingViewMode() === 'list'" (click)="setTimingViewMode('list')">List</button>
+            <button type="button" class="panel-switch-btn" [class.active]="timingViewMode() === 'chart'" (click)="setTimingViewMode('chart')">Graph</button>
+          </div>
+        </div>
+        @if (timingViewMode() === 'list') {
+          <div class="panel-body">
+            @for (timing of runManager.stepTimings(); track timing.id; let idx = $index) {
+              <div class="timing-row">
+                <div class="timing-label" [pTooltip]="timing.label || timing.path" tooltipPosition="top" [showDelay]="120" [hideDelay]="50">
+                  <span class="timing-index">#{{ timing.index || (idx + 1) }}</span>
+                  <span class="timing-name">{{ timing.label || timing.path || ('FLOWCHART.STEP'|translate) }}</span>
+                </div>
+                <div class="timing-bar-row">
+                  <div class="timing-bar-bg">
+                    <div class="timing-bar-fill" [style.width.%]="runManager.maxStepDurationMs() ? (timing.durationMs / runManager.maxStepDurationMs()) * 100 : 5"></div>
+                  </div>
+                  <div class="timing-value">{{ (timing.durationMs / 1000) | number:'1.2-2' }}s</div>
+                </div>
+              </div>
+            }
+          </div>
+        } @else {
+          @if (runManager.stepTimings().length) {
+            <div class="timing-chart">
+              <p-chart type="line" [data]="timingChartData" [options]="timingChartOptions" styleClass="timing-chart-canvas"></p-chart>
+            </div>
+          } @else {
+            <div class="timing-empty">No timings yet</div>
+          }
+        }
+      </div>
+    }
   </div>
 
   <p-contextMenu #cm [model]="contextMenu.items" [appendTo]="'body'"></p-contextMenu>
