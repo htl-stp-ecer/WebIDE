@@ -97,7 +97,8 @@
             <div class="node-title">{{ node.text }}</div>
             @if (isToggleEnabled('timestamps') ? runManager.getNodeTiming(node.id) : null; as timing) {
               <div class="node-timing" [pTooltip]="timing.label || timing.path || ('FLOWCHART.STEP'|translate)" tooltipPosition="top" [showDelay]="120" [hideDelay]="50">
-                {{ (timing.durationMs / 1000) | number:'1.2-2' }}s
+                <div class="node-timing__duration">{{ (timing.durationMs / 1000) | number:'1.2-2' }}s</div>
+                <div class="node-timing__elapsed">{{ (timing.elapsedMs / 1000) | number:'1.2-2' }}s</div>
               </div>
             }
             @if (node.step.arguments.length) {

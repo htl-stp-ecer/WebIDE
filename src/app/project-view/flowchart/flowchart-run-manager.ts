@@ -31,6 +31,7 @@ export interface StepTiming {
   path?: string;
   durationMs: number;
   timestampMs: number;
+  elapsedMs: number;
 }
 
 export class FlowchartRunManager {
@@ -43,6 +44,7 @@ export class FlowchartRunManager {
   private runStartMs: number | null = null;
   private lastStepTimestampMs: number | null = null;
   private pathToNodeId: Map<string, string> = new Map();
+  private accumulatedMs = 0;
 
   readonly stepTimings = signal<StepTiming[]>([]);
   readonly maxStepDurationMs = signal(0);
@@ -301,6 +303,7 @@ export class FlowchartRunManager {
     const ts = this.extractTimestampMs(payload) ?? Date.now();
     this.runStartMs = ts;
     this.lastStepTimestampMs = null;
+    this.accumulatedMs = 0;
   }
 
   private recordStepTiming(payload: Record<string, unknown>): void {
@@ -312,6 +315,7 @@ export class FlowchartRunManager {
     const prevTs = this.lastStepTimestampMs ?? this.runStartMs;
     const durationMs = prevTs !== null ? Math.max(0, tsMs - prevTs) : 0;
     this.lastStepTimestampMs = tsMs;
+    this.accumulatedMs += durationMs;
     const label = (payload['display_label'] as string) || (payload['name'] as string) || (payload['step_type'] as string);
     const pathArr = Array.isArray(payload['path']) ? payload['path'] as unknown[] : undefined;
     const path = pathArr ? pathArr.join('.') : undefined;
@@ -324,6 +328,7 @@ export class FlowchartRunManager {
       path,
       durationMs,
       timestampMs: tsMs,
+      elapsedMs: this.accumulatedMs,
     };
 
     this.stepTimings.update(prev => [...prev, entry]);
@@ -359,5 +364,6 @@ export class FlowchartRunManager {
     this.stepTimings.set([]);
     this.maxStepDurationMs.set(0);
     this.nodeTimings.set(new Map());
+    this.accumulatedMs = 0;
   }
 }
