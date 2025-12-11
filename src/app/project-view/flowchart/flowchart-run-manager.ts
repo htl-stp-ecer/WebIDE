@@ -22,6 +22,7 @@ interface FlowchartRunContext {
   breakpointInfo: WritableSignal<BreakpointEventPayload | null>;
   getProjectUUID(): string | null;
   getMissionKey(): string | null;
+  shouldSimulate?(): boolean;
 }
 
 export interface StepTiming {
@@ -29,9 +30,15 @@ export interface StepTiming {
   index: number;
   label?: string;
   path?: string;
+  signature?: string;
   durationMs: number;
   timestampMs: number;
   elapsedMs: number;
+  anomaly?: boolean;
+  expectedMeanMs?: number;
+  expectedStddevMs?: number;
+  deviationSigma?: number;
+  source: 'synthetic' | 'measured';
 }
 
 export class FlowchartRunManager {
@@ -170,6 +177,15 @@ export class FlowchartRunManager {
       case 'breakpoint':
         this.handleBreakpointEvent(payload as BreakpointEventPayload & { state?: string });
         break;
+      case 'step_timing':
+        this.applyMeasuredTiming(payload);
+        break;
+      case 'step_timing_status':
+        // Timings database not present yet (expected in simulation); ignore.
+        break;
+      case 'step_timing_error':
+        console.warn('[Flowchart] Step timing error', payload);
+        break;
       case 'exit':
       case 'error':
         this.ctx.isRunActive.set(false);
@@ -239,9 +255,10 @@ export class FlowchartRunManager {
     this.paused = false;
     this.bufferedEvents = [];
 
+    const simulate = mode === 'debug' ? true : !!this.ctx.shouldSimulate?.();
     const runOptions = mode === 'debug'
       ? { simulate: true, debug: true, onSocket: (socket: WebSocket | null) => this.updateSocket(socket) }
-      : { simulate: true, onSocket: (socket: WebSocket | null) => this.updateSocket(socket) };
+      : { simulate, onSocket: (socket: WebSocket | null) => this.updateSocket(socket) };
 
     this.runSubscription = this.ctx.http.runMission(projectId, missionKey, runOptions).subscribe({
       next: event => this.handleRunEvent(event),
@@ -329,21 +346,87 @@ export class FlowchartRunManager {
       durationMs,
       timestampMs: tsMs,
       elapsedMs: this.accumulatedMs,
+      source: 'synthetic',
     };
 
-    this.stepTimings.update(prev => [...prev, entry]);
-    this.maxStepDurationMs.update(prev => Math.max(prev, durationMs));
+    this.rebuildTimings([...this.stepTimings(), entry]);
+  }
 
-    if (path) {
-      const nodeId = this.pathToNodeId.get(path);
-      if (nodeId) {
-        this.nodeTimings.update(prev => {
-          const next = new Map(prev);
-          next.set(nodeId, entry);
-          return next;
-        });
-      }
+  private applyMeasuredTiming(payload: Record<string, unknown>): void {
+    const durationSeconds = Number((payload as { duration_seconds?: unknown }).duration_seconds);
+    if (!Number.isFinite(durationSeconds)) {
+      return;
     }
+    const durationMs = Math.max(0, durationSeconds * 1000);
+    const recordedAtMs = this.extractRecordedAtMs(payload) ?? Date.now();
+    if (this.runStartMs === null) {
+      this.runStartMs = recordedAtMs;
+    }
+
+    const signatureRaw = (payload as { signature?: unknown }).signature;
+    const signature = typeof signatureRaw === 'string' ? signatureRaw : undefined;
+    const anomaly = Boolean((payload as { anomaly?: unknown }).anomaly);
+    const expectedMeanMs = this.toMs((payload as { expected_mean?: unknown }).expected_mean);
+    const expectedStddevMs = this.toMs((payload as { expected_stddev?: unknown }).expected_stddev);
+    const deviationSigma = this.toNumber((payload as { deviation_sigma?: unknown }).deviation_sigma);
+
+    const timings = [...this.stepTimings()];
+    const targetIdx = this.findTimingTargetIndex(timings, signature);
+    const base: StepTiming = timings[targetIdx] ?? {
+      id: '',
+      index: targetIdx + 1,
+      label: signature,
+      path: undefined,
+      signature,
+      durationMs,
+      timestampMs: recordedAtMs,
+      elapsedMs: 0,
+      source: 'measured',
+    };
+
+    const merged: StepTiming = {
+      ...base,
+      id: base.id || `step-${targetIdx + 1}-${signature || base.path || 'measured'}`,
+      durationMs,
+      timestampMs: recordedAtMs,
+      signature: signature ?? base.signature,
+      label: base.label || signature,
+      anomaly,
+      expectedMeanMs: expectedMeanMs ?? base.expectedMeanMs,
+      expectedStddevMs: expectedStddevMs ?? base.expectedStddevMs,
+      deviationSigma: deviationSigma ?? base.deviationSigma,
+      source: 'measured',
+    };
+
+    timings[targetIdx] = merged;
+    this.rebuildTimings(timings);
+  }
+
+  private findTimingTargetIndex(timings: StepTiming[], signature?: string): number {
+    const normalizedSig = (signature ?? '').trim().toLowerCase();
+    if (normalizedSig) {
+      const idx = timings.findIndex(
+        t => t.source !== 'measured' && this.matchesSignature(t, normalizedSig),
+      );
+      if (idx !== -1) return idx;
+    }
+
+    const firstSynthetic = timings.findIndex(t => t.source !== 'measured');
+    if (firstSynthetic !== -1) return firstSynthetic;
+
+    return timings.length;
+  }
+
+  private matchesSignature(entry: StepTiming, normalizedSig: string): boolean {
+    const candidates = [
+      entry.signature,
+      entry.label,
+      entry.path,
+    ]
+      .filter(Boolean)
+      .map(v => String(v).toLowerCase());
+
+    return candidates.some(val => val.includes(normalizedSig) || normalizedSig.includes(val));
   }
 
   private extractTimestampMs(payload: Record<string, unknown>): number | null {
@@ -356,6 +439,57 @@ export class FlowchartRunManager {
       return Number.isFinite(parsed) ? parsed : null;
     }
     return null;
+  }
+
+  private extractRecordedAtMs(payload: Record<string, unknown>): number | null {
+    const raw = (payload as { recorded_at?: unknown }).recorded_at;
+    if (typeof raw === 'number' && Number.isFinite(raw)) {
+      return raw * 1000;
+    }
+    return this.extractTimestampMs(payload);
+  }
+
+  private toMs(value: unknown): number | undefined {
+    const num = Number(value);
+    if (!Number.isFinite(num)) return undefined;
+    return num * 1000;
+  }
+
+  private toNumber(value: unknown): number | undefined {
+    const num = Number(value);
+    return Number.isFinite(num) ? num : undefined;
+  }
+
+  private rebuildTimings(nextTimings: StepTiming[]): void {
+    let elapsed = 0;
+    let maxDuration = 0;
+    const normalized: StepTiming[] = nextTimings.map((timing, idx) => {
+      const duration = Number.isFinite(timing.durationMs) ? Math.max(0, timing.durationMs) : 0;
+      elapsed += duration;
+      maxDuration = Math.max(maxDuration, duration);
+      return {
+        ...timing,
+        id: timing.id || `step-${idx + 1}-${timing.path || timing.label || timing.signature || 'step'}`,
+        index: timing.index || idx + 1,
+        durationMs: duration,
+        elapsedMs: elapsed,
+        source: timing.source ?? 'synthetic',
+      };
+    });
+
+    this.stepTimings.set(normalized);
+    this.maxStepDurationMs.set(maxDuration);
+
+    const nodeMap = new Map<string, StepTiming>();
+    normalized.forEach(timing => {
+      if (!timing.path) return;
+      const nodeId = this.pathToNodeId.get(timing.path);
+      if (nodeId) {
+        nodeMap.set(nodeId, timing);
+      }
+    });
+    this.nodeTimings.set(nodeMap);
+    this.accumulatedMs = elapsed;
   }
 
   private resetTimingData(): void {

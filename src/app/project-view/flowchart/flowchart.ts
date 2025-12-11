@@ -72,6 +72,7 @@ export class Flowchart implements AfterViewChecked, OnDestroy, OnInit {
     { key: 'timestamps', label: 'Show timestamps', icon: 'pi pi-clock' },
   ];
   readonly timingViewMode = signal<TimingViewMode>('list');
+  readonly simulateRuns = signal<boolean>(true);
   actions!: FlowchartActions;
   readonly eMarkerType = EFMarkerType;
   orientationOptions: { label: string; value: FlowOrientation }[] = [];
@@ -152,6 +153,10 @@ export class Flowchart implements AfterViewChecked, OnDestroy, OnInit {
 
   setTimingViewMode(mode: TimingViewMode): void {
     this.timingViewMode.set(mode);
+  }
+
+  toggleSimulation(): void {
+    this.simulateRuns.update(prev => !prev);
   }
 
   get timingChartData(): ChartData<'line'> {

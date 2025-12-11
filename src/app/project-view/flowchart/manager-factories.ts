@@ -32,5 +32,6 @@ export function createRunManager(flow: Flowchart): FlowchartRunManager {
     breakpointInfo: flow.breakpointInfo,
     getProjectUUID: () => flow.projectUUID,
     getMissionKey: () => flow.historyManager.getMissionKey(),
+    shouldSimulate: () => flow.simulateRuns(),
   });
 }

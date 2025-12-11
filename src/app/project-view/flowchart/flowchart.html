@@ -66,6 +66,18 @@
         <i [class]="toggle.icon || 'pi pi-sliders-h'" class="toggle-icon"></i>
       </button>
     }
+    <div class="toggle-spacer"></div>
+    <button
+      type="button"
+      class="toggle-chip simulate-toggle"
+      [class.active]="simulateRuns()"
+      (click)="toggleSimulation()"
+      aria-label="Toggle simulation"
+      [pTooltip]="simulateRuns() ? 'Simulated run enabled' : 'Simulated run disabled'"
+      tooltipPosition="bottom">
+      <i class="pi pi-objects-column"></i>
+      <span class="ml-1 text-sm">{{ simulateRuns() ? 'Sim' : 'Real' }}</span>
+    </button>
   </div>
 
   <div class="flow-surface" (contextmenu)="actions.onCanvasContextMenu($event)">
