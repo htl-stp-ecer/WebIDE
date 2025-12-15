@@ -34,6 +34,7 @@ export interface StepTiming {
   durationMs: number;
   timestampMs: number;
   elapsedMs: number;
+  runId: number;
   anomaly?: boolean;
   expectedMeanMs?: number;
   expectedStddevMs?: number;
@@ -42,12 +43,16 @@ export interface StepTiming {
 }
 
 export class FlowchartRunManager {
+  private static readonly HISTORY_RUN_ID = -1;
+
   private readonly tracker = new RunPathTracker();
   private runSubscription: Subscription | null = null;
   private currentSocket: WebSocket | null = null;
   private currentMode: 'normal' | 'debug' | null = null;
   private paused = false;
   private bufferedEvents: unknown[] = [];
+  private currentRunId = 0;
+  private awaitingRunStart = false;
   private runStartMs: number | null = null;
   private lastStepTimestampMs: number | null = null;
   private pathToNodeId: Map<string, string> = new Map();
@@ -246,6 +251,8 @@ export class FlowchartRunManager {
     this.runSubscription = null;
 
     this.clearRunVisuals();
+    this.currentRunId += 1;
+    this.awaitingRunStart = true;
     this.resetTimingData();
     this.ctx.isRunActive.set(true);
     this.ctx.debugState.set('idle');
@@ -318,15 +325,13 @@ export class FlowchartRunManager {
 
   private markRunStart(payload: Record<string, unknown>): void {
     const ts = this.extractTimestampMs(payload) ?? Date.now();
-    this.runStartMs = ts;
-    this.lastStepTimestampMs = null;
-    this.accumulatedMs = 0;
+    this.beginRun(ts);
   }
 
   private recordStepTiming(payload: Record<string, unknown>): void {
     const tsMs = this.extractTimestampMs(payload) ?? Date.now();
-    if (this.runStartMs === null) {
-      this.runStartMs = tsMs;
+    if (this.awaitingRunStart || this.runStartMs === null) {
+      this.beginRun(tsMs);
     }
 
     const prevTs = this.lastStepTimestampMs ?? this.runStartMs;
@@ -346,6 +351,7 @@ export class FlowchartRunManager {
       durationMs,
       timestampMs: tsMs,
       elapsedMs: this.accumulatedMs,
+      runId: this.currentRunId,
       source: 'synthetic',
     };
 
@@ -359,9 +365,9 @@ export class FlowchartRunManager {
     }
     const durationMs = Math.max(0, durationSeconds * 1000);
     const recordedAtMs = this.extractRecordedAtMs(payload) ?? Date.now();
-    if (this.runStartMs === null) {
-      this.runStartMs = recordedAtMs;
-    }
+
+    const belongsToCurrentRun = this.isMeasuredTimingForCurrentRun(recordedAtMs);
+    const runId = belongsToCurrentRun ? this.currentRunId : FlowchartRunManager.HISTORY_RUN_ID;
 
     const signatureRaw = (payload as { signature?: unknown }).signature;
     const signature = typeof signatureRaw === 'string' ? signatureRaw : undefined;
@@ -370,8 +376,33 @@ export class FlowchartRunManager {
     const expectedStddevMs = this.toMs((payload as { expected_stddev?: unknown }).expected_stddev);
     const deviationSigma = this.toNumber((payload as { deviation_sigma?: unknown }).deviation_sigma);
 
+    if (!belongsToCurrentRun) {
+      const entry: StepTiming = {
+        id: `history-${recordedAtMs}-${signature ?? 'unknown'}`,
+        index: this.stepTimings().length + 1,
+        label: signature,
+        signature,
+        path: undefined,
+        durationMs,
+        timestampMs: recordedAtMs,
+        elapsedMs: 0,
+        runId,
+        anomaly,
+        expectedMeanMs,
+        expectedStddevMs,
+        deviationSigma,
+        source: 'measured',
+      };
+      this.rebuildTimings([...this.stepTimings(), entry]);
+      return;
+    }
+
+    if (this.awaitingRunStart || this.runStartMs === null) {
+      this.beginRun(recordedAtMs);
+    }
+
     const timings = [...this.stepTimings()];
-    const targetIdx = this.findTimingTargetIndex(timings, signature);
+    const targetIdx = this.findTimingTargetIndex(timings, runId, signature);
     const base: StepTiming = timings[targetIdx] ?? {
       id: '',
       index: targetIdx + 1,
@@ -381,6 +412,7 @@ export class FlowchartRunManager {
       durationMs,
       timestampMs: recordedAtMs,
       elapsedMs: 0,
+      runId,
       source: 'measured',
     };
 
@@ -395,6 +427,7 @@ export class FlowchartRunManager {
       expectedMeanMs: expectedMeanMs ?? base.expectedMeanMs,
       expectedStddevMs: expectedStddevMs ?? base.expectedStddevMs,
       deviationSigma: deviationSigma ?? base.deviationSigma,
+      runId,
       source: 'measured',
     };
 
@@ -402,17 +435,25 @@ export class FlowchartRunManager {
     this.rebuildTimings(timings);
   }
 
-  private findTimingTargetIndex(timings: StepTiming[], signature?: string): number {
+  private findTimingTargetIndex(timings: StepTiming[], runId: number, signature?: string): number {
     const normalizedSig = (signature ?? '').trim().toLowerCase();
+
     if (normalizedSig) {
-      const idx = timings.findIndex(
-        t => t.source !== 'measured' && this.matchesSignature(t, normalizedSig),
-      );
-      if (idx !== -1) return idx;
+      for (let i = timings.length - 1; i >= 0; i--) {
+        const t = timings[i];
+        if (t.runId !== runId) continue;
+        if (t.source !== 'measured' && this.matchesSignature(t, normalizedSig)) {
+          return i;
+        }
+      }
     }
 
-    const firstSynthetic = timings.findIndex(t => t.source !== 'measured');
-    if (firstSynthetic !== -1) return firstSynthetic;
+    for (let i = timings.length - 1; i >= 0; i--) {
+      const t = timings[i];
+      if (t.runId === runId && t.source !== 'measured') {
+        return i;
+      }
+    }
 
     return timings.length;
   }
@@ -461,18 +502,26 @@ export class FlowchartRunManager {
   }
 
   private rebuildTimings(nextTimings: StepTiming[]): void {
-    let elapsed = 0;
+    let overallElapsed = 0;
+    let currentRunElapsed = 0;
+    let runElapsed = 0;
     let maxDuration = 0;
     const normalized: StepTiming[] = nextTimings.map((timing, idx) => {
       const duration = Number.isFinite(timing.durationMs) ? Math.max(0, timing.durationMs) : 0;
-      elapsed += duration;
+      overallElapsed += duration;
+      const inCurrentRun = timing.runId === this.currentRunId;
+      if (inCurrentRun) {
+        runElapsed += duration;
+        currentRunElapsed = runElapsed;
+      }
       maxDuration = Math.max(maxDuration, duration);
       return {
         ...timing,
         id: timing.id || `step-${idx + 1}-${timing.path || timing.label || timing.signature || 'step'}`,
         index: timing.index || idx + 1,
         durationMs: duration,
-        elapsedMs: elapsed,
+        elapsedMs: inCurrentRun ? runElapsed : overallElapsed,
+        runId: timing.runId ?? this.currentRunId,
         source: timing.source ?? 'synthetic',
       };
     });
@@ -481,23 +530,37 @@ export class FlowchartRunManager {
     this.maxStepDurationMs.set(maxDuration);
 
     const nodeMap = new Map<string, StepTiming>();
-    normalized.forEach(timing => {
-      if (!timing.path) return;
+    for (let i = normalized.length - 1; i >= 0; i--) {
+      const timing = normalized[i];
+      if (timing.runId !== this.currentRunId) continue;
+      if (!timing.path) continue;
       const nodeId = this.pathToNodeId.get(timing.path);
-      if (nodeId) {
+      if (nodeId && !nodeMap.has(nodeId)) {
         nodeMap.set(nodeId, timing);
       }
-    });
+    }
     this.nodeTimings.set(nodeMap);
-    this.accumulatedMs = elapsed;
+    this.accumulatedMs = currentRunElapsed;
+  }
+
+  private isMeasuredTimingForCurrentRun(recordedAtMs: number): boolean {
+    if (this.runStartMs === null) {
+      return false;
+    }
+    return recordedAtMs >= this.runStartMs;
   }
 
   private resetTimingData(): void {
     this.runStartMs = null;
     this.lastStepTimestampMs = null;
-    this.stepTimings.set([]);
-    this.maxStepDurationMs.set(0);
     this.nodeTimings.set(new Map());
+    this.accumulatedMs = 0;
+  }
+
+  private beginRun(startTimestampMs: number | null): void {
+    this.runStartMs = startTimestampMs;
+    this.awaitingRunStart = false;
+    this.lastStepTimestampMs = null;
     this.accumulatedMs = 0;
   }
 }
