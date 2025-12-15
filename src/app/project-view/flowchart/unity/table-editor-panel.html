@@ -1,0 +1,37 @@
+<div class="table-panel">
+  <div class="table-header">
+    <div class="table-title">
+      <i class="pi pi-table"></i>
+      <span>Table editor</span>
+    </div>
+    <div class="table-status" [class.disabled]="!unity.isReady()">
+      @if (unity.isReady()) {
+        <span class="table-pill table-pill-ready">Unity ready</span>
+      } @else {
+        <span class="table-pill">Unity not ready</span>
+      }
+    </div>
+  </div>
+
+  <div class="table-body">
+    <canvas
+      #drawCanvas
+      class="draw-canvas"
+      width="256"
+      height="256"
+      (pointerdown)="onPointerDown()"
+      (pointerup)="onPointerUp()"
+      (pointerleave)="onPointerUp()"
+      (pointermove)="onPointerMove($event)"></canvas>
+
+    <div class="table-actions">
+      <button type="button" class="table-btn" (click)="clearCanvas()">Clear</button>
+      <button type="button" class="table-btn table-btn-primary" (click)="sendToUnity()" [disabled]="!unity.isReady()">Send to Unity</button>
+    </div>
+
+    @if (message()) {
+      <div class="table-message">{{ message() }}</div>
+    }
+  </div>
+</div>
+

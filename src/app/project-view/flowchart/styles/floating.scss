@@ -1,0 +1,20 @@
+.bottom-right-stack {
+  position: absolute;
+  right: 1rem;
+  bottom: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  align-items: flex-end;
+  z-index: 7;
+  pointer-events: none;
+}
+
+.bottom-right-stack > * {
+  pointer-events: auto;
+}
+
+.is-hidden {
+  display: none !important;
+}
+

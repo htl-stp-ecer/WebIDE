@@ -31,6 +31,8 @@ import {Select} from 'primeng/select';
 import { ChartModule } from 'primeng/chart';
 import type { ChartData, ChartOptions } from 'chart.js';
 import {DecimalPipe} from '@angular/common';
+import { UnityCanvasPanel } from './unity/unity-canvas-panel';
+import { TableEditorPanel } from './unity/table-editor-panel';
 
 interface DefinitionOption {
   label: string;
@@ -42,7 +44,7 @@ type TimingViewMode = 'list' | 'chart';
 
 @Component({
   selector: 'app-flowchart',
-  imports: [FFlowComponent, FFlowModule, InputNumberModule, CheckboxModule, InputTextModule, ContextMenuModule, Tooltip, SelectButtonModule, FormsModule, TranslateModule, Select, DecimalPipe, ChartModule],
+  imports: [FFlowComponent, FFlowModule, InputNumberModule, CheckboxModule, InputTextModule, ContextMenuModule, Tooltip, SelectButtonModule, FormsModule, TranslateModule, Select, DecimalPipe, ChartModule, UnityCanvasPanel, TableEditorPanel],
   templateUrl: './flowchart.html',
   styleUrl: './flowchart.scss',
   providers: [FlowHistory],
@@ -67,10 +69,13 @@ export class Flowchart implements AfterViewChecked, OnDestroy, OnInit {
   readonly historyManager: FlowchartHistoryManager;
   readonly runManager: FlowchartRunManager;
   readonly typeDefinitionOptions = signal<DefinitionGroups>({});
-  readonly viewToggleState = signal<Record<string, boolean>>({ timestamps: true });
+  readonly viewToggleState = signal<Record<string, boolean>>({ timestamps: true, unityCanvas: false, tableEditor: false });
   readonly viewToggleOptions = [
     { key: 'timestamps', label: 'Show timestamps', icon: 'pi pi-clock' },
+    { key: 'unityCanvas', label: 'Simulation', icon: 'pi pi-desktop' },
+    { key: 'tableEditor', label: 'Table editor', icon: 'pi pi-table' },
   ];
+  readonly unityBaseUrl = `${globalThis.location?.protocol ?? 'http:'}//${globalThis.location?.hostname ?? 'localhost'}:8000`;
   readonly timingViewMode = signal<TimingViewMode>('list');
   readonly simulateRuns = signal<boolean>(true);
   actions!: FlowchartActions;

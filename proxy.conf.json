@@ -1,0 +1,12 @@
+{
+  "/unity": {
+    "target": "https://localhost:4443",
+    "secure": false,
+    "changeOrigin": true,
+    "ws": false,
+    "logLevel": "warn",
+    "pathRewrite": {
+      "^/unity": ""
+    }
+  }
+}

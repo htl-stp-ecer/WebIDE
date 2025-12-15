@@ -194,6 +194,16 @@
         }
       </div>
     }
+
+    <div class="bottom-right-stack">
+      <app-unity-canvas-panel
+        [baseUrl]="unityBaseUrl"
+        [visible]="isToggleEnabled('unityCanvas')"
+        [class.is-hidden]="!isToggleEnabled('unityCanvas')"></app-unity-canvas-panel>
+
+      <app-table-editor-panel
+        [class.is-hidden]="!isToggleEnabled('tableEditor')"></app-table-editor-panel>
+    </div>
   </div>
 
   <p-contextMenu #cm [model]="contextMenu.items" [appendTo]="'body'"></p-contextMenu>

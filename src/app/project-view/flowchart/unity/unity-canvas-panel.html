@@ -1,0 +1,58 @@
+<div class="unity-panel">
+  <div class="unity-header">
+    <div class="unity-title">
+      <i class="pi pi-desktop"></i>
+      <span>ECER Robot Simulator</span>
+    </div>
+
+    <div class="unity-status">
+      @if (unity.status() === 'loading') {
+        <span class="unity-pill unity-pill-loading">{{ (unity.progress() * 100) | number:'1.0-0' }}%</span>
+      } @else if (unity.status() === 'ready') {
+        <span class="unity-pill unity-pill-ready">Ready</span>
+      } @else if (unity.status() === 'error') {
+        <span class="unity-pill unity-pill-error">Error</span>
+      } @else {
+        <span class="unity-pill">Idle</span>
+      }
+
+      <button type="button" class="unity-icon-btn" (click)="reload()" aria-label="Reload Unity" title="Reload Unity">
+        <i class="pi pi-refresh"></i>
+      </button>
+    </div>
+  </div>
+
+  <div class="unity-body">
+    <canvas #unityCanvas id="unityCanvas" class="unity-canvas"></canvas>
+
+    @if (unity.status() === 'loading') {
+      <div class="unity-overlay">
+        <div class="unity-overlay-card">
+          <div class="unity-overlay-title">Loading Unity…</div>
+          <div class="unity-overlay-sub">{{ (unity.progress() * 100) | number:'1.0-0' }}%</div>
+          <div class="unity-overlay-hint">Source: {{ baseUrl }}</div>
+          <a class="unity-link" [href]="baseUrl" target="_blank" rel="noreferrer">Open source</a>
+        </div>
+      </div>
+    } @else if (unity.status() === 'error') {
+      <div class="unity-overlay">
+        <div class="unity-overlay-card">
+          <div class="unity-overlay-title">Unity failed to load</div>
+          <div class="unity-overlay-sub">{{ unity.error() }}</div>
+          <button type="button" class="unity-btn" (click)="reload()">Retry</button>
+          <div class="unity-overlay-hint">Source: {{ baseUrl }}</div>
+          <a class="unity-link" [href]="baseUrl" target="_blank" rel="noreferrer">Open source</a>
+        </div>
+      </div>
+    } @else if (unity.status() === 'idle') {
+      <div class="unity-overlay">
+        <div class="unity-overlay-card">
+          <div class="unity-overlay-title">Unity is not started</div>
+          <button type="button" class="unity-btn" (click)="start()">Start</button>
+          <div class="unity-overlay-hint">Source: {{ baseUrl }}</div>
+          <a class="unity-link" [href]="baseUrl" target="_blank" rel="noreferrer">Open source</a>
+        </div>
+      </div>
+    }
+  </div>
+</div>
