@@ -2,11 +2,37 @@ import type { Flowchart } from './flowchart';
 import { Mission } from '../../entities/Mission';
 import { MissionStep } from '../../entities/MissionStep';
 import { MissionComment } from '../../entities/MissionComment';
+import { MissionGroup } from '../../entities/MissionGroup';
 import { rebuildMissionView } from './mission-builder';
 import { asStepFromPool, initialArgsFromPool } from './step-utils';
 import { recomputeMergedView } from './view-merger';
 import { START_OUTPUT_ID } from './constants';
-import { FlowComment, FlowNode } from './models';
+import { FlowComment, FlowGroup, FlowNode } from './models';
+
+const DEFAULT_GROUP_SIZE = { width: 360, height: 240 };
+
+function normalizeFlowGroups(groups: FlowGroup[]): FlowGroup[] {
+  return (groups ?? [])
+    .filter((g): g is FlowGroup => !!g && typeof (g as any).id === 'string' && !!(g as any).id)
+    .map(g => ({
+      id: g.id,
+      title: (g as any).title ?? 'Group',
+      position: (g as any).position && Number.isFinite((g as any).position.x) && Number.isFinite((g as any).position.y)
+        ? { x: (g as any).position.x, y: (g as any).position.y }
+        : { x: 0, y: 0 },
+      size: (g as any).size && Number.isFinite((g as any).size.width) && Number.isFinite((g as any).size.height)
+        ? { width: (g as any).size.width, height: (g as any).size.height }
+        : { width: DEFAULT_GROUP_SIZE.width, height: DEFAULT_GROUP_SIZE.height },
+      collapsed: !!(g as any).collapsed,
+      nodeIds: Array.isArray((g as any).nodeIds)
+        ? (g as any).nodeIds.filter((id: unknown): id is string => typeof id === 'string' && !!id)
+        : [],
+      stepPaths: Array.isArray((g as any).stepPaths)
+        ? (g as any).stepPaths.filter((p: unknown): p is string => typeof p === 'string' && !!p)
+        : [],
+      expandedSize: (g as any).expandedSize ?? null,
+    }));
+}
 
 function toFlowComments(comments: MissionComment[] | undefined): FlowComment[] {
   if (!Array.isArray(comments)) {
@@ -36,14 +62,67 @@ function toMissionComments(comments: FlowComment[]): MissionComment[] {
   }));
 }
 
+function toFlowGroups(flow: Flowchart, groups: MissionGroup[] | undefined): FlowGroup[] {
+  if (!Array.isArray(groups)) {
+    return [];
+  }
+  return groups
+    .filter((g): g is MissionGroup => !!g && typeof g.id === 'string' && !!g.id)
+    .map((group) => ({
+      id: group.id,
+      title: group.title ?? 'Group',
+      position: { x: group.position?.x ?? 0, y: group.position?.y ?? 0 },
+      size: {
+        width: group.size?.width ?? DEFAULT_GROUP_SIZE.width,
+        height: group.size?.height ?? DEFAULT_GROUP_SIZE.height,
+      },
+      collapsed: !!group.collapsed,
+      nodeIds: (Array.isArray(group.step_paths) ? group.step_paths : [])
+        .map(pathKey => flow.lookups.pathToNodeId.get(pathKey))
+        .filter((id): id is string => typeof id === 'string' && !!id),
+      stepPaths: Array.isArray(group.step_paths) ? group.step_paths.filter((p): p is string => typeof p === 'string' && !!p) : [],
+      expandedSize: null,
+    }));
+}
+
+function toMissionGroups(groups: FlowGroup[]): MissionGroup[] {
+  return groups.map((group) => ({
+    id: group.id,
+    title: group.title,
+    position: { x: group.position.x, y: group.position.y },
+    size: { width: group.size.width, height: group.size.height },
+    collapsed: group.collapsed,
+    step_paths: group.stepPaths,
+  }));
+}
+
+function refreshGroupStepPaths(flow: Flowchart, groups: FlowGroup[]): FlowGroup[] {
+  const getStepPath = (nodeId: string): string | null => {
+    const step = flow.lookups.nodeIdToStep.get(nodeId);
+    const path = step ? flow.lookups.stepPaths.get(step) : undefined;
+    return path && path.length ? path.join('.') : null;
+  };
+  return groups.map(group => ({
+    ...group,
+    stepPaths: group.nodeIds
+      .map(id => getStepPath(id))
+      .filter((p): p is string => typeof p === 'string' && !!p),
+  }));
+}
+
 export function computeStepPaths(flow: Flowchart, mission: Mission | null): void {
   flow.lookups.stepPaths.clear();
   if (!mission) {
     return;
   }
 
+  const visited = new Set<MissionStep>();
   const visit = (steps: MissionStep[] | undefined, prefix: number[]) => {
     (steps ?? []).forEach((step, idx) => {
+      if (visited.has(step)) {
+        return;
+      }
+      visited.add(step);
       const path = [...prefix, idx + 1];
       flow.lookups.stepPaths.set(step, path);
       if (step.children?.length) {
@@ -78,6 +157,11 @@ export function rebuildFromMission(flow: Flowchart, mission: Mission): void {
   const flowComments = toFlowComments(mission.comments);
   flow.comments.set(flowComments);
   mission.comments = toMissionComments(flowComments);
+  const existingGroups = flow.groups();
+  const loadedGroups = normalizeFlowGroups(existingGroups.length ? existingGroups : toFlowGroups(flow, mission.groups));
+  const refreshedGroups = refreshGroupStepPaths(flow, loadedGroups);
+  flow.groups.set(refreshedGroups);
+  mission.groups = toMissionGroups(refreshedGroups);
   recomputeMergedView(flow);
   flow.runManager.clearRunVisuals();
 }

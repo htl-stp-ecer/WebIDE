@@ -1,0 +1,81 @@
+.group-node {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  padding: 0.5rem;
+  border-radius: 0.9rem;
+  background: rgba(34, 197, 94, 0.08);
+  border: 2px dashed rgba(34, 197, 94, 0.45);
+  box-shadow: 0 10px 18px rgba(15, 23, 42, 0.08);
+  box-sizing: border-box;
+  z-index: 5;
+}
+
+.group-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.55rem;
+  border-radius: 0.7rem;
+  background: rgba(255, 255, 255, 0.75);
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  color: #111827;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+
+.group-header:active {
+  cursor: grabbing;
+}
+
+.group-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-weight: 700;
+  font-size: 0.9rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.group-collapse-btn {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 1.65rem;
+  width: 1.65rem;
+  border-radius: 0.55rem;
+  border: 1px solid rgba(148, 163, 184, 0.65);
+  background: rgba(255, 255, 255, 0.85);
+  color: inherit;
+  cursor: pointer;
+}
+
+.group-collapse-btn:hover {
+  border-color: rgba(34, 197, 94, 0.75);
+}
+
+:host-context(.dark) .group-node,
+:host-context(.p-dark) .group-node {
+  background: rgba(34, 197, 94, 0.06);
+  border-color: rgba(74, 222, 128, 0.45);
+  box-shadow: 0 10px 18px rgba(0, 0, 0, 0.35);
+}
+
+:host-context(.dark) .group-header,
+:host-context(.p-dark) .group-header {
+  background: rgba(17, 24, 39, 0.72);
+  border-color: rgba(148, 163, 184, 0.35);
+  color: #e2e8f0;
+}
+
+:host-context(.dark) .group-collapse-btn,
+:host-context(.p-dark) .group-collapse-btn {
+  background: rgba(15, 23, 42, 0.7);
+  border-color: rgba(100, 116, 139, 0.75);
+  color: #e2e8f0;
+}
+

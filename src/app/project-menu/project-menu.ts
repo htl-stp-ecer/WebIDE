@@ -39,7 +39,13 @@ export class ProjectMenu implements OnInit {
     private confirmationService: ConfirmationService,
     private translate: TranslateService,
     private unity: UnityWebglService
-  ) {}
+  ) {
+    const ipParam = this.route.snapshot.paramMap.get('ip');
+    const decodedIp = decodeRouteIp(ipParam);
+    if (decodedIp) {
+      this.http.setIp(decodedIp);
+    }
+  }
 
   ngOnInit() {
     this.http.getDeviceInfoDefault().subscribe(deviceInfo => {

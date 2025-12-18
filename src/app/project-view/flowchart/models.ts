@@ -30,6 +30,17 @@ export interface FlowComment {
   afterPath?: string | null;
 }
 
+export interface FlowGroup {
+  id: string;
+  position: { x: number; y: number };
+  size: { width: number; height: number };
+  title: string;
+  collapsed: boolean;
+  nodeIds: string[];
+  stepPaths: string[];
+  expandedSize?: { width: number; height: number } | null;
+}
+
 export type FlowOrientation = 'vertical' | 'horizontal';
 
 // The `Step` interface is provided by the steps state domain at runtime.

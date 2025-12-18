@@ -1,7 +1,7 @@
 import { WritableSignal } from '@angular/core';
 import { FlowHistory } from '../../entities/flow-history';
 import { MissionStateService } from '../../services/mission-sate-service';
-import { Connection, FlowComment, FlowNode } from './models';
+import { Connection, FlowComment, FlowGroup, FlowNode } from './models';
 
 export interface FlowchartHistoryContext {
   missionState: MissionStateService;
@@ -11,6 +11,7 @@ export interface FlowchartHistoryContext {
   adHocNodes: WritableSignal<FlowNode[]>;
   adHocConnections: WritableSignal<Connection[]>;
   comments: WritableSignal<FlowComment[]>;
+  groups: WritableSignal<FlowGroup[]>;
   nodes: WritableSignal<FlowNode[]>;
   connections: WritableSignal<Connection[]>;
   recomputeMergedView(): void;

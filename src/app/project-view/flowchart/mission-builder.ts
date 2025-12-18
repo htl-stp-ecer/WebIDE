@@ -25,6 +25,7 @@ export function rebuildMissionView(
   const nodeIdToStep = new Map<string, MissionStep>();
   const pathToNodeId = new Map<string, string>();
   const pathToConnectionIds = new Map<string, string[]>();
+  const visitedSteps = new Set<MissionStep>();
 
   type ExitRef = { id: string; breakpointPathKey?: string | null };
   const toPathKey = (path?: number[]) => (path && path.length ? path.join('.') : null);
@@ -37,6 +38,10 @@ export function rebuildMissionView(
     const exits: ExitRef[] = [];
     for (let idx = 0; idx < steps.length; idx += 1) {
       const s = steps[idx];
+      if (visitedSteps.has(s)) {
+        continue;
+      }
+      visitedSteps.add(s);
       const path = resolvePath?.(s);
       const pathKey = toPathKey(path);
       if (isType(s, 'seq')) {

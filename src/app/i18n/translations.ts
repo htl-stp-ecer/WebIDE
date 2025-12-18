@@ -87,6 +87,9 @@ export const enTranslations = {
     CONTINUE: 'Continue',
     SELECT_TYPE_DEFINITION: 'Select {{ type }} definition',
     NO_TYPE_DEFINITIONS: 'No {{ type }} definitions available',
+    ADD_GROUP: 'Add Group',
+    TOGGLE_GROUP: 'Toggle Group',
+    REMOVE_FROM_GROUP: 'Remove from Group',
   },
 };
 
@@ -179,6 +182,9 @@ export const deTranslations = {
     CONTINUE: 'Weiter',
     SELECT_TYPE_DEFINITION: '{{ type }}-Definition auswählen',
     NO_TYPE_DEFINITIONS: 'Keine {{ type }}-Definitionen verfügbar',
+    ADD_GROUP: 'Gruppe hinzufügen',
+    TOGGLE_GROUP: 'Gruppe umschalten',
+    REMOVE_FROM_GROUP: 'Aus Gruppe entfernen',
   },
 };
 

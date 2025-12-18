@@ -1,7 +1,7 @@
 import type { Flowchart } from './flowchart';
 import type { FlowOrientation } from './models';
 import type { IPoint } from '@foblex/2d';
-import type { FCreateConnectionEvent, FCreateNodeEvent, FNodeIntersectedWithConnections } from '@foblex/flow';
+import type { FCreateConnectionEvent, FCreateNodeEvent, FDropToGroupEvent, FNodeIntersectedWithConnections } from '@foblex/flow';
 import { handleLoaded, startNodePosition } from './layout-handlers';
 import { handleOrientationChange, isVerticalOrientation } from './orientation-handlers';
 import { handleUndo, handleRedo } from './history-handlers';
@@ -21,6 +21,19 @@ import {
   focusCommentTextarea as focusCommentField,
   toCanvasPoint,
 } from './comment-handlers';
+import {
+  createGroupFromContextMenu,
+  deleteGroup as removeGroup,
+  getNodeParentGroupId,
+  getVisibleConnections,
+  getVisibleNodes,
+  handleDropToGroup,
+  handleGroupPositionChanged,
+  handleGroupRightClick,
+  handleGroupSizeChanged,
+  removeSelectedNodeFromGroups,
+  toggleGroupCollapsed,
+} from './group-handlers';
 import { isNodeCompleted, isConnectionCompleted, handleRun, handleStop, handleContinueDebug } from './run-handlers';
 import { handleSave } from './save-handlers';
 import { handleNodeContextMenu, handleConnectionContextMenu } from './menu-handlers';
@@ -43,8 +56,20 @@ export interface FlowchartActions {
   onCommentFocus(id: string): void;
   onCommentBlur(id: string): void;
   createCommentFromContextMenu(): void;
+  createGroupFromContextMenu(): void;
   onCommentPositionChanged(id: string, pos: IPoint): void;
   deleteComment(): void;
+  onGroupRightClick(event: MouseEvent, id: string): void;
+  onGroupPositionChanged(id: string, pos: IPoint): void;
+  onGroupSizeChanged(id: string, rect: { width: number; height: number }): void;
+  toggleGroupCollapsed(id: string): void;
+  toggleSelectedGroupCollapsed(): void;
+  deleteGroup(): void;
+  onDropToGroup(event: FDropToGroupEvent): void;
+  removeSelectedNodeFromGroup(): void;
+  getNodeParentId(nodeId: string): string | null;
+  visibleNodes(): import('./models').FlowNode[];
+  visibleConnections(): import('./models').Connection[];
   focusCommentTextarea(id: string): void;
   onRightClick(event: MouseEvent, nodeId: string): void;
   addBreakpointToConnection(): void;
@@ -79,8 +104,26 @@ export function createFlowchartActions(flow: Flowchart): FlowchartActions {
     onCommentFocus: id => handleCommentFocus(flow, id),
     onCommentBlur: id => handleCommentBlur(flow, id),
     createCommentFromContextMenu: () => createCommentFromContextMenu(flow),
+    createGroupFromContextMenu: () => createGroupFromContextMenu(flow),
     onCommentPositionChanged: (id, pos) => handleCommentPositionChanged(flow, id, pos),
     deleteComment: () => removeComment(flow),
+    onGroupRightClick: (event, id) => handleGroupRightClick(flow, event, id),
+    onGroupPositionChanged: (id, pos) => handleGroupPositionChanged(flow, id, pos),
+    onGroupSizeChanged: (id, rect) => handleGroupSizeChanged(flow, id, rect),
+    toggleGroupCollapsed: id => toggleGroupCollapsed(flow, id),
+    toggleSelectedGroupCollapsed: () => {
+      const id = flow.contextMenu.selectedGroupId;
+      if (id) toggleGroupCollapsed(flow, id);
+    },
+    deleteGroup: () => removeGroup(flow),
+    onDropToGroup: event => handleDropToGroup(flow, event),
+    removeSelectedNodeFromGroup: () => removeSelectedNodeFromGroups(flow),
+    getNodeParentId: nodeId => {
+      const node = flow.nodes().find(n => n.id === nodeId);
+      return node ? getNodeParentGroupId(flow, node) : null;
+    },
+    visibleNodes: () => getVisibleNodes(flow),
+    visibleConnections: () => getVisibleConnections(flow),
     focusCommentTextarea: id => focusCommentField(flow, id),
     onRightClick: (event, nodeId) => handleNodeContextMenu(flow, event, nodeId),
     addBreakpointToConnection: () => handleAddBreakpoint(flow),

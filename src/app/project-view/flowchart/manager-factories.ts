@@ -12,6 +12,7 @@ export function createHistoryManager(flow: Flowchart): FlowchartHistoryManager {
     adHocNodes: flow.adHocNodes,
     adHocConnections: flow.adHocConnections,
     comments: flow.comments,
+    groups: flow.groups,
     nodes: flow.nodes,
     connections: flow.connections,
     recomputeMergedView: () => recomputeMergedView(flow),

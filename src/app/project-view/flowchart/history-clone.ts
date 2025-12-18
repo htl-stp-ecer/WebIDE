@@ -1,5 +1,5 @@
 import { Mission } from '../../entities/Mission';
-import { Connection, FlowComment, FlowNode } from './models';
+import { Connection, FlowComment, FlowGroup, FlowNode } from './models';
 
 export function cloneNodes(nodes: FlowNode[] | undefined): FlowNode[] {
   return clonePlain(nodes ?? []);
@@ -11,6 +11,10 @@ export function cloneConnections(connections: Connection[] | undefined): Connect
 
 export function cloneComments(comments: FlowComment[] | undefined): FlowComment[] {
   return clonePlain(comments ?? []);
+}
+
+export function cloneGroups(groups: FlowGroup[] | undefined): FlowGroup[] {
+  return clonePlain(groups ?? []);
 }
 
 export function cloneMission(mission: Mission | null): Mission | null {

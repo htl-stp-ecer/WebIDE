@@ -14,7 +14,7 @@ import { MissionStateService } from '../../services/mission-sate-service';
 import { StepsStateService } from '../../services/steps-state-service';
 import { HttpService } from '../../services/http-service';
 import { FlowHistory } from '../../entities/flow-history';
-import { Connection, FlowComment, FlowNode, FlowOrientation } from './models';
+import { Connection, FlowComment, FlowGroup, FlowNode, FlowOrientation } from './models';
 import { FlowchartHistoryManager } from './flowchart-history-manager';
 import { FlowchartRunManager } from './flowchart-run-manager';
 import { createHistoryManager, createRunManager } from './manager-factories';
@@ -57,6 +57,7 @@ export class Flowchart implements AfterViewChecked, OnDestroy, OnInit {
   readonly nodes = signal<FlowNode[]>([]);
   readonly connections = signal<Connection[]>([]);
   readonly comments = signal<FlowComment[]>([]);
+  readonly groups = signal<FlowGroup[]>([]);
   readonly isRunActive = signal(false);
   readonly debugState = signal<'idle' | 'running' | 'paused'>('idle');
   readonly breakpointInfo = signal<Record<string, unknown> | null>(null);
@@ -149,7 +150,12 @@ export class Flowchart implements AfterViewChecked, OnDestroy, OnInit {
 
   private loadTypeDefinitions(): void {
     this.typeDefinitionsSub?.unsubscribe();
-    this.typeDefinitionsSub = this.http.getTypeDefinitions().subscribe({
+    const projectUUID = this.projectUUID;
+    if (!projectUUID) {
+      this.typeDefinitionOptions.set({});
+      return;
+    }
+    this.typeDefinitionsSub = this.http.getTypeDefinitions(projectUUID).subscribe({
       next: defs => this.typeDefinitionOptions.set(this.groupDefinitionsByType(defs)),
       error: () => this.typeDefinitionOptions.set({}),
     });

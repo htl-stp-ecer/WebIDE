@@ -19,7 +19,7 @@ function syncMissionComments(flow: Flowchart, comments: FlowComment[]): void {
 }
 
 export function handleCanvasContextMenu(flow: Flowchart, event: MouseEvent): void {
-  if ((event.target as HTMLElement | null)?.closest('.node, .comment-node')) {
+  if ((event.target as HTMLElement | null)?.closest('.node, .comment-node, .group-node')) {
     return;
   }
   const connectionId = findNearbyConnection(flow, event);

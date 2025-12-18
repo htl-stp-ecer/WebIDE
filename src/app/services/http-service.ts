@@ -81,8 +81,8 @@ export class HttpService {
     return this.http.get<Step[]>(`${this.ip}/api/v1/steps/?project_uuid=${uuid}`);
   }
 
-  getTypeDefinitions() {
-    return this.http.get<TypeDefinition[]>(`${this.ip}/api/v1/type-definitions`);
+  getTypeDefinitions(projectUUID: string) {
+    return this.http.get<TypeDefinition[]>(`${this.ip}/api/v1/type-definitions/${projectUUID}`);
   }
 
   getAllMissions(projectUUID: string) {
