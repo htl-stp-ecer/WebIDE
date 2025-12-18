@@ -21,7 +21,7 @@ import { createHistoryManager, createRunManager } from './manager-factories';
 import { ContextMenuState } from './context-menu-state';
 import { FlowchartLookupState } from './lookups';
 import { createLayoutFlags, LayoutFlags } from './layout-flags';
-import { readDarkMode, readStoredAutoLayout, persistAutoLayout } from './theme-utils';
+import { persistViewToggleState, readDarkMode, readStoredAutoLayout, readStoredViewToggleState, persistAutoLayout } from './theme-utils';
 import { initializeFlowchart } from './flowchart-init';
 import { handleAfterViewChecked } from './layout-handlers';
 import { recomputeMergedView } from './view-merger';
@@ -41,6 +41,8 @@ interface DefinitionOption {
 
 type DefinitionGroups = Partial<Record<string, DefinitionOption[]>>;
 type TimingViewMode = 'list' | 'chart';
+
+const DEFAULT_VIEW_TOGGLE_STATE: Record<string, boolean> = { timestamps: true, unityCanvas: false, tableEditor: false };
 
 @Component({
   selector: 'app-flowchart',
@@ -69,7 +71,7 @@ export class Flowchart implements AfterViewChecked, OnDestroy, OnInit {
   readonly historyManager: FlowchartHistoryManager;
   readonly runManager: FlowchartRunManager;
   readonly typeDefinitionOptions = signal<DefinitionGroups>({});
-  readonly viewToggleState = signal<Record<string, boolean>>({ timestamps: true, unityCanvas: false, tableEditor: false });
+  readonly viewToggleState = signal<Record<string, boolean>>(readStoredViewToggleState(DEFAULT_VIEW_TOGGLE_STATE));
   readonly viewToggleOptions = [
     { key: 'timestamps', label: 'Show timestamps', icon: 'pi pi-clock' },
     { key: 'unityCanvas', label: 'Simulation', icon: 'pi pi-desktop' },
@@ -158,7 +160,11 @@ export class Flowchart implements AfterViewChecked, OnDestroy, OnInit {
   }
 
   toggleViewOption(key: string): void {
-    this.viewToggleState.update(prev => ({ ...prev, [key]: !prev[key] }));
+    this.viewToggleState.update(prev => {
+      const next = { ...prev, [key]: !prev[key] };
+      persistViewToggleState(next);
+      return next;
+    });
   }
 
   setTimingViewMode(mode: TimingViewMode): void {
