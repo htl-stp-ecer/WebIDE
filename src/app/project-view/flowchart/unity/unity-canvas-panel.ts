@@ -26,6 +26,14 @@ export class UnityCanvasPanel implements AfterViewInit, OnChanges {
 
   ngOnChanges(changes: SimpleChanges): void {
     if (!this.viewReady) return;
+    if (changes['baseUrl'] && !changes['baseUrl'].firstChange) {
+      // Ensure the Unity instance is reloaded from the correct backend origin.
+      this.unity.reset();
+      if (this.visible) {
+        void this.start();
+      }
+      return;
+    }
     if (changes['visible'] && this.visible && this.unity.status() === 'idle') {
       void this.start();
     }

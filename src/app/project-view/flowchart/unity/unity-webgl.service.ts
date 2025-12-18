@@ -28,6 +28,11 @@ export class UnityWebglService {
   private instance: UnityWebglInstance | null = null;
   private baseUrl: string | null = null;
 
+  private pendingRobotSize: { lengthCm: number; widthCm: number } | null = null;
+  private lastAppliedRobotSize: { lengthCm: number; widthCm: number } | null = null;
+  private robotSizeAttempt = 0;
+  private robotSizeTimeoutId: number | null = null;
+
   isReady(): boolean {
     return this.status() === 'ready' && !!this.instance;
   }
@@ -95,6 +100,11 @@ export class UnityWebglService {
 
       this.instance = instance;
       this.status.set('ready');
+      if (this.pendingRobotSize) {
+        this.robotSizeAttempt = 0;
+        this.scheduleRobotSizeAttempt(0);
+      }
+      void this.syncRobotSizeFromBackend();
       return instance;
     })();
 
@@ -110,12 +120,75 @@ export class UnityWebglService {
   }
 
   reset(): void {
+    if (this.robotSizeTimeoutId !== null) {
+      window.clearTimeout(this.robotSizeTimeoutId);
+      this.robotSizeTimeoutId = null;
+    }
+    this.pendingRobotSize = null;
+    this.lastAppliedRobotSize = null;
+    this.robotSizeAttempt = 0;
     this.status.set('idle');
     this.progress.set(0);
     this.error.set(null);
     this.instancePromise = null;
     this.instance = null;
     this.baseUrl = null;
+  }
+
+  applyRobotSize(lengthCm: number, widthCm: number): void {
+    if (!Number.isFinite(lengthCm) || !Number.isFinite(widthCm)) return;
+    if (lengthCm < 0 || widthCm < 0) return;
+
+    this.pendingRobotSize = { lengthCm, widthCm };
+    this.robotSizeAttempt = 0;
+    if (this.instance) {
+      this.scheduleRobotSizeAttempt(0);
+    }
+  }
+
+  async syncRobotSizeFromBackend(): Promise<void> {
+    if (!this.baseUrl) return;
+    try {
+      const resp = await fetch(`${this.baseUrl}/api/v1/device/info`, { cache: 'no-store' });
+      if (!resp.ok) return;
+      const data = (await resp.json()) as { length_cm?: unknown; width_cm?: unknown };
+      const lengthCm = Number(data.length_cm);
+      const widthCm = Number(data.width_cm);
+      if (!Number.isFinite(lengthCm) || !Number.isFinite(widthCm)) return;
+      this.applyRobotSize(lengthCm, widthCm);
+    } catch {
+      // Keep Unity usable even if the backend endpoint is temporarily unavailable.
+    }
+  }
+
+  private scheduleRobotSizeAttempt(delayMs: number): void {
+    if (this.robotSizeTimeoutId !== null) {
+      window.clearTimeout(this.robotSizeTimeoutId);
+    }
+    this.robotSizeTimeoutId = window.setTimeout(() => this.tryApplyRobotSizeOnce(), delayMs);
+  }
+
+  private tryApplyRobotSizeOnce(): void {
+    this.robotSizeTimeoutId = null;
+    const size = this.pendingRobotSize;
+    if (!size || !this.instance) return;
+
+    const alreadyApplied =
+      this.lastAppliedRobotSize &&
+      Math.abs(this.lastAppliedRobotSize.lengthCm - size.lengthCm) < 1e-6 &&
+      Math.abs(this.lastAppliedRobotSize.widthCm - size.widthCm) < 1e-6;
+
+    // Unity WebGL can ignore SendMessage if the target GameObject isn't ready yet.
+    // Re-send a few times after init to make it reliable without a manual "Apply" button.
+    if (!alreadyApplied || this.robotSizeAttempt < 6) {
+      this.instance.SendMessage('Robot', 'SetRobotSize', `${size.lengthCm},${size.widthCm}`);
+      this.lastAppliedRobotSize = size;
+    }
+
+    this.robotSizeAttempt += 1;
+    if (this.robotSizeAttempt < 6) {
+      this.scheduleRobotSizeAttempt(500);
+    }
   }
 
   private async resolveBuildFile(baseUrl: string, file: string): Promise<string> {

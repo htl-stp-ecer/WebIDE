@@ -11,6 +11,7 @@ import { ConfirmationService } from 'primeng/api';
 import {NgClass} from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { decodeRouteIp, encodeRouteIp } from '../services/route-ip-serializer';
+import { UnityWebglService } from '../project-view/flowchart/unity/unity-webgl.service';
 
 @Component({
   selector: 'app-project-menu',
@@ -36,7 +37,8 @@ export class ProjectMenu implements OnInit {
     private route: ActivatedRoute,
     private http: HttpService,
     private confirmationService: ConfirmationService,
-    private translate: TranslateService
+    private translate: TranslateService,
+    private unity: UnityWebglService
   ) {}
 
   ngOnInit() {
@@ -131,6 +133,11 @@ export class ProjectMenu implements OnInit {
         this.tempWidth = this.toDimensionString(info.width_cm);
         this.tempLength = this.toDimensionString(info.length_cm);
         this.editingDimensions = false;
+        if (info.length_cm !== undefined && info.width_cm !== undefined) {
+          this.unity.applyRobotSize(info.length_cm, info.width_cm);
+        } else {
+          this.unity.applyRobotSize(length, width);
+        }
         NotificationService.showSuccess(
           this.translate.instant('PROJECT_MENU.SAVE_DIMENSIONS_SUCCESS'),
           this.translate.instant('COMMON.SUCCESS')

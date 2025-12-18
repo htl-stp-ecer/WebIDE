@@ -75,7 +75,7 @@ export class Flowchart implements AfterViewChecked, OnDestroy, OnInit {
     { key: 'unityCanvas', label: 'Simulation', icon: 'pi pi-desktop' },
     { key: 'tableEditor', label: 'Table editor', icon: 'pi pi-table' },
   ];
-  readonly unityBaseUrl = `${globalThis.location?.protocol ?? 'http:'}//${globalThis.location?.hostname ?? 'localhost'}:8000`;
+  unityBaseUrl = `${globalThis.location?.protocol ?? 'http:'}//${globalThis.location?.hostname ?? 'localhost'}:8000`;
   readonly timingViewMode = signal<TimingViewMode>('list');
   readonly simulateRuns = signal<boolean>(true);
   actions!: FlowchartActions;
@@ -90,6 +90,7 @@ export class Flowchart implements AfterViewChecked, OnDestroy, OnInit {
   commentHeaderLabel = 'Comment';
   commentPlaceholder = 'Write a comment...';
   projectUUID: string | null = null;
+  unityBaseUrlSub?: Subscription;
   langChangeSub?: Subscription;
   themeObserver?: MutationObserver;
   typeDefinitionsSub?: Subscription;
@@ -111,6 +112,9 @@ export class Flowchart implements AfterViewChecked, OnDestroy, OnInit {
 
   ngOnInit(): void {
     this.loadTypeDefinitions();
+    this.unityBaseUrlSub = this.http.ip$.subscribe(ip => {
+      if (ip) this.unityBaseUrl = ip;
+    });
   }
 
   get useAutoLayout(): boolean {
@@ -135,6 +139,7 @@ export class Flowchart implements AfterViewChecked, OnDestroy, OnInit {
 
   ngOnDestroy(): void {
     this.actions.stopRun();
+    this.unityBaseUrlSub?.unsubscribe();
     this.langChangeSub?.unsubscribe();
     this.themeObserver?.disconnect();
     this.typeDefinitionsSub?.unsubscribe();
