@@ -9,7 +9,10 @@ export interface MissionGroup {
     width: number;
     height: number;
   };
+  expanded_size?: {
+    width: number;
+    height: number;
+  };
   collapsed?: boolean;
   step_paths?: string[];
 }
-

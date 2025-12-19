@@ -67,7 +67,7 @@ function toFlowGroups(flow: Flowchart, groups: MissionGroup[] | undefined): Flow
     return [];
   }
   return groups
-    .filter((g): g is MissionGroup => !!g && typeof g.id === 'string' && !!g.id)
+    .filter((g): g is MissionGroup => !!g && !!g.id)
     .map((group) => ({
       id: group.id,
       title: group.title ?? 'Group',
@@ -80,8 +80,13 @@ function toFlowGroups(flow: Flowchart, groups: MissionGroup[] | undefined): Flow
       nodeIds: (Array.isArray(group.step_paths) ? group.step_paths : [])
         .map(pathKey => flow.lookups.pathToNodeId.get(pathKey))
         .filter((id): id is string => typeof id === 'string' && !!id),
-      stepPaths: Array.isArray(group.step_paths) ? group.step_paths.filter((p): p is string => typeof p === 'string' && !!p) : [],
-      expandedSize: null,
+      stepPaths: Array.isArray(group.step_paths) ? group.step_paths.filter((p): p is string => !!p) : [],
+      expandedSize: group.expanded_size
+        ? {
+          width: group.expanded_size.width ?? (group.size?.width ?? DEFAULT_GROUP_SIZE.width),
+          height: group.expanded_size.height ?? (group.size?.height ?? DEFAULT_GROUP_SIZE.height),
+        }
+        : null,
     }));
 }
 
@@ -91,6 +96,9 @@ function toMissionGroups(groups: FlowGroup[]): MissionGroup[] {
     title: group.title,
     position: { x: group.position.x, y: group.position.y },
     size: { width: group.size.width, height: group.size.height },
+    expanded_size: group.expandedSize
+      ? { width: group.expandedSize.width, height: group.expandedSize.height }
+      : undefined,
     collapsed: group.collapsed,
     step_paths: group.stepPaths,
   }));

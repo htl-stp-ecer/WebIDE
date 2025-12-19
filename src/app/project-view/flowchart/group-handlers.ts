@@ -164,6 +164,9 @@ function syncMissionGroups(flow: Flowchart, groups: FlowGroup[]): void {
       title: group.title,
       position: { x: group.position.x, y: group.position.y },
       size: { width: group.size.width, height: group.size.height },
+      expanded_size: group.expandedSize
+        ? { width: group.expandedSize.width, height: group.expandedSize.height }
+        : undefined,
       collapsed: group.collapsed,
       step_paths: normalizeNodeIds((group as any).nodeIds)
         .map(id => getNodeStepPathKey(flow, id))
