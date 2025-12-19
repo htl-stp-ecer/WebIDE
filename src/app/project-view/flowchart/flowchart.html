@@ -107,6 +107,8 @@
                 type="button"
                 class="group-collapse-btn"
                 (click)="$event.stopPropagation(); actions.toggleGroupCollapsed(group.id)"
+                (dblclick)="$event.preventDefault(); $event.stopPropagation()"
+                (pointerdown)="$event.stopPropagation()"
                 [attr.aria-label]="group.collapsed ? 'Expand group' : 'Collapse group'">
                 <i [class]="group.collapsed ? 'pi pi-window-maximize' : 'pi pi-window-minimize'"></i>
               </button>

@@ -12,6 +12,10 @@
   z-index: 5;
 }
 
+.is-collapsed {
+  padding-bottom: 3rem;
+}
+
 .group-resize-handle {
   position: absolute;
   z-index: 6;
@@ -140,6 +144,7 @@ $corner-offset: 9px;
   background: rgba(255, 255, 255, 0.85);
   color: inherit;
   cursor: pointer;
+  touch-action: manipulation;
 }
 
 .group-collapse-btn:hover {
