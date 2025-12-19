@@ -95,6 +95,7 @@
             [fGroupSize]="group.size"
             fIncludePadding
             class="group-node"
+            [class.is-collapsed]="group.collapsed"
             [attr.data-group-id]="group.id"
             (contextmenu)="actions.onGroupRightClick($event, group.id)"
             (fGroupPositionChange)="actions.onGroupPositionChanged(group.id, $event)"
@@ -110,6 +111,17 @@
                 <i [class]="group.collapsed ? 'pi pi-window-maximize' : 'pi pi-window-minimize'"></i>
               </button>
             </div>
+            @if (!group.collapsed) {
+              <div class="group-resize-handle edge edge-top" fResizeHandle fResizeHandleType="top"></div>
+              <div class="group-resize-handle edge edge-right" fResizeHandle fResizeHandleType="right"></div>
+              <div class="group-resize-handle edge edge-bottom" fResizeHandle fResizeHandleType="bottom"></div>
+              <div class="group-resize-handle edge edge-left" fResizeHandle fResizeHandleType="left"></div>
+
+              <div class="group-resize-handle corner corner-left-top" fResizeHandle fResizeHandleType="left-top"></div>
+              <div class="group-resize-handle corner corner-right-top" fResizeHandle fResizeHandleType="right-top"></div>
+              <div class="group-resize-handle corner corner-right-bottom" fResizeHandle fResizeHandleType="right-bottom"></div>
+              <div class="group-resize-handle corner corner-left-bottom" fResizeHandle fResizeHandleType="left-bottom"></div>
+            }
           </div>
         }
 
@@ -119,7 +131,7 @@
         </div>
 
         @for (connection of actions.visibleConnections(); track connection.id) {
-          <f-connection [fConnectionId]="connection.id" [fReassignDisabled]="false" fBehavior="fixed" fType="segment" [fOutputId]="connection.outputId" [fInputId]="connection.inputId" [fStartColor]="isDarkMode() ? '#EEE5E9' : '#131217'" [fEndColor]="isDarkMode() ? '#EEE5E9' : '#131217'" [class.connection-completed]="actions.isConnectionCompleted(connection.id)" [attr.data-connection-id]="connection.id" (contextmenu)="actions.onConnectionRightClick($event, connection.id)">
+          <f-connection [fConnectionId]="connection.id" [fReassignDisabled]="false" fBehavior="fixed" fType="segment" [fOutputId]="connection.outputId" [fInputId]="connection.inputId" [fStartColor]="isDarkMode() ? '#EEE5E9' : '#131217'" [fEndColor]="isDarkMode() ? '#EEE5E9' : '#131217'" [class.connection-completed]="actions.isConnectionCompleted(connection.id)" [class.connection-collapsed]="connection.id.startsWith('collapsed-')" [attr.data-connection-id]="connection.id" (contextmenu)="actions.onConnectionRightClick($event, connection.id)">
             @if (connection.hasBreakpoint) {
               <div fConnectionCenter class="connection-breakpoint-indicator"></div>
             }
@@ -130,7 +142,7 @@
         }
 
         @for (node of actions.visibleNodes(); track node.id) {
-          <div fNode fDragHandle [fNodeId]="node.id" [fNodePosition]="node.position" [fNodeParentId]="actions.getNodeParentId(node.id)" class="node" [class.node-completed]="actions.isNodeCompleted(node.id)" [attr.data-node-id]="node.id" (contextmenu)="actions.onRightClick($event, node.id)" (fNodePositionChange)="actions.onNodeMoved(node.id, $event)" #nodeElement>
+          <div fNode fDragHandle [fNodeId]="node.id" [fNodePosition]="node.position" class="node" [class.node-completed]="actions.isNodeCompleted(node.id)" [attr.data-node-id]="node.id" (contextmenu)="actions.onRightClick($event, node.id)" (fNodePositionChange)="actions.onNodeMoved(node.id, $event)" #nodeElement>
             <div fNodeInput [fInputConnectableSide]="actions.isVertical() ? 'top' : 'left'" [fInputId]="node.id + '-input'" class="port" [class.port-top]="actions.isVertical()" [class.port-left]="!actions.isVertical()"></div>
             <div class="node-title">{{ node.text }}</div>
             @if (isToggleEnabled('timestamps') ? runManager.getNodeTiming(node.id) : null; as timing) {

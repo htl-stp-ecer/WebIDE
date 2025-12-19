@@ -12,6 +12,94 @@
   z-index: 5;
 }
 
+.group-resize-handle {
+  position: absolute;
+  z-index: 6;
+  background: transparent;
+}
+
+.group-resize-handle.edge {
+  opacity: 0;
+}
+
+.group-resize-handle.corner {
+  opacity: 0;
+}
+
+/* Place handles slightly outside so nodes don't block them. */
+$edge-thickness: 12px;
+$edge-offset: 7px;
+$corner-size: 18px;
+$corner-offset: 9px;
+
+.group-resize-handle.edge-top {
+  top: -$edge-offset;
+  left: 0;
+  right: 0;
+  height: $edge-thickness;
+  cursor: ns-resize;
+}
+
+.group-resize-handle.edge-right {
+  top: 0;
+  right: -$edge-offset;
+  bottom: 0;
+  width: $edge-thickness;
+  cursor: ew-resize;
+}
+
+.group-resize-handle.edge-bottom {
+  left: 0;
+  right: 0;
+  bottom: -$edge-offset;
+  height: $edge-thickness;
+  cursor: ns-resize;
+}
+
+.group-resize-handle.edge-left {
+  top: 0;
+  left: -$edge-offset;
+  bottom: 0;
+  width: $edge-thickness;
+  cursor: ew-resize;
+}
+
+.group-resize-handle.corner-left-top {
+  top: -$corner-offset;
+  left: -$corner-offset;
+  width: $corner-size;
+  height: $corner-size;
+  cursor: nwse-resize;
+}
+
+.group-resize-handle.corner-right-top {
+  top: -$corner-offset;
+  right: -$corner-offset;
+  width: $corner-size;
+  height: $corner-size;
+  cursor: nesw-resize;
+}
+
+.group-resize-handle.corner-right-bottom {
+  right: -$corner-offset;
+  bottom: -$corner-offset;
+  width: $corner-size;
+  height: $corner-size;
+  cursor: nwse-resize;
+}
+
+.group-resize-handle.corner-left-bottom {
+  left: -$corner-offset;
+  bottom: -$corner-offset;
+  width: $corner-size;
+  height: $corner-size;
+  cursor: nesw-resize;
+}
+
+.group-node.is-collapsed .group-resize-handle {
+  display: none;
+}
+
 .group-header {
   display: flex;
   align-items: center;
@@ -78,4 +166,3 @@
   border-color: rgba(100, 116, 139, 0.75);
   color: #e2e8f0;
 }
-

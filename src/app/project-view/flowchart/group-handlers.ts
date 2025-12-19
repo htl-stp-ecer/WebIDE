@@ -10,12 +10,59 @@ import type { Connection, FlowNode } from './models';
 const DEFAULT_GROUP_SIZE = { width: 360, height: 240 };
 const COLLAPSED_GROUP_HEIGHT = 44;
 const COLLAPSED_GROUP_MIN_WIDTH = 160;
+const DEFAULT_NODE_SIZE = { width: 240, height: 80 };
 
 function normalizeNodeIds(value: unknown): string[] {
   if (!Array.isArray(value)) {
     return [];
   }
   return value.filter((id): id is string => typeof id === 'string' && !!id);
+}
+
+function stableHash(input: string): string {
+  let hash = 0;
+  for (let i = 0; i < input.length; i++) {
+    hash = (hash * 31 + input.charCodeAt(i)) | 0;
+  }
+  return Math.abs(hash).toString(36);
+}
+
+function getNodeElementSize(flow: Flowchart, nodeId: string): { width: number; height: number } {
+  const fallback = { ...DEFAULT_NODE_SIZE };
+  const els = flow.nodeEls?.toArray?.() ?? [];
+  for (const ref of els) {
+    const el = ref?.nativeElement;
+    if (!el) {
+      continue;
+    }
+    const id = el.dataset['nodeId'];
+    if (id === nodeId) {
+      const width = el.offsetWidth || fallback.width;
+      const height = el.offsetHeight || fallback.height;
+      return { width, height };
+    }
+  }
+  return fallback;
+}
+
+function buildNodeElementSizeMap(flow: Flowchart): Map<string, { width: number; height: number }> {
+  const map = new Map<string, { width: number; height: number }>();
+  const els = flow.nodeEls?.toArray?.() ?? [];
+  for (const ref of els) {
+    const el = ref?.nativeElement;
+    if (!el) {
+      continue;
+    }
+    const id = el.dataset['nodeId'];
+    if (!id) {
+      continue;
+    }
+    map.set(id, {
+      width: el.offsetWidth || DEFAULT_NODE_SIZE.width,
+      height: el.offsetHeight || DEFAULT_NODE_SIZE.height,
+    });
+  }
+  return map;
 }
 
 function getNodeStepPathKey(flow: Flowchart, nodeId: string): string | null {
@@ -29,6 +76,81 @@ function getNodeStepPathKey(flow: Flowchart, nodeId: string): string | null {
     return node.path.join('.');
   }
   return null;
+}
+
+function getNodesUnderGroup(flow: Flowchart, group: FlowGroup, candidates: FlowNode[]): string[] {
+  const groupSize = group.collapsed
+    ? (group.expandedSize ?? group.size)
+    : group.size;
+  const left = group.position.x;
+  const top = group.position.y;
+  const right = left + groupSize.width;
+  const bottom = top + groupSize.height;
+  const sizeMap = buildNodeElementSizeMap(flow);
+
+  return candidates
+    .filter(node => {
+      const size = sizeMap.get(node.id) ?? getNodeElementSize(flow, node.id);
+      const centerX = node.position.x + size.width / 2;
+      const centerY = node.position.y + size.height / 2;
+      return centerX >= left && centerX <= right && centerY >= top && centerY <= bottom;
+    })
+    .map(node => node.id);
+}
+
+function applyAutoAssignNodesToGroup(flow: Flowchart, groups: FlowGroup[], targetGroupId: string, strict = false): FlowGroup[] {
+  const targetIndex = groups.findIndex(g => g.id === targetGroupId);
+  if (targetIndex === -1) {
+    return groups;
+  }
+
+  const target = groups[targetIndex]!;
+  const currentTargetNodeIds = normalizeNodeIds((target as any).nodeIds);
+  const visibleNodes = getVisibleNodes(flow);
+  const visibleNodeIds = new Set(visibleNodes.map(n => n.id));
+  const candidates = flow.nodes().filter(node => visibleNodeIds.has(node.id) || currentTargetNodeIds.includes(node.id));
+
+  const nodesUnderGroup = getNodesUnderGroup(flow, target, candidates);
+  if (!strict && !nodesUnderGroup.length) {
+    return groups;
+  }
+
+  const nextTargetNodeIds = strict
+    ? nodesUnderGroup
+    : Array.from(new Set([...currentTargetNodeIds, ...nodesUnderGroup]));
+  const nodesToClaim = new Set(nextTargetNodeIds);
+
+  let changed = false;
+  const updated = groups.map(group => {
+    const currentNodeIds = normalizeNodeIds((group as any).nodeIds);
+    if (group.id === targetGroupId) {
+      if (currentNodeIds.length !== nextTargetNodeIds.length || currentNodeIds.some((id, idx) => id !== nextTargetNodeIds[idx])) {
+        changed = true;
+      }
+      return {
+        ...group,
+        nodeIds: nextTargetNodeIds,
+        stepPaths: nextTargetNodeIds
+          .map(id => getNodeStepPathKey(flow, id))
+          .filter((p): p is string => typeof p === 'string' && !!p),
+      };
+    }
+
+    const filtered = currentNodeIds.filter(id => !nodesToClaim.has(id));
+    if (filtered.length !== currentNodeIds.length) {
+      changed = true;
+      return {
+        ...group,
+        nodeIds: filtered,
+        stepPaths: filtered
+          .map(id => getNodeStepPathKey(flow, id))
+          .filter((p): p is string => typeof p === 'string' && !!p),
+      };
+    }
+    return group;
+  });
+
+  return changed ? updated : groups;
 }
 
 function syncMissionGroups(flow: Flowchart, groups: FlowGroup[]): void {
@@ -98,8 +220,9 @@ export function handleGroupPositionChanged(flow: Flowchart, groupId: string, pos
   }
   const updated = groups.slice();
   updated[index] = { ...updated[index], position: { x: pos.x, y: pos.y } };
-  flow.groups.set(updated);
-  syncMissionGroups(flow, updated);
+  const withAutoGrouped = applyAutoAssignNodesToGroup(flow, updated, groupId, true);
+  flow.groups.set(withAutoGrouped);
+  syncMissionGroups(flow, withAutoGrouped);
   flow.historyManager.recordHistory('move-group');
 }
 
@@ -127,8 +250,9 @@ export function handleGroupSizeChanged(flow: Flowchart, groupId: string, rect: {
     size: { width, height },
     expandedSize: current.collapsed ? current.expandedSize : null,
   };
-  flow.groups.set(updated);
-  syncMissionGroups(flow, updated);
+  const withAutoGrouped = applyAutoAssignNodesToGroup(flow, updated, groupId, true);
+  flow.groups.set(withAutoGrouped);
+  syncMissionGroups(flow, withAutoGrouped);
   flow.historyManager.recordHistory('resize-group');
 }
 
@@ -192,7 +316,7 @@ export function handleDropToGroup(flow: Flowchart, event: FDropToGroupEvent): vo
 
   const allNodeIds = new Set(flow.nodes().map(n => n.id));
   const draggedIds = (event.fNodes ?? [])
-    .filter((id): id is string => typeof id === 'string' && !!id)
+    .filter((id): id is string => !!id)
     .filter(id => allNodeIds.has(id));
   if (!draggedIds.length) {
     return;
@@ -254,11 +378,67 @@ export function getVisibleNodes(flow: Flowchart): FlowNode[] {
 
 export function getVisibleConnections(flow: Flowchart): Connection[] {
   const visibleNodeIds = new Set(getVisibleNodes(flow).map(n => n.id));
-  return flow.connections().filter(conn => {
+  const connections = flow.connections();
+
+  const visible = connections.filter(conn => {
     const sourceNodeId = baseId(conn.outputId, 'output');
     const targetNodeId = baseId(conn.inputId, 'input');
     const sourceOk = sourceNodeId === 'start-node' || visibleNodeIds.has(sourceNodeId);
     const targetOk = visibleNodeIds.has(targetNodeId);
     return sourceOk && targetOk;
   });
+
+  const byEndpoints = new Set(visible.map(conn => `${conn.outputId}→${conn.inputId}`));
+  const bridged: Connection[] = [];
+
+  const collapsedGroups = flow.groups().filter(g => g.collapsed);
+  for (const group of collapsedGroups) {
+    const groupNodeIds = new Set(normalizeNodeIds((group as any).nodeIds));
+    if (!groupNodeIds.size) {
+      continue;
+    }
+
+    const incomingOutputIds = new Set<string>();
+    const outgoingInputIds = new Set<string>();
+
+    for (const conn of connections) {
+      const sourceNodeId = baseId(conn.outputId, 'output');
+      const targetNodeId = baseId(conn.inputId, 'input');
+      const sourceInGroup = groupNodeIds.has(sourceNodeId);
+      const targetInGroup = groupNodeIds.has(targetNodeId);
+
+      if (!sourceInGroup && targetInGroup) {
+        const sourceOk = sourceNodeId === 'start-node' || visibleNodeIds.has(sourceNodeId);
+        if (sourceOk) {
+          incomingOutputIds.add(conn.outputId);
+        }
+      } else if (sourceInGroup && !targetInGroup) {
+        const targetOk = visibleNodeIds.has(targetNodeId);
+        if (targetOk) {
+          outgoingInputIds.add(conn.inputId);
+        }
+      }
+    }
+
+    if (!incomingOutputIds.size || !outgoingInputIds.size) {
+      continue;
+    }
+
+    for (const outputId of incomingOutputIds) {
+      for (const inputId of outgoingInputIds) {
+        const key = `${outputId}→${inputId}`;
+        if (byEndpoints.has(key)) {
+          continue;
+        }
+        byEndpoints.add(key);
+        bridged.push({
+          id: `collapsed-${group.id}-${stableHash(key)}`,
+          outputId,
+          inputId,
+        });
+      }
+    }
+  }
+
+  return [...visible, ...bridged];
 }

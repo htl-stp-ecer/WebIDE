@@ -102,6 +102,9 @@ export function handleNodeContextMenu(flow: Flowchart, event: MouseEvent, nodeId
 }
 
 export function handleConnectionContextMenu(flow: Flowchart, event: MouseEvent, connectionId: string): void {
+  if (connectionId.startsWith('collapsed-')) {
+    return;
+  }
   event.preventDefault();
   event.stopPropagation();
   flow.contextMenu.selectConnection(connectionId, { clientX: event.clientX, clientY: event.clientY });
