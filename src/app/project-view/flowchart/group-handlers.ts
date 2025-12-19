@@ -6,6 +6,7 @@ import { MissionGroup } from '../../entities/MissionGroup';
 import { toCanvasPoint } from './comment-handlers';
 import type { FDropToGroupEvent } from '@foblex/flow';
 import type { Connection, FlowNode } from './models';
+import { recomputeMergedView } from './view-merger';
 
 const DEFAULT_GROUP_SIZE = { width: 360, height: 240 };
 const COLLAPSED_GROUP_HEIGHT = 44;
@@ -25,6 +26,37 @@ function stableHash(input: string): string {
     hash = (hash * 31 + input.charCodeAt(i)) | 0;
   }
   return Math.abs(hash).toString(36);
+}
+
+function shiftIfBelow<T extends { position: { x: number; y: number } }>(items: T[], thresholdY: number, deltaY: number, exclude?: (item: T) => boolean): T[] {
+  let changed = false;
+  const next = items.map(item => {
+    if (exclude?.(item)) {
+      return item;
+    }
+    if (item.position.y < thresholdY) {
+      return item;
+    }
+    changed = true;
+    return { ...item, position: { x: item.position.x, y: item.position.y + deltaY } };
+  });
+  return changed ? next : items;
+}
+
+function updateMissionStepPositions(flow: Flowchart, nodeIds: Set<string>, deltaY: number): void {
+  if (deltaY === 0) {
+    return;
+  }
+  const mission = flow.missionState.currentMission();
+  if (!mission || flow.useAutoLayout) {
+    return;
+  }
+  for (const nodeId of nodeIds) {
+    const step = flow.lookups.nodeIdToStep.get(nodeId);
+    if (step?.position) {
+      step.position = { x: step.position.x, y: step.position.y + deltaY };
+    }
+  }
 }
 
 function getNodeElementSize(flow: Flowchart, nodeId: string): { width: number; height: number } {
@@ -260,37 +292,99 @@ export function handleGroupSizeChanged(flow: Flowchart, groupId: string, rect: {
 }
 
 export function toggleGroupCollapsed(flow: Flowchart, groupId: string): void {
-  const groups = flow.groups();
-  const index = groups.findIndex(g => g.id === groupId);
+  const groupsBefore = flow.groups();
+  const index = groupsBefore.findIndex(g => g.id === groupId);
   if (index === -1) {
     return;
   }
 
-  const updated = groups.slice();
-  const group = updated[index];
-  if (group.collapsed) {
-    const restoreSize = group.expandedSize ?? group.size;
-    updated[index] = {
-      ...group,
-      collapsed: false,
-      size: { ...restoreSize },
-      expandedSize: null,
-    };
+  const isAutoLayout = flow.useAutoLayout;
+  const nodesBefore = flow.nodes();
+  const missionNodesBefore = flow.missionNodes();
+  const adHocNodesBefore = flow.adHocNodes();
+  const commentsBefore = flow.comments();
+
+  let groups = groupsBefore.slice();
+  let nodes = nodesBefore;
+  let missionNodes = missionNodesBefore;
+  let adHocNodes = adHocNodesBefore;
+  let comments = commentsBefore;
+
+  const groupBefore = groups[index]!;
+  const isVertical = flow.orientation() === 'vertical';
+  const nodeIdsInGroup = new Set(normalizeNodeIds((groupBefore as any).nodeIds));
+
+  const applyShift = (thresholdY: number, deltaY: number) => {
+    if (!isVertical || deltaY === 0) {
+      return;
+    }
+    const excludeNode = (node: FlowNode) => nodeIdsInGroup.has(node.id);
+    if (isAutoLayout) {
+      nodes = shiftIfBelow(nodes, thresholdY, deltaY, excludeNode);
+    } else {
+      missionNodes = shiftIfBelow(missionNodes, thresholdY, deltaY, excludeNode);
+      adHocNodes = shiftIfBelow(adHocNodes, thresholdY, deltaY, excludeNode);
+    }
+    comments = shiftIfBelow(comments, thresholdY, deltaY);
+    groups = shiftIfBelow(groups, thresholdY, deltaY, g => (g as any).id === groupId);
+
+    if (!isAutoLayout) {
+      const shiftedMissionIds = new Set(
+        missionNodes
+          .filter((n, i) => n.position.y !== missionNodesBefore[i]?.position.y)
+          .map(n => n.id),
+      );
+      updateMissionStepPositions(flow, shiftedMissionIds, deltaY);
+    }
+  };
+
+  const groupNow = () => groups.find(g => g.id === groupId);
+
+  if (groupBefore.collapsed) {
+    const g = groupNow() ?? groupBefore;
+    const restoreSize = g.expandedSize ?? g.size;
+    const collapseHeight = g.size.height;
+    const deltaY = restoreSize.height - collapseHeight;
+    const thresholdY = g.position.y + collapseHeight;
+
+    applyShift(thresholdY, deltaY);
+
+    const nextGroup = groupNow() ?? g;
+    groups = groups.map(existing => existing.id === groupId
+      ? { ...nextGroup, collapsed: false, size: { ...restoreSize }, expandedSize: null }
+      : existing);
   } else {
-    const expandedSize = group.expandedSize ?? group.size;
-    updated[index] = {
-      ...group,
-      collapsed: true,
-      expandedSize,
-      size: {
-        width: Math.max(COLLAPSED_GROUP_MIN_WIDTH, expandedSize.width),
-        height: COLLAPSED_GROUP_HEIGHT,
-      },
-    };
+    const g = groupNow() ?? groupBefore;
+    const expandedSize = g.expandedSize ?? g.size;
+    const deltaY = expandedSize.height - COLLAPSED_GROUP_HEIGHT;
+    const thresholdY = g.position.y + expandedSize.height;
+
+    applyShift(thresholdY, -deltaY);
+
+    const nextGroup = groupNow() ?? g;
+    groups = groups.map(existing => existing.id === groupId
+      ? {
+        ...nextGroup,
+        collapsed: true,
+        expandedSize,
+        size: {
+          width: Math.max(COLLAPSED_GROUP_MIN_WIDTH, expandedSize.width),
+          height: COLLAPSED_GROUP_HEIGHT,
+        },
+      }
+      : existing);
   }
 
-  flow.groups.set(updated);
-  syncMissionGroups(flow, updated);
+  flow.comments.set(comments);
+  flow.groups.set(groups);
+  if (isAutoLayout) {
+    flow.nodes.set(nodes);
+  } else {
+    flow.missionNodes.set(missionNodes);
+    flow.adHocNodes.set(adHocNodes);
+    recomputeMergedView(flow);
+  }
+  syncMissionGroups(flow, groups);
   flow.historyManager.recordHistory('toggle-group');
 }
 
