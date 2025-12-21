@@ -1,17 +1,21 @@
-<div class="flex h-full overflow-hidden">
+<div class="project-layout" #layoutRoot>
   <!-- Left Panel -->
-  <div class="w-1/5 border-r p-4 border-gray-300 dark:border-gray-600 overflow-hidden">
+  <div class="panel panel-left" #leftPanel>
     <app-mission-panel></app-mission-panel>
   </div>
 
+  <div class="panel-resizer" (pointerdown)="startResize($event, 'left')" aria-label="Resize mission panel"></div>
+
   <!-- Center Content -->
-  <div class="flex-1 p-4 overflow-hidden">
+  <div class="panel panel-center">
     <app-flowchart></app-flowchart>
   </div>
 
+  <div class="panel-resizer" (pointerdown)="startResize($event, 'right')" aria-label="Resize step panel"></div>
+
   <!-- Right Panel (scrollable step panel) -->
-  <div class="w-1/5 border-l p-4 border-gray-300 dark:border-gray-600 flex flex-col overflow-hidden">
-    <div class="flex-1 overflow-y-auto no-scrollbar">
+  <div class="panel panel-right" #rightPanel>
+    <div class="panel-scroll no-scrollbar">
       <app-step-panel></app-step-panel>
     </div>
   </div>
