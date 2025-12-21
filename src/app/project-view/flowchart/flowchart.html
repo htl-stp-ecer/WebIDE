@@ -60,8 +60,8 @@
         class="toggle-chip"
         [class.active]="isToggleEnabled(toggle.key)"
         (click)="toggleViewOption(toggle.key)"
-        [attr.aria-label]="toggle.label"
-        [pTooltip]="toggle.label"
+        [attr.aria-label]="toggle.labelKey | translate"
+        [pTooltip]="toggle.labelKey | translate"
         tooltipPosition="bottom">
         <i [class]="toggle.icon || 'pi pi-sliders-h'" class="toggle-icon"></i>
       </button>
@@ -72,11 +72,11 @@
       class="toggle-chip simulate-toggle"
       [class.active]="simulateRuns()"
       (click)="toggleSimulation()"
-      aria-label="Toggle simulation"
-      [pTooltip]="simulateRuns() ? 'Simulated run enabled' : 'Simulated run disabled'"
+      [attr.aria-label]="'FLOWCHART.SIMULATION_TOGGLE' | translate"
+      [pTooltip]="simulateRuns() ? ('FLOWCHART.SIMULATION_ENABLED' | translate) : ('FLOWCHART.SIMULATION_DISABLED' | translate)"
       tooltipPosition="bottom">
       <i class="pi pi-objects-column"></i>
-      <span class="ml-1 text-sm">{{ simulateRuns() ? 'Sim' : 'Real' }}</span>
+      <span class="ml-1 text-sm">{{ simulateRuns() ? ('FLOWCHART.SIM_SHORT' | translate) : ('FLOWCHART.REAL_SHORT' | translate) }}</span>
     </button>
   </div>
 

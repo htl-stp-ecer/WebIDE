@@ -1,7 +1,7 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { Tooltip } from 'primeng/tooltip';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ChartModule } from 'primeng/chart';
 import type { ChartData, ChartOptions } from 'chart.js';
 import type { StepTiming } from '../flowchart-run-manager';
@@ -21,20 +21,24 @@ export class TimingPanel {
   @Input() viewMode: TimingViewMode = 'list';
   @Output() viewModeChange = new EventEmitter<TimingViewMode>();
 
+  constructor(private readonly translate: TranslateService) {}
+
   setViewMode(mode: TimingViewMode): void {
     this.viewModeChange.emit(mode);
   }
 
   get chartData(): ChartData<'line'> {
     const timings = this.timings;
-    const labels = timings.map(t => t.label || t.path || `Step ${t.index}`);
+    const labels = timings.map(t =>
+      t.label || t.path || this.translate.instant('FLOWCHART.TIMING_STEP_INDEX', { value: t.index })
+    );
     const data = timings.map(t => +(t.durationMs / 1000).toFixed(3));
 
     return {
       labels,
       datasets: [
         {
-          label: 'Duration (s)',
+          label: this.translate.instant('FLOWCHART.TIMING_DURATION_LABEL'),
           data,
           borderColor: '#22c55e',
           backgroundColor: '#22c55e',
@@ -58,17 +62,17 @@ export class TimingPanel {
         tooltip: {
           callbacks: {
             title: items => (items[0]?.label ? [items[0].label] : []),
-            label: ctx => `Duration: ${ctx.formattedValue}s`,
+            label: ctx => this.translate.instant('FLOWCHART.TIMING_TOOLTIP', { value: ctx.formattedValue }),
           },
         },
       },
       scales: {
         x: {
-          title: { display: true, text: 'Step' },
+          title: { display: true, text: this.translate.instant('FLOWCHART.TIMING_STEP_LABEL') },
           ticks: { autoSkip: false, maxRotation: 35, minRotation: 0 },
         },
         y: {
-          title: { display: true, text: 'Duration (s)' },
+          title: { display: true, text: this.translate.instant('FLOWCHART.TIMING_DURATION_LABEL') },
           beginAtZero: true,
         },
       },

@@ -1,11 +1,12 @@
 import { AfterViewInit, Component, ElementRef, Input, OnChanges, SimpleChanges, ViewChild } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
+import { TranslateModule } from '@ngx-translate/core';
 import { UnityWebglService } from './unity-webgl.service';
 
 @Component({
   selector: 'app-unity-canvas-panel',
   standalone: true,
-  imports: [DecimalPipe],
+  imports: [DecimalPipe, TranslateModule],
   templateUrl: './unity-canvas-panel.html',
   styleUrl: './unity-canvas-panel.scss',
 })

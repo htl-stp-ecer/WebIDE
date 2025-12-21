@@ -93,9 +93,9 @@ export class Flowchart implements AfterViewChecked, OnDestroy, OnInit {
   readonly typeDefinitionOptions = signal<DefinitionGroups>({});
   readonly viewToggleState = signal<Record<string, boolean>>(readStoredViewToggleState(DEFAULT_VIEW_TOGGLE_STATE));
   readonly viewToggleOptions = [
-    { key: 'timestamps', label: 'Show timestamps', icon: 'pi pi-clock' },
-    { key: 'unityCanvas', label: 'Simulation', icon: 'pi pi-desktop' },
-    { key: 'tableEditor', label: 'Table editor', icon: 'pi pi-table' },
+    { key: 'timestamps', labelKey: 'FLOWCHART.VIEW_TOGGLE_TIMESTAMPS', icon: 'pi pi-clock' },
+    { key: 'unityCanvas', labelKey: 'FLOWCHART.VIEW_TOGGLE_SIMULATION', icon: 'pi pi-desktop' },
+    { key: 'tableEditor', labelKey: 'FLOWCHART.VIEW_TOGGLE_TABLE_EDITOR', icon: 'pi pi-table' },
   ];
   readonly panelOffsets = signal<Record<FloatingPanelKey, PanelOffset>>({ ...DEFAULT_PANEL_OFFSETS });
   unityBaseUrl = `${globalThis.location?.protocol ?? 'http:'}//${globalThis.location?.hostname ?? 'localhost'}:8000`;

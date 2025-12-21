@@ -1,9 +1,11 @@
 import { AfterViewInit, Component, ElementRef, ViewChild, signal } from '@angular/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { UnityWebglService } from './unity-webgl.service';
 
 @Component({
   selector: 'app-table-editor-panel',
   standalone: true,
+  imports: [TranslateModule],
   templateUrl: './table-editor-panel.html',
   styleUrl: './table-editor-panel.scss',
 })
@@ -15,7 +17,10 @@ export class TableEditorPanel implements AfterViewInit {
   private ctx: CanvasRenderingContext2D | null = null;
   private drawing = false;
 
-  constructor(readonly unity: UnityWebglService) {}
+  constructor(
+    readonly unity: UnityWebglService,
+    private readonly translate: TranslateService
+  ) {}
 
   ngAfterViewInit(): void {
     const canvas = this.drawCanvasRef.nativeElement;
@@ -50,14 +55,14 @@ export class TableEditorPanel implements AfterViewInit {
     const canvas = this.drawCanvasRef.nativeElement;
     ctx.fillStyle = 'white';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    this.message.set('Canvas cleared');
+    this.message.set(this.translate.instant('FLOWCHART.TABLE_MESSAGE_CLEARED'));
   }
 
   sendToUnity(): void {
     const ctx = this.ctx;
     if (!ctx) return;
     if (!this.unity.isReady()) {
-      this.message.set('Unity is not ready');
+      this.message.set(this.translate.instant('FLOWCHART.TABLE_MESSAGE_UNITY_NOT_READY'));
       return;
     }
 
@@ -74,10 +79,19 @@ export class TableEditorPanel implements AfterViewInit {
     const binary = bits.join('');
     try {
       this.unity.sendMessage('GameTableBuilder', 'BuildFromData', binary);
-      this.message.set(`Sent ${pixelCount} pixels (${canvas.width}x${canvas.height})`);
+      this.message.set(
+        this.translate.instant('FLOWCHART.TABLE_MESSAGE_SENT', {
+          count: pixelCount,
+          width: canvas.width,
+          height: canvas.height,
+        })
+      );
     } catch (err) {
-      this.message.set(`Failed to send: ${err instanceof Error ? err.message : String(err)}`);
+      this.message.set(
+        this.translate.instant('FLOWCHART.TABLE_MESSAGE_FAILED', {
+          error: err instanceof Error ? err.message : String(err),
+        })
+      );
     }
   }
 }
-

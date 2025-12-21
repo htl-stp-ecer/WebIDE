@@ -2,21 +2,26 @@
   <div class="unity-header panel-drag-handle">
     <div class="unity-title">
       <i class="pi pi-desktop"></i>
-      <span>ECER Robot Simulator</span>
+      <span>{{ 'FLOWCHART.UNITY_TITLE' | translate }}</span>
     </div>
 
     <div class="unity-status">
       @if (unity.status() === 'loading') {
         <span class="unity-pill unity-pill-loading">{{ (unity.progress() * 100) | number:'1.0-0' }}%</span>
       } @else if (unity.status() === 'ready') {
-        <span class="unity-pill unity-pill-ready">Ready</span>
+        <span class="unity-pill unity-pill-ready">{{ 'FLOWCHART.UNITY_STATUS_READY' | translate }}</span>
       } @else if (unity.status() === 'error') {
-        <span class="unity-pill unity-pill-error">Error</span>
+        <span class="unity-pill unity-pill-error">{{ 'FLOWCHART.UNITY_STATUS_ERROR' | translate }}</span>
       } @else {
-        <span class="unity-pill">Idle</span>
+        <span class="unity-pill">{{ 'FLOWCHART.UNITY_STATUS_IDLE' | translate }}</span>
       }
 
-      <button type="button" class="unity-icon-btn" (click)="reload()" aria-label="Reload Unity" title="Reload Unity">
+      <button
+        type="button"
+        class="unity-icon-btn"
+        (click)="reload()"
+        [attr.aria-label]="'FLOWCHART.UNITY_RELOAD' | translate"
+        [title]="'FLOWCHART.UNITY_RELOAD' | translate">
         <i class="pi pi-refresh"></i>
       </button>
     </div>
@@ -28,29 +33,29 @@
     @if (unity.status() === 'loading') {
       <div class="unity-overlay">
         <div class="unity-overlay-card">
-          <div class="unity-overlay-title">Loading Unity…</div>
+          <div class="unity-overlay-title">{{ 'FLOWCHART.UNITY_LOADING' | translate }}</div>
           <div class="unity-overlay-sub">{{ (unity.progress() * 100) | number:'1.0-0' }}%</div>
-          <div class="unity-overlay-hint">Source: {{ baseUrl }}</div>
-          <a class="unity-link" [href]="baseUrl" target="_blank" rel="noreferrer">Open source</a>
+          <div class="unity-overlay-hint">{{ 'FLOWCHART.UNITY_SOURCE' | translate:{ url: baseUrl } }}</div>
+          <a class="unity-link" [href]="baseUrl" target="_blank" rel="noreferrer">{{ 'FLOWCHART.UNITY_OPEN_SOURCE' | translate }}</a>
         </div>
       </div>
     } @else if (unity.status() === 'error') {
       <div class="unity-overlay">
         <div class="unity-overlay-card">
-          <div class="unity-overlay-title">Unity failed to load</div>
+          <div class="unity-overlay-title">{{ 'FLOWCHART.UNITY_ERROR_TITLE' | translate }}</div>
           <div class="unity-overlay-sub">{{ unity.error() }}</div>
-          <button type="button" class="unity-btn" (click)="reload()">Retry</button>
-          <div class="unity-overlay-hint">Source: {{ baseUrl }}</div>
-          <a class="unity-link" [href]="baseUrl" target="_blank" rel="noreferrer">Open source</a>
+          <button type="button" class="unity-btn" (click)="reload()">{{ 'FLOWCHART.UNITY_RETRY' | translate }}</button>
+          <div class="unity-overlay-hint">{{ 'FLOWCHART.UNITY_SOURCE' | translate:{ url: baseUrl } }}</div>
+          <a class="unity-link" [href]="baseUrl" target="_blank" rel="noreferrer">{{ 'FLOWCHART.UNITY_OPEN_SOURCE' | translate }}</a>
         </div>
       </div>
     } @else if (unity.status() === 'idle') {
       <div class="unity-overlay">
         <div class="unity-overlay-card">
-          <div class="unity-overlay-title">Unity is not started</div>
-          <button type="button" class="unity-btn" (click)="start()">Start</button>
-          <div class="unity-overlay-hint">Source: {{ baseUrl }}</div>
-          <a class="unity-link" [href]="baseUrl" target="_blank" rel="noreferrer">Open source</a>
+          <div class="unity-overlay-title">{{ 'FLOWCHART.UNITY_IDLE_TITLE' | translate }}</div>
+          <button type="button" class="unity-btn" (click)="start()">{{ 'FLOWCHART.UNITY_START' | translate }}</button>
+          <div class="unity-overlay-hint">{{ 'FLOWCHART.UNITY_SOURCE' | translate:{ url: baseUrl } }}</div>
+          <a class="unity-link" [href]="baseUrl" target="_blank" rel="noreferrer">{{ 'FLOWCHART.UNITY_OPEN_SOURCE' | translate }}</a>
         </div>
       </div>
     }

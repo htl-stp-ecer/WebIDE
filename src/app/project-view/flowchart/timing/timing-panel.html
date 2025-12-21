@@ -1,9 +1,9 @@
 <div class="step-timing-panel">
   <div class="panel-header panel-drag-handle">
-    <span>Step times</span>
+    <span>{{ 'FLOWCHART.TIMING_TITLE' | translate }}</span>
     <div class="panel-switch">
-      <button type="button" class="panel-switch-btn" [class.active]="viewMode === 'list'" (click)="setViewMode('list')">List</button>
-      <button type="button" class="panel-switch-btn" [class.active]="viewMode === 'chart'" (click)="setViewMode('chart')">Graph</button>
+      <button type="button" class="panel-switch-btn" [class.active]="viewMode === 'list'" (click)="setViewMode('list')">{{ 'FLOWCHART.TIMING_LIST' | translate }}</button>
+      <button type="button" class="panel-switch-btn" [class.active]="viewMode === 'chart'" (click)="setViewMode('chart')">{{ 'FLOWCHART.TIMING_GRAPH' | translate }}</button>
     </div>
   </div>
   @if (viewMode === 'list') {
@@ -29,7 +29,7 @@
         <p-chart type="line" [data]="chartData" [options]="chartOptions" styleClass="timing-chart-canvas"></p-chart>
       </div>
     } @else {
-      <div class="timing-empty">No timings yet</div>
+      <div class="timing-empty">{{ 'FLOWCHART.TIMING_EMPTY' | translate }}</div>
     }
   }
 </div>
