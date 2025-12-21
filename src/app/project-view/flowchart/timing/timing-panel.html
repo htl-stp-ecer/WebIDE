@@ -1,0 +1,35 @@
+<div class="step-timing-panel">
+  <div class="panel-header panel-drag-handle">
+    <span>Step times</span>
+    <div class="panel-switch">
+      <button type="button" class="panel-switch-btn" [class.active]="viewMode === 'list'" (click)="setViewMode('list')">List</button>
+      <button type="button" class="panel-switch-btn" [class.active]="viewMode === 'chart'" (click)="setViewMode('chart')">Graph</button>
+    </div>
+  </div>
+  @if (viewMode === 'list') {
+    <div class="panel-body">
+      @for (timing of timings; track timing.id; let idx = $index) {
+        <div class="timing-row">
+          <div class="timing-label" [pTooltip]="timing.label || timing.path" tooltipPosition="top" [showDelay]="120" [hideDelay]="50">
+            <span class="timing-index">#{{ timing.index || (idx + 1) }}</span>
+            <span class="timing-name">{{ timing.label || timing.path || ('FLOWCHART.STEP'|translate) }}</span>
+          </div>
+          <div class="timing-bar-row">
+            <div class="timing-bar-bg">
+              <div class="timing-bar-fill" [style.width.%]="maxDurationMs ? (timing.durationMs / maxDurationMs) * 100 : 5"></div>
+            </div>
+            <div class="timing-value">{{ (timing.durationMs / 1000) | number:'1.2-2' }}s</div>
+          </div>
+        </div>
+      }
+    </div>
+  } @else {
+    @if (timings.length) {
+      <div class="timing-chart">
+        <p-chart type="line" [data]="chartData" [options]="chartOptions" styleClass="timing-chart-canvas"></p-chart>
+      </div>
+    } @else {
+      <div class="timing-empty">No timings yet</div>
+    }
+  }
+</div>

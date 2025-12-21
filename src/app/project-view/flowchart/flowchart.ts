@@ -28,11 +28,10 @@ import { recomputeMergedView } from './view-merger';
 import { createFlowchartActions, FlowchartActions } from './flowchart-actions';
 import { TypeDefinition } from '../../entities/TypeDefinition';
 import {Select} from 'primeng/select';
-import { ChartModule } from 'primeng/chart';
-import type { ChartData, ChartOptions } from 'chart.js';
 import {DecimalPipe} from '@angular/common';
 import { UnityCanvasPanel } from './unity/unity-canvas-panel';
 import { TableEditorPanel } from './unity/table-editor-panel';
+import { TimingPanel, type TimingViewMode } from './timing/timing-panel';
 
 interface DefinitionOption {
   label: string;
@@ -40,7 +39,6 @@ interface DefinitionOption {
 }
 
 type DefinitionGroups = Partial<Record<string, DefinitionOption[]>>;
-type TimingViewMode = 'list' | 'chart';
 type FloatingPanelKey = 'timing' | 'unity' | 'table';
 
 interface PanelOffset {
@@ -67,7 +65,7 @@ const DEFAULT_PANEL_OFFSETS: Record<FloatingPanelKey, PanelOffset> = {
 
 @Component({
   selector: 'app-flowchart',
-  imports: [FFlowComponent, FFlowModule, InputNumberModule, CheckboxModule, InputTextModule, ContextMenuModule, Tooltip, SelectButtonModule, FormsModule, TranslateModule, Select, DecimalPipe, ChartModule, UnityCanvasPanel, TableEditorPanel],
+  imports: [FFlowComponent, FFlowModule, InputNumberModule, CheckboxModule, InputTextModule, ContextMenuModule, Tooltip, SelectButtonModule, FormsModule, TranslateModule, Select, DecimalPipe, UnityCanvasPanel, TableEditorPanel, TimingPanel],
   templateUrl: './flowchart.html',
   styleUrl: './flowchart.scss',
   providers: [FlowHistory],
@@ -275,56 +273,6 @@ export class Flowchart implements AfterViewChecked, OnDestroy, OnInit {
       max = tmp;
     }
     return Math.min(Math.max(value, min), max);
-  }
-
-  get timingChartData(): ChartData<'line'> {
-    const timings = this.runManager.stepTimings();
-    const labels = timings.map(t => t.label || t.path || `Step ${t.index}`);
-    const data = timings.map(t => +(t.durationMs / 1000).toFixed(3));
-
-    return {
-      labels,
-      datasets: [
-        {
-          label: 'Duration (s)',
-          data,
-          borderColor: '#22c55e',
-          backgroundColor: '#22c55e',
-          pointBackgroundColor: '#22c55e',
-          pointBorderColor: '#22c55e',
-          pointRadius: 5,
-          pointHoverRadius: 7,
-          tension: 0.3,
-          fill: false,
-        },
-      ],
-    };
-  }
-
-  get timingChartOptions(): ChartOptions<'line'> {
-    return {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          callbacks: {
-            title: items => (items[0]?.label ? [items[0].label] : []),
-            label: ctx => `Duration: ${ctx.formattedValue}s`,
-          },
-        },
-      },
-      scales: {
-        x: {
-          title: { display: true, text: 'Step' },
-          ticks: { autoSkip: false, maxRotation: 35, minRotation: 0 },
-        },
-        y: {
-          title: { display: true, text: 'Duration (s)' },
-          beginAtZero: true,
-        },
-      },
-    };
   }
 
   private groupDefinitionsByType(definitions: TypeDefinition[]): DefinitionGroups {

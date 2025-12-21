@@ -199,41 +199,14 @@
     </f-flow>
 
     @if (runManager.stepTimings().length && isToggleEnabled('timestamps')) {
-      <div class="step-timing-panel floating-panel" [style.transform]="panelTransform('timing')" (pointerdown)="startPanelDrag($event, 'timing')">
-        <div class="panel-header panel-drag-handle">
-          <span>Step times</span>
-          <div class="panel-switch">
-            <button type="button" class="panel-switch-btn" [class.active]="timingViewMode() === 'list'" (click)="setTimingViewMode('list')">List</button>
-            <button type="button" class="panel-switch-btn" [class.active]="timingViewMode() === 'chart'" (click)="setTimingViewMode('chart')">Graph</button>
-          </div>
-        </div>
-        @if (timingViewMode() === 'list') {
-          <div class="panel-body">
-            @for (timing of runManager.stepTimings(); track timing.id; let idx = $index) {
-              <div class="timing-row">
-                <div class="timing-label" [pTooltip]="timing.label || timing.path" tooltipPosition="top" [showDelay]="120" [hideDelay]="50">
-                  <span class="timing-index">#{{ timing.index || (idx + 1) }}</span>
-                  <span class="timing-name">{{ timing.label || timing.path || ('FLOWCHART.STEP'|translate) }}</span>
-                </div>
-                <div class="timing-bar-row">
-                  <div class="timing-bar-bg">
-                    <div class="timing-bar-fill" [style.width.%]="runManager.maxStepDurationMs() ? (timing.durationMs / runManager.maxStepDurationMs()) * 100 : 5"></div>
-                  </div>
-                  <div class="timing-value">{{ (timing.durationMs / 1000) | number:'1.2-2' }}s</div>
-                </div>
-              </div>
-            }
-          </div>
-        } @else {
-          @if (runManager.stepTimings().length) {
-            <div class="timing-chart">
-              <p-chart type="line" [data]="timingChartData" [options]="timingChartOptions" styleClass="timing-chart-canvas"></p-chart>
-            </div>
-          } @else {
-            <div class="timing-empty">No timings yet</div>
-          }
-        }
-      </div>
+      <app-timing-panel
+        class="floating-panel"
+        [style.transform]="panelTransform('timing')"
+        (pointerdown)="startPanelDrag($event, 'timing')"
+        [timings]="runManager.stepTimings()"
+        [maxDurationMs]="runManager.maxStepDurationMs()"
+        [viewMode]="timingViewMode()"
+        (viewModeChange)="setTimingViewMode($event)"></app-timing-panel>
     }
 
     <div class="bottom-right-stack">
