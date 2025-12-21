@@ -41,8 +41,29 @@ interface DefinitionOption {
 
 type DefinitionGroups = Partial<Record<string, DefinitionOption[]>>;
 type TimingViewMode = 'list' | 'chart';
+type FloatingPanelKey = 'timing' | 'unity' | 'table';
+
+interface PanelOffset {
+  x: number;
+  y: number;
+}
+
+interface PanelDragState {
+  key: FloatingPanelKey;
+  startX: number;
+  startY: number;
+  originX: number;
+  originY: number;
+  startRect: DOMRect;
+  surfaceRect: DOMRect;
+}
 
 const DEFAULT_VIEW_TOGGLE_STATE: Record<string, boolean> = { timestamps: true, unityCanvas: false, tableEditor: false };
+const DEFAULT_PANEL_OFFSETS: Record<FloatingPanelKey, PanelOffset> = {
+  timing: { x: 0, y: 0 },
+  unity: { x: 0, y: 0 },
+  table: { x: 0, y: 0 },
+};
 
 @Component({
   selector: 'app-flowchart',
@@ -78,6 +99,7 @@ export class Flowchart implements AfterViewChecked, OnDestroy, OnInit {
     { key: 'unityCanvas', label: 'Simulation', icon: 'pi pi-desktop' },
     { key: 'tableEditor', label: 'Table editor', icon: 'pi pi-table' },
   ];
+  readonly panelOffsets = signal<Record<FloatingPanelKey, PanelOffset>>({ ...DEFAULT_PANEL_OFFSETS });
   unityBaseUrl = `${globalThis.location?.protocol ?? 'http:'}//${globalThis.location?.hostname ?? 'localhost'}:8000`;
   readonly timingViewMode = signal<TimingViewMode>('list');
   readonly simulateRuns = signal<boolean>(true);
@@ -87,6 +109,7 @@ export class Flowchart implements AfterViewChecked, OnDestroy, OnInit {
   fCanvas = viewChild(FCanvasComponent);
   @ViewChildren('nodeElement') nodeEls!: QueryList<ElementRef<HTMLDivElement>>;
   @ViewChildren('commentTextarea') commentTextareas!: QueryList<ElementRef<HTMLTextAreaElement>>;
+  @ViewChild('flowSurface') flowSurfaceRef!: ElementRef<HTMLDivElement>;
   @ViewChild('cm') cm!: ContextMenu;
   canUndoSignal?: Signal<boolean>;
   canRedoSignal?: Signal<boolean>;
@@ -98,6 +121,7 @@ export class Flowchart implements AfterViewChecked, OnDestroy, OnInit {
   themeObserver?: MutationObserver;
   typeDefinitionsSub?: Subscription;
   private _useAutoLayout = readStoredAutoLayout();
+  private activePanelDrag: PanelDragState | null = null;
 
   constructor(
     readonly missionState: MissionStateService,
@@ -142,6 +166,7 @@ export class Flowchart implements AfterViewChecked, OnDestroy, OnInit {
 
   ngOnDestroy(): void {
     this.actions.stopRun();
+    this.stopPanelDrag();
     this.unityBaseUrlSub?.unsubscribe();
     this.langChangeSub?.unsubscribe();
     this.themeObserver?.disconnect();
@@ -179,6 +204,77 @@ export class Flowchart implements AfterViewChecked, OnDestroy, OnInit {
 
   toggleSimulation(): void {
     this.simulateRuns.update(prev => !prev);
+  }
+
+  panelTransform(key: FloatingPanelKey): string {
+    const offset = this.panelOffsets()[key];
+    return `translate3d(${offset.x}px, ${offset.y}px, 0)`;
+  }
+
+  startPanelDrag(event: PointerEvent, key: FloatingPanelKey): void {
+    if (!event.isPrimary || event.button !== 0) return;
+    const target = event.target as HTMLElement | null;
+    if (!target?.closest('.panel-drag-handle')) return;
+    if (target.closest('button, input, textarea, select, option, a, [data-no-drag]')) return;
+    const panelEl = event.currentTarget as HTMLElement | null;
+    const surfaceEl = this.flowSurfaceRef?.nativeElement;
+    if (!panelEl || !surfaceEl) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    this.stopPanelDrag();
+    const offset = this.panelOffsets()[key];
+    this.activePanelDrag = {
+      key,
+      startX: event.clientX,
+      startY: event.clientY,
+      originX: offset.x,
+      originY: offset.y,
+      startRect: panelEl.getBoundingClientRect(),
+      surfaceRect: surfaceEl.getBoundingClientRect(),
+    };
+    window.addEventListener('pointermove', this.onPanelPointerMove);
+    window.addEventListener('pointerup', this.onPanelPointerUp);
+  }
+
+  private onPanelPointerMove = (event: PointerEvent): void => {
+    const drag = this.activePanelDrag;
+    if (!drag) return;
+    event.preventDefault();
+    const dx = event.clientX - drag.startX;
+    const dy = event.clientY - drag.startY;
+    const minDx = drag.surfaceRect.left - drag.startRect.left;
+    const maxDx = drag.surfaceRect.right - drag.startRect.right;
+    const minDy = drag.surfaceRect.top - drag.startRect.top;
+    const maxDy = drag.surfaceRect.bottom - drag.startRect.bottom;
+    const clampedDx = this.clamp(dx, minDx, maxDx);
+    const clampedDy = this.clamp(dy, minDy, maxDy);
+
+    this.panelOffsets.update(prev => ({
+      ...prev,
+      [drag.key]: { x: drag.originX + clampedDx, y: drag.originY + clampedDy },
+    }));
+  };
+
+  private onPanelPointerUp = (): void => {
+    this.stopPanelDrag();
+  };
+
+  private stopPanelDrag(): void {
+    if (!this.activePanelDrag) return;
+    this.activePanelDrag = null;
+    window.removeEventListener('pointermove', this.onPanelPointerMove);
+    window.removeEventListener('pointerup', this.onPanelPointerUp);
+  }
+
+  private clamp(value: number, min: number, max: number): number {
+    if (min > max) {
+      const tmp = min;
+      min = max;
+      max = tmp;
+    }
+    return Math.min(Math.max(value, min), max);
   }
 
   get timingChartData(): ChartData<'line'> {

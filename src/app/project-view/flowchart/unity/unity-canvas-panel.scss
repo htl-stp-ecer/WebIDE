@@ -78,6 +78,15 @@
   user-select: none;
 }
 
+.panel-drag-handle {
+  cursor: grab;
+  touch-action: none;
+}
+
+.panel-drag-handle:active {
+  cursor: grabbing;
+}
+
 .unity-title {
   display: inline-flex;
   align-items: center;

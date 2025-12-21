@@ -96,6 +96,16 @@
   gap: 0.5rem;
 }
 
+.panel-drag-handle {
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+
+.panel-drag-handle:active {
+  cursor: grabbing;
+}
+
 .panel-switch {
   display: inline-flex;
   gap: 0.25rem;

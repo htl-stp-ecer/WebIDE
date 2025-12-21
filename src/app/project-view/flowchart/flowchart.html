@@ -80,7 +80,7 @@
     </button>
   </div>
 
-  <div class="flow-surface" (contextmenu)="actions.onCanvasContextMenu($event)">
+  <div class="flow-surface" #flowSurface (contextmenu)="actions.onCanvasContextMenu($event)">
     <f-flow class="flow-root" fDraggable fEmitOnNodeIntersect (fNodeIntersectedWithConnections)="actions.onNodeIntersected($event)" (fDropToGroup)="actions.onDropToGroup($event)" (fLoaded)="actions.onLoaded()" (fCreateNode)="actions.onCreateNode($event)" (fCreateConnection)="actions.addConnection($event)" (fDragEnded)="actions.onSave()">
       <f-background class="flow-bg"><f-circle-pattern color="#4a5565"></f-circle-pattern></f-background>
       <f-canvas fZoom class="flow-canvas">
@@ -199,8 +199,8 @@
     </f-flow>
 
     @if (runManager.stepTimings().length && isToggleEnabled('timestamps')) {
-      <div class="step-timing-panel">
-        <div class="panel-header">
+      <div class="step-timing-panel floating-panel" [style.transform]="panelTransform('timing')" (pointerdown)="startPanelDrag($event, 'timing')">
+        <div class="panel-header panel-drag-handle">
           <span>Step times</span>
           <div class="panel-switch">
             <button type="button" class="panel-switch-btn" [class.active]="timingViewMode() === 'list'" (click)="setTimingViewMode('list')">List</button>
@@ -238,11 +238,17 @@
 
     <div class="bottom-right-stack">
       <app-unity-canvas-panel
+        class="floating-panel"
+        [style.transform]="panelTransform('unity')"
+        (pointerdown)="startPanelDrag($event, 'unity')"
         [baseUrl]="unityBaseUrl"
         [visible]="isToggleEnabled('unityCanvas')"
         [class.is-hidden]="!isToggleEnabled('unityCanvas')"></app-unity-canvas-panel>
 
       <app-table-editor-panel
+        class="floating-panel"
+        [style.transform]="panelTransform('table')"
+        (pointerdown)="startPanelDrag($event, 'table')"
         [class.is-hidden]="!isToggleEnabled('tableEditor')"></app-table-editor-panel>
     </div>
   </div>

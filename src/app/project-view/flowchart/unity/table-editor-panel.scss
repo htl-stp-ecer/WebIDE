@@ -54,6 +54,15 @@
   user-select: none;
 }
 
+.panel-drag-handle {
+  cursor: grab;
+  touch-action: none;
+}
+
+.panel-drag-handle:active {
+  cursor: grabbing;
+}
+
 .table-title {
   display: inline-flex;
   align-items: center;
@@ -141,4 +150,3 @@
   color: rgba(51, 65, 85, 0.85);
   word-break: break-word;
 }
-
