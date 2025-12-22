@@ -27,10 +27,11 @@ import { handleAfterViewChecked } from './layout-handlers';
 import { recomputeMergedView } from './view-merger';
 import { createFlowchartActions, FlowchartActions } from './flowchart-actions';
 import { TypeDefinition } from '../../entities/TypeDefinition';
-import {Select} from 'primeng/select';
-import {DecimalPipe} from '@angular/common';
+import { Select } from 'primeng/select';
+import { DecimalPipe } from '@angular/common';
 import { UnityCanvasPanel } from './unity/unity-canvas-panel';
 import { TableEditorPanel } from './unity/table-editor-panel';
+import { UnityWebglService } from './unity/unity-webgl.service';
 import { TimingPanel, type TimingViewMode } from './timing/timing-panel';
 
 interface DefinitionOption {
@@ -125,6 +126,7 @@ export class Flowchart implements AfterViewChecked, OnDestroy, OnInit {
     readonly missionState: MissionStateService,
     readonly stepsState: StepsStateService,
     readonly http: HttpService,
+    readonly unity: UnityWebglService,
     readonly route: ActivatedRoute,
     readonly history: FlowHistory,
     readonly translate: TranslateService

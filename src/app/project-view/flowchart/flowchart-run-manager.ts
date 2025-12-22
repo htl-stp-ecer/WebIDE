@@ -1,6 +1,9 @@
 import { WritableSignal, signal } from '@angular/core';
 import { Subscription } from 'rxjs';
 import { HttpService } from '../../services/http-service';
+import { Mission } from '../../entities/Mission';
+import { MissionStep } from '../../entities/MissionStep';
+import { UnityWebglService } from './unity/unity-webgl.service';
 import { RunPathTracker } from './run-path-tracker';
 
 type DebugState = 'idle' | 'running' | 'paused';
@@ -23,6 +26,19 @@ interface FlowchartRunContext {
   getProjectUUID(): string | null;
   getMissionKey(): string | null;
   shouldSimulate?(): boolean;
+  unity?: UnityWebglService;
+}
+
+interface StepArgument {
+  name?: unknown;
+  value?: unknown;
+  type?: unknown;
+}
+
+interface UnityPreviewAction {
+  kind: 'move' | 'rotate';
+  value: number;
+  timeoutMs: number;
 }
 
 export interface StepTiming {
@@ -51,6 +67,11 @@ export class FlowchartRunManager {
   private currentMode: 'normal' | 'debug' | null = null;
   private paused = false;
   private bufferedEvents: unknown[] = [];
+  private previewTimeoutId: number | null = null;
+  private previewAbortHandlers = new Set<() => void>();
+  private previewPendingMission: Mission | null = null;
+  private previewSignature: string | null = null;
+  private previewToken = 0;
   private currentRunId = 0;
   private awaitingRunStart = false;
   private runStartMs: number | null = null;
@@ -150,6 +171,22 @@ export class FlowchartRunManager {
     this.processEvent(event as Record<string, unknown>);
   }
 
+  scheduleUnityPreview(mission: Mission | null): void {
+    this.previewPendingMission = mission;
+    if (!mission) {
+      this.previewSignature = null;
+      this.abortUnityPreview();
+      return;
+    }
+    if (this.previewTimeoutId !== null) {
+      window.clearTimeout(this.previewTimeoutId);
+    }
+    this.previewTimeoutId = window.setTimeout(() => {
+      this.previewTimeoutId = null;
+      this.startUnityPreview();
+    }, 300);
+  }
+
   private processEvent(payload: Record<string, unknown>): void {
     this.logEventTimestamp(payload);
     const type = String((payload as { type?: unknown }).type ?? '');
@@ -170,6 +207,7 @@ export class FlowchartRunManager {
       case 'step':
         this.tracker.handleStepEvent(payload);
         this.recordStepTiming(payload);
+        this.sendUnityStep(payload);
         if (
           this.currentMode === 'debug' &&
           !this.paused &&
@@ -199,6 +237,291 @@ export class FlowchartRunManager {
       default:
         break;
     }
+  }
+
+  private startUnityPreview(): void {
+    if (this.ctx.isRunActive()) {
+      return;
+    }
+    const unity = this.ctx.unity;
+    if (!unity || !unity.isReady()) {
+      return;
+    }
+    const mission = this.previewPendingMission;
+    if (!mission) {
+      return;
+    }
+    const actions = this.buildPreviewActions(mission);
+    const signature = actions.map(action => `${action.kind}:${action.value}:${action.timeoutMs}`).join('|');
+    if (!actions.length) {
+      this.previewSignature = null;
+      return;
+    }
+    if (signature === this.previewSignature) {
+      return;
+    }
+    this.previewSignature = signature;
+    this.previewToken += 1;
+    const token = this.previewToken;
+    this.abortUnityPreview();
+    void this.runUnityPreview(actions, token);
+  }
+
+  private abortUnityPreview(): void {
+    if (this.previewTimeoutId !== null) {
+      window.clearTimeout(this.previewTimeoutId);
+      this.previewTimeoutId = null;
+    }
+    for (const handler of this.previewAbortHandlers) {
+      try {
+        handler();
+      } catch {
+        // Ignore handler errors.
+      }
+    }
+    this.previewAbortHandlers.clear();
+  }
+
+  private async runUnityPreview(actions: UnityPreviewAction[], token: number): Promise<void> {
+    const unity = this.ctx.unity;
+    if (!unity) return;
+
+    unity.sendMessage('Robot', 'Stop');
+    unity.sendMessage('Robot', 'ClearMissionPath');
+
+    for (const action of actions) {
+      if (token !== this.previewToken) {
+        return;
+      }
+      if (action.kind === 'move') {
+        unity.sendMessage('Robot', 'Move', String(action.value));
+        await this.waitForUnityEvent(['Move complete'], action.timeoutMs, token);
+        continue;
+      }
+      if (action.kind === 'rotate') {
+        unity.sendMessage('Robot', 'Rotate', String(action.value));
+        await this.waitForUnityEvent(['Rotation complete'], action.timeoutMs, token);
+      }
+    }
+  }
+
+  private waitForUnityEvent(matchers: string[], timeoutMs: number, token: number): Promise<void> {
+    const unity = this.ctx.unity;
+    if (!unity) return Promise.resolve();
+    const normalizedMatchers = matchers.map(m => m.toLowerCase());
+    const maxTimeout = Math.max(300, Math.min(timeoutMs, 15_000));
+    return new Promise(resolve => {
+      let timeoutId: number | null = null;
+      let unsubscribe = () => {};
+      let done = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        if (timeoutId !== null) {
+          window.clearTimeout(timeoutId);
+        }
+        unsubscribe();
+        this.previewAbortHandlers.delete(abort);
+        resolve();
+      };
+      const abort = () => finish();
+      this.previewAbortHandlers.add(abort);
+      unsubscribe = unity.onRobotEvent(message => {
+        if (token !== this.previewToken) {
+          finish();
+          return;
+        }
+        const lower = message.toLowerCase();
+        if (normalizedMatchers.some(m => lower.includes(m))) {
+          finish();
+        }
+      });
+      timeoutId = window.setTimeout(() => finish(), maxTimeout);
+    });
+  }
+
+  private buildPreviewActions(mission: Mission): UnityPreviewAction[] {
+    const actions: UnityPreviewAction[] = [];
+    const visit = (steps: MissionStep[] | undefined): void => {
+      (steps ?? []).forEach(step => {
+        if (!step) return;
+        const stepType = this.normalizeStepName(step);
+        const args = step.arguments ?? [];
+        if (stepType === 'drive_forward') {
+          const cm = this.extractNumericArgFromMission(args, ['cm', 'distance_cm', 'distance', 'dist']);
+          if (cm !== null) {
+            const speed = this.extractNumericArgFromMission(args, ['velocity', 'speed']);
+            actions.push({
+              kind: 'move',
+              value: Math.abs(cm),
+              timeoutMs: this.computeDriveTimeoutMs(cm, speed),
+            });
+          }
+        } else if (stepType === 'drive_backward') {
+          const cm = this.extractNumericArgFromMission(args, ['cm', 'distance_cm', 'distance', 'dist']);
+          if (cm !== null) {
+            const speed = this.extractNumericArgFromMission(args, ['velocity', 'speed']);
+            actions.push({
+              kind: 'move',
+              value: -Math.abs(cm),
+              timeoutMs: this.computeDriveTimeoutMs(cm, speed),
+            });
+          }
+        } else if (stepType === 'turn_cw') {
+          const deg = this.extractNumericArgFromMission(args, ['deg', 'degree', 'degrees', 'angle', 'angle_deg']);
+          if (deg !== null) {
+            const speed = this.extractNumericArgFromMission(args, ['omega', 'speed']);
+            actions.push({
+              kind: 'rotate',
+              value: Math.abs(deg),
+              timeoutMs: this.computeTurnTimeoutMs(deg, speed),
+            });
+          }
+        } else if (stepType === 'turn_ccw') {
+          const deg = this.extractNumericArgFromMission(args, ['deg', 'degree', 'degrees', 'angle', 'angle_deg']);
+          if (deg !== null) {
+            const speed = this.extractNumericArgFromMission(args, ['omega', 'speed']);
+            actions.push({
+              kind: 'rotate',
+              value: -Math.abs(deg),
+              timeoutMs: this.computeTurnTimeoutMs(deg, speed),
+            });
+          }
+        }
+
+        if (step.children?.length) {
+          visit(step.children);
+        }
+      });
+    };
+
+    visit(mission.steps ?? []);
+    return actions;
+  }
+
+  private normalizeStepName(step: MissionStep): string {
+    const raw = step.step_type || step.function_name || '';
+    const trimmed = String(raw).split('(')[0].trim();
+    if (!trimmed) return '';
+    const lastToken = trimmed.split('.').pop();
+    return (lastToken ?? '').toLowerCase();
+  }
+
+  private extractNumericArgFromMission(args: MissionStep['arguments'] | undefined, names: string[]): number | null {
+    const list = args ?? [];
+    const normalizedNames = names.map(name => name.toLowerCase());
+    for (const arg of list) {
+      const name = arg.name.toLowerCase();
+      if (!name || !normalizedNames.includes(name)) continue;
+      const value = this.parseNumeric(arg.value);
+      if (value !== null) return value;
+    }
+    for (const arg of list) {
+      const value = this.parseNumeric(arg.value);
+      if (value !== null) return value;
+    }
+    return null;
+  }
+
+  private computeDriveTimeoutMs(cm: number, speed?: number | null): number {
+    const distanceM = Math.abs(cm) / 100;
+    const maxSpeed = speed && Number.isFinite(speed) && speed > 0 ? speed : 1;
+    const seconds = distanceM / maxSpeed;
+    return this.clampPreviewTimeout(seconds * 1000);
+  }
+
+  private computeTurnTimeoutMs(deg: number, omega?: number | null): number {
+    const radians = Math.abs(deg) * Math.PI / 180;
+    const maxSpeed = omega && Number.isFinite(omega) && omega > 0 ? omega : 1;
+    const seconds = radians / maxSpeed;
+    return this.clampPreviewTimeout(seconds * 1000);
+  }
+
+  private clampPreviewTimeout(ms: number): number {
+    if (!Number.isFinite(ms)) {
+      return 1500;
+    }
+    return Math.max(400, Math.min(ms + 500, 15_000));
+  }
+
+  private sendUnityStep(payload: Record<string, unknown>): void {
+    const unity = this.ctx.unity;
+    if (!unity || !unity.isReady()) return;
+
+    const stepType = this.extractStepType(payload);
+    if (!stepType) return;
+
+    const args = this.extractArguments(payload);
+    if (stepType === 'drive_forward') {
+      const cm = this.extractNumericArg(args, ['cm', 'distance_cm', 'distance', 'dist']);
+      if (cm === null) return;
+      unity.sendMessage('Robot', 'Move', String(Math.abs(cm)));
+      return;
+    }
+    if (stepType === 'drive_backward') {
+      const cm = this.extractNumericArg(args, ['cm', 'distance_cm', 'distance', 'dist']);
+      if (cm === null) return;
+      unity.sendMessage('Robot', 'Move', String(-Math.abs(cm)));
+      return;
+    }
+    if (stepType === 'turn_cw') {
+      const deg = this.extractNumericArg(args, ['deg', 'degree', 'degrees', 'angle', 'angle_deg']);
+      if (deg === null) return;
+      unity.sendMessage('Robot', 'Rotate', String(Math.abs(deg)));
+      return;
+    }
+    if (stepType === 'turn_ccw') {
+      const deg = this.extractNumericArg(args, ['deg', 'degree', 'degrees', 'angle', 'angle_deg']);
+      if (deg === null) return;
+      unity.sendMessage('Robot', 'Rotate', String(-Math.abs(deg)));
+    }
+  }
+
+  private extractStepType(payload: Record<string, unknown>): string | null {
+    const raw =
+      (payload as { step_type?: unknown }).step_type ??
+      (payload as { function_name?: unknown }).function_name ??
+      (payload as { name?: unknown }).name;
+    if (!raw) return null;
+    const trimmed = String(raw).split('(')[0].trim();
+    if (!trimmed) return null;
+    const lastToken = trimmed.split('.').pop();
+    if (!lastToken) return null;
+    return lastToken.toLowerCase();
+  }
+
+  private extractArguments(payload: Record<string, unknown>): StepArgument[] {
+    const rawArgs = (payload as { arguments?: unknown }).arguments ?? (payload as { args?: unknown }).args;
+    if (!Array.isArray(rawArgs)) return [];
+    return rawArgs.filter(item => typeof item === 'object' && item !== null) as StepArgument[];
+  }
+
+  private extractNumericArg(args: StepArgument[], names: string[]): number | null {
+    const normalizedNames = names.map(name => name.toLowerCase());
+    for (const arg of args) {
+      const name = typeof arg.name === 'string' ? arg.name.toLowerCase() : '';
+      if (!name || !normalizedNames.includes(name)) continue;
+      const value = this.parseNumeric(arg.value);
+      if (value !== null) return value;
+    }
+
+    for (const arg of args) {
+      const value = this.parseNumeric(arg.value);
+      if (value !== null) return value;
+    }
+
+    return null;
+  }
+
+  private parseNumeric(value: unknown): number | null {
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+    if (typeof value === 'string') {
+      const direct = Number(value);
+      if (Number.isFinite(direct)) return direct;
+      const parsed = Number.parseFloat(value);
+      if (Number.isFinite(parsed)) return parsed;
+    }
+    return null;
   }
 
   private logEventTimestamp(payload: Record<string, unknown>): void {
@@ -247,6 +570,7 @@ export class FlowchartRunManager {
       return;
     }
 
+    this.abortUnityPreview();
     this.runSubscription?.unsubscribe();
     this.runSubscription = null;
 

@@ -49,4 +49,9 @@ export class UnityCanvasPanel implements AfterViewInit, OnChanges {
     this.unity.reset();
     void this.start();
   }
+
+  suppressContextMenu(event: MouseEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+  }
 }

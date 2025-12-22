@@ -14,6 +14,7 @@ declare global {
       config: Record<string, unknown>,
       onProgress?: (progress: number) => void
     ) => Promise<UnityWebglInstance>;
+    onRobotEvent?: (message: string) => void;
   }
 }
 
@@ -32,6 +33,8 @@ export class UnityWebglService {
   private lastAppliedRobotSize: { lengthCm: number; widthCm: number } | null = null;
   private robotSizeAttempt = 0;
   private robotSizeTimeoutId: number | null = null;
+  private robotEventBridgeReady = false;
+  private readonly robotEventListeners = new Set<(message: string) => void>();
 
   isReady(): boolean {
     return this.status() === 'ready' && !!this.instance;
@@ -40,6 +43,14 @@ export class UnityWebglService {
   sendMessage(gameObject: string, methodName: string, parameter?: string): void {
     if (!this.instance) return;
     this.instance.SendMessage(gameObject, methodName, parameter);
+  }
+
+  onRobotEvent(listener: (message: string) => void): () => void {
+    this.ensureRobotEventBridge();
+    this.robotEventListeners.add(listener);
+    return () => {
+      this.robotEventListeners.delete(listener);
+    };
   }
 
   async init(canvas: HTMLCanvasElement, baseUrl: string): Promise<UnityWebglInstance> {
@@ -133,6 +144,28 @@ export class UnityWebglService {
     this.instancePromise = null;
     this.instance = null;
     this.baseUrl = null;
+  }
+
+  private ensureRobotEventBridge(): void {
+    if (this.robotEventBridgeReady) return;
+    this.robotEventBridgeReady = true;
+    const previous = window.onRobotEvent;
+    window.onRobotEvent = (message: string) => {
+      if (typeof previous === 'function') {
+        try {
+          previous(message);
+        } catch {
+          // Ignore previous handler errors.
+        }
+      }
+      for (const listener of this.robotEventListeners) {
+        try {
+          listener(message);
+        } catch {
+          // Ignore listener errors.
+        }
+      }
+    };
   }
 
   applyRobotSize(lengthCm: number, widthCm: number): void {
