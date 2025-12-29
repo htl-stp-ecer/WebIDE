@@ -8,7 +8,7 @@ import { NotificationService } from '../services/NotificationService';
 import { Card } from 'primeng/card';
 import { ConfirmDialog } from 'primeng/confirmdialog';
 import { ConfirmationService } from 'primeng/api';
-import {NgClass} from '@angular/common';
+import {NgClass, NgStyle} from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { decodeRouteIp, encodeRouteIp } from '../services/route-ip-serializer';
 import { UnityWebglService } from '../project-view/flowchart/unity/unity-webgl.service';
@@ -19,12 +19,13 @@ interface Sensor {
   color: string;
   x_pct?: number;
   y_pct?: number;
+  clearance_cm?: number;
 }
 
 @Component({
   selector: 'app-project-menu',
   standalone: true,
-  imports: [FormsModule, InputText, Button, Card, ConfirmDialog, NgClass, TranslateModule],
+  imports: [FormsModule, InputText, Button, Card, ConfirmDialog, NgClass, NgStyle, TranslateModule],
   templateUrl: './project-menu.html',
   styleUrl: './project-menu.scss',
   providers: [ConfirmationService] // required for PrimeNG
@@ -326,11 +327,17 @@ export class ProjectMenu implements OnInit {
       return;
     }
 
+    const sensor = this.selectedSensor;
+    if (!sensor) {
+      return;
+    }
+
     const parsed = value === null || value === undefined ? undefined : Number(value);
     const maxCm = axis === 'x' ? dimensions.width : dimensions.length;
+    const bounds = this.getAxisBoundsCm(axis, dimensions, sensor.clearance_cm ?? 0);
     const clampedCm = parsed === undefined || Number.isNaN(parsed)
       ? undefined
-      : Math.min(Math.max(parsed, 0), maxCm);
+      : Math.min(Math.max(parsed, bounds.min), bounds.max);
     const percent = clampedCm === undefined || maxCm === 0
       ? undefined
       : axis === 'y'
@@ -352,8 +359,39 @@ export class ProjectMenu implements OnInit {
     this.persistSensors();
   }
 
+  setSelectedSensorClearanceCm(value: number | null) {
+    if (this.selectedSensorId === null) {
+      return;
+    }
+
+    const parsed = value === null || value === undefined ? undefined : Number(value);
+    const maxCm = this.sensorMaxClearanceCm;
+    const clamped = parsed === undefined || Number.isNaN(parsed)
+      ? undefined
+      : Math.min(Math.max(parsed, 0), maxCm ?? parsed);
+
+    this.sensors = this.sensors.map(sensor => {
+      if (sensor.id !== this.selectedSensorId) {
+        return sensor;
+      }
+
+      const updated = {
+        ...sensor,
+        clearance_cm: clamped,
+      };
+      return this.applyClearanceClamp(updated);
+    });
+
+    this.persistSensors();
+  }
+
   placeSelectedSensor(event: MouseEvent) {
     if (this.selectedSensorId === null) {
+      return;
+    }
+
+    const sensor = this.selectedSensor;
+    if (!sensor) {
       return;
     }
 
@@ -369,8 +407,8 @@ export class ProjectMenu implements OnInit {
 
     const x = ((event.clientX - rect.left) / rect.width) * 100;
     const y = ((event.clientY - rect.top) / rect.height) * 100;
-    const clampedX = Math.min(Math.max(x, 0), 100);
-    const clampedY = Math.min(Math.max(y, 0), 100);
+    const clampedX = this.clampPercentForSensor('x', Math.min(Math.max(x, 0), 100), sensor);
+    const clampedY = this.clampPercentForSensor('y', Math.min(Math.max(y, 0), 100), sensor);
 
     this.sensors = this.sensors.map(sensor => {
       if (sensor.id !== this.selectedSensorId) {
@@ -444,12 +482,57 @@ export class ProjectMenu implements OnInit {
     return this.roundToTwo(dimensions.length * (1 - this.selectedSensor.y_pct / 100));
   }
 
+  get selectedSensorClearanceCm(): number | null {
+    if (!this.selectedSensor || this.selectedSensor.clearance_cm === undefined) {
+      return null;
+    }
+
+    return this.roundToTwo(this.selectedSensor.clearance_cm);
+  }
+
   get sensorMaxXcm(): number | null {
-    return this.getDisplayDimensions()?.width ?? null;
+    const dimensions = this.getDisplayDimensions();
+    if (!dimensions) {
+      return null;
+    }
+    const clearance = this.selectedSensor?.clearance_cm ?? 0;
+    return this.getAxisBoundsCm('x', dimensions, clearance).max;
   }
 
   get sensorMaxYcm(): number | null {
-    return this.getDisplayDimensions()?.length ?? null;
+    const dimensions = this.getDisplayDimensions();
+    if (!dimensions) {
+      return null;
+    }
+    const clearance = this.selectedSensor?.clearance_cm ?? 0;
+    return this.getAxisBoundsCm('y', dimensions, clearance).max;
+  }
+
+  get sensorMinXcm(): number | null {
+    const dimensions = this.getDisplayDimensions();
+    if (!dimensions) {
+      return null;
+    }
+    const clearance = this.selectedSensor?.clearance_cm ?? 0;
+    return this.getAxisBoundsCm('x', dimensions, clearance).min;
+  }
+
+  get sensorMinYcm(): number | null {
+    const dimensions = this.getDisplayDimensions();
+    if (!dimensions) {
+      return null;
+    }
+    const clearance = this.selectedSensor?.clearance_cm ?? 0;
+    return this.getAxisBoundsCm('y', dimensions, clearance).min;
+  }
+
+  get sensorMaxClearanceCm(): number | null {
+    const dimensions = this.getDisplayDimensions();
+    if (!dimensions) {
+      return null;
+    }
+
+    return Math.min(dimensions.width, dimensions.length) / 2;
   }
 
   private getDisplayDimensions(): { width: number; length: number } | null {
@@ -467,6 +550,89 @@ export class ProjectMenu implements OnInit {
     return { width, length };
   }
 
+  getSensorMarkerStyle(sensor: Sensor): Record<string, string> {
+    const style: Record<string, string> = {
+      '--sensor-x': `${sensor.x_pct}%`,
+      '--sensor-y': `${sensor.y_pct}%`,
+    };
+    const clearance = this.getSensorClearanceDiameter(sensor);
+    if (clearance) {
+      style['--sensor-clear-x'] = `${clearance.x}%`;
+      style['--sensor-clear-y'] = `${clearance.y}%`;
+    }
+    return style;
+  }
+
+  getSensorClearanceVisible(sensor: Sensor): boolean {
+    if (sensor.clearance_cm === undefined || sensor.clearance_cm <= 0) {
+      return false;
+    }
+    return !!this.getSensorClearanceDiameter(sensor);
+  }
+
+  private getSensorClearanceDiameter(sensor: Sensor): { x: number; y: number } | null {
+    if (sensor.clearance_cm === undefined) {
+      return null;
+    }
+
+    const dimensions = this.getDisplayDimensions();
+    if (!dimensions || dimensions.width === 0 || dimensions.length === 0) {
+      return null;
+    }
+
+    return {
+      x: (sensor.clearance_cm * 2 / dimensions.width) * 100,
+      y: (sensor.clearance_cm * 2 / dimensions.length) * 100,
+    };
+  }
+
+  private getAxisBoundsCm(
+    axis: 'x' | 'y',
+    dimensions: { width: number; length: number },
+    clearanceCm: number
+  ): { min: number; max: number } {
+    const maxCm = axis === 'x' ? dimensions.width : dimensions.length;
+    if (clearanceCm <= 0) {
+      return { min: 0, max: maxCm };
+    }
+
+    if (clearanceCm * 2 >= maxCm) {
+      const mid = maxCm / 2;
+      return { min: mid, max: mid };
+    }
+
+    return { min: clearanceCm, max: maxCm - clearanceCm };
+  }
+
+  private clampPercentForSensor(axis: 'x' | 'y', percent: number, sensor: Sensor): number {
+    const dimensions = this.getDisplayDimensions();
+    if (!dimensions) {
+      return percent;
+    }
+
+    const maxCm = axis === 'x' ? dimensions.width : dimensions.length;
+    if (maxCm === 0) {
+      return percent;
+    }
+
+    const bounds = this.getAxisBoundsCm(axis, dimensions, sensor.clearance_cm ?? 0);
+    const cm = (percent / 100) * maxCm;
+    const clampedCm = Math.min(Math.max(cm, bounds.min), bounds.max);
+    return (clampedCm / maxCm) * 100;
+  }
+
+  private applyClearanceClamp(sensor: Sensor): Sensor {
+    if (sensor.x_pct === undefined && sensor.y_pct === undefined) {
+      return sensor;
+    }
+
+    return {
+      ...sensor,
+      x_pct: sensor.x_pct === undefined ? sensor.x_pct : this.clampPercentForSensor('x', sensor.x_pct, sensor),
+      y_pct: sensor.y_pct === undefined ? sensor.y_pct : this.clampPercentForSensor('y', sensor.y_pct, sensor),
+    };
+  }
+
   private roundToTwo(value: number): number {
     return Math.round(value * 100) / 100;
   }
@@ -479,6 +645,7 @@ export class ProjectMenu implements OnInit {
       color: this.sensorPalette[index % this.sensorPalette.length],
       x_pct: sensor.x_pct ?? undefined,
       y_pct: sensor.y_pct ?? undefined,
+      clearance_cm: sensor.clearance_cm ?? undefined,
     }));
     if (this.selectedSensorId !== null && !this.sensors.some(sensor => sensor.id === this.selectedSensorId)) {
       this.selectedSensorId = null;
@@ -490,6 +657,7 @@ export class ProjectMenu implements OnInit {
       name: sensor.name,
       x_pct: sensor.x_pct,
       y_pct: sensor.y_pct,
+      clearance_cm: sensor.clearance_cm,
     }));
 
     this.http.updateDeviceSensors(payload).subscribe({

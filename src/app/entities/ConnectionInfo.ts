@@ -2,6 +2,7 @@ interface DeviceSensorInfo {
   name: string;
   x_pct?: number;
   y_pct?: number;
+  clearance_cm?: number;
 }
 
 interface ConnectionInfo {

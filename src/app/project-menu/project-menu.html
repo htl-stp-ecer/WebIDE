@@ -154,7 +154,7 @@
                 <label class="flex flex-col text-xs text-gray-500">
                   {{ 'PROJECT_MENU.SENSOR_X_LABEL' | translate }}
                   <input type="number"
-                         min="0"
+                         [attr.min]="sensorMinXcm"
                          [attr.max]="sensorMaxXcm"
                          step="0.1"
                          [ngModel]="selectedSensorXcm"
@@ -167,12 +167,25 @@
                 <label class="flex flex-col text-xs text-gray-500">
                   {{ 'PROJECT_MENU.SENSOR_Y_LABEL' | translate }}
                   <input type="number"
-                         min="0"
+                         [attr.min]="sensorMinYcm"
                          [attr.max]="sensorMaxYcm"
                          step="0.1"
                          [ngModel]="selectedSensorYcm"
                          [disabled]="!canEditSensorCm"
                          (ngModelChange)="setSelectedSensorCoordCm('y', $event)"
+                         [ngModelOptions]="{standalone: true}"
+                         pInputText
+                         class="w-full mt-1"/>
+                </label>
+                <label class="flex flex-col text-xs text-gray-500 col-span-2">
+                  {{ 'PROJECT_MENU.SENSOR_CLEARANCE_LABEL' | translate }}
+                  <input type="number"
+                         min="0"
+                         [attr.max]="sensorMaxClearanceCm"
+                         step="0.1"
+                         [ngModel]="selectedSensorClearanceCm"
+                         [disabled]="!canEditSensorCm"
+                         (ngModelChange)="setSelectedSensorClearanceCm($event)"
                          [ngModelOptions]="{standalone: true}"
                          pInputText
                          class="w-full mt-1"/>
@@ -204,11 +217,14 @@
                    (click)="placeSelectedSensor($event)">
                 @for (sensor of sensors; track sensor.id) {
                   @if (sensor.x_pct !== undefined && sensor.y_pct !== undefined) {
-                    <span class="sensor-dot rounded-full border border-white shadow pointer-events-none"
-                          [style.background]="sensor.color"
-                          [style.--sensor-x]="sensor.x_pct + '%'"
-                          [style.--sensor-y]="sensor.y_pct + '%'"
-                          [attr.title]="sensor.name"></span>
+                    <span class="sensor-marker"
+                          [ngStyle]="getSensorMarkerStyle(sensor)"
+                          [attr.title]="sensor.name">
+                      @if (getSensorClearanceVisible(sensor)) {
+                        <span class="sensor-clearance"></span>
+                      }
+                      <span class="sensor-dot" [style.background]="sensor.color"></span>
+                    </span>
                   }
                 }
               </div>

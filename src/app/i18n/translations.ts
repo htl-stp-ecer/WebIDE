@@ -63,6 +63,7 @@ export const enTranslations = {
     SENSOR_POSITION: 'Position',
     SENSOR_X_LABEL: 'X (cm)',
     SENSOR_Y_LABEL: 'Y (cm)',
+    SENSOR_CLEARANCE_LABEL: 'Clearance (cm)',
   },
   MISSION: {
     ERROR_LOAD_MISSIONS: 'Could not get missions',
@@ -209,6 +210,7 @@ export const deTranslations = {
     SENSOR_POSITION: 'Position',
     SENSOR_X_LABEL: 'X (cm)',
     SENSOR_Y_LABEL: 'Y (cm)',
+    SENSOR_CLEARANCE_LABEL: 'Sicherheitsabstand (cm)',
   },
   MISSION: {
     ERROR_LOAD_MISSIONS: 'Missionen konnten nicht geladen werden',
