@@ -204,10 +204,10 @@
                    (click)="placeSelectedSensor($event)">
                 @for (sensor of sensors; track sensor.id) {
                   @if (sensor.x_pct !== undefined && sensor.y_pct !== undefined) {
-                    <span class="absolute w-3 h-3 rounded-full border border-white shadow pointer-events-none"
+                    <span class="sensor-dot rounded-full border border-white shadow pointer-events-none"
                           [style.background]="sensor.color"
-                          [style.left.%]="sensor.x_pct"
-                          [style.top.%]="sensor.y_pct"
+                          [style.--sensor-x]="sensor.x_pct + '%'"
+                          [style.--sensor-y]="sensor.y_pct + '%'"
                           [attr.title]="sensor.name"></span>
                   }
                 }

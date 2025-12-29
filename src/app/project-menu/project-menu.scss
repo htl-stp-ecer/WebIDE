@@ -94,3 +94,13 @@
   top: 50%;
   transform: translateY(-50%);
 }
+
+.sensor-dot {
+  position: absolute;
+  --dot-size: 12px;
+  width: var(--dot-size);
+  height: var(--dot-size);
+  left: clamp(calc(var(--dot-size) / 2), var(--sensor-x), calc(100% - (var(--dot-size) / 2)));
+  top: clamp(calc(var(--dot-size) / 2), var(--sensor-y), calc(100% - (var(--dot-size) / 2)));
+  transform: translate(-50%, -50%);
+}
