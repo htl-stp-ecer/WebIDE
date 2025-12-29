@@ -65,6 +65,12 @@ export class HttpService {
     });
   }
 
+  updateDeviceSensors(sensors: DeviceSensorInfo[]) {
+    return this.http.put<ConnectionInfo>(`${this.ip}/api/v1/device/sensors`, {
+      sensors,
+    });
+  }
+
   getAllProjects() {
     return this.http.get<Project[]>(`${this.ip}/api/v1/projects`);
   }

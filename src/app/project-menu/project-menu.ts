@@ -13,6 +13,14 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { decodeRouteIp, encodeRouteIp } from '../services/route-ip-serializer';
 import { UnityWebglService } from '../project-view/flowchart/unity/unity-webgl.service';
 
+interface Sensor {
+  id: number;
+  name: string;
+  color: string;
+  x_pct?: number;
+  y_pct?: number;
+}
+
 @Component({
   selector: 'app-project-menu',
   standalone: true,
@@ -31,6 +39,11 @@ export class ProjectMenu implements OnInit {
   editingDimensions = false;
 
   projects: Project[] = [];
+  sensors: Sensor[] = [];
+  newSensorName = '';
+  selectedSensorId: number | null = null;
+  private nextSensorId = 1;
+  private readonly sensorPalette = ['#ef4444', '#f97316', '#f59e0b', '#22c55e', '#3b82f6', '#6366f1', '#ec4899'];
 
   constructor(
     private router: Router,
@@ -53,6 +66,7 @@ export class ProjectMenu implements OnInit {
       this.tempName = deviceInfo.hostname
       this.tempWidth = this.toDimensionString(deviceInfo.width_cm);
       this.tempLength = this.toDimensionString(deviceInfo.length_cm);
+      this.loadSensors(deviceInfo.sensors);
     });
 
     this.http.getAllProjects().subscribe(projects => {
@@ -265,6 +279,153 @@ export class ProjectMenu implements OnInit {
 
   backToProjects() {
     this.router.navigate(['/']);
+  }
+
+  addSensor() {
+    const name = this.newSensorName.trim();
+    if (!name) {
+      NotificationService.showError(
+        this.translate.instant('PROJECT_MENU.SENSOR_NAME_REQUIRED'),
+        this.translate.instant('COMMON.ERROR')
+      );
+      return;
+    }
+
+    const id = this.nextSensorId++;
+    const sensor: Sensor = {
+      id,
+      name,
+      color: this.sensorPalette[(id - 1) % this.sensorPalette.length]
+    };
+
+    this.sensors = [...this.sensors, sensor];
+    this.newSensorName = '';
+    this.selectedSensorId = sensor.id;
+    this.persistSensors();
+  }
+
+  selectSensor(sensorId: number) {
+    this.selectedSensorId = this.selectedSensorId === sensorId ? null : sensorId;
+  }
+
+  deleteSensor(sensorId: number) {
+    this.sensors = this.sensors.filter(sensor => sensor.id !== sensorId);
+    if (this.selectedSensorId === sensorId) {
+      this.selectedSensorId = null;
+    }
+    this.persistSensors();
+  }
+
+  placeSelectedSensor(event: MouseEvent) {
+    if (this.selectedSensorId === null) {
+      return;
+    }
+
+    const target = event.currentTarget as HTMLElement | null;
+    if (!target) {
+      return;
+    }
+
+    const rect = target.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) {
+      return;
+    }
+
+    const x = ((event.clientX - rect.left) / rect.width) * 100;
+    const y = ((event.clientY - rect.top) / rect.height) * 100;
+    const clampedX = Math.min(Math.max(x, 0), 100);
+    const clampedY = Math.min(Math.max(y, 0), 100);
+
+    this.sensors = this.sensors.map(sensor => {
+      if (sensor.id !== this.selectedSensorId) {
+        return sensor;
+      }
+
+      return {
+        ...sensor,
+        x_pct: clampedX,
+        y_pct: clampedY
+      };
+    });
+    this.persistSensors();
+  }
+
+  get robotScale() {
+    const dimensions = this.getDisplayDimensions();
+    if (!dimensions) {
+      return { widthPct: 70, heightPct: 70 };
+    }
+
+    const max = Math.max(dimensions.width, dimensions.length);
+    return {
+      widthPct: (dimensions.width / max) * 100,
+      heightPct: (dimensions.length / max) * 100
+    };
+  }
+
+  get robotDimensionLabel(): string {
+    const dimensions = this.getDisplayDimensions();
+    return `${this.formatDimension(dimensions?.width)} × ${this.formatDimension(dimensions?.length)} cm`;
+  }
+
+  get robotWidthLabel(): string {
+    const dimensions = this.getDisplayDimensions();
+    return `${this.formatDimension(dimensions?.width)} cm`;
+  }
+
+  get robotLengthLabel(): string {
+    const dimensions = this.getDisplayDimensions();
+    return `${this.formatDimension(dimensions?.length)} cm`;
+  }
+
+  private getDisplayDimensions(): { width: number; length: number } | null {
+    const width = this.editingDimensions
+      ? this.parseDimension(this.tempWidth) ?? this.connectionInfo?.width_cm
+      : this.connectionInfo?.width_cm;
+    const length = this.editingDimensions
+      ? this.parseDimension(this.tempLength) ?? this.connectionInfo?.length_cm
+      : this.connectionInfo?.length_cm;
+
+    if (width === undefined || length === undefined || width <= 0 || length <= 0) {
+      return null;
+    }
+
+    return { width, length };
+  }
+
+  private loadSensors(sensors: DeviceSensorInfo[] | undefined) {
+    this.nextSensorId = 1;
+    this.sensors = (sensors ?? []).map((sensor, index) => ({
+      id: this.nextSensorId++,
+      name: sensor.name,
+      color: this.sensorPalette[index % this.sensorPalette.length],
+      x_pct: sensor.x_pct ?? undefined,
+      y_pct: sensor.y_pct ?? undefined,
+    }));
+    if (this.selectedSensorId !== null && !this.sensors.some(sensor => sensor.id === this.selectedSensorId)) {
+      this.selectedSensorId = null;
+    }
+  }
+
+  private persistSensors() {
+    const payload: DeviceSensorInfo[] = this.sensors.map(sensor => ({
+      name: sensor.name,
+      x_pct: sensor.x_pct,
+      y_pct: sensor.y_pct,
+    }));
+
+    this.http.updateDeviceSensors(payload).subscribe({
+      next: info => {
+        this.connectionInfo = info;
+      },
+      error: err => {
+        NotificationService.showError(
+          this.translate.instant('PROJECT_MENU.SENSOR_SAVE_ERROR'),
+          this.translate.instant('COMMON.ERROR')
+        );
+        console.error(err);
+      }
+    });
   }
 
 }

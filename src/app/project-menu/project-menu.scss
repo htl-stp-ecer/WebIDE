@@ -1,0 +1,80 @@
+.robot-frame {
+  --robot-width: 70%;
+  --robot-height: 70%;
+}
+
+.robot-measure {
+  position: absolute;
+  border-color: #cbd5e1;
+}
+
+.robot-measure-width {
+  width: var(--robot-width);
+  border-top: 2px dashed #cbd5e1;
+  top: calc(50% + (var(--robot-height) / 2) + 12px);
+  left: calc(50% - (var(--robot-width) / 2));
+  position: absolute;
+}
+
+.robot-measure-height {
+  height: var(--robot-height);
+  border-left: 2px dashed #cbd5e1;
+  left: calc(50% + (var(--robot-width) / 2) + 12px);
+  top: calc(50% - (var(--robot-height) / 2));
+  position: absolute;
+}
+
+.robot-measure-width::before,
+.robot-measure-width::after {
+  content: '';
+  position: absolute;
+  width: 0;
+  height: 10px;
+  border-left: 2px solid #cbd5e1;
+  top: -10px;
+}
+
+.robot-measure-width::before {
+  left: 0;
+}
+
+.robot-measure-width::after {
+  right: 0;
+}
+
+.robot-measure-height::before,
+.robot-measure-height::after {
+  content: '';
+  position: absolute;
+  height: 0;
+  width: 10px;
+  border-top: 2px solid #cbd5e1;
+  left: -10px;
+}
+
+.robot-measure-height::before {
+  top: 0;
+}
+
+.robot-measure-height::after {
+  bottom: 0;
+}
+
+.robot-measure-label {
+  position: absolute;
+  font-size: 0.75rem;
+  color: #6b7280;
+  white-space: nowrap;
+}
+
+.robot-measure-width-label {
+  top: calc(50% + (var(--robot-height) / 2) + 18px);
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.robot-measure-height-label {
+  left: calc(50% + (var(--robot-width) / 2) + 18px);
+  top: 50%;
+  transform: translateY(-50%);
+}
