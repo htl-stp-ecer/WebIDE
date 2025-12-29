@@ -60,6 +60,9 @@ export const enTranslations = {
     SENSOR_NAME_REQUIRED: 'Sensor name cannot be empty',
     SENSOR_SAVE_ERROR: 'Could not save sensor positions.',
     SENSOR_DELETE: 'Delete sensor',
+    SENSOR_POSITION: 'Position',
+    SENSOR_X_LABEL: 'X (cm)',
+    SENSOR_Y_LABEL: 'Y (cm)',
   },
   MISSION: {
     ERROR_LOAD_MISSIONS: 'Could not get missions',
@@ -203,6 +206,9 @@ export const deTranslations = {
     SENSOR_NAME_REQUIRED: 'Sensorname darf nicht leer sein',
     SENSOR_SAVE_ERROR: 'Sensorpositionen konnten nicht gespeichert werden.',
     SENSOR_DELETE: 'Sensor löschen',
+    SENSOR_POSITION: 'Position',
+    SENSOR_X_LABEL: 'X (cm)',
+    SENSOR_Y_LABEL: 'Y (cm)',
   },
   MISSION: {
     ERROR_LOAD_MISSIONS: 'Missionen konnten nicht geladen werden',

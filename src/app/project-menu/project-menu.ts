@@ -316,6 +316,42 @@ export class ProjectMenu implements OnInit {
     this.persistSensors();
   }
 
+  setSelectedSensorCoordCm(axis: 'x' | 'y', value: number | null) {
+    if (this.selectedSensorId === null) {
+      return;
+    }
+
+    const dimensions = this.getDisplayDimensions();
+    if (!dimensions) {
+      return;
+    }
+
+    const parsed = value === null || value === undefined ? undefined : Number(value);
+    const maxCm = axis === 'x' ? dimensions.width : dimensions.length;
+    const clampedCm = parsed === undefined || Number.isNaN(parsed)
+      ? undefined
+      : Math.min(Math.max(parsed, 0), maxCm);
+    const percent = clampedCm === undefined || maxCm === 0
+      ? undefined
+      : axis === 'y'
+        ? (1 - clampedCm / maxCm) * 100
+        : (clampedCm / maxCm) * 100;
+
+    this.sensors = this.sensors.map(sensor => {
+      if (sensor.id !== this.selectedSensorId) {
+        return sensor;
+      }
+
+      return {
+        ...sensor,
+        x_pct: axis === 'x' ? percent : sensor.x_pct,
+        y_pct: axis === 'y' ? percent : sensor.y_pct,
+      };
+    });
+
+    this.persistSensors();
+  }
+
   placeSelectedSensor(event: MouseEvent) {
     if (this.selectedSensorId === null) {
       return;
@@ -378,6 +414,44 @@ export class ProjectMenu implements OnInit {
     return `${this.formatDimension(dimensions?.length)} cm`;
   }
 
+  get selectedSensor(): Sensor | undefined {
+    if (this.selectedSensorId === null) {
+      return undefined;
+    }
+
+    return this.sensors.find(sensor => sensor.id === this.selectedSensorId);
+  }
+
+  get canEditSensorCm(): boolean {
+    return this.getDisplayDimensions() !== null;
+  }
+
+  get selectedSensorXcm(): number | null {
+    const dimensions = this.getDisplayDimensions();
+    if (!dimensions || this.selectedSensor?.x_pct === undefined) {
+      return null;
+    }
+
+    return this.roundToTwo((dimensions.width * this.selectedSensor.x_pct) / 100);
+  }
+
+  get selectedSensorYcm(): number | null {
+    const dimensions = this.getDisplayDimensions();
+    if (!dimensions || this.selectedSensor?.y_pct === undefined) {
+      return null;
+    }
+
+    return this.roundToTwo(dimensions.length * (1 - this.selectedSensor.y_pct / 100));
+  }
+
+  get sensorMaxXcm(): number | null {
+    return this.getDisplayDimensions()?.width ?? null;
+  }
+
+  get sensorMaxYcm(): number | null {
+    return this.getDisplayDimensions()?.length ?? null;
+  }
+
   private getDisplayDimensions(): { width: number; length: number } | null {
     const width = this.editingDimensions
       ? this.parseDimension(this.tempWidth) ?? this.connectionInfo?.width_cm
@@ -391,6 +465,10 @@ export class ProjectMenu implements OnInit {
     }
 
     return { width, length };
+  }
+
+  private roundToTwo(value: number): number {
+    return Math.round(value * 100) / 100;
   }
 
   private loadSensors(sensors: DeviceSensorInfo[] | undefined) {
