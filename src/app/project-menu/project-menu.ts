@@ -12,6 +12,7 @@ import {NgClass, NgStyle} from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { decodeRouteIp, encodeRouteIp } from '../services/route-ip-serializer';
 import { UnityWebglService } from '../project-view/flowchart/unity/unity-webgl.service';
+import { TypeDefinition } from '../entities/TypeDefinition';
 
 interface Sensor {
   id: number;
@@ -41,9 +42,10 @@ export class ProjectMenu implements OnInit {
 
   projects: Project[] = [];
   sensors: Sensor[] = [];
-  newSensorName = '';
   selectedSensorId: number | null = null;
-  private nextSensorId = 1;
+  sensorProjectUuid: string | null = null;
+  private deviceSensors: DeviceSensorInfo[] = [];
+  private sensorDefinitions: TypeDefinition[] = [];
   private readonly sensorPalette = ['#ef4444', '#f97316', '#f59e0b', '#22c55e', '#3b82f6', '#6366f1', '#ec4899'];
 
   constructor(
@@ -67,11 +69,13 @@ export class ProjectMenu implements OnInit {
       this.tempName = deviceInfo.hostname
       this.tempWidth = this.toDimensionString(deviceInfo.width_cm);
       this.tempLength = this.toDimensionString(deviceInfo.length_cm);
-      this.loadSensors(deviceInfo.sensors);
+      this.deviceSensors = deviceInfo.sensors ?? [];
+      this.syncSensorsFromDefinitions();
     });
 
     this.http.getAllProjects().subscribe(projects => {
       this.projects = projects;
+      this.ensureSensorProjectSelection();
     })
   }
 
@@ -216,6 +220,7 @@ export class ProjectMenu implements OnInit {
           this.translate.instant('COMMON.SUCCESS')
         );
         this.projects = this.projects.filter(project => project.uuid !== uuid)
+        this.ensureSensorProjectSelection();
       },
       error: err => {
         NotificationService.showError(
@@ -255,6 +260,7 @@ export class ProjectMenu implements OnInit {
           this.translate.instant('COMMON.SUCCESS')
         );
         this.projects = [...this.projects, project];
+        this.ensureSensorProjectSelection();
         this.addingProject = false;
       },
       error: err => {
@@ -282,39 +288,8 @@ export class ProjectMenu implements OnInit {
     this.router.navigate(['/']);
   }
 
-  addSensor() {
-    const name = this.newSensorName.trim();
-    if (!name) {
-      NotificationService.showError(
-        this.translate.instant('PROJECT_MENU.SENSOR_NAME_REQUIRED'),
-        this.translate.instant('COMMON.ERROR')
-      );
-      return;
-    }
-
-    const id = this.nextSensorId++;
-    const sensor: Sensor = {
-      id,
-      name,
-      color: this.sensorPalette[(id - 1) % this.sensorPalette.length]
-    };
-
-    this.sensors = [...this.sensors, sensor];
-    this.newSensorName = '';
-    this.selectedSensorId = sensor.id;
-    this.persistSensors();
-  }
-
   selectSensor(sensorId: number) {
     this.selectedSensorId = this.selectedSensorId === sensorId ? null : sensorId;
-  }
-
-  deleteSensor(sensorId: number) {
-    this.sensors = this.sensors.filter(sensor => sensor.id !== sensorId);
-    if (this.selectedSensorId === sensorId) {
-      this.selectedSensorId = null;
-    }
-    this.persistSensors();
   }
 
   setSelectedSensorCoordCm(axis: 'x' | 'y', value: number | null) {
@@ -327,17 +302,15 @@ export class ProjectMenu implements OnInit {
       return;
     }
 
-    const sensor = this.selectedSensor;
-    if (!sensor) {
+    if (!this.selectedSensor) {
       return;
     }
 
     const parsed = value === null || value === undefined ? undefined : Number(value);
     const maxCm = axis === 'x' ? dimensions.width : dimensions.length;
-    const bounds = this.getAxisBoundsCm(axis, dimensions, sensor.clearance_cm ?? 0);
     const clampedCm = parsed === undefined || Number.isNaN(parsed)
       ? undefined
-      : Math.min(Math.max(parsed, bounds.min), bounds.max);
+      : Math.min(Math.max(parsed, 0), maxCm);
     const percent = clampedCm === undefined || maxCm === 0
       ? undefined
       : axis === 'y'
@@ -375,11 +348,10 @@ export class ProjectMenu implements OnInit {
         return sensor;
       }
 
-      const updated = {
+      return {
         ...sensor,
         clearance_cm: clamped,
       };
-      return this.applyClearanceClamp(updated);
     });
 
     this.persistSensors();
@@ -390,8 +362,7 @@ export class ProjectMenu implements OnInit {
       return;
     }
 
-    const sensor = this.selectedSensor;
-    if (!sensor) {
+    if (!this.selectedSensor) {
       return;
     }
 
@@ -407,8 +378,8 @@ export class ProjectMenu implements OnInit {
 
     const x = ((event.clientX - rect.left) / rect.width) * 100;
     const y = ((event.clientY - rect.top) / rect.height) * 100;
-    const clampedX = this.clampPercentForSensor('x', Math.min(Math.max(x, 0), 100), sensor);
-    const clampedY = this.clampPercentForSensor('y', Math.min(Math.max(y, 0), 100), sensor);
+    const clampedX = Math.min(Math.max(x, 0), 100);
+    const clampedY = Math.min(Math.max(y, 0), 100);
 
     this.sensors = this.sensors.map(sensor => {
       if (sensor.id !== this.selectedSensorId) {
@@ -495,8 +466,7 @@ export class ProjectMenu implements OnInit {
     if (!dimensions) {
       return null;
     }
-    const clearance = this.selectedSensor?.clearance_cm ?? 0;
-    return this.getAxisBoundsCm('x', dimensions, clearance).max;
+    return dimensions.width;
   }
 
   get sensorMaxYcm(): number | null {
@@ -504,8 +474,7 @@ export class ProjectMenu implements OnInit {
     if (!dimensions) {
       return null;
     }
-    const clearance = this.selectedSensor?.clearance_cm ?? 0;
-    return this.getAxisBoundsCm('y', dimensions, clearance).max;
+    return dimensions.length;
   }
 
   get sensorMinXcm(): number | null {
@@ -513,8 +482,7 @@ export class ProjectMenu implements OnInit {
     if (!dimensions) {
       return null;
     }
-    const clearance = this.selectedSensor?.clearance_cm ?? 0;
-    return this.getAxisBoundsCm('x', dimensions, clearance).min;
+    return 0;
   }
 
   get sensorMinYcm(): number | null {
@@ -522,8 +490,7 @@ export class ProjectMenu implements OnInit {
     if (!dimensions) {
       return null;
     }
-    const clearance = this.selectedSensor?.clearance_cm ?? 0;
-    return this.getAxisBoundsCm('y', dimensions, clearance).min;
+    return 0;
   }
 
   get sensorMaxClearanceCm(): number | null {
@@ -586,67 +553,68 @@ export class ProjectMenu implements OnInit {
     };
   }
 
-  private getAxisBoundsCm(
-    axis: 'x' | 'y',
-    dimensions: { width: number; length: number },
-    clearanceCm: number
-  ): { min: number; max: number } {
-    const maxCm = axis === 'x' ? dimensions.width : dimensions.length;
-    if (clearanceCm <= 0) {
-      return { min: 0, max: maxCm };
-    }
-
-    if (clearanceCm * 2 >= maxCm) {
-      const mid = maxCm / 2;
-      return { min: mid, max: mid };
-    }
-
-    return { min: clearanceCm, max: maxCm - clearanceCm };
-  }
-
-  private clampPercentForSensor(axis: 'x' | 'y', percent: number, sensor: Sensor): number {
-    const dimensions = this.getDisplayDimensions();
-    if (!dimensions) {
-      return percent;
-    }
-
-    const maxCm = axis === 'x' ? dimensions.width : dimensions.length;
-    if (maxCm === 0) {
-      return percent;
-    }
-
-    const bounds = this.getAxisBoundsCm(axis, dimensions, sensor.clearance_cm ?? 0);
-    const cm = (percent / 100) * maxCm;
-    const clampedCm = Math.min(Math.max(cm, bounds.min), bounds.max);
-    return (clampedCm / maxCm) * 100;
-  }
-
-  private applyClearanceClamp(sensor: Sensor): Sensor {
-    if (sensor.x_pct === undefined && sensor.y_pct === undefined) {
-      return sensor;
-    }
-
-    return {
-      ...sensor,
-      x_pct: sensor.x_pct === undefined ? sensor.x_pct : this.clampPercentForSensor('x', sensor.x_pct, sensor),
-      y_pct: sensor.y_pct === undefined ? sensor.y_pct : this.clampPercentForSensor('y', sensor.y_pct, sensor),
-    };
-  }
-
   private roundToTwo(value: number): number {
     return Math.round(value * 100) / 100;
   }
 
-  private loadSensors(sensors: DeviceSensorInfo[] | undefined) {
-    this.nextSensorId = 1;
-    this.sensors = (sensors ?? []).map((sensor, index) => ({
-      id: this.nextSensorId++,
-      name: sensor.name,
-      color: this.sensorPalette[index % this.sensorPalette.length],
-      x_pct: sensor.x_pct ?? undefined,
-      y_pct: sensor.y_pct ?? undefined,
-      clearance_cm: sensor.clearance_cm ?? undefined,
-    }));
+  onSensorProjectChange(projectUuid: string | null) {
+    this.sensorProjectUuid = projectUuid;
+    this.loadSensorDefinitionsForProject(projectUuid);
+  }
+
+  private ensureSensorProjectSelection() {
+    if (this.projects.length === 0) {
+      this.sensorProjectUuid = null;
+      this.sensorDefinitions = [];
+      this.syncSensorsFromDefinitions();
+      return;
+    }
+
+    const hasSelection = this.sensorProjectUuid && this.projects.some(project => project.uuid === this.sensorProjectUuid);
+    if (!hasSelection) {
+      this.sensorProjectUuid = this.projects[0].uuid;
+    }
+
+    this.loadSensorDefinitionsForProject(this.sensorProjectUuid);
+  }
+
+  private loadSensorDefinitionsForProject(projectUuid: string | null) {
+    if (!projectUuid) {
+      this.sensorDefinitions = [];
+      this.syncSensorsFromDefinitions();
+      return;
+    }
+
+    this.http.getTypeDefinitions(projectUuid).subscribe({
+      next: definitions => {
+        this.sensorDefinitions = this.filterIrSensorDefinitions(definitions);
+        this.syncSensorsFromDefinitions();
+      },
+      error: () => {
+        this.sensorDefinitions = [];
+        this.syncSensorsFromDefinitions();
+      }
+    });
+  }
+
+  private filterIrSensorDefinitions(definitions: TypeDefinition[]): TypeDefinition[] {
+    return definitions.filter(definition => definition.type === 'IRSensor');
+  }
+
+  private syncSensorsFromDefinitions() {
+    const sensorLookup = new Map(this.deviceSensors.map(sensor => [sensor.name, sensor]));
+    this.sensors = this.sensorDefinitions.map((definition, index) => {
+      const stored = sensorLookup.get(definition.name);
+      return {
+        id: index + 1,
+        name: definition.name,
+        color: this.sensorPalette[index % this.sensorPalette.length],
+        x_pct: stored?.x_pct ?? undefined,
+        y_pct: stored?.y_pct ?? undefined,
+        clearance_cm: stored?.clearance_cm ?? undefined,
+      };
+    });
+
     if (this.selectedSensorId !== null && !this.sensors.some(sensor => sensor.id === this.selectedSensorId)) {
       this.selectedSensorId = null;
     }
@@ -663,6 +631,8 @@ export class ProjectMenu implements OnInit {
     this.http.updateDeviceSensors(payload).subscribe({
       next: info => {
         this.connectionInfo = info;
+        this.deviceSensors = info.sensors ?? [];
+        this.syncSensorsFromDefinitions();
       },
       error: err => {
         NotificationService.showError(

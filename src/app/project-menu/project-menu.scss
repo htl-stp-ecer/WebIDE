@@ -121,8 +121,8 @@
   border-radius: 9999px;
   border: 1px dashed rgba(148, 163, 184, 0.8);
   background: rgba(148, 163, 184, 0.08);
-  left: clamp(calc(var(--sensor-clear-x) / 2), var(--sensor-x), calc(100% - (var(--sensor-clear-x) / 2)));
-  top: clamp(calc(var(--sensor-clear-y) / 2), var(--sensor-y), calc(100% - (var(--sensor-clear-y) / 2)));
+  left: var(--sensor-x);
+  top: var(--sensor-y);
   transform: translate(-50%, -50%);
 }
 
