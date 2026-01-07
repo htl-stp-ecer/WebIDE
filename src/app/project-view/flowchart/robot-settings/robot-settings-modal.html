@@ -1,0 +1,323 @@
+<p-dialog
+  [(visible)]="visible"
+  (visibleChange)="visibleChange.emit($event)"
+  [modal]="true"
+  [draggable]="false"
+  [resizable]="false"
+  [showHeader]="false"
+  [style]="{ width: activeTab() === 'map' ? '900px' : '800px', maxWidth: '95vw' }"
+  [contentStyle]="{ padding: 0 }">
+
+  <!-- Tab Header -->
+  <div class="settings-tabs">
+    <button
+      type="button"
+      class="settings-tab"
+      [class.active]="activeTab() === 'robot'"
+      (click)="activeTab.set('robot')">
+      <i class="pi pi-cog"></i>
+      {{ 'ROBOT_SETTINGS.TITLE' | translate }}
+    </button>
+    <button
+      type="button"
+      class="settings-tab"
+      [class.active]="activeTab() === 'map'"
+      (click)="activeTab.set('map')">
+      <i class="pi pi-table"></i>
+      {{ 'FLOWCHART.TABLE_TITLE' | translate }}
+    </button>
+    <div class="settings-tab-spacer"></div>
+    <button
+      type="button"
+      class="settings-close-btn"
+      (click)="closeModal()">
+      <i class="pi pi-times"></i>
+    </button>
+  </div>
+
+  <!-- Robot Settings Tab -->
+  @if (activeTab() === 'robot') {
+    <div class="flex flex-col lg:flex-row h-[500px] max-h-[70vh]">
+
+      <!-- Left Sidebar: Sensors List -->
+      <aside class="w-full lg:w-64 border-b lg:border-b-0 lg:border-r border-slate-200 dark:border-slate-700 flex flex-col bg-slate-50 dark:bg-slate-800/50">
+        <div class="p-4 border-b border-slate-200 dark:border-slate-700">
+          <h3 class="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+            {{ 'ROBOT_SETTINGS.SENSORS_HEADING' | translate }}
+          </h3>
+        </div>
+
+        <div class="flex-1 overflow-y-auto p-3">
+          @if (sensors.length === 0) {
+            <div class="text-center py-6 text-slate-400">
+              <i class="pi pi-info-circle text-xl mb-2"></i>
+              <p class="text-sm">{{ 'ROBOT_SETTINGS.NO_SENSORS' | translate }}</p>
+            </div>
+          } @else {
+            <div class="space-y-1">
+              @for (sensor of sensors; track sensor.id) {
+                <button
+                  type="button"
+                  class="w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-150 text-left"
+                  [ngClass]="{
+                    'bg-blue-100 dark:bg-blue-900/40 ring-1 ring-blue-500': selectedSensorId === sensor.id,
+                    'hover:bg-slate-100 dark:hover:bg-slate-700': selectedSensorId !== sensor.id
+                  }"
+                  (click)="selectSensor(sensor.id)">
+                  <span
+                    class="w-3 h-3 rounded-full ring-2 ring-offset-2 ring-offset-slate-50 dark:ring-offset-slate-800 flex-shrink-0"
+                    [style.background]="sensor.color"
+                    [style.ring-color]="sensor.color">
+                  </span>
+                  <span class="flex-1 text-sm font-medium text-slate-700 dark:text-slate-200 truncate">
+                    {{ sensor.name }}
+                  </span>
+                  @if (sensor.x_pct !== undefined && sensor.y_pct !== undefined) {
+                    <i class="pi pi-check-circle text-green-500 text-sm"></i>
+                  }
+                </button>
+              }
+            </div>
+          }
+        </div>
+
+        <!-- Rotation Center Section -->
+        <div class="p-4 border-t border-slate-200 dark:border-slate-700">
+          <h3 class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">
+            {{ 'ROBOT_SETTINGS.ROTATION_CENTER' | translate }}
+          </h3>
+          <button
+            type="button"
+            class="w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-150 text-left"
+            [ngClass]="{
+              'bg-violet-100 dark:bg-violet-900/40 ring-1 ring-violet-500': isRotationSelected,
+              'hover:bg-slate-100 dark:hover:bg-slate-700': !isRotationSelected
+            }"
+            (click)="selectRotationCenter()">
+            <span class="center-icon center-icon-rotation flex-shrink-0">
+              <i class="pi pi-sync text-[8px]"></i>
+            </span>
+            <span class="flex-1 text-sm font-medium text-slate-700 dark:text-slate-200">
+              @if (rotationCenter) {
+                {{ rotationCenterXcm }} × {{ rotationCenterYcm }} cm
+              } @else {
+                {{ 'ROBOT_SETTINGS.NOT_SET' | translate }}
+              }
+            </span>
+            @if (rotationCenter) {
+              <i class="pi pi-check-circle text-green-500 text-sm"></i>
+            }
+          </button>
+        </div>
+
+        <!-- Position Panel -->
+        @if (selectedSensorId !== null || isRotationSelected) {
+          <div class="border-t border-slate-200 dark:border-slate-700 p-4 bg-white dark:bg-slate-800">
+            <h4 class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">
+              {{ 'ROBOT_SETTINGS.POSITION' | translate }}
+            </h4>
+            <div class="grid grid-cols-2 gap-3">
+              @if (selectedSensorId !== null) {
+                <!-- Sensor coords -->
+                <div>
+                  <label class="text-xs text-slate-500 mb-1 block">X (cm)</label>
+                  <input
+                    type="number"
+                    [ngModel]="selectedSensorXcm"
+                    (ngModelChange)="setSelectedSensorCoordCm('x', $event)"
+                    [disabled]="!canEditSensorCm"
+                    pInputText
+                    class="w-full font-mono text-sm"/>
+                </div>
+                <div>
+                  <label class="text-xs text-slate-500 mb-1 block">Y (cm)</label>
+                  <input
+                    type="number"
+                    [ngModel]="selectedSensorYcm"
+                    (ngModelChange)="setSelectedSensorCoordCm('y', $event)"
+                    [disabled]="!canEditSensorCm"
+                    pInputText
+                    class="w-full font-mono text-sm"/>
+                </div>
+                <div class="col-span-2">
+                  <label class="text-xs text-slate-500 mb-1 block">{{ 'ROBOT_SETTINGS.CLEARANCE' | translate }}</label>
+                  <input
+                    type="number"
+                    [ngModel]="selectedSensorClearanceCm"
+                    (ngModelChange)="setSelectedSensorClearanceCm($event)"
+                    [disabled]="!canEditSensorCm"
+                    pInputText
+                    class="w-full font-mono text-sm"/>
+                </div>
+              } @else if (isRotationSelected) {
+                <!-- Rotation center coords -->
+                <div>
+                  <label class="text-xs text-slate-500 mb-1 block">X (cm)</label>
+                  <input
+                    type="number"
+                    [ngModel]="rotationCenterXcm"
+                    (ngModelChange)="setCenterCoordCm('rotation', 'x', $event)"
+                    [disabled]="!canEditSensorCm"
+                    pInputText
+                    class="w-full font-mono text-sm"/>
+                </div>
+                <div>
+                  <label class="text-xs text-slate-500 mb-1 block">Y (cm)</label>
+                  <input
+                    type="number"
+                    [ngModel]="rotationCenterYcm"
+                    (ngModelChange)="setCenterCoordCm('rotation', 'y', $event)"
+                    [disabled]="!canEditSensorCm"
+                    pInputText
+                    class="w-full font-mono text-sm"/>
+                </div>
+              }
+            </div>
+          </div>
+        }
+      </aside>
+
+      <!-- Main: Robot Visualization -->
+      <main class="flex-1 flex flex-col">
+        <!-- Robot Canvas -->
+        <div class="flex-1 flex items-center justify-center p-6 robot-canvas-bg">
+          <div class="relative robot-frame"
+               [style.--robot-width]="robotScale.widthPct + '%'"
+               [style.--robot-height]="robotScale.heightPct + '%'">
+
+            <!-- Measurement Lines -->
+            <div class="robot-measure robot-measure-width" aria-hidden="true"></div>
+            <div class="robot-measure robot-measure-height" aria-hidden="true"></div>
+
+            <!-- Width Label (editable) -->
+            <div class="robot-measure-label robot-measure-width-label">
+              @if (editingWidth) {
+                <div class="inline-edit-container">
+                  <input
+                    #widthInput
+                    type="number"
+                    [(ngModel)]="tempWidth"
+                    pInputText
+                    class="inline-dim-input"
+                    (keydown.enter)="saveDimension('width')"
+                    (keydown.escape)="cancelDimensionEdit('width')"
+                    (blur)="onDimensionBlur('width')"/>
+                  <span class="inline-dim-unit">cm</span>
+                </div>
+              } @else {
+                <button
+                  type="button"
+                  class="inline-dim-label group"
+                  (click)="startEditDimension('width')">
+                  <span class="font-mono text-xs">{{ robotWidthLabel }}</span>
+                  <i class="pi pi-pencil text-[10px] opacity-0 group-hover:opacity-100 transition-opacity ml-1"></i>
+                </button>
+              }
+            </div>
+
+            <!-- Length Label (editable) -->
+            <div class="robot-measure-label robot-measure-height-label">
+              @if (editingLength) {
+                <div class="inline-edit-container inline-edit-vertical">
+                  <input
+                    #lengthInput
+                    type="number"
+                    [(ngModel)]="tempLength"
+                    pInputText
+                    class="inline-dim-input"
+                    (keydown.enter)="saveDimension('length')"
+                    (keydown.escape)="cancelDimensionEdit('length')"
+                    (blur)="onDimensionBlur('length')"/>
+                  <span class="inline-dim-unit">cm</span>
+                </div>
+              } @else {
+                <button
+                  type="button"
+                  class="inline-dim-label group"
+                  (click)="startEditDimension('length')">
+                  <span class="font-mono text-xs">{{ robotLengthLabel }}</span>
+                  <i class="pi pi-pencil text-[10px] opacity-0 group-hover:opacity-100 transition-opacity ml-1"></i>
+                </button>
+              }
+            </div>
+
+            <!-- Robot Body -->
+            <div
+              #robotBody
+              class="robot-body relative border-2 rounded-2xl shadow-lg flex items-center justify-center transition-colors select-none"
+              [ngClass]="{
+                'cursor-crosshair border-blue-400 bg-blue-50/50 dark:bg-blue-900/20': editTarget !== null,
+                'cursor-default border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800': editTarget === null
+              }"
+              [style.width.%]="robotScale.widthPct"
+              [style.height.%]="robotScale.heightPct"
+              (mousedown)="onRobotMouseDown($event)"
+              (mousemove)="onRobotMouseMove($event)"
+              (mouseup)="onRobotMouseUp()"
+              (mouseleave)="onRobotMouseUp()">
+
+              <!-- Geometric Center Marker (fixed at center) -->
+              <span class="center-marker center-marker-geometric center-marker-fixed">
+                <i class="pi pi-plus text-[8px]"></i>
+              </span>
+
+              <!-- Rotation Center Marker -->
+              @if (rotationCenter) {
+                <span
+                  class="center-marker center-marker-rotation"
+                  [ngStyle]="getCenterMarkerStyle(rotationCenter)"
+                  [ngClass]="{'center-marker-selected': isRotationSelected}">
+                  <i class="pi pi-sync text-[8px]"></i>
+                </span>
+              }
+
+              <!-- Sensor Dots -->
+              @for (sensor of sensors; track sensor.id) {
+                @if (sensor.x_pct !== undefined && sensor.y_pct !== undefined) {
+                  <span
+                    class="sensor-marker"
+                    [ngStyle]="getSensorMarkerStyle(sensor)">
+                    @if (getSensorClearanceVisible(sensor)) {
+                      <span class="sensor-clearance"></span>
+                    }
+                    <span
+                      class="sensor-dot"
+                      [style.background]="sensor.color"
+                      [ngClass]="{'ring-2 ring-offset-2 ring-blue-500 scale-125': selectedSensorId === sensor.id}">
+                    </span>
+                  </span>
+                }
+              }
+
+              <!-- Empty State -->
+              @if (!editTarget) {
+                <div class="text-center text-slate-400 pointer-events-none">
+                  <i class="pi pi-hand-pointer text-3xl mb-2 opacity-30"></i>
+                  <p class="text-sm">{{ 'ROBOT_SETTINGS.SELECT_ITEM_HINT' | translate }}</p>
+                </div>
+              }
+            </div>
+          </div>
+        </div>
+
+        <!-- Hint -->
+        @if (editTarget !== null) {
+          <div class="p-3 bg-blue-50 dark:bg-blue-900/30 border-t border-blue-200 dark:border-blue-800">
+            <p class="text-sm text-blue-700 dark:text-blue-300 text-center">
+              <i class="pi pi-info-circle mr-2"></i>
+              {{ 'ROBOT_SETTINGS.DRAG_TO_PLACE' | translate }}
+            </p>
+          </div>
+        }
+      </main>
+    </div>
+  }
+
+  <!-- Map Editor Tab -->
+  @if (activeTab() === 'map') {
+    <div class="map-editor-container">
+      <app-table-editor-view></app-table-editor-view>
+    </div>
+  }
+
+</p-dialog>

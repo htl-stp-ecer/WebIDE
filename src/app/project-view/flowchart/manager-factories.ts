@@ -34,6 +34,5 @@ export function createRunManager(flow: Flowchart): FlowchartRunManager {
     getProjectUUID: () => flow.projectUUID,
     getMissionKey: () => flow.historyManager.getMissionKey(),
     shouldSimulate: () => flow.simulateRuns(),
-    unity: flow.unity,
   });
 }

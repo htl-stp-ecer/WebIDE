@@ -1,0 +1,16 @@
+<div class="viz-panel">
+  <div class="viz-header panel-drag-handle">
+    <div class="viz-title">
+      <i class="pi pi-map"></i>
+      <span>{{ 'FLOWCHART.VIEW_TOGGLE_TABLE_VIZ' | translate }}</span>
+    </div>
+    <div class="viz-status">
+      @if (mapService.isLoaded()) {
+        <span class="viz-pill viz-pill-ready">Map Loaded</span>
+      }
+    </div>
+  </div>
+  <div class="viz-body">
+    <canvas #canvas class="viz-canvas"></canvas>
+  </div>
+</div>

@@ -71,6 +71,12 @@ export class HttpService {
     });
   }
 
+  updateDeviceRotationCenter(rotationCenter?: DeviceCenterPoint) {
+    return this.http.put<ConnectionInfo>(`${this.ip}/api/v1/device/rotation-center`, {
+      rotation_center: rotationCenter,
+    });
+  }
+
   getAllProjects() {
     return this.http.get<Project[]>(`${this.ip}/api/v1/projects`);
   }
@@ -205,5 +211,16 @@ export class HttpService {
 
   saveMission(projectUUID: string, mission: Mission) {
     return this.http.put(`${this.ip}/api/v1/missions/${projectUUID}/update`, mission);
+  }
+
+  // Table Map API
+  saveTableMap(base64Image: string) {
+    return this.http.put<{ success: boolean }>(`${this.ip}/api/v1/device/table-map`, {
+      image: base64Image,
+    });
+  }
+
+  getTableMap() {
+    return this.http.get<{ image: string | null }>(`${this.ip}/api/v1/device/table-map`);
   }
 }

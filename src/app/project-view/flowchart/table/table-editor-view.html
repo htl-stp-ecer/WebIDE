@@ -1,0 +1,60 @@
+<div class="editor-container">
+  <!-- Toolbar -->
+  <app-table-editor-toolbar
+    [zoom]="zoom()"
+    [showGrid]="showGrid()"
+    [activeTool]="activeTool()"
+    [selectedColor]="selectedColor()"
+    (zoomChange)="setZoom($event)"
+    (gridToggle)="toggleGrid()"
+    (toolChange)="setTool($event)"
+    (colorChange)="setColor($event)"
+    (uploadRequest)="uploadPng()"
+    (clearRequest)="clearCanvas()"
+    (loadMapRequest)="loadMap()"
+    (zoomToFit)="fitToView()">
+  </app-table-editor-toolbar>
+
+  <!-- Canvas Area -->
+  <div
+    class="canvas-wrapper"
+    #canvasContainer
+    (wheel)="onWheel($event)"
+    (pointerdown)="onPointerDown($event)"
+    (pointermove)="onPointerMove($event)"
+    (pointerup)="onPointerUp($event)"
+    (pointerleave)="onPointerLeave()">
+
+    <!-- Main drawing canvas (79x40 actual pixels) -->
+    <canvas
+      #editorCanvas
+      class="editor-canvas"
+      [width]="MAP_WIDTH"
+      [height]="MAP_HEIGHT"
+      [style.transform]="canvasTransform()">
+    </canvas>
+
+    <!-- Grid overlay -->
+    <canvas #gridCanvas class="grid-overlay"></canvas>
+
+    <!-- Line tool preview -->
+    <canvas #previewCanvas class="preview-overlay"></canvas>
+  </div>
+
+  <!-- Status bar -->
+  <div class="status-bar">
+    @if (hoverCoords(); as coords) {
+      <span class="coords">X: {{ coords.x }}, Y: {{ coords.y }}</span>
+    } @else {
+      <span class="coords coords-placeholder">--</span>
+    }
+    <span class="divider">|</span>
+    <span class="dimensions">{{ MAP_WIDTH }} x {{ MAP_HEIGHT }} px</span>
+    <span class="divider">|</span>
+    <span class="zoom-level">{{ zoom() * 100 | number:'1.0-0' }}%</span>
+    @if (message()) {
+      <span class="divider">|</span>
+      <span class="message">{{ message() }}</span>
+    }
+  </div>
+</div>
