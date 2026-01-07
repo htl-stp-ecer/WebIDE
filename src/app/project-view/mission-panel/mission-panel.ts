@@ -79,7 +79,12 @@ export class MissionPanel implements OnInit {
       next: result => {
         this.missions = result;
         this.updateTimelineData();
-        this.getDetailedMission(result[0].name)
+        if (result.length) {
+          this.getDetailedMission(result[0].name);
+        } else {
+          this.currentMission = undefined;
+          this.missionState.setMission(null);
+        }
       },
       error: error => {
         NotificationService.showError(

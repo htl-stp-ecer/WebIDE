@@ -61,12 +61,16 @@
 				},
 				"serve": {
 					"builder": "@angular/build:dev-server",
+					"options": {
+						"proxyConfig": "proxy.conf.json"
+					},
 					"configurations": {
 						"production": {
 							"buildTarget": "WebIDE:build:production"
 						},
 						"development": {
-							"buildTarget": "WebIDE:build:development"
+							"buildTarget": "WebIDE:build:development",
+							"proxyConfig": "proxy.conf.json"
 						}
 					},
 					"defaultConfiguration": "development"

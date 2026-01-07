@@ -12,6 +12,7 @@ import { NotificationService } from '../services/NotificationService';
 import { interval, Subscription } from 'rxjs';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { encodeRouteIp } from '../services/route-ip-serializer';
+import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 
 @Component({
   selector: 'app-home',
@@ -31,13 +32,17 @@ export class Home implements OnInit, OnDestroy {
   ip: string = "";
   previousConnections: ConnectionInfo[] = [];
   loading: boolean = false;
+  corsConfirmUrl?: string;
+  corsConfirmSafeUrl?: SafeResourceUrl;
+  corsConfirmIp?: string;
   private refreshSub?: Subscription;
 
   constructor(
     private httpService: HttpService,
     private messageService: MessageService,
     private router: Router,
-    private translate: TranslateService
+    private translate: TranslateService,
+    private sanitizer: DomSanitizer
   ) {
     const connections = localStorage.getItem("previousConnections");
     if (connections) {
@@ -68,6 +73,11 @@ export class Home implements OnInit, OnDestroy {
         next: res => {
           conn.battery_percent = res.battery_percent;
           conn.hostname = res.hostname;
+          if (this.corsConfirmIp === conn.ip) {
+            this.corsConfirmIp = undefined;
+            this.corsConfirmUrl = undefined;
+            this.corsConfirmSafeUrl = undefined;
+          }
         },
         error: err => {
           conn.battery_percent = 0
@@ -78,6 +88,9 @@ export class Home implements OnInit, OnDestroy {
   }
 
   tryConnecting(ip: string) {
+    this.corsConfirmUrl = undefined;
+    this.corsConfirmSafeUrl = undefined;
+    this.corsConfirmIp = undefined;
     const targetIp = (ip || '').trim();
     if (!targetIp) {
       return;
@@ -99,6 +112,9 @@ export class Home implements OnInit, OnDestroy {
 
         this.saveToLocalStorage();
         this.router.navigate(['/', encodeRouteIp(targetIp), 'projects']);
+        this.corsConfirmUrl = undefined;
+        this.corsConfirmSafeUrl = undefined;
+        this.corsConfirmIp = undefined;
       },
       error: (err) => {
         this.loading = false;
@@ -107,16 +123,50 @@ export class Home implements OnInit, OnDestroy {
           this.translate.instant('HOME.CONNECT_ERROR'),
           this.translate.instant('COMMON.ERROR')
         );
+        if (this.isCorsLikeError(err)) {
+          this.corsConfirmIp = targetIp;
+          this.corsConfirmUrl = this.buildConfirmUrl(targetIp);
+          this.corsConfirmSafeUrl = this.sanitizer.bypassSecurityTrustResourceUrl(this.corsConfirmUrl);
+        }
       }
     });
   }
 
   removeConnection(ip: string) {
     this.previousConnections = this.previousConnections.filter(c => c.ip !== ip);
+    if (this.corsConfirmIp === ip) {
+      this.corsConfirmIp = undefined;
+      this.corsConfirmUrl = undefined;
+      this.corsConfirmSafeUrl = undefined;
+    }
     this.saveToLocalStorage();
   }
 
   saveToLocalStorage() {
     localStorage.setItem("previousConnections", JSON.stringify(this.previousConnections));
+  }
+
+  private isCorsLikeError(err: any): boolean {
+    const message = (err?.message || err?.statusText || '').toString();
+    return err?.status === 0 || /CORS/i.test(message) || /TypeError/i.test(err?.name);
+  }
+
+  private buildConfirmUrl(ip: string): string {
+    let base = (ip || '').trim();
+    if (!/^https?:\/\//i.test(base)) {
+      base = 'http://' + base;
+    }
+    try {
+      const url = new URL(base);
+      if (!url.port) {
+        url.port = '8000';
+      }
+      url.pathname = '/api/v1/device/confirm';
+      url.search = '';
+      url.hash = '';
+      return url.toString();
+    } catch {
+      return `http://${ip}/api/v1/device/confirm`;
+    }
   }
 }

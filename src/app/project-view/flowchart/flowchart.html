@@ -53,20 +53,88 @@
     </div>
   </div>
 
-  <div class="flow-surface" (contextmenu)="actions.onCanvasContextMenu($event)">
-    <f-flow class="flow-root" fDraggable fEmitOnNodeIntersect (fNodeIntersectedWithConnections)="actions.onNodeIntersected($event)" (fLoaded)="actions.onLoaded()" (fCreateNode)="actions.onCreateNode($event)" (fCreateConnection)="actions.addConnection($event)" (fDragEnded)="actions.onSave()">
+  <div class="view-toggle-bar">
+    @for (toggle of viewToggleOptions; track toggle.key) {
+      <button
+        type="button"
+        class="toggle-chip"
+        [class.active]="isToggleEnabled(toggle.key)"
+        (click)="toggleViewOption(toggle.key)"
+        [attr.aria-label]="toggle.labelKey | translate"
+        [pTooltip]="toggle.labelKey | translate"
+        tooltipPosition="bottom">
+        <i [class]="toggle.icon || 'pi pi-sliders-h'" class="toggle-icon"></i>
+      </button>
+    }
+    <div class="toggle-spacer"></div>
+    <button
+      type="button"
+      class="toggle-chip simulate-toggle"
+      [class.active]="simulateRuns()"
+      (click)="toggleSimulation()"
+      [attr.aria-label]="'FLOWCHART.SIMULATION_TOGGLE' | translate"
+      [pTooltip]="simulateRuns() ? ('FLOWCHART.SIMULATION_ENABLED' | translate) : ('FLOWCHART.SIMULATION_DISABLED' | translate)"
+      tooltipPosition="bottom">
+      <i class="pi pi-objects-column"></i>
+      <span class="ml-1 text-sm">{{ simulateRuns() ? ('FLOWCHART.SIM_SHORT' | translate) : ('FLOWCHART.REAL_SHORT' | translate) }}</span>
+    </button>
+  </div>
+
+  <div class="flow-surface" #flowSurface (contextmenu)="actions.onCanvasContextMenu($event)">
+    <f-flow class="flow-root" fDraggable fEmitOnNodeIntersect (fNodeIntersectedWithConnections)="actions.onNodeIntersected($event)" (fDropToGroup)="actions.onDropToGroup($event)" (fLoaded)="actions.onLoaded()" (fCreateNode)="actions.onCreateNode($event)" (fCreateConnection)="actions.addConnection($event)" (fDragEnded)="actions.onSave()">
       <f-background class="flow-bg"><f-circle-pattern color="#4a5565"></f-circle-pattern></f-background>
       <f-canvas fZoom class="flow-canvas">
         <f-connection-for-create fBehavior="fixed" fType="segment" [fStartColor]="isDarkMode() ? '#EEE5E9' : '#131217'" [fEndColor]="isDarkMode() ? '#EEE5E9' : '#131217'"></f-connection-for-create>
         <f-snap-connection [fSnapThreshold]="50" fBehavior="fixed" fType="segment" [fStartColor]="isDarkMode() ? '#EEE5E9' : '#131217'" [fEndColor]="isDarkMode() ? '#EEE5E9' : '#131217'"></f-snap-connection>
+
+        @for (group of groups(); track group.id) {
+          <div
+            fGroup
+            [fGroupId]="group.id"
+            [fGroupPosition]="group.position"
+            [fGroupSize]="group.size"
+            [fGroupDraggingDisabled]="group.collapsed"
+            fIncludePadding
+            class="group-node"
+            [class.is-collapsed]="group.collapsed"
+            [attr.data-group-id]="group.id"
+            (contextmenu)="actions.onGroupRightClick($event, group.id)"
+            (fGroupPositionChange)="actions.onGroupPositionChanged(group.id, $event)"
+            (fGroupSizeChange)="actions.onGroupSizeChanged(group.id, $event)">
+            <div class="group-header" fDragHandle>
+              <i class="pi pi-folder"></i>
+              <span class="group-title">{{ group.title }}</span>
+              <button
+                type="button"
+                class="group-collapse-btn"
+                (click)="$event.stopPropagation(); actions.toggleGroupCollapsed(group.id)"
+                (dblclick)="$event.preventDefault(); $event.stopPropagation()"
+                (pointerdown)="$event.stopPropagation()"
+                [attr.aria-label]="group.collapsed ? 'Expand group' : 'Collapse group'">
+                <i [class]="group.collapsed ? 'pi pi-window-maximize' : 'pi pi-window-minimize'"></i>
+              </button>
+            </div>
+            @if (!group.collapsed) {
+              <div class="group-resize-handle edge edge-top" fResizeHandle fResizeHandleType="top"></div>
+              <div class="group-resize-handle edge edge-right" fResizeHandle fResizeHandleType="right"></div>
+              <div class="group-resize-handle edge edge-bottom" fResizeHandle fResizeHandleType="bottom"></div>
+              <div class="group-resize-handle edge edge-left" fResizeHandle fResizeHandleType="left"></div>
+
+              <div class="group-resize-handle corner corner-left-top" fResizeHandle fResizeHandleType="left-top"></div>
+              <div class="group-resize-handle corner corner-right-top" fResizeHandle fResizeHandleType="right-top"></div>
+              <div class="group-resize-handle corner corner-right-bottom" fResizeHandle fResizeHandleType="right-bottom"></div>
+              <div class="group-resize-handle corner corner-left-bottom" fResizeHandle fResizeHandleType="left-bottom"></div>
+            }
+          </div>
+        }
 
         <div fNode [fNodeId]="'start-node'" [fNodePosition]="actions.startNodePosition()" class="node" [attr.data-node-id]="'start-node'" #nodeElement>
           <div class="node-title">{{'FLOWCHART.START_NODE'|translate}}</div>
           <div fNodeOutput [fOutputConnectableSide]="actions.isVertical() ? 'bottom' : 'right'" [fOutputId]="'start-node-output'" [fOutputMultiple]="true" class="port" [class.port-bottom]="actions.isVertical()" [class.port-right]="!actions.isVertical()"></div>
         </div>
 
-        @for (connection of connections(); track connection.id) {
-          <f-connection [fConnectionId]="connection.id" [fReassignDisabled]="false" fBehavior="fixed" fType="segment" [fOutputId]="connection.outputId" [fInputId]="connection.inputId" [fStartColor]="isDarkMode() ? '#EEE5E9' : '#131217'" [fEndColor]="isDarkMode() ? '#EEE5E9' : '#131217'" [class.connection-completed]="actions.isConnectionCompleted(connection.id)" [attr.data-connection-id]="connection.id" (contextmenu)="actions.onConnectionRightClick($event, connection.id)">
+        @for (connection of actions.visibleConnections(); track connection.id) {
+          <f-connection [fConnectionId]="connection.id" [fReassignDisabled]="false" fBehavior="fixed" fType="segment" [fOutputId]="connection.outputId" [fInputId]="connection.inputId" [fStartColor]="isDarkMode() ? '#EEE5E9' : '#131217'" [fEndColor]="isDarkMode() ? '#EEE5E9' : '#131217'" [class.connection-completed]="actions.isConnectionCompleted(connection.id)" [class.connection-collapsed]="connection.id.startsWith('collapsed-')" [attr.data-connection-id]="connection.id" (contextmenu)="actions.onConnectionRightClick($event, connection.id)">
             @if (connection.hasBreakpoint) {
               <div fConnectionCenter class="connection-breakpoint-indicator"></div>
             }
@@ -76,10 +144,16 @@
           </f-connection>
         }
 
-        @for (node of nodes(); track node.id) {
+        @for (node of actions.visibleNodes(); track node.id) {
           <div fNode fDragHandle [fNodeId]="node.id" [fNodePosition]="node.position" class="node" [class.node-completed]="actions.isNodeCompleted(node.id)" [attr.data-node-id]="node.id" (contextmenu)="actions.onRightClick($event, node.id)" (fNodePositionChange)="actions.onNodeMoved(node.id, $event)" #nodeElement>
             <div fNodeInput [fInputConnectableSide]="actions.isVertical() ? 'top' : 'left'" [fInputId]="node.id + '-input'" class="port" [class.port-top]="actions.isVertical()" [class.port-left]="!actions.isVertical()"></div>
             <div class="node-title">{{ node.text }}</div>
+            @if (isToggleEnabled('timestamps') ? runManager.getNodeTiming(node.id) : null; as timing) {
+              <div class="node-timing" [pTooltip]="timing.label || timing.path || ('FLOWCHART.STEP'|translate)" tooltipPosition="top" [showDelay]="120" [hideDelay]="50">
+                <div class="node-timing__duration">{{ (timing.durationMs / 1000) | number:'1.2-2' }}s</div>
+                <div class="node-timing__elapsed">{{ (timing.elapsedMs / 1000) | number:'1.2-2' }}s</div>
+              </div>
+            }
             @if (node.step.arguments.length) {
               <div class="node-args">
                 @for (arg of node.step.arguments; track arg.name; let idx = $index) {
@@ -123,6 +197,33 @@
         }
       </f-canvas>
     </f-flow>
+
+    @if (runManager.stepTimings().length && isToggleEnabled('timestamps')) {
+      <app-timing-panel
+        class="floating-panel"
+        [style.transform]="panelTransform('timing')"
+        (pointerdown)="startPanelDrag($event, 'timing')"
+        [timings]="runManager.stepTimings()"
+        [maxDurationMs]="runManager.maxStepDurationMs()"
+        [viewMode]="timingViewMode()"
+        (viewModeChange)="setTimingViewMode($event)"></app-timing-panel>
+    }
+
+    <div class="bottom-right-stack">
+      <app-unity-canvas-panel
+        class="floating-panel"
+        [style.transform]="panelTransform('unity')"
+        (pointerdown)="startPanelDrag($event, 'unity')"
+        [baseUrl]="unityBaseUrl"
+        [visible]="isToggleEnabled('unityCanvas')"
+        [class.is-hidden]="!isToggleEnabled('unityCanvas')"></app-unity-canvas-panel>
+
+      <app-table-editor-panel
+        class="floating-panel"
+        [style.transform]="panelTransform('table')"
+        (pointerdown)="startPanelDrag($event, 'table')"
+        [class.is-hidden]="!isToggleEnabled('tableEditor')"></app-table-editor-panel>
+    </div>
   </div>
 
   <p-contextMenu #cm [model]="contextMenu.items" [appendTo]="'body'"></p-contextMenu>

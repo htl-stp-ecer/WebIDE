@@ -6,11 +6,18 @@ export function refreshContextMenus(flow: Flowchart): void {
   const deleteLabel = flow.translate.instant('COMMON.DELETE');
   const commentLabel = translateLabel(flow, 'FLOWCHART.COMMENT', 'Comment');
   const addCommentLabel = translateLabel(flow, 'FLOWCHART.ADD_COMMENT', 'Add Comment');
+  const addGroupLabel = translateLabel(flow, 'FLOWCHART.ADD_GROUP', 'Add Group');
+  const toggleGroupLabel = translateLabel(flow, 'FLOWCHART.TOGGLE_GROUP', 'Toggle Group');
+  const removeFromGroupLabel = translateLabel(flow, 'FLOWCHART.REMOVE_FROM_GROUP', 'Remove from Group');
   const addBreakpointLabel = translateLabel(flow, 'FLOWCHART.ADD_BREAKPOINT', 'Add Breakpoint');
   const removeBreakpointLabel = translateLabel(flow, 'FLOWCHART.REMOVE_BREAKPOINT', 'Remove Breakpoint');
   const placeholder = translateLabel(flow, 'FLOWCHART.COMMENT_PLACEHOLDER', 'Write a comment...');
 
   flow.contextMenu.nodeItems = [{
+    label: removeFromGroupLabel,
+    icon: 'pi pi-times',
+    command: () => flow.actions.removeSelectedNodeFromGroup(),
+  }, {
     label: deleteLabel,
     icon: 'pi pi-trash',
     command: () => flow.actions.deleteNode(),
@@ -22,10 +29,27 @@ export function refreshContextMenus(flow: Flowchart): void {
     command: () => flow.actions.deleteComment(),
   }];
 
+  flow.contextMenu.groupItems = [
+    {
+      label: toggleGroupLabel,
+      icon: 'pi pi-window-minimize',
+      command: () => flow.actions.toggleSelectedGroupCollapsed(),
+    },
+    {
+      label: deleteLabel,
+      icon: 'pi pi-trash',
+      command: () => flow.actions.deleteGroup(),
+    },
+  ];
+
   flow.contextMenu.canvasItems = [{
     label: addCommentLabel,
     icon: 'pi pi-comment',
     command: () => flow.actions.createCommentFromContextMenu(),
+  }, {
+    label: addGroupLabel,
+    icon: 'pi pi-clone',
+    command: () => flow.actions.createGroupFromContextMenu(),
   }];
 
   flow.contextMenu.connectionItems = [
@@ -57,11 +81,30 @@ export function handleNodeContextMenu(flow: Flowchart, event: MouseEvent, nodeId
   event.preventDefault();
   event.stopPropagation();
   flow.contextMenu.selectNode(nodeId, { clientX: event.clientX, clientY: event.clientY });
-  flow.contextMenu.setItems(flow.contextMenu.nodeItems);
+  const deleteLabel = flow.translate.instant('COMMON.DELETE');
+  const removeFromGroupLabel = translateLabel(flow, 'FLOWCHART.REMOVE_FROM_GROUP', 'Remove from Group');
+  const parentId = flow.actions.getNodeParentId(nodeId);
+  const items: MenuItem[] = [];
+  if (parentId) {
+    items.push({
+      label: removeFromGroupLabel,
+      icon: 'pi pi-times',
+      command: () => flow.actions.removeSelectedNodeFromGroup(),
+    });
+  }
+  items.push({
+    label: deleteLabel,
+    icon: 'pi pi-trash',
+    command: () => flow.actions.deleteNode(),
+  });
+  flow.contextMenu.setItems(items);
   flow.cm.show(event);
 }
 
 export function handleConnectionContextMenu(flow: Flowchart, event: MouseEvent, connectionId: string): void {
+  if (connectionId.startsWith('collapsed-')) {
+    return;
+  }
   event.preventDefault();
   event.stopPropagation();
   flow.contextMenu.selectConnection(connectionId, { clientX: event.clientX, clientY: event.clientY });

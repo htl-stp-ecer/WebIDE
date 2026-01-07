@@ -1,6 +1,9 @@
-import { WritableSignal } from '@angular/core';
+import { WritableSignal, signal } from '@angular/core';
 import { Subscription } from 'rxjs';
 import { HttpService } from '../../services/http-service';
+import { Mission } from '../../entities/Mission';
+import { MissionStep } from '../../entities/MissionStep';
+import { UnityWebglService } from './unity/unity-webgl.service';
 import { RunPathTracker } from './run-path-tracker';
 
 type DebugState = 'idle' | 'running' | 'paused';
@@ -22,15 +25,63 @@ interface FlowchartRunContext {
   breakpointInfo: WritableSignal<BreakpointEventPayload | null>;
   getProjectUUID(): string | null;
   getMissionKey(): string | null;
+  shouldSimulate?(): boolean;
+  unity?: UnityWebglService;
+}
+
+interface StepArgument {
+  name?: unknown;
+  value?: unknown;
+  type?: unknown;
+}
+
+interface UnityPreviewAction {
+  kind: 'move' | 'rotate';
+  value: number;
+  timeoutMs: number;
+}
+
+export interface StepTiming {
+  id: string;
+  index: number;
+  label?: string;
+  path?: string;
+  signature?: string;
+  durationMs: number;
+  timestampMs: number;
+  elapsedMs: number;
+  runId: number;
+  anomaly?: boolean;
+  expectedMeanMs?: number;
+  expectedStddevMs?: number;
+  deviationSigma?: number;
+  source: 'synthetic' | 'measured';
 }
 
 export class FlowchartRunManager {
+  private static readonly HISTORY_RUN_ID = -1;
+
   private readonly tracker = new RunPathTracker();
   private runSubscription: Subscription | null = null;
   private currentSocket: WebSocket | null = null;
   private currentMode: 'normal' | 'debug' | null = null;
   private paused = false;
   private bufferedEvents: unknown[] = [];
+  private previewTimeoutId: number | null = null;
+  private previewAbortHandlers = new Set<() => void>();
+  private previewPendingMission: Mission | null = null;
+  private previewSignature: string | null = null;
+  private previewToken = 0;
+  private currentRunId = 0;
+  private awaitingRunStart = false;
+  private runStartMs: number | null = null;
+  private lastStepTimestampMs: number | null = null;
+  private pathToNodeId: Map<string, string> = new Map();
+  private accumulatedMs = 0;
+
+  readonly stepTimings = signal<StepTiming[]>([]);
+  readonly maxStepDurationMs = signal(0);
+  readonly nodeTimings = signal<Map<string, StepTiming>>(new Map());
 
   constructor(private readonly ctx: FlowchartRunContext) {}
 
@@ -91,6 +142,8 @@ export class FlowchartRunManager {
 
   updatePathLookups(pathToNodeId: Map<string, string>, pathToConnectionIds: Map<string, string[]>): void {
     this.tracker.updateLookups(pathToNodeId, pathToConnectionIds);
+    this.pathToNodeId = new Map(pathToNodeId);
+    this.nodeTimings.set(new Map());
   }
 
   clearRunVisuals(): void {
@@ -105,6 +158,10 @@ export class FlowchartRunManager {
     return this.tracker.isConnectionCompleted(connectionId);
   }
 
+  getNodeTiming(nodeId: string): StepTiming | undefined {
+    return this.nodeTimings().get(nodeId);
+  }
+
   handleRunEvent(event: unknown): void {
     if (!event || typeof event !== 'object') return;
     if (this.paused) {
@@ -114,9 +171,29 @@ export class FlowchartRunManager {
     this.processEvent(event as Record<string, unknown>);
   }
 
+  scheduleUnityPreview(mission: Mission | null): void {
+    this.previewPendingMission = mission;
+    if (!mission) {
+      this.previewSignature = null;
+      this.abortUnityPreview();
+      return;
+    }
+    if (this.previewTimeoutId !== null) {
+      window.clearTimeout(this.previewTimeoutId);
+    }
+    this.previewTimeoutId = window.setTimeout(() => {
+      this.previewTimeoutId = null;
+      this.startUnityPreview();
+    }, 300);
+  }
+
   private processEvent(payload: Record<string, unknown>): void {
+    this.logEventTimestamp(payload);
     const type = String((payload as { type?: unknown }).type ?? '');
     switch (type) {
+      case 'started':
+        this.markRunStart(payload);
+        break;
       case 'open':
         this.ctx.isRunActive.set(true);
         if (this.currentMode === 'debug') {
@@ -129,6 +206,8 @@ export class FlowchartRunManager {
         break;
       case 'step':
         this.tracker.handleStepEvent(payload);
+        this.recordStepTiming(payload);
+        this.sendUnityStep(payload);
         if (
           this.currentMode === 'debug' &&
           !this.paused &&
@@ -141,6 +220,15 @@ export class FlowchartRunManager {
       case 'breakpoint':
         this.handleBreakpointEvent(payload as BreakpointEventPayload & { state?: string });
         break;
+      case 'step_timing':
+        this.applyMeasuredTiming(payload);
+        break;
+      case 'step_timing_status':
+        // Timings database not present yet (expected in simulation); ignore.
+        break;
+      case 'step_timing_error':
+        console.warn('[Flowchart] Step timing error', payload);
+        break;
       case 'exit':
       case 'error':
         this.ctx.isRunActive.set(false);
@@ -148,6 +236,309 @@ export class FlowchartRunManager {
         break;
       default:
         break;
+    }
+  }
+
+  private startUnityPreview(): void {
+    if (this.ctx.isRunActive()) {
+      return;
+    }
+    const unity = this.ctx.unity;
+    if (!unity || !unity.isReady()) {
+      return;
+    }
+    const mission = this.previewPendingMission;
+    if (!mission) {
+      return;
+    }
+    const actions = this.buildPreviewActions(mission);
+    const signature = actions.map(action => `${action.kind}:${action.value}:${action.timeoutMs}`).join('|');
+    if (!actions.length) {
+      this.previewSignature = null;
+      return;
+    }
+    if (signature === this.previewSignature) {
+      return;
+    }
+    this.previewSignature = signature;
+    this.previewToken += 1;
+    const token = this.previewToken;
+    this.abortUnityPreview();
+    void this.runUnityPreview(actions, token);
+  }
+
+  private abortUnityPreview(): void {
+    if (this.previewTimeoutId !== null) {
+      window.clearTimeout(this.previewTimeoutId);
+      this.previewTimeoutId = null;
+    }
+    for (const handler of this.previewAbortHandlers) {
+      try {
+        handler();
+      } catch {
+        // Ignore handler errors.
+      }
+    }
+    this.previewAbortHandlers.clear();
+  }
+
+  private async runUnityPreview(actions: UnityPreviewAction[], token: number): Promise<void> {
+    const unity = this.ctx.unity;
+    if (!unity) return;
+
+    unity.sendMessage('Robot', 'Stop');
+    unity.sendMessage('Robot', 'ClearMissionPath');
+
+    for (const action of actions) {
+      if (token !== this.previewToken) {
+        return;
+      }
+      if (action.kind === 'move') {
+        unity.sendMessage('Robot', 'Move', String(action.value));
+        await this.waitForUnityEvent(['Move complete'], action.timeoutMs, token);
+        continue;
+      }
+      if (action.kind === 'rotate') {
+        unity.sendMessage('Robot', 'Rotate', String(action.value));
+        await this.waitForUnityEvent(['Rotation complete'], action.timeoutMs, token);
+      }
+    }
+  }
+
+  private waitForUnityEvent(matchers: string[], timeoutMs: number, token: number): Promise<void> {
+    const unity = this.ctx.unity;
+    if (!unity) return Promise.resolve();
+    const normalizedMatchers = matchers.map(m => m.toLowerCase());
+    const maxTimeout = Math.max(300, Math.min(timeoutMs, 15_000));
+    return new Promise(resolve => {
+      let timeoutId: number | null = null;
+      let unsubscribe = () => {};
+      let done = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        if (timeoutId !== null) {
+          window.clearTimeout(timeoutId);
+        }
+        unsubscribe();
+        this.previewAbortHandlers.delete(abort);
+        resolve();
+      };
+      const abort = () => finish();
+      this.previewAbortHandlers.add(abort);
+      unsubscribe = unity.onRobotEvent(message => {
+        if (token !== this.previewToken) {
+          finish();
+          return;
+        }
+        const lower = message.toLowerCase();
+        if (normalizedMatchers.some(m => lower.includes(m))) {
+          finish();
+        }
+      });
+      timeoutId = window.setTimeout(() => finish(), maxTimeout);
+    });
+  }
+
+  private buildPreviewActions(mission: Mission): UnityPreviewAction[] {
+    const actions: UnityPreviewAction[] = [];
+    const visit = (steps: MissionStep[] | undefined): void => {
+      (steps ?? []).forEach(step => {
+        if (!step) return;
+        const stepType = this.normalizeStepName(step);
+        const args = step.arguments ?? [];
+        if (stepType === 'drive_forward') {
+          const cm = this.extractNumericArgFromMission(args, ['cm', 'distance_cm', 'distance', 'dist']);
+          if (cm !== null) {
+            const speed = this.extractNumericArgFromMission(args, ['velocity', 'speed']);
+            actions.push({
+              kind: 'move',
+              value: Math.abs(cm),
+              timeoutMs: this.computeDriveTimeoutMs(cm, speed),
+            });
+          }
+        } else if (stepType === 'drive_backward') {
+          const cm = this.extractNumericArgFromMission(args, ['cm', 'distance_cm', 'distance', 'dist']);
+          if (cm !== null) {
+            const speed = this.extractNumericArgFromMission(args, ['velocity', 'speed']);
+            actions.push({
+              kind: 'move',
+              value: -Math.abs(cm),
+              timeoutMs: this.computeDriveTimeoutMs(cm, speed),
+            });
+          }
+        } else if (stepType === 'turn_cw') {
+          const deg = this.extractNumericArgFromMission(args, ['deg', 'degree', 'degrees', 'angle', 'angle_deg']);
+          if (deg !== null) {
+            const speed = this.extractNumericArgFromMission(args, ['omega', 'speed']);
+            actions.push({
+              kind: 'rotate',
+              value: Math.abs(deg),
+              timeoutMs: this.computeTurnTimeoutMs(deg, speed),
+            });
+          }
+        } else if (stepType === 'turn_ccw') {
+          const deg = this.extractNumericArgFromMission(args, ['deg', 'degree', 'degrees', 'angle', 'angle_deg']);
+          if (deg !== null) {
+            const speed = this.extractNumericArgFromMission(args, ['omega', 'speed']);
+            actions.push({
+              kind: 'rotate',
+              value: -Math.abs(deg),
+              timeoutMs: this.computeTurnTimeoutMs(deg, speed),
+            });
+          }
+        }
+
+        if (step.children?.length) {
+          visit(step.children);
+        }
+      });
+    };
+
+    visit(mission.steps ?? []);
+    return actions;
+  }
+
+  private normalizeStepName(step: MissionStep): string {
+    const raw = step.step_type || step.function_name || '';
+    const trimmed = String(raw).split('(')[0].trim();
+    if (!trimmed) return '';
+    const lastToken = trimmed.split('.').pop();
+    return (lastToken ?? '').toLowerCase();
+  }
+
+  private extractNumericArgFromMission(args: MissionStep['arguments'] | undefined, names: string[]): number | null {
+    const list = args ?? [];
+    const normalizedNames = names.map(name => name.toLowerCase());
+    for (const arg of list) {
+      const name = arg.name.toLowerCase();
+      if (!name || !normalizedNames.includes(name)) continue;
+      const value = this.parseNumeric(arg.value);
+      if (value !== null) return value;
+    }
+    for (const arg of list) {
+      const value = this.parseNumeric(arg.value);
+      if (value !== null) return value;
+    }
+    return null;
+  }
+
+  private computeDriveTimeoutMs(cm: number, speed?: number | null): number {
+    const distanceM = Math.abs(cm) / 100;
+    const maxSpeed = speed && Number.isFinite(speed) && speed > 0 ? speed : 1;
+    const seconds = distanceM / maxSpeed;
+    return this.clampPreviewTimeout(seconds * 1000);
+  }
+
+  private computeTurnTimeoutMs(deg: number, omega?: number | null): number {
+    const radians = Math.abs(deg) * Math.PI / 180;
+    const maxSpeed = omega && Number.isFinite(omega) && omega > 0 ? omega : 1;
+    const seconds = radians / maxSpeed;
+    return this.clampPreviewTimeout(seconds * 1000);
+  }
+
+  private clampPreviewTimeout(ms: number): number {
+    if (!Number.isFinite(ms)) {
+      return 1500;
+    }
+    return Math.max(400, Math.min(ms + 500, 15_000));
+  }
+
+  private sendUnityStep(payload: Record<string, unknown>): void {
+    const unity = this.ctx.unity;
+    if (!unity || !unity.isReady()) return;
+
+    const stepType = this.extractStepType(payload);
+    if (!stepType) return;
+
+    const args = this.extractArguments(payload);
+    if (stepType === 'drive_forward') {
+      const cm = this.extractNumericArg(args, ['cm', 'distance_cm', 'distance', 'dist']);
+      if (cm === null) return;
+      unity.sendMessage('Robot', 'Move', String(Math.abs(cm)));
+      return;
+    }
+    if (stepType === 'drive_backward') {
+      const cm = this.extractNumericArg(args, ['cm', 'distance_cm', 'distance', 'dist']);
+      if (cm === null) return;
+      unity.sendMessage('Robot', 'Move', String(-Math.abs(cm)));
+      return;
+    }
+    if (stepType === 'turn_cw') {
+      const deg = this.extractNumericArg(args, ['deg', 'degree', 'degrees', 'angle', 'angle_deg']);
+      if (deg === null) return;
+      unity.sendMessage('Robot', 'Rotate', String(Math.abs(deg)));
+      return;
+    }
+    if (stepType === 'turn_ccw') {
+      const deg = this.extractNumericArg(args, ['deg', 'degree', 'degrees', 'angle', 'angle_deg']);
+      if (deg === null) return;
+      unity.sendMessage('Robot', 'Rotate', String(-Math.abs(deg)));
+    }
+  }
+
+  private extractStepType(payload: Record<string, unknown>): string | null {
+    const raw =
+      (payload as { step_type?: unknown }).step_type ??
+      (payload as { function_name?: unknown }).function_name ??
+      (payload as { name?: unknown }).name;
+    if (!raw) return null;
+    const trimmed = String(raw).split('(')[0].trim();
+    if (!trimmed) return null;
+    const lastToken = trimmed.split('.').pop();
+    if (!lastToken) return null;
+    return lastToken.toLowerCase();
+  }
+
+  private extractArguments(payload: Record<string, unknown>): StepArgument[] {
+    const rawArgs = (payload as { arguments?: unknown }).arguments ?? (payload as { args?: unknown }).args;
+    if (!Array.isArray(rawArgs)) return [];
+    return rawArgs.filter(item => typeof item === 'object' && item !== null) as StepArgument[];
+  }
+
+  private extractNumericArg(args: StepArgument[], names: string[]): number | null {
+    const normalizedNames = names.map(name => name.toLowerCase());
+    for (const arg of args) {
+      const name = typeof arg.name === 'string' ? arg.name.toLowerCase() : '';
+      if (!name || !normalizedNames.includes(name)) continue;
+      const value = this.parseNumeric(arg.value);
+      if (value !== null) return value;
+    }
+
+    for (const arg of args) {
+      const value = this.parseNumeric(arg.value);
+      if (value !== null) return value;
+    }
+
+    return null;
+  }
+
+  private parseNumeric(value: unknown): number | null {
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+    if (typeof value === 'string') {
+      const direct = Number(value);
+      if (Number.isFinite(direct)) return direct;
+      const parsed = Number.parseFloat(value);
+      if (Number.isFinite(parsed)) return parsed;
+    }
+    return null;
+  }
+
+  private logEventTimestamp(payload: Record<string, unknown>): void {
+    const type = String((payload as { type?: unknown }).type ?? '');
+    if (type !== 'step') return;
+
+    const parsedMs = this.extractTimestampMs(payload) ?? Date.now();
+    const ts = new Date(parsedMs);
+
+    const label = (payload['display_label'] as string) || (payload['name'] as string);
+    const path = Array.isArray(payload['path']) ? (payload['path'] as unknown[]).join('.') : undefined;
+    const summary = label || path ? { label: label || path } : undefined;
+
+    if (summary) {
+      console.log(`[Flowchart] Step event at ${ts.toISOString()}`, summary, payload);
+    } else {
+      console.log(`[Flowchart] Step event at ${ts.toISOString()}`, payload);
     }
   }
 
@@ -179,10 +570,14 @@ export class FlowchartRunManager {
       return;
     }
 
+    this.abortUnityPreview();
     this.runSubscription?.unsubscribe();
     this.runSubscription = null;
 
     this.clearRunVisuals();
+    this.currentRunId += 1;
+    this.awaitingRunStart = true;
+    this.resetTimingData();
     this.ctx.isRunActive.set(true);
     this.ctx.debugState.set('idle');
     this.ctx.breakpointInfo.set(null);
@@ -191,9 +586,10 @@ export class FlowchartRunManager {
     this.paused = false;
     this.bufferedEvents = [];
 
+    const simulate = mode === 'debug' ? true : !!this.ctx.shouldSimulate?.();
     const runOptions = mode === 'debug'
       ? { simulate: true, debug: true, onSocket: (socket: WebSocket | null) => this.updateSocket(socket) }
-      : { simulate: true, onSocket: (socket: WebSocket | null) => this.updateSocket(socket) };
+      : { simulate, onSocket: (socket: WebSocket | null) => this.updateSocket(socket) };
 
     this.runSubscription = this.ctx.http.runMission(projectId, missionKey, runOptions).subscribe({
       next: event => this.handleRunEvent(event),
@@ -249,5 +645,246 @@ export class FlowchartRunManager {
     for (const event of queue) {
       this.handleRunEvent(event);
     }
+  }
+
+  private markRunStart(payload: Record<string, unknown>): void {
+    const ts = this.extractTimestampMs(payload) ?? Date.now();
+    this.beginRun(ts);
+  }
+
+  private recordStepTiming(payload: Record<string, unknown>): void {
+    const tsMs = this.extractTimestampMs(payload) ?? Date.now();
+    if (this.awaitingRunStart || this.runStartMs === null) {
+      this.beginRun(tsMs);
+    }
+
+    const prevTs = this.lastStepTimestampMs ?? this.runStartMs;
+    const durationMs = prevTs !== null ? Math.max(0, tsMs - prevTs) : 0;
+    this.lastStepTimestampMs = tsMs;
+    this.accumulatedMs += durationMs;
+    const label = (payload['display_label'] as string) || (payload['name'] as string) || (payload['step_type'] as string);
+    const pathArr = Array.isArray(payload['path']) ? payload['path'] as unknown[] : undefined;
+    const path = pathArr ? pathArr.join('.') : undefined;
+    const index = Number((payload as { index?: unknown }).index) || this.stepTimings().length + 1;
+
+    const entry: StepTiming = {
+      id: `${index}-${path || label || 'step'}`,
+      index,
+      label: label || undefined,
+      path,
+      durationMs,
+      timestampMs: tsMs,
+      elapsedMs: this.accumulatedMs,
+      runId: this.currentRunId,
+      source: 'synthetic',
+    };
+
+    this.rebuildTimings([...this.stepTimings(), entry]);
+  }
+
+  private applyMeasuredTiming(payload: Record<string, unknown>): void {
+    const durationSeconds = Number((payload as { duration_seconds?: unknown }).duration_seconds);
+    if (!Number.isFinite(durationSeconds)) {
+      return;
+    }
+    const durationMs = Math.max(0, durationSeconds * 1000);
+    const recordedAtMs = this.extractRecordedAtMs(payload) ?? Date.now();
+
+    const belongsToCurrentRun = this.isMeasuredTimingForCurrentRun(recordedAtMs);
+    const runId = belongsToCurrentRun ? this.currentRunId : FlowchartRunManager.HISTORY_RUN_ID;
+
+    const signatureRaw = (payload as { signature?: unknown }).signature;
+    const signature = typeof signatureRaw === 'string' ? signatureRaw : undefined;
+    const anomaly = Boolean((payload as { anomaly?: unknown }).anomaly);
+    const expectedMeanMs = this.toMs((payload as { expected_mean?: unknown }).expected_mean);
+    const expectedStddevMs = this.toMs((payload as { expected_stddev?: unknown }).expected_stddev);
+    const deviationSigma = this.toNumber((payload as { deviation_sigma?: unknown }).deviation_sigma);
+
+    if (!belongsToCurrentRun) {
+      const entry: StepTiming = {
+        id: `history-${recordedAtMs}-${signature ?? 'unknown'}`,
+        index: this.stepTimings().length + 1,
+        label: signature,
+        signature,
+        path: undefined,
+        durationMs,
+        timestampMs: recordedAtMs,
+        elapsedMs: 0,
+        runId,
+        anomaly,
+        expectedMeanMs,
+        expectedStddevMs,
+        deviationSigma,
+        source: 'measured',
+      };
+      this.rebuildTimings([...this.stepTimings(), entry]);
+      return;
+    }
+
+    if (this.awaitingRunStart || this.runStartMs === null) {
+      this.beginRun(recordedAtMs);
+    }
+
+    const timings = [...this.stepTimings()];
+    const targetIdx = this.findTimingTargetIndex(timings, runId, signature);
+    const base: StepTiming = timings[targetIdx] ?? {
+      id: '',
+      index: targetIdx + 1,
+      label: signature,
+      path: undefined,
+      signature,
+      durationMs,
+      timestampMs: recordedAtMs,
+      elapsedMs: 0,
+      runId,
+      source: 'measured',
+    };
+
+    const merged: StepTiming = {
+      ...base,
+      id: base.id || `step-${targetIdx + 1}-${signature || base.path || 'measured'}`,
+      durationMs,
+      timestampMs: recordedAtMs,
+      signature: signature ?? base.signature,
+      label: base.label || signature,
+      anomaly,
+      expectedMeanMs: expectedMeanMs ?? base.expectedMeanMs,
+      expectedStddevMs: expectedStddevMs ?? base.expectedStddevMs,
+      deviationSigma: deviationSigma ?? base.deviationSigma,
+      runId,
+      source: 'measured',
+    };
+
+    timings[targetIdx] = merged;
+    this.rebuildTimings(timings);
+  }
+
+  private findTimingTargetIndex(timings: StepTiming[], runId: number, signature?: string): number {
+    const normalizedSig = (signature ?? '').trim().toLowerCase();
+
+    if (normalizedSig) {
+      for (let i = timings.length - 1; i >= 0; i--) {
+        const t = timings[i];
+        if (t.runId !== runId) continue;
+        if (t.source !== 'measured' && this.matchesSignature(t, normalizedSig)) {
+          return i;
+        }
+      }
+    }
+
+    for (let i = timings.length - 1; i >= 0; i--) {
+      const t = timings[i];
+      if (t.runId === runId && t.source !== 'measured') {
+        return i;
+      }
+    }
+
+    return timings.length;
+  }
+
+  private matchesSignature(entry: StepTiming, normalizedSig: string): boolean {
+    const candidates = [
+      entry.signature,
+      entry.label,
+      entry.path,
+    ]
+      .filter(Boolean)
+      .map(v => String(v).toLowerCase());
+
+    return candidates.some(val => val.includes(normalizedSig) || normalizedSig.includes(val));
+  }
+
+  private extractTimestampMs(payload: Record<string, unknown>): number | null {
+    const raw = (payload as { timestamp?: unknown }).timestamp;
+    if (typeof raw === 'number') {
+      return raw * 1000;
+    }
+    if (typeof raw === 'string') {
+      const parsed = Date.parse(raw);
+      return Number.isFinite(parsed) ? parsed : null;
+    }
+    return null;
+  }
+
+  private extractRecordedAtMs(payload: Record<string, unknown>): number | null {
+    const raw = (payload as { recorded_at?: unknown }).recorded_at;
+    if (typeof raw === 'number' && Number.isFinite(raw)) {
+      return raw * 1000;
+    }
+    return this.extractTimestampMs(payload);
+  }
+
+  private toMs(value: unknown): number | undefined {
+    const num = Number(value);
+    if (!Number.isFinite(num)) return undefined;
+    return num * 1000;
+  }
+
+  private toNumber(value: unknown): number | undefined {
+    const num = Number(value);
+    return Number.isFinite(num) ? num : undefined;
+  }
+
+  private rebuildTimings(nextTimings: StepTiming[]): void {
+    let overallElapsed = 0;
+    let currentRunElapsed = 0;
+    let runElapsed = 0;
+    let maxDuration = 0;
+    const normalized: StepTiming[] = nextTimings.map((timing, idx) => {
+      const duration = Number.isFinite(timing.durationMs) ? Math.max(0, timing.durationMs) : 0;
+      overallElapsed += duration;
+      const inCurrentRun = timing.runId === this.currentRunId;
+      if (inCurrentRun) {
+        runElapsed += duration;
+        currentRunElapsed = runElapsed;
+      }
+      maxDuration = Math.max(maxDuration, duration);
+      return {
+        ...timing,
+        id: timing.id || `step-${idx + 1}-${timing.path || timing.label || timing.signature || 'step'}`,
+        index: timing.index || idx + 1,
+        durationMs: duration,
+        elapsedMs: inCurrentRun ? runElapsed : overallElapsed,
+        runId: timing.runId ?? this.currentRunId,
+        source: timing.source ?? 'synthetic',
+      };
+    });
+
+    this.stepTimings.set(normalized);
+    this.maxStepDurationMs.set(maxDuration);
+
+    const nodeMap = new Map<string, StepTiming>();
+    for (let i = normalized.length - 1; i >= 0; i--) {
+      const timing = normalized[i];
+      if (timing.runId !== this.currentRunId) continue;
+      if (!timing.path) continue;
+      const nodeId = this.pathToNodeId.get(timing.path);
+      if (nodeId && !nodeMap.has(nodeId)) {
+        nodeMap.set(nodeId, timing);
+      }
+    }
+    this.nodeTimings.set(nodeMap);
+    this.accumulatedMs = currentRunElapsed;
+  }
+
+  private isMeasuredTimingForCurrentRun(recordedAtMs: number): boolean {
+    if (this.runStartMs === null) {
+      return false;
+    }
+    return recordedAtMs >= this.runStartMs;
+  }
+
+  private resetTimingData(): void {
+    this.runStartMs = null;
+    this.lastStepTimestampMs = null;
+    this.nodeTimings.set(new Map());
+    this.accumulatedMs = 0;
+  }
+
+  private beginRun(startTimestampMs: number | null): void {
+    this.runStartMs = startTimestampMs;
+    this.awaitingRunStart = false;
+    this.lastStepTimestampMs = null;
+    this.accumulatedMs = 0;
   }
 }

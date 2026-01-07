@@ -1,4 +1,5 @@
 import type { Flowchart } from './flowchart';
+import type { FlowNode } from './models';
 import { LAYOUT_SPACING, START_NODE_ID } from './constants';
 import { computeAutoLayout } from './layout-utils';
 import { isVerticalOrientation } from './orientation-handlers';
@@ -88,5 +89,64 @@ export function runAutoLayout(flow: Flowchart): void {
     LAYOUT_SPACING.vertical.gap,
     LAYOUT_SPACING.horizontal.gap
   );
-  flow.nodes.set(laidOut);
+  flow.nodes.set(applyCollapsedGroupOffsets(flow, laidOut, heights));
+}
+
+const DEFAULT_NODE_HEIGHT = 80;
+
+function applyCollapsedGroupOffsets(flow: Flowchart, nodes: FlowNode[], heights: Map<string, number>): FlowNode[] {
+  if (!isVerticalOrientation(flow)) {
+    return nodes;
+  }
+  const collapsedGroups = flow.groups().filter(group => group.collapsed);
+  if (!collapsedGroups.length) {
+    return nodes;
+  }
+
+  const sortedGroups = collapsedGroups.slice().sort((a, b) => a.position.y - b.position.y);
+  let updated = nodes;
+
+  for (const group of sortedGroups) {
+    const groupNodeIds = new Set(group.nodeIds);
+    if (!groupNodeIds.size) {
+      continue;
+    }
+
+    let contentBottom = -Infinity;
+    for (const node of updated) {
+      if (!groupNodeIds.has(node.id)) {
+        continue;
+      }
+      const height = heights.get(node.id) ?? flow.lookups.lastNodeHeights.get(node.id) ?? DEFAULT_NODE_HEIGHT;
+      contentBottom = Math.max(contentBottom, node.position.y + height);
+    }
+    if (!Number.isFinite(contentBottom)) {
+      continue;
+    }
+
+    const collapsedBottom = group.position.y + group.size.height;
+    const deltaY = contentBottom - collapsedBottom;
+    if (deltaY <= 0) {
+      continue;
+    }
+
+    updated = shiftNodesBelow(updated, contentBottom, deltaY, groupNodeIds);
+  }
+
+  return updated;
+}
+
+function shiftNodesBelow(nodes: FlowNode[], thresholdY: number, deltaY: number, excludedIds: Set<string>): FlowNode[] {
+  let changed = false;
+  const next = nodes.map(node => {
+    if (excludedIds.has(node.id)) {
+      return node;
+    }
+    if (node.position.y < thresholdY) {
+      return node;
+    }
+    changed = true;
+    return { ...node, position: { x: node.position.x, y: node.position.y - deltaY } };
+  });
+  return changed ? next : nodes;
 }

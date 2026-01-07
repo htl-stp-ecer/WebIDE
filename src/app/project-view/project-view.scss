@@ -5,3 +5,63 @@
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+:host {
+  display: block;
+  height: 100%;
+}
+
+.project-layout {
+  --left-panel-width: clamp(220px, 20vw, 360px);
+  --right-panel-width: clamp(220px, 20vw, 360px);
+  --resizer-width: 6px;
+  display: flex;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+.panel {
+  min-width: 0;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.panel-left {
+  flex: 0 0 var(--left-panel-width);
+  padding: 1rem;
+  border-right: 1px solid #d1d5db;
+}
+
+.panel-center {
+  flex: 1 1 auto;
+  padding: 1rem;
+}
+
+.panel-right {
+  flex: 0 0 var(--right-panel-width);
+  padding: 1rem;
+  border-left: 1px solid #d1d5db;
+  display: flex;
+  flex-direction: column;
+}
+
+.panel-scroll {
+  flex: 1 1 auto;
+  overflow-y: auto;
+}
+
+.panel-resizer {
+  flex: 0 0 var(--resizer-width);
+  cursor: col-resize;
+  position: relative;
+  touch-action: none;
+  user-select: none;
+}
+
+:host-context(.dark) .panel-left,
+:host-context(.dark) .panel-right,
+:host-context(.p-dark) .panel-left,
+:host-context(.p-dark) .panel-right {
+  border-color: #4b5563;
+}

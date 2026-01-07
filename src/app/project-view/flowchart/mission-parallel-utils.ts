@@ -103,6 +103,18 @@ export function attachToStartWithParallel(mission: Mission, child: MissionStep):
 export function attachChildWithParallel(mission: Mission, parent: MissionStep, child: MissionStep): boolean {
   if (parent === child) return false;
 
+  const parentLoc = findParentAndIndex(mission, parent);
+  const parentIsTopLevelTail = !!(
+    parentLoc &&
+    !parentLoc.parent &&
+    parentLoc.index === (parentLoc.container.length - 1)
+  );
+  if (parentLoc && parentIsTopLevelTail) {
+    detachEverywhere(mission, child);
+    parentLoc.container.splice(parentLoc.index + 1, 0, child);
+    return true;
+  }
+
   const children = parent.children ?? [];
   if (
     !isType(parent, 'parallel') &&

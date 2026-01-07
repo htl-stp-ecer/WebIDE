@@ -65,6 +65,12 @@ export class HttpService {
     });
   }
 
+  updateDeviceSensors(sensors: DeviceSensorInfo[]) {
+    return this.http.put<ConnectionInfo>(`${this.ip}/api/v1/device/sensors`, {
+      sensors,
+    });
+  }
+
   getAllProjects() {
     return this.http.get<Project[]>(`${this.ip}/api/v1/projects`);
   }
@@ -81,8 +87,8 @@ export class HttpService {
     return this.http.get<Step[]>(`${this.ip}/api/v1/steps/?project_uuid=${uuid}`);
   }
 
-  getTypeDefinitions() {
-    return this.http.get<TypeDefinition[]>(`${this.ip}/api/v1/type-definitions`);
+  getTypeDefinitions(projectUUID: string) {
+    return this.http.get<TypeDefinition[]>(`${this.ip}/api/v1/type-definitions/${projectUUID}`);
   }
 
   getAllMissions(projectUUID: string) {
@@ -142,10 +148,10 @@ export class HttpService {
     const params: string[] = [];
     const shouldSimulate = options?.simulate ?? true;
     if (shouldSimulate) {
-      // params.push('simulate=1');
+      params.push('simulate=1');
     }
     if (options?.debug) {
-      // params.push('debug=1');
+      params.push('debug=1');
     }
     const query = params.length ? `?${params.join('&')}` : '';
     const httpUrl = `${this.ip}/api/v1/missions/${projectUUID}/run/${name}${query}`;

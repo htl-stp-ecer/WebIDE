@@ -1,8 +1,24 @@
 import type { Flowchart } from './flowchart';
 import type { FlowNode } from './models';
 import type { MissionStep } from '../../entities/MissionStep';
+import { handleSave } from './save-handlers';
 
 type ArgPrimitive = string | number | boolean | null;
+
+const ARGUMENT_SAVE_DEBOUNCE_MS = 500;
+const pendingArgumentSaves = new WeakMap<Flowchart, ReturnType<typeof setTimeout>>();
+
+function scheduleArgumentAutoSave(flow: Flowchart): void {
+  const pending = pendingArgumentSaves.get(flow);
+  if (pending) {
+    clearTimeout(pending);
+  }
+  const handle = setTimeout(() => {
+    pendingArgumentSaves.delete(flow);
+    handleSave(flow);
+  }, ARGUMENT_SAVE_DEBOUNCE_MS);
+  pendingArgumentSaves.set(flow, handle);
+}
 
 export function handleArgumentChange(flow: Flowchart, nodeId: string, argName: string, argIndex: number, rawValue: unknown): void {
   const node = findNode(flow, nodeId);
@@ -31,6 +47,7 @@ export function handleArgumentChange(flow: Flowchart, nodeId: string, argName: s
     }
     targetArg.value = resolvedValue;
     flow.historyManager.recordHistory('update-argument');
+    scheduleArgumentAutoSave(flow);
     return;
   }
 

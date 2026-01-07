@@ -490,6 +490,21 @@ it('keeps downstream node outside parallel when adding new parallel child', () =
     expect(step2.children?.length ?? 0).toBe(0);
   });
 
+  it('does not treat the last top-level step as sequential append candidate', () => {
+    const step1 = createStep('First');
+    const step2 = createStep('Second');
+    const mission: Mission = {
+      name: 'mission',
+      is_setup: false,
+      is_shutdown: false,
+      order: 0,
+      steps: [step1, step2],
+      comments: [],
+    };
+
+    expect(shouldAppendSequentially(mission, step2)).toBeFalse();
+  });
+
   it('appends sequentially inside a parallel lane without moving downstream steps', () => {
     const laneStep = createStep('Lane');
     const laneSeq = createStep('seq', [], [laneStep], 'seq');
@@ -520,6 +535,25 @@ it('keeps downstream node outside parallel when adding new parallel child', () =
     expect(parallelChildren[1]).toBe(otherLane);
 
     expect(mission.steps?.[1]).toBe(tail);
+  });
+
+  it('appends to the mission list when parallel attachment targets the final top-level step', () => {
+    const tail = createStep('Tail');
+    const mission: Mission = {
+      name: 'mission',
+      is_setup: false,
+      is_shutdown: false,
+      order: 0,
+      steps: [tail],
+      comments: [],
+    };
+
+    const inserted = createStep('Inserted');
+    const result = attachChildWithParallel(mission, tail, inserted);
+    expect(result).toBeTrue();
+    expect(mission.steps.length).toBe(2);
+    expect(mission.steps[1]).toBe(inserted);
+    expect(tail.children?.length ?? 0).toBe(0);
   });
 
   it('inserting between a parallel lane and downstream node keeps tail outside parallel', () => {

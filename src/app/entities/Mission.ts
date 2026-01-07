@@ -1,5 +1,6 @@
 import { MissionStep } from './MissionStep';
 import { MissionComment } from './MissionComment';
+import { MissionGroup } from './MissionGroup';
 
 export interface Mission {
   "name": string,
@@ -8,4 +9,5 @@ export interface Mission {
   "order": number,
   "steps": MissionStep[],
   "comments"?: MissionComment[],
+  "groups"?: MissionGroup[],
 }

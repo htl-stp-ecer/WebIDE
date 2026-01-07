@@ -22,6 +22,21 @@
   </p>
 </div>
 
+@if (corsConfirmUrl) {
+  <div class="mt-12 w-full flex justify-center px-4">
+    <div class="w-full md:w-4/5 lg:w-3/4 bg-yellow-50 border border-yellow-200 rounded-xl p-4 shadow-sm">
+      <div class="flex items-center justify-between mb-3">
+        <div class="text-lg font-semibold text-yellow-800">
+          Browser blocked the device request. Confirm access below.
+        </div>
+        <span class="text-sm text-gray-600">{{ corsConfirmIp }}</span>
+      </div>
+      <a [href]="corsConfirmUrl" target="_blank" rel="noopener noreferrer" class="text-blue-500 hover:text-blue-700 underline">
+        {{ corsConfirmUrl }}
+      </a>
+    </div>
+  </div>
+}
 
 <div class="mt-40 text-xl ml-20 mr-20">
   {{ 'HOME.PREVIOUS_CONNECTIONS' | translate }}

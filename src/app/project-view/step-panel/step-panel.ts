@@ -23,9 +23,20 @@ export class StepPanel implements OnInit {
   constructor(private http: HttpService, private stepStateService: StepsStateService, private route: ActivatedRoute) {}
 
   ngOnInit(): void {
-    this.http.getAllSteps(this.route.snapshot.paramMap.get('uuid')!).subscribe(steps => {
-      this.stepStateService.setSteps(steps);
-      this.groupSteps(steps);
+    const projectUUID = this.route.snapshot.paramMap.get('uuid');
+    if (!projectUUID) {
+      this.stepGroups = [];
+      return;
+    }
+    this.http.getAllSteps(projectUUID).subscribe({
+      next: steps => {
+        this.stepStateService.setSteps(steps);
+        this.groupSteps(steps);
+      },
+      error: () => {
+        this.stepGroups = [];
+        this.stepStateService.setSteps([]);
+      },
     });
   }
 

@@ -5,7 +5,7 @@ import { Mission } from '../entities/Mission';
 export class MissionStateService {
   currentMission = signal<Mission | null>(null);
 
-  setMission(mission: Mission) {
+  setMission(mission: Mission | null) {
     this.currentMission.set(mission);
   }
 }

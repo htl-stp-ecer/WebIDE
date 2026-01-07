@@ -1,0 +1,36 @@
+<div class="table-panel">
+  <div class="table-header panel-drag-handle">
+    <div class="table-title">
+      <i class="pi pi-table"></i>
+      <span>{{ 'FLOWCHART.TABLE_TITLE' | translate }}</span>
+    </div>
+    <div class="table-status" [class.disabled]="!unity.isReady()">
+      @if (unity.isReady()) {
+        <span class="table-pill table-pill-ready">{{ 'FLOWCHART.TABLE_UNITY_READY' | translate }}</span>
+      } @else {
+        <span class="table-pill">{{ 'FLOWCHART.TABLE_UNITY_NOT_READY' | translate }}</span>
+      }
+    </div>
+  </div>
+
+  <div class="table-body">
+    <canvas
+      #drawCanvas
+      class="draw-canvas"
+      width="256"
+      height="256"
+      (pointerdown)="onPointerDown()"
+      (pointerup)="onPointerUp()"
+      (pointerleave)="onPointerUp()"
+      (pointermove)="onPointerMove($event)"></canvas>
+
+    <div class="table-actions">
+      <button type="button" class="table-btn" (click)="clearCanvas()">{{ 'FLOWCHART.TABLE_CLEAR' | translate }}</button>
+      <button type="button" class="table-btn table-btn-primary" (click)="sendToUnity()" [disabled]="!unity.isReady()">{{ 'FLOWCHART.TABLE_SEND' | translate }}</button>
+    </div>
+
+    @if (message()) {
+      <div class="table-message">{{ message() }}</div>
+    }
+  </div>
+</div>

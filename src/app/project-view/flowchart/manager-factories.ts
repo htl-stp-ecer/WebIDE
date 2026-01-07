@@ -12,6 +12,7 @@ export function createHistoryManager(flow: Flowchart): FlowchartHistoryManager {
     adHocNodes: flow.adHocNodes,
     adHocConnections: flow.adHocConnections,
     comments: flow.comments,
+    groups: flow.groups,
     nodes: flow.nodes,
     connections: flow.connections,
     recomputeMergedView: () => recomputeMergedView(flow),
@@ -32,5 +33,7 @@ export function createRunManager(flow: Flowchart): FlowchartRunManager {
     breakpointInfo: flow.breakpointInfo,
     getProjectUUID: () => flow.projectUUID,
     getMissionKey: () => flow.historyManager.getMissionKey(),
+    shouldSimulate: () => flow.simulateRuns(),
+    unity: flow.unity,
   });
 }

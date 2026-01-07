@@ -7,6 +7,7 @@ import { cleanupAdHocNode, recomputeMergedView } from './view-merger';
 import { MissionStep } from '../../entities/MissionStep';
 import { Mission } from '../../entities/Mission';
 import { rebuildFromMission } from './mission-handlers';
+import { removeNodeFromGroups } from './group-handlers';
 
 export function handleCreateNode(flow: Flowchart, event: FCreateNodeEvent): void {
   const step = event.data as Step;
@@ -60,6 +61,7 @@ export function deleteNode(flow: Flowchart): void {
     return;
   }
 
+  removeNodeFromGroups(flow, nodeId, false);
   flow.contextMenu.selectedNodeId = '';
   flow.layoutFlags.needsAdjust = true;
   flow.historyManager.recordHistory('delete-node');
