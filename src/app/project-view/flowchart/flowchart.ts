@@ -43,7 +43,7 @@ interface DefinitionOption {
 
 type DefinitionGroups = Partial<Record<string, DefinitionOption[]>>;
 type FloatingPanelKey = 'timing' | 'unity' | 'table';
-
+//
 interface PanelOffset {
   x: number;
   y: number;
