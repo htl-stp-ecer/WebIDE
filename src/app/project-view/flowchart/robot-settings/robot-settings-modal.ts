@@ -123,6 +123,7 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
         this.deviceSensors = info.sensors ?? [];
         this.rotationCenter = info.rotation_center ?? null;
         this.syncTableVisualizationDimensions(info);
+        this.syncTableVisualizationRotationCenter(info, info.rotation_center ?? null);
         this.syncSensorsFromDefinitions();
         this.loading = false;
       },
@@ -197,6 +198,7 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
         this.tempWidth = this.toDimensionString(info.width_cm);
         this.tempLength = this.toDimensionString(info.length_cm);
         this.syncTableVisualizationDimensions(info);
+        this.syncTableVisualizationRotationCenter(info, this.rotationCenter);
         // Clamp centers and sensors to new bounds (they stay in percentage, so no action needed)
         // But clearances might need clamping if they exceed new dimensions
         this.clampClearancesToDimensions();
@@ -248,6 +250,30 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
     if (typeof width === 'number' && typeof length === 'number' && width > 0 && length > 0) {
       this.vizService.setRobotDimensions(width, length);
     }
+  }
+
+  private syncTableVisualizationRotationCenter(
+    info?: ConnectionInfo,
+    rotationCenter?: CenterPoint | null
+  ) {
+    const width = info?.width_cm;
+    const length = info?.length_cm;
+    if (typeof width !== 'number' || typeof length !== 'number' || width <= 0 || length <= 0) {
+      this.vizService.setRotationCenter(0, 0);
+      return;
+    }
+
+    if (!rotationCenter) {
+      this.vizService.setRotationCenter(0, 0);
+      return;
+    }
+
+    const xCm = (width * rotationCenter.x_pct) / 100;
+    const yCm = length * (1 - rotationCenter.y_pct / 100);
+    const forwardCm = yCm - length / 2;
+    const strafeCm = (width / 2) - xCm;
+
+    this.vizService.setRotationCenter(forwardCm, strafeCm);
   }
 
   // Sensors
@@ -407,6 +433,7 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
       this.persistSubject.next();
     } else if (this.editTarget?.type === 'rotation') {
       this.rotationCenter = { x_pct: x, y_pct: y };
+      this.syncTableVisualizationRotationCenter(this.connectionInfo, this.rotationCenter);
       this.persistCentersSubject.next();
     }
   }
@@ -442,6 +469,7 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
       next: info => {
         this.connectionInfo = info;
         this.rotationCenter = info.rotation_center ?? null;
+        this.syncTableVisualizationRotationCenter(info, this.rotationCenter);
       },
       error: () => {
         NotificationService.showError(
@@ -526,6 +554,7 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
       x_pct: axis === 'x' ? percent : (this.rotationCenter?.x_pct ?? 50),
       y_pct: axis === 'y' ? percent : (this.rotationCenter?.y_pct ?? 50)
     };
+    this.syncTableVisualizationRotationCenter(this.connectionInfo, this.rotationCenter);
     this.persistCentersSubject.next();
   }
 

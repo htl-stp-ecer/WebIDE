@@ -46,8 +46,9 @@ export function buildPlannedPathFromSimulation(
     const next = applyLocalDelta(current, forwardCm, -strafeCm, angular);
 
     const moved = Math.abs(forwardCm) > EPSILON || Math.abs(strafeCm) > EPSILON;
+    const rotated = Math.abs(angular) > EPSILON;
     current = next;
-    if (moved) {
+    if (moved || rotated) {
       poses.push(next);
     }
   }
