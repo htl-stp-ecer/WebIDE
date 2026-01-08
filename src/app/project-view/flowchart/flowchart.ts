@@ -14,6 +14,7 @@ import { MissionStateService } from '../../services/mission-sate-service';
 import { StepsStateService } from '../../services/steps-state-service';
 import { HttpService } from '../../services/http-service';
 import { FlowHistory } from '../../entities/flow-history';
+import { Mission } from '../../entities/Mission';
 import { Connection, FlowComment, FlowGroup, FlowNode, FlowOrientation } from './models';
 import { FlowchartHistoryManager } from './flowchart-history-manager';
 import { FlowchartRunManager } from './flowchart-run-manager';
@@ -32,6 +33,8 @@ import { DecimalPipe } from '@angular/common';
 import { TableVisualizationPanel } from './table/table-visualization-panel';
 import { TimingPanel, type TimingViewMode } from './timing/timing-panel';
 import { RobotSettingsModal } from './robot-settings/robot-settings-modal';
+import { TableVisualizationService } from './table/services';
+import { buildPlannedPathFromSimulation } from './table/simulation-path';
 
 interface DefinitionOption {
   label: string;
@@ -117,6 +120,7 @@ export class Flowchart implements AfterViewChecked, OnDestroy, OnInit {
   langChangeSub?: Subscription;
   themeObserver?: MutationObserver;
   typeDefinitionsSub?: Subscription;
+  simulationPathSub?: Subscription;
   private _useAutoLayout = readStoredAutoLayout();
   private activePanelDrag: PanelDragState | null = null;
 
@@ -126,7 +130,8 @@ export class Flowchart implements AfterViewChecked, OnDestroy, OnInit {
     readonly http: HttpService,
     readonly route: ActivatedRoute,
     readonly history: FlowHistory,
-    readonly translate: TranslateService
+    readonly translate: TranslateService,
+    readonly tableViz: TableVisualizationService
   ) {
     this.historyManager = createHistoryManager(this);
     this.runManager = createRunManager(this);
@@ -164,6 +169,7 @@ export class Flowchart implements AfterViewChecked, OnDestroy, OnInit {
     this.langChangeSub?.unsubscribe();
     this.themeObserver?.disconnect();
     this.typeDefinitionsSub?.unsubscribe();
+    this.simulationPathSub?.unsubscribe();
   }
 
   private loadTypeDefinitions(): void {
@@ -204,6 +210,28 @@ export class Flowchart implements AfterViewChecked, OnDestroy, OnInit {
 
   toggleSimulation(): void {
     this.simulateRuns.update(prev => !prev);
+  }
+
+  updatePlannedPathForMission(mission: Mission | null): void {
+    this.simulationPathSub?.unsubscribe();
+    this.simulationPathSub = undefined;
+
+    if (!mission || !this.projectUUID) {
+      this.tableViz.setPlannedPath(null);
+      return;
+    }
+
+    this.simulationPathSub = this.http.getMissionSimulationData(this.projectUUID, mission.name).subscribe({
+      next: data => {
+        const startPose = this.tableViz.startPose();
+        const planned = buildPlannedPathFromSimulation(startPose, data);
+        this.tableViz.setPlannedPath(planned.length > 1 ? planned : null);
+      },
+      error: err => {
+        console.warn('[Flowchart] Failed to load simulation data', err);
+        this.tableViz.setPlannedPath(null);
+      },
+    });
   }
 
   openRobotSettings(): void {

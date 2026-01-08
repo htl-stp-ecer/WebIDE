@@ -9,10 +9,10 @@ import {
   input,
 } from '@angular/core';
 import { TranslateModule } from '@ngx-translate/core';
-import { TableMapService } from './services/table-map.service';
-import { TableVisualizationService } from './services/table-visualization.service';
-import { Pose2D } from './models/pose2d';
-import { SensorStepType } from './models/sensor';
+import { TableMapService } from './services';
+import { TableVisualizationService } from './services';
+import { Pose2D } from './models';
+import { SensorStepType } from './models';
 
 /** Line thickness in cm for rendering */
 const LINE_THICKNESS_CM = 2.54;
@@ -50,6 +50,7 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
       this.mapService.wallSegmentsCm();
       this.vizService.computedPath();
       this.vizService.currentPose();
+      this.vizService.plannedPath();
       this.render();
     });
   }
@@ -109,8 +110,14 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
     // Draw map (white surface with vector lines)
     this.renderMap(width, height);
 
+    // Draw planned path
+    this.renderPlannedPath(width, height);
+
     // Draw path
     this.renderPath(width, height);
+
+    // Draw ghost robot at planned end position
+    this.renderGhostRobot(width, height);
 
     // Draw robot
     this.renderRobot(width, height);
@@ -296,6 +303,26 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
     this.ctx.fill();
   }
 
+  private renderPlannedPath(width: number, height: number): void {
+    const planned = this.vizService.plannedPath();
+    if (!planned || planned.length < 2) return;
+
+    this.ctx.strokeStyle = '#ef4444';
+    this.ctx.lineWidth = 2;
+    this.ctx.lineCap = 'round';
+    this.ctx.lineJoin = 'round';
+
+    for (let i = 0; i < planned.length - 1; i++) {
+      const start = this.tableToCanvas(planned[i], width, height);
+      const end = this.tableToCanvas(planned[i + 1], width, height);
+
+      this.ctx.beginPath();
+      this.ctx.moveTo(start.x, start.y);
+      this.ctx.lineTo(end.x, end.y);
+      this.ctx.stroke();
+    }
+  }
+
   private getStepColor(steps: any[], index: number): string {
     if (!steps || index < 0 || index >= steps.length) {
       return '#4ade80'; // Default green
@@ -352,6 +379,47 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
     const pose = this.vizService.currentPose();
     if (!pose) return;
 
+    this.renderRobotAtPose(pose, width, height, {
+      bodyFill: 'rgba(74, 222, 128, 0.7)',
+      bodyStroke: '#4ade80',
+      arrowFill: '#facc15',
+      rotationCenterFill: '#ef4444',
+      geometricCenterFill: '#facc15',
+      showSensors: true,
+      dashed: false,
+    });
+  }
+
+  private renderGhostRobot(width: number, height: number): void {
+    const planned = this.vizService.plannedPath();
+    if (!planned || planned.length === 0) return;
+
+    const pose = planned[planned.length - 1];
+    this.renderRobotAtPose(pose, width, height, {
+      bodyFill: 'rgba(239, 68, 68, 0.12)',
+      bodyStroke: 'rgba(239, 68, 68, 0.6)',
+      arrowFill: 'rgba(239, 68, 68, 0.6)',
+      rotationCenterFill: 'rgba(239, 68, 68, 0.6)',
+      geometricCenterFill: 'rgba(239, 68, 68, 0.4)',
+      showSensors: false,
+      dashed: true,
+    });
+  }
+
+  private renderRobotAtPose(
+    pose: Pose2D,
+    width: number,
+    height: number,
+    options: {
+      bodyFill: string;
+      bodyStroke: string;
+      arrowFill: string;
+      rotationCenterFill: string;
+      geometricCenterFill: string;
+      showSensors: boolean;
+      dashed: boolean;
+    }
+  ): void {
     const rotationCenter = this.tableToCanvas(pose, width, height);
     const robotConfig = this.vizService.robotConfig();
     const { scaleX, scaleY } = this.getDrawParams(width, height);
@@ -370,9 +438,12 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
     const bodyCenterY = rcOffsetStrafePx;
 
     // Draw robot body
-    this.ctx.fillStyle = 'rgba(74, 222, 128, 0.7)';
-    this.ctx.strokeStyle = '#4ade80';
+    this.ctx.fillStyle = options.bodyFill;
+    this.ctx.strokeStyle = options.bodyStroke;
     this.ctx.lineWidth = 2;
+    if (options.dashed) {
+      this.ctx.setLineDash([6, 4]);
+    }
     this.ctx.beginPath();
     this.ctx.rect(
       bodyCenterX - robotLengthPx / 2,
@@ -382,9 +453,12 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
     );
     this.ctx.fill();
     this.ctx.stroke();
+    if (options.dashed) {
+      this.ctx.setLineDash([]);
+    }
 
     // Draw forward indicator (arrow)
-    this.ctx.fillStyle = '#facc15';
+    this.ctx.fillStyle = options.arrowFill;
     this.ctx.beginPath();
     const arrowTipX = bodyCenterX + robotLengthPx / 2;
     this.ctx.moveTo(arrowTipX, bodyCenterY);
@@ -394,29 +468,31 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
     this.ctx.fill();
 
     // Draw rotation center marker
-    this.ctx.fillStyle = '#ef4444';
+    this.ctx.fillStyle = options.rotationCenterFill;
     this.ctx.beginPath();
     this.ctx.arc(0, 0, 4, 0, Math.PI * 2);
     this.ctx.fill();
 
     // Draw geometric center marker (if offset is non-zero)
     if (robotConfig.rotationCenterForwardCm !== 0 || robotConfig.rotationCenterStrafeCm !== 0) {
-      this.ctx.fillStyle = '#facc15';
+      this.ctx.fillStyle = options.geometricCenterFill;
       this.ctx.beginPath();
       this.ctx.arc(bodyCenterX, bodyCenterY, 3, 0, Math.PI * 2);
       this.ctx.fill();
     }
 
     // Draw sensors
-    const sensorConfig = this.vizService.sensorConfig();
-    for (const sensor of sensorConfig.lineSensors) {
-      const sensorX = bodyCenterX + sensor.forwardCm * scaleX;
-      const sensorY = bodyCenterY - sensor.strafeCm * scaleY;
+    if (options.showSensors) {
+      const sensorConfig = this.vizService.sensorConfig();
+      for (const sensor of sensorConfig.lineSensors) {
+        const sensorX = bodyCenterX + sensor.forwardCm * scaleX;
+        const sensorY = bodyCenterY - sensor.strafeCm * scaleY;
 
-      this.ctx.fillStyle = '#22d3ee';
-      this.ctx.beginPath();
-      this.ctx.arc(sensorX, sensorY, 3, 0, Math.PI * 2);
-      this.ctx.fill();
+        this.ctx.fillStyle = '#22d3ee';
+        this.ctx.beginPath();
+        this.ctx.arc(sensorX, sensorY, 3, 0, Math.PI * 2);
+        this.ctx.fill();
+      }
     }
 
     this.ctx.restore();

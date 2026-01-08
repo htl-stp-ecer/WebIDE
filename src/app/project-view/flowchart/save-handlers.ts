@@ -8,6 +8,9 @@ export function handleSave(flow: Flowchart): void {
     return;
   }
   flow.http.saveMission(projectId, mission).subscribe({
+    next: () => {
+      flow.updatePlannedPathForMission?.(mission);
+    },
     error: error => NotificationService.showError('Could not save settings', String(error)),
   });
 }

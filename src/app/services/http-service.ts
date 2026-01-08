@@ -3,6 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { BehaviorSubject, Observable } from 'rxjs';
 import {Mission} from '../entities/Mission';
 import { TypeDefinition } from '../entities/TypeDefinition';
+import { MissionSimulationData, ProjectSimulationData } from '../entities/Simulation';
 
 interface RunMissionOptions {
   simulate?: boolean;
@@ -95,6 +96,15 @@ export class HttpService {
 
   getTypeDefinitions(projectUUID: string) {
     return this.http.get<TypeDefinition[]>(`${this.ip}/api/v1/type-definitions/${projectUUID}`);
+  }
+
+  getMissionSimulationData(projectUUID: string, missionName: string) {
+    const encoded = encodeURIComponent(missionName);
+    return this.http.get<MissionSimulationData>(`${this.ip}/api/v1/missions/${projectUUID}/simulation/${encoded}`);
+  }
+
+  getProjectSimulationData(projectUUID: string) {
+    return this.http.get<ProjectSimulationData>(`${this.ip}/api/v1/missions/${projectUUID}/simulation`);
   }
 
   getAllMissions(projectUUID: string) {

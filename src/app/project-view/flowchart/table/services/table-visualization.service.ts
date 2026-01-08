@@ -1,6 +1,6 @@
 import { Injectable, signal, computed } from '@angular/core';
-import { Pose2D, createPose } from '../models/pose2d';
-import { SensorConfig, createSensorConfig, setSensor, SensorStepType } from '../models/sensor';
+import { Pose2D, createPose } from '../models';
+import { SensorConfig, createSensorConfig, setSensor, SensorStepType } from '../models';
 
 export interface RobotConfig {
   widthCm: number;
@@ -37,12 +37,14 @@ export class TableVisualizationService {
   private readonly _startPose = signal<Pose2D>(createPose(20, 50, 0));
   private readonly _currentPose = signal<Pose2D | null>(null);
   private readonly _computedPath = signal<ComputedPath | null>(null);
+  private readonly _plannedPath = signal<Pose2D[] | null>(null);
 
   readonly robotConfig = this._robotConfig.asReadonly();
   readonly sensorConfig = this._sensorConfig.asReadonly();
   readonly startPose = this._startPose.asReadonly();
   readonly currentPose = computed(() => this._currentPose() ?? this._startPose());
   readonly computedPath = this._computedPath.asReadonly();
+  readonly plannedPath = this._plannedPath.asReadonly();
 
   /** Set the start pose */
   setStartPose(x: number, y: number, thetaDeg: number): void {
@@ -89,6 +91,11 @@ export class TableVisualizationService {
     this._computedPath.set(path);
   }
 
+  /** Set the planned path (array of poses) */
+  setPlannedPath(path: Pose2D[] | null): void {
+    this._plannedPath.set(path);
+  }
+
   /** Add a single pose to the path (for building incrementally) */
   addPoseToPath(pose: Pose2D, step?: ExpandedStep): void {
     const currentPath = this._computedPath();
@@ -122,6 +129,7 @@ export class TableVisualizationService {
     this._startPose.set(createPose(20, 50, 0));
     this._currentPose.set(null);
     this._computedPath.set(null);
+    this._plannedPath.set(null);
   }
 
   /** Configure default sensors (typical 2-sensor setup for line following) */
