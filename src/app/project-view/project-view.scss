@@ -27,10 +27,22 @@
   box-sizing: border-box;
 }
 
+$collapsed-width: 40px;
+
 .panel-left {
   flex: 0 0 var(--left-panel-width);
   padding: 1rem;
   border-right: 1px solid #d1d5db;
+  position: relative;
+  transition: flex-basis 0.2s ease;
+
+  &.collapsed {
+    flex: 0 0 $collapsed-width;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
 }
 
 .panel-center {
@@ -44,6 +56,15 @@
   border-left: 1px solid #d1d5db;
   display: flex;
   flex-direction: column;
+  position: relative;
+  transition: flex-basis 0.2s ease;
+
+  &.collapsed {
+    flex: 0 0 $collapsed-width;
+    padding: 0;
+    align-items: center;
+    justify-content: center;
+  }
 }
 
 .panel-scroll {
@@ -64,4 +85,55 @@
 :host-context(.p-dark) .panel-left,
 :host-context(.p-dark) .panel-right {
   border-color: #4b5563;
+}
+
+// Panel toggle buttons
+.panel-toggle-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 4px;
+  color: #6b7280;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.15s ease, color 0.15s ease;
+
+  &:hover {
+    background: rgba(0, 0, 0, 0.08);
+    color: #374151;
+  }
+
+  i {
+    font-size: 1rem;
+  }
+
+  // Collapse button positioned in corner when panel is expanded
+  &.collapse-btn {
+    position: absolute;
+    top: 8px;
+    z-index: 10;
+  }
+}
+
+// Left panel collapse button on the right side
+.panel-left:not(.collapsed) .collapse-btn {
+  right: 8px;
+}
+
+// Right panel collapse button on the left side
+.panel-right:not(.collapsed) .collapse-btn {
+  left: 8px;
+}
+
+// Dark mode support for toggle buttons
+:host-context(.dark) .panel-toggle-btn,
+:host-context(.p-dark) .panel-toggle-btn {
+  color: #9ca3af;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #e5e7eb;
+  }
 }

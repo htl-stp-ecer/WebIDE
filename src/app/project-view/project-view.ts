@@ -1,4 +1,4 @@
-import {Component, ElementRef, OnDestroy, ViewChild} from '@angular/core';
+import {Component, ElementRef, OnDestroy, signal, ViewChild} from '@angular/core';
 import {MissionPanel} from './mission-panel/mission-panel';
 import {Flowchart} from './flowchart/flowchart';
 import {StepPanel} from './step-panel/step-panel';
@@ -7,6 +7,13 @@ import { HttpService } from '../services/http-service';
 import { decodeRouteIp } from '../services/route-ip-serializer';
 
 type ResizeSide = 'left' | 'right';
+
+const STORAGE_KEYS = {
+  leftCollapsed: 'webide-left-panel-collapsed',
+  rightCollapsed: 'webide-right-panel-collapsed',
+  leftWidth: 'webide-left-panel-width',
+  rightWidth: 'webide-right-panel-width',
+} as const;
 
 interface ResizeState {
   side: ResizeSide;
@@ -29,12 +36,17 @@ interface ResizeState {
 export class ProjectView implements OnDestroy {
   private static readonly MIN_PANEL_WIDTH = 220;
   private static readonly MIN_CENTER_WIDTH = 360;
+  private static readonly COLLAPSED_WIDTH = 40;
+  private static readonly DEFAULT_PANEL_WIDTH = 280;
 
   @ViewChild('layoutRoot') layoutRoot!: ElementRef<HTMLDivElement>;
   @ViewChild('leftPanel') leftPanelRef!: ElementRef<HTMLDivElement>;
   @ViewChild('rightPanel') rightPanelRef!: ElementRef<HTMLDivElement>;
 
   private resizeState: ResizeState | null = null;
+
+  leftCollapsed = signal(this.loadCollapsedState('left'));
+  rightCollapsed = signal(this.loadCollapsedState('right'));
 
   constructor(
     private route: ActivatedRoute,
@@ -44,6 +56,51 @@ export class ProjectView implements OnDestroy {
     const decodedIp = decodeRouteIp(ipParam);
     if (decodedIp) {
       this.http.setIp(decodedIp);
+    }
+  }
+
+  private loadCollapsedState(side: 'left' | 'right'): boolean {
+    const key = side === 'left' ? STORAGE_KEYS.leftCollapsed : STORAGE_KEYS.rightCollapsed;
+    return localStorage.getItem(key) === 'true';
+  }
+
+  toggleLeftPanel(): void {
+    const layout = this.layoutRoot?.nativeElement;
+    const leftPanel = this.leftPanelRef?.nativeElement;
+
+    if (!this.leftCollapsed() && layout && leftPanel) {
+      const currentWidth = leftPanel.getBoundingClientRect().width;
+      localStorage.setItem(STORAGE_KEYS.leftWidth, String(Math.round(currentWidth)));
+    }
+
+    const newState = !this.leftCollapsed();
+    this.leftCollapsed.set(newState);
+    localStorage.setItem(STORAGE_KEYS.leftCollapsed, String(newState));
+
+    if (!newState && layout) {
+      const savedWidth = localStorage.getItem(STORAGE_KEYS.leftWidth);
+      const width = savedWidth ? parseInt(savedWidth, 10) : ProjectView.DEFAULT_PANEL_WIDTH;
+      layout.style.setProperty('--left-panel-width', `${width}px`);
+    }
+  }
+
+  toggleRightPanel(): void {
+    const layout = this.layoutRoot?.nativeElement;
+    const rightPanel = this.rightPanelRef?.nativeElement;
+
+    if (!this.rightCollapsed() && layout && rightPanel) {
+      const currentWidth = rightPanel.getBoundingClientRect().width;
+      localStorage.setItem(STORAGE_KEYS.rightWidth, String(Math.round(currentWidth)));
+    }
+
+    const newState = !this.rightCollapsed();
+    this.rightCollapsed.set(newState);
+    localStorage.setItem(STORAGE_KEYS.rightCollapsed, String(newState));
+
+    if (!newState && layout) {
+      const savedWidth = localStorage.getItem(STORAGE_KEYS.rightWidth);
+      const width = savedWidth ? parseInt(savedWidth, 10) : ProjectView.DEFAULT_PANEL_WIDTH;
+      layout.style.setProperty('--right-panel-width', `${width}px`);
     }
   }
 
