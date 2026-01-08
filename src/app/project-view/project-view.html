@@ -1,22 +1,44 @@
 <div class="project-layout" #layoutRoot>
   <!-- Left Panel -->
-  <div class="panel panel-left" #leftPanel>
-    <app-mission-panel></app-mission-panel>
+  <div class="panel panel-left" [class.collapsed]="leftCollapsed()" #leftPanel>
+    @if (leftCollapsed()) {
+      <button class="panel-toggle-btn" (click)="toggleLeftPanel()" aria-label="Expand mission panel">
+        <i class="pi pi-chevron-right"></i>
+      </button>
+    } @else {
+      <button class="panel-toggle-btn collapse-btn" (click)="toggleLeftPanel()" aria-label="Collapse mission panel">
+        <i class="pi pi-chevron-left"></i>
+      </button>
+      <app-mission-panel></app-mission-panel>
+    }
   </div>
 
-  <div class="panel-resizer" (pointerdown)="startResize($event, 'left')" aria-label="Resize mission panel"></div>
+  @if (!leftCollapsed()) {
+    <div class="panel-resizer" (pointerdown)="startResize($event, 'left')" aria-label="Resize mission panel"></div>
+  }
 
   <!-- Center Content -->
   <div class="panel panel-center">
     <app-flowchart></app-flowchart>
   </div>
 
-  <div class="panel-resizer" (pointerdown)="startResize($event, 'right')" aria-label="Resize step panel"></div>
+  @if (!rightCollapsed()) {
+    <div class="panel-resizer" (pointerdown)="startResize($event, 'right')" aria-label="Resize step panel"></div>
+  }
 
   <!-- Right Panel (scrollable step panel) -->
-  <div class="panel panel-right" #rightPanel>
-    <div class="panel-scroll no-scrollbar">
-      <app-step-panel></app-step-panel>
-    </div>
+  <div class="panel panel-right" [class.collapsed]="rightCollapsed()" #rightPanel>
+    @if (rightCollapsed()) {
+      <button class="panel-toggle-btn" (click)="toggleRightPanel()" aria-label="Expand step panel">
+        <i class="pi pi-chevron-left"></i>
+      </button>
+    } @else {
+      <button class="panel-toggle-btn collapse-btn" (click)="toggleRightPanel()" aria-label="Collapse step panel">
+        <i class="pi pi-chevron-right"></i>
+      </button>
+      <div class="panel-scroll no-scrollbar">
+        <app-step-panel></app-step-panel>
+      </div>
+    }
   </div>
 </div>

@@ -1,0 +1,356 @@
+// Settings tabs
+.settings-tabs {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 0 0.5rem;
+  background: #f1f5f9;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+:host-context(.dark) .settings-tabs,
+:host-context(.p-dark) .settings-tabs {
+  background: #1e293b;
+  border-bottom-color: #334155;
+}
+
+.settings-tab {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border: none;
+  background: transparent;
+  color: #64748b;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: all 0.15s ease;
+
+  &:hover {
+    color: #334155;
+    background: rgba(0, 0, 0, 0.03);
+  }
+
+  &.active {
+    color: #3b82f6;
+    border-bottom-color: #3b82f6;
+  }
+
+  i {
+    font-size: 14px;
+  }
+}
+
+:host-context(.dark) .settings-tab,
+:host-context(.p-dark) .settings-tab {
+  color: #94a3b8;
+
+  &:hover {
+    color: #e2e8f0;
+    background: rgba(255, 255, 255, 0.03);
+  }
+
+  &.active {
+    color: #60a5fa;
+    border-bottom-color: #60a5fa;
+  }
+}
+
+.settings-tab-spacer {
+  flex: 1;
+}
+
+.settings-close-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  &:hover {
+    background: rgba(0, 0, 0, 0.06);
+    color: #334155;
+  }
+}
+
+:host-context(.dark) .settings-close-btn,
+:host-context(.p-dark) .settings-close-btn {
+  color: #94a3b8;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.06);
+    color: #e2e8f0;
+  }
+}
+
+// Map editor container
+.map-editor-container {
+  height: 500px;
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+
+  app-table-editor-view {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+  }
+}
+
+// Robot canvas background with grid
+.robot-canvas-bg {
+  background-color: #f8fafc;
+  background-image:
+    linear-gradient(rgba(148, 163, 184, 0.15) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.15) 1px, transparent 1px);
+  background-size: 16px 16px;
+}
+
+:host-context(.dark) .robot-canvas-bg,
+:host-context(.p-dark) .robot-canvas-bg {
+  background-color: #0f172a;
+  background-image:
+    linear-gradient(rgba(71, 85, 105, 0.4) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(71, 85, 105, 0.4) 1px, transparent 1px);
+}
+
+// Robot frame
+.robot-frame {
+  --robot-width: 70%;
+  --robot-height: 70%;
+  --robot-line-color: #94a3b8;
+  --robot-label-color: #64748b;
+
+  width: min(320px, 50vw);
+  height: min(320px, 50vw);
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+:host-context(.dark) .robot-frame,
+:host-context(.p-dark) .robot-frame {
+  --robot-line-color: #475569;
+  --robot-label-color: #94a3b8;
+}
+
+// Measurement lines
+.robot-measure {
+  position: absolute;
+}
+
+.robot-measure-width {
+  width: var(--robot-width);
+  border-top: 1px dashed var(--robot-line-color);
+  top: calc(50% + (var(--robot-height) / 2) + 12px);
+  left: calc(50% - (var(--robot-width) / 2));
+
+  &::before,
+  &::after {
+    content: '';
+    position: absolute;
+    width: 0;
+    height: 6px;
+    border-left: 1px solid var(--robot-line-color);
+    top: -6px;
+  }
+
+  &::before { left: 0; }
+  &::after { right: 0; }
+}
+
+.robot-measure-height {
+  height: var(--robot-height);
+  border-left: 1px dashed var(--robot-line-color);
+  left: calc(50% + (var(--robot-width) / 2) + 12px);
+  top: calc(50% - (var(--robot-height) / 2));
+
+  &::before,
+  &::after {
+    content: '';
+    position: absolute;
+    height: 0;
+    width: 6px;
+    border-top: 1px solid var(--robot-line-color);
+    left: -6px;
+  }
+
+  &::before { top: 0; }
+  &::after { bottom: 0; }
+}
+
+.robot-measure-label {
+  position: absolute;
+  color: var(--robot-label-color);
+  white-space: nowrap;
+}
+
+.robot-measure-width-label {
+  top: calc(50% + (var(--robot-height) / 2) + 18px);
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.robot-measure-height-label {
+  left: calc(50% + (var(--robot-width) / 2) + 18px);
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+// Inline dimension editing
+.inline-dim-label {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 6px;
+  margin: -2px -6px;
+  border-radius: 4px;
+  background: transparent;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  color: var(--robot-label-color);
+
+  &:hover {
+    background: rgba(59, 130, 246, 0.1);
+    border-color: rgba(59, 130, 246, 0.3);
+  }
+}
+
+.inline-edit-container {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.inline-dim-input {
+  width: 56px !important;
+  padding: 2px 6px !important;
+  font-size: 12px !important;
+  font-family: ui-monospace, monospace !important;
+  text-align: center;
+  border-radius: 4px;
+
+  // Remove spinner arrows
+  &::-webkit-outer-spin-button,
+  &::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  -moz-appearance: textfield;
+}
+
+.inline-dim-unit {
+  font-size: 11px;
+  color: var(--robot-label-color);
+  font-family: ui-monospace, monospace;
+}
+
+// Sensor markers
+.sensor-marker {
+  position: absolute;
+  --dot-size: 12px;
+  inset: 0;
+  pointer-events: none;
+}
+
+.sensor-dot {
+  position: absolute;
+  width: var(--dot-size);
+  height: var(--dot-size);
+  border-radius: 9999px;
+  border: 2px solid white;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  left: clamp(calc(var(--dot-size) / 2), var(--sensor-x), calc(100% - (var(--dot-size) / 2)));
+  top: clamp(calc(var(--dot-size) / 2), var(--sensor-y), calc(100% - (var(--dot-size) / 2)));
+  transform: translate(-50%, -50%);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.sensor-clearance {
+  position: absolute;
+  width: var(--sensor-clear-x);
+  height: var(--sensor-clear-y);
+  border-radius: 9999px;
+  border: 1px dashed rgba(100, 116, 139, 0.5);
+  background: rgba(100, 116, 139, 0.05);
+  left: var(--sensor-x);
+  top: var(--sensor-y);
+  transform: translate(-50%, -50%);
+}
+
+:host-context(.dark) .sensor-clearance,
+:host-context(.p-dark) .sensor-clearance {
+  border-color: rgba(148, 163, 184, 0.4);
+  background: rgba(148, 163, 184, 0.1);
+}
+
+// Center point icons in sidebar
+.center-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  color: white;
+  font-weight: bold;
+}
+
+.center-icon-geometric {
+  background: #10b981; // emerald-500
+}
+
+.center-icon-rotation {
+  background: #8b5cf6; // violet-500
+}
+
+// Center markers on robot
+.center-marker {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  color: white;
+  font-weight: bold;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+  left: clamp(10px, var(--center-x), calc(100% - 10px));
+  top: clamp(10px, var(--center-y), calc(100% - 10px));
+  transform: translate(-50%, -50%);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.center-marker-geometric {
+  background: #10b981; // emerald-500
+  border: 2px solid white;
+}
+
+.center-marker-rotation {
+  background: #8b5cf6; // violet-500
+  border: 2px solid white;
+}
+
+.center-marker-selected {
+  transform: translate(-50%, -50%) scale(1.2);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.center-marker-fixed {
+  left: 50%;
+  top: 50%;
+  opacity: 0.6;
+}

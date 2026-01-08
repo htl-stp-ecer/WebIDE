@@ -78,6 +78,15 @@
       <i class="pi pi-objects-column"></i>
       <span class="ml-1 text-sm">{{ simulateRuns() ? ('FLOWCHART.SIM_SHORT' | translate) : ('FLOWCHART.REAL_SHORT' | translate) }}</span>
     </button>
+    <button
+      type="button"
+      class="toggle-chip"
+      (click)="openRobotSettings()"
+      [attr.aria-label]="'ROBOT_SETTINGS.TITLE' | translate"
+      [pTooltip]="'ROBOT_SETTINGS.TITLE' | translate"
+      tooltipPosition="bottom">
+      <i class="pi pi-cog"></i>
+    </button>
   </div>
 
   <div class="flow-surface" #flowSurface (contextmenu)="actions.onCanvasContextMenu($event)">
@@ -209,22 +218,19 @@
         (viewModeChange)="setTimingViewMode($event)"></app-timing-panel>
     }
 
-    <div class="bottom-right-stack">
-      <app-unity-canvas-panel
-        class="floating-panel"
-        [style.transform]="panelTransform('unity')"
-        (pointerdown)="startPanelDrag($event, 'unity')"
-        [baseUrl]="unityBaseUrl"
-        [visible]="isToggleEnabled('unityCanvas')"
-        [class.is-hidden]="!isToggleEnabled('unityCanvas')"></app-unity-canvas-panel>
-
-      <app-table-editor-panel
-        class="floating-panel"
-        [style.transform]="panelTransform('table')"
-        (pointerdown)="startPanelDrag($event, 'table')"
-        [class.is-hidden]="!isToggleEnabled('tableEditor')"></app-table-editor-panel>
-    </div>
+    <app-table-visualization-panel
+      class="floating-panel visualization-panel"
+      [style.transform]="panelTransform('unity')"
+      (pointerdown)="startPanelDrag($event, 'unity')"
+      [visible]="isToggleEnabled('tableVisualization')"
+      [class.is-hidden]="!isToggleEnabled('tableVisualization')"></app-table-visualization-panel>
   </div>
 
   <p-contextMenu #cm [model]="contextMenu.items" [appendTo]="'body'"></p-contextMenu>
+
+  <app-robot-settings-modal
+    [(visible)]="robotSettingsVisible"
+    [projectUuid]="projectUUID"
+    [typeDefinitions]="typeDefinitions()">
+  </app-robot-settings-modal>
 </div>

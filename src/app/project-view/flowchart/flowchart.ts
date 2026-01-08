@@ -29,10 +29,9 @@ import { createFlowchartActions, FlowchartActions } from './flowchart-actions';
 import { TypeDefinition } from '../../entities/TypeDefinition';
 import { Select } from 'primeng/select';
 import { DecimalPipe } from '@angular/common';
-import { UnityCanvasPanel } from './unity/unity-canvas-panel';
-import { TableEditorPanel } from './unity/table-editor-panel';
-import { UnityWebglService } from './unity/unity-webgl.service';
+import { TableVisualizationPanel } from './table/table-visualization-panel';
 import { TimingPanel, type TimingViewMode } from './timing/timing-panel';
+import { RobotSettingsModal } from './robot-settings/robot-settings-modal';
 
 interface DefinitionOption {
   label: string;
@@ -57,7 +56,7 @@ interface PanelDragState {
   surfaceRect: DOMRect;
 }
 
-const DEFAULT_VIEW_TOGGLE_STATE: Record<string, boolean> = { timestamps: true, unityCanvas: false, tableEditor: false };
+const DEFAULT_VIEW_TOGGLE_STATE: Record<string, boolean> = { timestamps: true, tableVisualization: false };
 const DEFAULT_PANEL_OFFSETS: Record<FloatingPanelKey, PanelOffset> = {
   timing: { x: 0, y: 0 },
   unity: { x: 0, y: 0 },
@@ -66,7 +65,7 @@ const DEFAULT_PANEL_OFFSETS: Record<FloatingPanelKey, PanelOffset> = {
 
 @Component({
   selector: 'app-flowchart',
-  imports: [FFlowComponent, FFlowModule, InputNumberModule, CheckboxModule, InputTextModule, ContextMenuModule, Tooltip, SelectButtonModule, FormsModule, TranslateModule, Select, DecimalPipe, UnityCanvasPanel, TableEditorPanel, TimingPanel],
+  imports: [FFlowComponent, FFlowModule, InputNumberModule, CheckboxModule, InputTextModule, ContextMenuModule, Tooltip, SelectButtonModule, FormsModule, TranslateModule, Select, DecimalPipe, TableVisualizationPanel, TimingPanel, RobotSettingsModal],
   templateUrl: './flowchart.html',
   styleUrl: './flowchart.scss',
   providers: [FlowHistory],
@@ -92,16 +91,16 @@ export class Flowchart implements AfterViewChecked, OnDestroy, OnInit {
   readonly historyManager: FlowchartHistoryManager;
   readonly runManager: FlowchartRunManager;
   readonly typeDefinitionOptions = signal<DefinitionGroups>({});
+  readonly typeDefinitions = signal<TypeDefinition[]>([]);
   readonly viewToggleState = signal<Record<string, boolean>>(readStoredViewToggleState(DEFAULT_VIEW_TOGGLE_STATE));
   readonly viewToggleOptions = [
     { key: 'timestamps', labelKey: 'FLOWCHART.VIEW_TOGGLE_TIMESTAMPS', icon: 'pi pi-clock' },
-    { key: 'unityCanvas', labelKey: 'FLOWCHART.VIEW_TOGGLE_SIMULATION', icon: 'pi pi-desktop' },
-    { key: 'tableEditor', labelKey: 'FLOWCHART.VIEW_TOGGLE_TABLE_EDITOR', icon: 'pi pi-table' },
+    { key: 'tableVisualization', labelKey: 'FLOWCHART.VIEW_TOGGLE_TABLE_VIZ', icon: 'pi pi-map' },
   ];
   readonly panelOffsets = signal<Record<FloatingPanelKey, PanelOffset>>({ ...DEFAULT_PANEL_OFFSETS });
-  unityBaseUrl = `${globalThis.location?.protocol ?? 'http:'}//${globalThis.location?.hostname ?? 'localhost'}:8000`;
   readonly timingViewMode = signal<TimingViewMode>('list');
   readonly simulateRuns = signal<boolean>(true);
+  readonly robotSettingsVisible = signal<boolean>(false);
   actions!: FlowchartActions;
   readonly eMarkerType = EFMarkerType;
   orientationOptions: { label: string; value: FlowOrientation }[] = [];
@@ -115,7 +114,6 @@ export class Flowchart implements AfterViewChecked, OnDestroy, OnInit {
   commentHeaderLabel = 'Comment';
   commentPlaceholder = 'Write a comment...';
   projectUUID: string | null = null;
-  unityBaseUrlSub?: Subscription;
   langChangeSub?: Subscription;
   themeObserver?: MutationObserver;
   typeDefinitionsSub?: Subscription;
@@ -126,7 +124,6 @@ export class Flowchart implements AfterViewChecked, OnDestroy, OnInit {
     readonly missionState: MissionStateService,
     readonly stepsState: StepsStateService,
     readonly http: HttpService,
-    readonly unity: UnityWebglService,
     readonly route: ActivatedRoute,
     readonly history: FlowHistory,
     readonly translate: TranslateService
@@ -139,9 +136,6 @@ export class Flowchart implements AfterViewChecked, OnDestroy, OnInit {
 
   ngOnInit(): void {
     this.loadTypeDefinitions();
-    this.unityBaseUrlSub = this.http.ip$.subscribe(ip => {
-      if (ip) this.unityBaseUrl = ip;
-    });
   }
 
   get useAutoLayout(): boolean {
@@ -167,7 +161,6 @@ export class Flowchart implements AfterViewChecked, OnDestroy, OnInit {
   ngOnDestroy(): void {
     this.actions.stopRun();
     this.stopPanelDrag();
-    this.unityBaseUrlSub?.unsubscribe();
     this.langChangeSub?.unsubscribe();
     this.themeObserver?.disconnect();
     this.typeDefinitionsSub?.unsubscribe();
@@ -178,11 +171,18 @@ export class Flowchart implements AfterViewChecked, OnDestroy, OnInit {
     const projectUUID = this.projectUUID;
     if (!projectUUID) {
       this.typeDefinitionOptions.set({});
+      this.typeDefinitions.set([]);
       return;
     }
     this.typeDefinitionsSub = this.http.getTypeDefinitions(projectUUID).subscribe({
-      next: defs => this.typeDefinitionOptions.set(this.groupDefinitionsByType(defs)),
-      error: () => this.typeDefinitionOptions.set({}),
+      next: defs => {
+        this.typeDefinitions.set(defs);
+        this.typeDefinitionOptions.set(this.groupDefinitionsByType(defs));
+      },
+      error: () => {
+        this.typeDefinitions.set([]);
+        this.typeDefinitionOptions.set({});
+      },
     });
   }
 
@@ -204,6 +204,10 @@ export class Flowchart implements AfterViewChecked, OnDestroy, OnInit {
 
   toggleSimulation(): void {
     this.simulateRuns.update(prev => !prev);
+  }
+
+  openRobotSettings(): void {
+    this.robotSettingsVisible.set(true);
   }
 
   panelTransform(key: FloatingPanelKey): string {

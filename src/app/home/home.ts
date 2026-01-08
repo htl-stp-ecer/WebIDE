@@ -148,7 +148,14 @@ export class Home implements OnInit, OnDestroy {
 
   private isCorsLikeError(err: any): boolean {
     const message = (err?.message || err?.statusText || '').toString();
-    return err?.status === 0 || /CORS/i.test(message) || /TypeError/i.test(err?.name);
+    const name = (err?.name || '').toString();
+
+    // Exclude timeout errors
+    if (/timeout/i.test(message) || /timeout/i.test(name)) {
+      return false;
+    }
+
+    return err?.status === 0 || /CORS/i.test(message) || /TypeError/i.test(name);
   }
 
   private buildConfirmUrl(ip: string): string {

@@ -1,0 +1,122 @@
+<div class="editor-toolbar">
+  <!-- Tool selection -->
+  <div class="tool-group">
+    @for (tool of toolOptions; track tool.value) {
+      <button
+        type="button"
+        class="tool-btn"
+        [class.active]="activeTool() === tool.value"
+        (click)="toolChange.emit(tool.value)"
+        [pTooltip]="tool.labelKey | translate"
+        tooltipPosition="bottom">
+        <i [class]="tool.icon"></i>
+      </button>
+    }
+  </div>
+
+  <div class="toolbar-divider"></div>
+
+  <!-- Color selection -->
+  <div class="color-group">
+    @for (opt of colorOptions; track opt.value) {
+      <button
+        type="button"
+        class="color-btn"
+        [class.active]="selectedColor() === opt.value"
+        [class.disabled]="activeTool() === 'eraser'"
+        [style.--swatch-color]="opt.hex"
+        (click)="colorChange.emit(opt.value)"
+        [pTooltip]="opt.labelKey | translate"
+        tooltipPosition="bottom"
+        [disabled]="activeTool() === 'eraser'">
+        <span class="color-swatch"></span>
+      </button>
+    }
+  </div>
+
+  <div class="toolbar-divider"></div>
+
+  <!-- Zoom controls -->
+  <div class="zoom-group">
+    <button
+      type="button"
+      class="tool-btn"
+      (click)="zoomOut()"
+      [pTooltip]="'FLOWCHART.TABLE_ZOOM_OUT' | translate"
+      tooltipPosition="bottom">
+      <i class="pi pi-minus"></i>
+    </button>
+
+    <select
+      class="zoom-select"
+      [value]="zoom()"
+      (change)="onZoomSelect($event)">
+      @for (level of zoomLevels; track level) {
+        <option [value]="level" [selected]="zoom() === level">
+          {{ level * 100 }}%
+        </option>
+      }
+    </select>
+
+    <button
+      type="button"
+      class="tool-btn"
+      (click)="zoomIn()"
+      [pTooltip]="'FLOWCHART.TABLE_ZOOM_IN' | translate"
+      tooltipPosition="bottom">
+      <i class="pi pi-plus"></i>
+    </button>
+
+    <button
+      type="button"
+      class="tool-btn"
+      (click)="zoomToFit.emit()"
+      [pTooltip]="'FLOWCHART.TABLE_FIT_VIEW' | translate"
+      tooltipPosition="bottom">
+      <i class="pi pi-expand"></i>
+    </button>
+  </div>
+
+  <div class="toolbar-divider"></div>
+
+  <!-- Grid toggle -->
+  <button
+    type="button"
+    class="tool-btn"
+    [class.active]="showGrid()"
+    (click)="gridToggle.emit()"
+    [pTooltip]="'FLOWCHART.TABLE_TOGGLE_GRID' | translate"
+    tooltipPosition="bottom">
+    <i class="pi pi-th-large"></i>
+  </button>
+
+  <div class="toolbar-spacer"></div>
+
+  <!-- Actions -->
+  <div class="action-group">
+    <button
+      type="button"
+      class="tool-btn"
+      (click)="uploadRequest.emit()"
+      [pTooltip]="'FLOWCHART.TABLE_UPLOAD' | translate"
+      tooltipPosition="bottom">
+      <i class="pi pi-upload"></i>
+    </button>
+
+    <button
+      type="button"
+      class="tool-btn"
+      (click)="clearRequest.emit()"
+      [pTooltip]="'FLOWCHART.TABLE_CLEAR' | translate"
+      tooltipPosition="bottom">
+      <i class="pi pi-trash"></i>
+    </button>
+
+    <button
+      type="button"
+      class="action-btn primary"
+      (click)="loadMapRequest.emit()">
+      {{ 'FLOWCHART.TABLE_LOAD' | translate }}
+    </button>
+  </div>
+</div>

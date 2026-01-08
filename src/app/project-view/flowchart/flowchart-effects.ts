@@ -37,17 +37,4 @@ export function setupFlowchartEffects(flow: Flowchart): void {
     }
     flow.historyManager.applySnapshotFromHistory();
   });
-
-  effect(() => {
-    flow.history.changes();
-    flow.unity.status();
-    const mission = flow.missionState.currentMission();
-    const isRunning = flow.isRunActive();
-    untracked(() => {
-      if (isRunning) {
-        return;
-      }
-      flow.runManager.scheduleUnityPreview(mission);
-    });
-  });
 }
