@@ -10,6 +10,7 @@ import { TypeDefinition } from '../../../entities/TypeDefinition';
 import { Subject } from 'rxjs';
 import { debounceTime } from 'rxjs/operators';
 import { TableEditorView } from '../table/table-editor-view';
+import { TableVisualizationService } from '../table/services';
 
 type SettingsTab = 'robot' | 'map';
 type EditTarget = { type: 'sensor'; id: number } | { type: 'rotation' } | null;
@@ -75,7 +76,8 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
 
   constructor(
     private http: HttpService,
-    private translate: TranslateService
+    private translate: TranslateService,
+    private vizService: TableVisualizationService
   ) {
     // Debounce persistence during drag
     this.persistSubject.pipe(debounceTime(300)).subscribe(() => {
@@ -120,6 +122,7 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
         this.tempLength = this.toDimensionString(info.length_cm);
         this.deviceSensors = info.sensors ?? [];
         this.rotationCenter = info.rotation_center ?? null;
+        this.syncTableVisualizationDimensions(info);
         this.syncSensorsFromDefinitions();
         this.loading = false;
       },
@@ -193,6 +196,7 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
         this.connectionInfo = info;
         this.tempWidth = this.toDimensionString(info.width_cm);
         this.tempLength = this.toDimensionString(info.length_cm);
+        this.syncTableVisualizationDimensions(info);
         // Clamp centers and sensors to new bounds (they stay in percentage, so no action needed)
         // But clearances might need clamping if they exceed new dimensions
         this.clampClearancesToDimensions();
@@ -236,6 +240,14 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
 
   formatDimension(value: number | undefined | null): string {
     return value === undefined || value === null ? '--' : value.toString();
+  }
+
+  private syncTableVisualizationDimensions(info?: ConnectionInfo) {
+    const width = info?.width_cm;
+    const length = info?.length_cm;
+    if (typeof width === 'number' && typeof length === 'number' && width > 0 && length > 0) {
+      this.vizService.setRobotDimensions(width, length);
+    }
   }
 
   // Sensors
