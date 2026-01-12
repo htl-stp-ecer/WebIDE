@@ -10,6 +10,12 @@ interface DeviceCenterPoint {
   y_pct: number;
 }
 
+interface DeviceStartPose {
+  x_cm: number;
+  y_cm: number;
+  theta_deg: number;
+}
+
 interface ConnectionInfo {
   hostname: string;
   ip: string;
@@ -18,4 +24,5 @@ interface ConnectionInfo {
   length_cm?: number;
   sensors?: DeviceSensorInfo[];
   rotation_center?: DeviceCenterPoint;
+  start_pose?: DeviceStartPose;
 }

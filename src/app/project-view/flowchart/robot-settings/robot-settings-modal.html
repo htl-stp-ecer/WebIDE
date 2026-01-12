@@ -374,7 +374,9 @@
           [visible]="true"
           [showHeader]="false"
           [embedded]="true"
-          [allowStartPoseEdit]="true">
+          [allowStartPoseEdit]="true"
+          [showPaths]="false"
+          (startPoseChange)="onStartPosePicked($event)">
         </app-table-visualization-panel>
       </div>
     </div>

@@ -78,6 +78,12 @@ export class HttpService {
     });
   }
 
+  updateDeviceStartPose(startPose: { x_cm: number; y_cm: number; theta_deg: number }) {
+    return this.http.put<ConnectionInfo>(`${this.ip}/api/v1/device/start-pose`, {
+      start_pose: startPose,
+    });
+  }
+
   getAllProjects() {
     return this.http.get<Project[]>(`${this.ip}/api/v1/projects`);
   }

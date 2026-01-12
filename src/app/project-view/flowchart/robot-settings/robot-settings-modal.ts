@@ -12,7 +12,7 @@ import { debounceTime } from 'rxjs/operators';
 import { TableEditorView } from '../table/table-editor-view';
 import { TableVisualizationPanel } from '../table/table-visualization-panel';
 import { TableMapService, TableVisualizationService } from '../table/services';
-import { thetaToDegrees } from '../table/models';
+import { Pose2D, thetaToDegrees } from '../table/models';
 
 type SettingsTab = 'robot' | 'start' | 'map';
 type EditTarget = { type: 'sensor'; id: number } | { type: 'rotation' } | null;
@@ -75,6 +75,7 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
   private isDragging = false;
   private persistSubject = new Subject<void>();
   private persistCentersSubject = new Subject<void>();
+  private persistStartPoseSubject = new Subject<void>();
 
   constructor(
     private http: HttpService,
@@ -88,6 +89,9 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
     });
     this.persistCentersSubject.pipe(debounceTime(300)).subscribe(() => {
       this.persistCentersToServer();
+    });
+    this.persistStartPoseSubject.pipe(debounceTime(300)).subscribe(() => {
+      this.persistStartPoseToServer();
     });
   }
 
@@ -127,6 +131,7 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
         this.rotationCenter = info.rotation_center ?? null;
         this.syncTableVisualizationDimensions(info);
         this.syncTableVisualizationRotationCenter(info, info.rotation_center ?? null);
+        this.syncTableVisualizationStartPose(info);
         this.syncSensorsFromDefinitions();
         this.loading = false;
       },
@@ -280,6 +285,12 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
     const strafeCm = (width / 2) - xCm;
 
     this.vizService.setRotationCenter(forwardCm, strafeCm);
+  }
+
+  private syncTableVisualizationStartPose(info?: ConnectionInfo) {
+    const pose = info?.start_pose;
+    if (!pose) return;
+    this.vizService.setStartPose(pose.x_cm, pose.y_cm, pose.theta_deg);
   }
 
   // Sensors
@@ -596,6 +607,14 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
     this.updateStartPose({ thetaDeg: value });
   }
 
+  onStartPosePicked(pose: Pose2D) {
+    this.updateStartPose({
+      x: pose.x,
+      y: pose.y,
+      thetaDeg: thetaToDegrees(pose.theta),
+    });
+  }
+
   private roundToTwo(value: number): number {
     return Math.round(value * 100) / 100;
   }
@@ -607,6 +626,7 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
     const nextY = this.clampValue(this.coerceNumber(update.y, current.y), 0, config.heightCm);
     const nextTheta = this.coerceNumber(update.thetaDeg, thetaToDegrees(current.theta));
     this.vizService.setStartPose(nextX, nextY, nextTheta);
+    this.persistStartPoseSubject.next();
   }
 
   private coerceNumber(value: number | null | undefined, fallback: number): number {
@@ -617,5 +637,24 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
 
   private clampValue(value: number, min: number, max: number): number {
     return Math.min(Math.max(value, min), max);
+  }
+
+  private persistStartPoseToServer() {
+    const pose = this.vizService.startPose();
+    this.http.updateDeviceStartPose({
+      x_cm: pose.x,
+      y_cm: pose.y,
+      theta_deg: thetaToDegrees(pose.theta),
+    }).subscribe({
+      next: info => {
+        this.connectionInfo = info;
+      },
+      error: () => {
+        NotificationService.showError(
+          this.translate.instant('ROBOT_SETTINGS.START_POSE_SAVE_ERROR'),
+          this.translate.instant('COMMON.ERROR')
+        );
+      }
+    });
   }
 }

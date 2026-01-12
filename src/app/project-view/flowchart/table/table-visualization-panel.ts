@@ -7,6 +7,8 @@ import {
   inject,
   effect,
   input,
+  EventEmitter,
+  Output,
 } from '@angular/core';
 import { TranslateModule } from '@ngx-translate/core';
 import { TableMapService } from './services';
@@ -38,6 +40,8 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
   readonly allowStartPoseEdit = input<boolean>(false);
   readonly showHeader = input<boolean>(true);
   readonly embedded = input<boolean>(false);
+  readonly showPaths = input<boolean>(true);
+  @Output() startPoseChange = new EventEmitter<Pose2D>();
 
   readonly mapService = inject(TableMapService);
   readonly vizService = inject(TableVisualizationService);
@@ -126,13 +130,19 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
     this.renderMap(width, height);
 
     // Draw planned path
-    this.renderPlannedPath(width, height);
+    if (this.showPaths()) {
+      this.renderPlannedPath(width, height);
+    }
 
     // Draw path
-    this.renderPath(width, height);
+    if (this.showPaths()) {
+      this.renderPath(width, height);
+    }
 
     // Draw ghost robot at planned end position
-    this.renderGhostRobot(width, height);
+    if (this.showPaths()) {
+      this.renderGhostRobot(width, height);
+    }
 
     // Draw robot
     this.renderRobot(width, height);
@@ -554,6 +564,12 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
     if (!tablePos) return;
 
     const current = this.vizService.startPose();
-    this.vizService.setStartPose(tablePos.x, tablePos.y, thetaToDegrees(current.theta));
+    const nextPose: Pose2D = {
+      x: tablePos.x,
+      y: tablePos.y,
+      theta: current.theta,
+    };
+    this.vizService.setStartPose(nextPose.x, nextPose.y, thetaToDegrees(nextPose.theta));
+    this.startPoseChange.emit(nextPose);
   }
 }
