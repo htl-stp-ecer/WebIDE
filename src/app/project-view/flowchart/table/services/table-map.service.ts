@@ -6,8 +6,10 @@ export interface MapConfig {
   pixelsPerCm: number;
 }
 
-/** Constant: 1 pixel = 1 inch = 2.54 cm */
-export const CM_PER_PIXEL = 2.54;
+/** Constants: 79px width maps to 200 cm, 40px height maps to 100 cm */
+export const CM_PER_PIXEL_X = 200 / 79;
+export const CM_PER_PIXEL_Y = 100 / 40;
+const CM_PER_PIXEL_AVG = (CM_PER_PIXEL_X + CM_PER_PIXEL_Y) / 2;
 
 /** Line segment in table coordinates (cm) */
 export interface LineSegmentCm {
@@ -67,11 +69,11 @@ export class TableMapService {
   private readonly _mapImage = signal<HTMLImageElement | null>(null);
   private readonly _imageData = signal<ImageData | null>(null);
   private readonly _parsedData = signal<ParsedMapData | null>(null);
-  // Default dimensions: 79x40 pixels * 2.54 cm/pixel
+  // Default dimensions: 79x40 pixels mapped to 200x100 cm
   private readonly _config = signal<MapConfig>({
-    widthCm: 79 * CM_PER_PIXEL,  // ~200.66 cm
-    heightCm: 40 * CM_PER_PIXEL, // ~101.6 cm
-    pixelsPerCm: 1 / CM_PER_PIXEL,
+    widthCm: 79 * CM_PER_PIXEL_X,  // 200 cm
+    heightCm: 40 * CM_PER_PIXEL_Y, // 100 cm
+    pixelsPerCm: 1 / CM_PER_PIXEL_AVG,
   });
 
   readonly mapImage = this._mapImage.asReadonly();
@@ -96,7 +98,7 @@ export class TableMapService {
 
     return data.wallSegments.map(seg => ({
       ...this.pixelSegmentToTableCm(seg, data.height),
-      thickness: seg.thickness * CM_PER_PIXEL,
+      thickness: seg.thickness * CM_PER_PIXEL_AVG,
     }));
   });
 
@@ -105,10 +107,10 @@ export class TableMapService {
     imgHeight: number
   ): { startX: number; startY: number; endX: number; endY: number } {
     return {
-      startX: seg.startX * CM_PER_PIXEL,
-      startY: (imgHeight - seg.startY) * CM_PER_PIXEL,
-      endX: seg.endX * CM_PER_PIXEL,
-      endY: (imgHeight - seg.endY) * CM_PER_PIXEL,
+      startX: seg.startX * CM_PER_PIXEL_X,
+      startY: (imgHeight - seg.startY) * CM_PER_PIXEL_Y,
+      endX: seg.endX * CM_PER_PIXEL_X,
+      endY: (imgHeight - seg.endY) * CM_PER_PIXEL_Y,
     };
   }
 
@@ -125,9 +127,9 @@ export class TableMapService {
 
         this._config.update(c => ({
           ...c,
-          widthCm: img.width * CM_PER_PIXEL,
-          heightCm: img.height * CM_PER_PIXEL,
-          pixelsPerCm: 1 / CM_PER_PIXEL,
+          widthCm: img.width * CM_PER_PIXEL_X,
+          heightCm: img.height * CM_PER_PIXEL_Y,
+          pixelsPerCm: 1 / CM_PER_PIXEL_AVG,
         }));
 
         resolve();
@@ -164,8 +166,8 @@ export class TableMapService {
     const img = this._mapImage();
     if (!imageData || !img) return false;
 
-    const imgCol = Math.round(xCm / CM_PER_PIXEL);
-    const imgRow = img.height - 1 - Math.round(yCm / CM_PER_PIXEL);
+    const imgCol = Math.round(xCm / CM_PER_PIXEL_X);
+    const imgRow = img.height - 1 - Math.round(yCm / CM_PER_PIXEL_Y);
 
     if (imgCol < 0 || imgCol >= img.width || imgRow < 0 || imgRow >= img.height) {
       return false;
