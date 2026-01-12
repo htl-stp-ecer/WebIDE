@@ -256,6 +256,22 @@ export class TableMapService {
     return avg >= GRAY_MIN && avg <= GRAY_MAX && maxDiff < 30;
   }
 
+  private isGrayBoundary(data: Uint8ClampedArray, x: number, y: number, width: number, height: number): boolean {
+    if (!this.isGray(data, x, y, width, height)) return false;
+
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        if (dx === 0 && dy === 0) continue;
+        const nx = x + dx;
+        const ny = y + dy;
+        if (nx < 0 || nx >= width || ny < 0 || ny >= height) return true;
+        if (!this.isGray(data, nx, ny, width, height)) return true;
+      }
+    }
+
+    return false;
+  }
+
   private extractBlackLines(imageData: ImageData, width: number, height: number): LineSegment[] {
     const segments: LineSegment[] = [];
     const visited = new Uint8Array(width * height);
@@ -406,7 +422,7 @@ export class TableMapService {
 
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
-        if (!this.isGray(data, x, y, width, height)) continue;
+        if (!this.isGrayBoundary(data, x, y, width, height)) continue;
         if (visited[y * width + x]) continue;
 
         for (const dir of directions) {
@@ -455,7 +471,7 @@ export class TableMapService {
         nextX < width &&
         nextY >= 0 &&
         nextY < height &&
-        this.isGray(data, nextX, nextY, width, height) &&
+        this.isGrayBoundary(data, nextX, nextY, width, height) &&
         !visited[nextY * width + nextX]
       ) {
         currentX = nextX;
@@ -471,7 +487,7 @@ export class TableMapService {
 
         if (
           hx >= 0 && hx < width && hy >= 0 && hy < height &&
-          this.isGray(data, hx, hy, width, height) &&
+          this.isGrayBoundary(data, hx, hy, width, height) &&
           !visited[hy * width + hx]
         ) {
           currentX = hx;
@@ -481,7 +497,7 @@ export class TableMapService {
 
         if (
           vx >= 0 && vx < width && vy >= 0 && vy < height &&
-          this.isGray(data, vx, vy, width, height) &&
+          this.isGrayBoundary(data, vx, vy, width, height) &&
           !visited[vy * width + vx]
         ) {
           currentX = vx;
@@ -526,12 +542,20 @@ export class TableMapService {
 
   private connectNearbyEndpoints(segments: WallSegment[]): WallSegment[] {
     const MAX_GAP = 5;
+    const ALIGN_THRESHOLD = 0.85;
     const result = [...segments];
 
-    const endpoints: Array<{ x: number; y: number; segIndex: number; isStart: boolean }> = [];
+    const segDirs = segments.map(seg => {
+      const dx = seg.endX - seg.startX;
+      const dy = seg.endY - seg.startY;
+      const len = Math.hypot(dx, dy);
+      return len > 0 ? { x: dx / len, y: dy / len } : { x: 0, y: 0 };
+    });
+
+    const endpoints: Array<{ x: number; y: number; segIndex: number }> = [];
     segments.forEach((seg, i) => {
-      endpoints.push({ x: seg.startX, y: seg.startY, segIndex: i, isStart: true });
-      endpoints.push({ x: seg.endX, y: seg.endY, segIndex: i, isStart: false });
+      endpoints.push({ x: seg.startX, y: seg.startY, segIndex: i });
+      endpoints.push({ x: seg.endX, y: seg.endY, segIndex: i });
     });
 
     const connected = new Set<string>();
@@ -543,9 +567,18 @@ export class TableMapService {
 
         if (p1.segIndex === p2.segIndex) continue;
 
-        const dist = Math.sqrt(Math.pow(p2.x - p1.x, 2) + Math.pow(p2.y - p1.y, 2));
+        const dx = p2.x - p1.x;
+        const dy = p2.y - p1.y;
+        const dist = Math.hypot(dx, dy);
 
         if (dist > 0.5 && dist <= MAX_GAP) {
+          const dir = { x: dx / dist, y: dy / dist };
+          const dir1 = segDirs[p1.segIndex];
+          const dir2 = segDirs[p2.segIndex];
+          const align1 = Math.abs(dir.x * dir1.x + dir.y * dir1.y);
+          const align2 = Math.abs(dir.x * dir2.x + dir.y * dir2.y);
+          if (align1 < ALIGN_THRESHOLD || align2 < ALIGN_THRESHOLD) continue;
+
           const key = `${Math.min(p1.x, p2.x)},${Math.min(p1.y, p2.y)}-${Math.max(p1.x, p2.x)},${Math.max(p1.y, p2.y)}`;
           if (!connected.has(key)) {
             connected.add(key);
