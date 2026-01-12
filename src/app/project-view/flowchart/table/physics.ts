@@ -122,7 +122,7 @@ function simulateSegment(
       theta: normalizeAngle(current.theta + stepTheta),
     };
 
-    const collision = stepDist > EPS ? findCollision(attempted, robotConfig, walls) : null;
+    const collision = stepDist > EPS ? findCollision(attempted, stepMove, robotConfig, walls) : null;
     if (!collision) {
       current = attempted;
       remainingMove = {
@@ -181,6 +181,7 @@ function simulateSegment(
 
 function findCollision(
   pose: Pose2D,
+  moveVec: Vec2,
   robotConfig: RobotConfig,
   walls: WallSegment[]
 ): CollisionInfo | null {
@@ -188,6 +189,9 @@ function findCollision(
   for (const wall of walls) {
     const collision = computeCollision(pose, robotConfig, wall);
     if (!collision) continue;
+    if (length(moveVec) > EPS && dot(moveVec, collision.normal) >= -EPS) {
+      continue;
+    }
     if (!best || collision.depth > best.depth) {
       best = collision;
     }
