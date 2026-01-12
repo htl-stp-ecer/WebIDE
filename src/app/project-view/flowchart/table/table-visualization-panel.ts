@@ -25,6 +25,7 @@ const WALL_THICKNESS_CM = 2.54;
 
 /** Wall color */
 const WALL_COLOR = '#6b7280';
+const HIGHLIGHT_COLOR = '#3b82f6';
 
 @Component({
   selector: 'app-table-visualization-panel',
@@ -52,6 +53,7 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
   private adjustedPlannedPath: Pose2D[] | null = null;
   private adjustedComputedPath: ComputedPath | null = null;
   private adjustedPlannedMissionEnds: Pose2D[] | null = null;
+  private adjustedPlannedHighlightRange: { startIndex: number; endIndex: number } | null = null;
 
   constructor() {
     effect(() => {
@@ -64,6 +66,7 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
       const collisionWalls = buildCollisionWalls(wallSegments, mapConfig);
       const plannedPath = this.vizService.plannedPath();
       const plannedMissionEndIndices = this.vizService.plannedMissionEndIndices();
+      const plannedHighlightRange = this.vizService.plannedHighlightRange();
       const computedPath = this.vizService.computedPath();
       if (plannedPath) {
         const adjustedPlanned = applyWallPhysicsToPathWithSegments(plannedPath, robotConfig, collisionWalls);
@@ -71,9 +74,13 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
         this.adjustedPlannedMissionEnds = plannedMissionEndIndices?.length
           ? this.mapMissionEndIndices(plannedMissionEndIndices, adjustedPlanned, plannedPath.length)
           : null;
+        this.adjustedPlannedHighlightRange = plannedHighlightRange
+          ? this.mapPlannedRange(plannedHighlightRange, adjustedPlanned, plannedPath.length)
+          : null;
       } else {
         this.adjustedPlannedPath = null;
         this.adjustedPlannedMissionEnds = null;
+        this.adjustedPlannedHighlightRange = null;
       }
       this.adjustedComputedPath = computedPath
         ? this.applyWallPhysicsToComputedPath(computedPath, robotConfig, collisionWalls)
@@ -376,6 +383,25 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
       this.ctx.lineTo(end.x, end.y);
       this.ctx.stroke();
     }
+
+    const highlightRange = this.adjustedPlannedHighlightRange;
+    if (!highlightRange) return;
+    const startIndex = Math.max(0, Math.min(highlightRange.startIndex, planned.length - 1));
+    const endIndex = Math.max(0, Math.min(highlightRange.endIndex, planned.length - 1));
+    const rangeStart = Math.min(startIndex, endIndex);
+    const rangeEnd = Math.max(startIndex, endIndex);
+    if (rangeEnd <= rangeStart) return;
+
+    this.ctx.strokeStyle = HIGHLIGHT_COLOR;
+    this.ctx.lineWidth = 3;
+    for (let i = rangeStart; i < rangeEnd; i++) {
+      const start = this.tableToCanvas(planned[i], width, height);
+      const end = this.tableToCanvas(planned[i + 1], width, height);
+      this.ctx.beginPath();
+      this.ctx.moveTo(start.x, start.y);
+      this.ctx.lineTo(end.x, end.y);
+      this.ctx.stroke();
+    }
   }
 
   private getStepColor(steps: any[], index: number): string {
@@ -580,6 +606,43 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
       return missionEndIndices.map(() => adjusted.poses[0]);
     }
 
+    const segmentEndIndex = this.buildSegmentEndIndex(adjusted, segmentCount);
+
+    return missionEndIndices
+      .filter(index => index >= 0)
+      .map(index => {
+        if (index === 0) return adjusted.poses[0];
+        const segmentIndex = Math.min(index - 1, segmentCount - 1);
+        const adjustedIndex = segmentEndIndex[segmentIndex] ?? 0;
+        return adjusted.poses[adjustedIndex] ?? adjusted.poses[0];
+      });
+  }
+
+  private mapPlannedRange(
+    range: { startIndex: number; endIndex: number },
+    adjusted: PathWithSegments,
+    plannedLength: number
+  ): { startIndex: number; endIndex: number } | null {
+    if (!adjusted.poses.length) return null;
+    const segmentCount = Math.max(0, plannedLength - 1);
+    if (segmentCount === 0) {
+      return { startIndex: 0, endIndex: 0 };
+    }
+
+    const segmentEndIndex = this.buildSegmentEndIndex(adjusted, segmentCount);
+    const mapIndex = (index: number): number => {
+      if (index <= 0) return 0;
+      const segmentIndex = Math.min(index - 1, segmentCount - 1);
+      return segmentEndIndex[segmentIndex] ?? 0;
+    };
+
+    return {
+      startIndex: mapIndex(range.startIndex),
+      endIndex: mapIndex(range.endIndex),
+    };
+  }
+
+  private buildSegmentEndIndex(adjusted: PathWithSegments, segmentCount: number): number[] {
     const segmentEndIndex = new Array<number>(segmentCount).fill(0);
     for (let i = 0; i < adjusted.segments.length; i++) {
       const segmentIndex = adjusted.segments[i];
@@ -593,14 +656,7 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
       }
     }
 
-    return missionEndIndices
-      .filter(index => index >= 0)
-      .map(index => {
-        if (index === 0) return adjusted.poses[0];
-        const segmentIndex = Math.min(index - 1, segmentCount - 1);
-        const adjustedIndex = segmentEndIndex[segmentIndex] ?? 0;
-        return adjusted.poses[adjustedIndex] ?? adjusted.poses[0];
-      });
+    return segmentEndIndex;
   }
 
   onCanvasPointerDown(event: PointerEvent): void {

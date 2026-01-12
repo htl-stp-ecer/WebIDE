@@ -98,6 +98,14 @@ export function buildPlannedPathFromSimulation(
 export interface PlannedProjectPath {
   poses: Pose2D[];
   missionEndIndices: number[];
+  missionRanges: MissionPlannedRange[];
+}
+
+export interface MissionPlannedRange {
+  name: string;
+  order: number;
+  startIndex: number;
+  endIndex: number;
 }
 
 export function buildPlannedPathFromProjectSimulation(
@@ -107,16 +115,25 @@ export function buildPlannedPathFromProjectSimulation(
   const missions = [...(simulation.missions ?? [])].sort((a, b) => a.order - b.order);
   const poses: Pose2D[] = [startPose];
   const missionEndIndices: number[] = [];
+  const missionRanges: MissionPlannedRange[] = [];
   let current = startPose;
 
   for (const mission of missions) {
+    const startIndex = poses.length - 1;
     const missionPath = buildPlannedPathFromSimulation(current, mission);
     if (missionPath.length > 1) {
       poses.push(...missionPath.slice(1));
-      missionEndIndices.push(poses.length - 1);
     }
+    const endIndex = poses.length - 1;
+    missionEndIndices.push(endIndex);
+    missionRanges.push({
+      name: mission.name,
+      order: mission.order,
+      startIndex,
+      endIndex,
+    });
     current = missionPath[missionPath.length - 1] ?? current;
   }
 
-  return { poses, missionEndIndices };
+  return { poses, missionEndIndices, missionRanges };
 }

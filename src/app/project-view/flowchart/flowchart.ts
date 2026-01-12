@@ -219,6 +219,7 @@ export class Flowchart implements AfterViewChecked, OnDestroy, OnInit {
     if (!mission || !this.projectUUID) {
       this.tableViz.setPlannedPath(null);
       this.tableViz.setPlannedMissionEndIndices(null);
+      this.tableViz.setPlannedHighlightRange(null);
       return;
     }
 
@@ -226,15 +227,20 @@ export class Flowchart implements AfterViewChecked, OnDestroy, OnInit {
       next: data => {
         const startPose = this.tableViz.startPose();
         const planned = buildPlannedPathFromProjectSimulation(startPose, data);
+        const highlightRange = planned.missionRanges.find(range => range.name === mission.name) ?? null;
         this.tableViz.setPlannedPath(planned.poses.length > 1 ? planned.poses : null);
         this.tableViz.setPlannedMissionEndIndices(
           planned.missionEndIndices.length ? planned.missionEndIndices : null
+        );
+        this.tableViz.setPlannedHighlightRange(
+          highlightRange ? { startIndex: highlightRange.startIndex, endIndex: highlightRange.endIndex } : null
         );
       },
       error: err => {
         console.warn('[Flowchart] Failed to load simulation data', err);
         this.tableViz.setPlannedPath(null);
         this.tableViz.setPlannedMissionEndIndices(null);
+        this.tableViz.setPlannedHighlightRange(null);
       },
     });
   }
