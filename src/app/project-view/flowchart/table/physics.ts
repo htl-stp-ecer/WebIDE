@@ -1,5 +1,5 @@
 import { MapConfig, WallSegmentCm } from './services';
-import { Pose2D, normalizeAngle } from './models';
+import { Pose2D, applyLocalDelta, normalizeAngle } from './models';
 import { RobotConfig } from './services';
 
 interface Vec2 {
@@ -65,7 +65,9 @@ export function applyWallPhysicsToPathWithSegments(
   let current = poses[0];
 
   for (let i = 0; i < poses.length - 1; i++) {
-    const target = poses[i + 1];
+    const plannedStart = poses[i];
+    const plannedEnd = poses[i + 1];
+    const target = applyLocalDeltaFromPlan(current, plannedStart, plannedEnd);
     const segmentPoses = simulateSegment(current, target, robotConfig, walls);
     if (segmentPoses.length) {
       for (const pose of segmentPoses) {
@@ -79,6 +81,17 @@ export function applyWallPhysicsToPathWithSegments(
   }
 
   return { poses: output, segments };
+}
+
+function applyLocalDeltaFromPlan(current: Pose2D, plannedStart: Pose2D, plannedEnd: Pose2D): Pose2D {
+  const dxWorld = plannedEnd.x - plannedStart.x;
+  const dyWorld = plannedEnd.y - plannedStart.y;
+  const cos = Math.cos(plannedStart.theta);
+  const sin = Math.sin(plannedStart.theta);
+  const dxLocal = dxWorld * cos + dyWorld * sin;
+  const dyLocal = -dxWorld * sin + dyWorld * cos;
+  const dTheta = normalizeAngle(plannedEnd.theta - plannedStart.theta);
+  return applyLocalDelta(current, dxLocal, dyLocal, dTheta);
 }
 
 interface CollisionInfo {
