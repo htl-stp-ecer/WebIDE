@@ -1,4 +1,4 @@
-import { MissionSimulationData, SimulationStepData } from '../../../entities/Simulation';
+import { MissionSimulationData, ProjectSimulationData, SimulationStepData } from '../../../entities/Simulation';
 import { Pose2D, applyLocalDelta } from './models';
 
 const EPSILON = 1e-6;
@@ -93,4 +93,30 @@ export function buildPlannedPathFromSimulation(
   }
 
   return poses;
+}
+
+export interface PlannedProjectPath {
+  poses: Pose2D[];
+  missionEndIndices: number[];
+}
+
+export function buildPlannedPathFromProjectSimulation(
+  startPose: Pose2D,
+  simulation: ProjectSimulationData
+): PlannedProjectPath {
+  const missions = [...(simulation.missions ?? [])].sort((a, b) => a.order - b.order);
+  const poses: Pose2D[] = [startPose];
+  const missionEndIndices: number[] = [];
+  let current = startPose;
+
+  for (const mission of missions) {
+    const missionPath = buildPlannedPathFromSimulation(current, mission);
+    if (missionPath.length > 1) {
+      poses.push(...missionPath.slice(1));
+      missionEndIndices.push(poses.length - 1);
+    }
+    current = missionPath[missionPath.length - 1] ?? current;
+  }
+
+  return { poses, missionEndIndices };
 }

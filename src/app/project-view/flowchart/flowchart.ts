@@ -34,7 +34,7 @@ import { TableVisualizationPanel } from './table/table-visualization-panel';
 import { TimingPanel, type TimingViewMode } from './timing/timing-panel';
 import { RobotSettingsModal } from './robot-settings/robot-settings-modal';
 import { TableVisualizationService } from './table/services';
-import { buildPlannedPathFromSimulation } from './table/simulation-path';
+import { buildPlannedPathFromProjectSimulation } from './table/simulation-path';
 
 interface DefinitionOption {
   label: string;
@@ -218,18 +218,23 @@ export class Flowchart implements AfterViewChecked, OnDestroy, OnInit {
 
     if (!mission || !this.projectUUID) {
       this.tableViz.setPlannedPath(null);
+      this.tableViz.setPlannedMissionEndIndices(null);
       return;
     }
 
-    this.simulationPathSub = this.http.getMissionSimulationData(this.projectUUID, mission.name).subscribe({
+    this.simulationPathSub = this.http.getProjectSimulationData(this.projectUUID).subscribe({
       next: data => {
         const startPose = this.tableViz.startPose();
-        const planned = buildPlannedPathFromSimulation(startPose, data);
-        this.tableViz.setPlannedPath(planned.length > 1 ? planned : null);
+        const planned = buildPlannedPathFromProjectSimulation(startPose, data);
+        this.tableViz.setPlannedPath(planned.poses.length > 1 ? planned.poses : null);
+        this.tableViz.setPlannedMissionEndIndices(
+          planned.missionEndIndices.length ? planned.missionEndIndices : null
+        );
       },
       error: err => {
         console.warn('[Flowchart] Failed to load simulation data', err);
         this.tableViz.setPlannedPath(null);
+        this.tableViz.setPlannedMissionEndIndices(null);
       },
     });
   }

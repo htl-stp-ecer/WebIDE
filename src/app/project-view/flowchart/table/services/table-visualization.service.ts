@@ -38,6 +38,7 @@ export class TableVisualizationService {
   private readonly _currentPose = signal<Pose2D | null>(null);
   private readonly _computedPath = signal<ComputedPath | null>(null);
   private readonly _plannedPath = signal<Pose2D[] | null>(null);
+  private readonly _plannedMissionEndIndices = signal<number[] | null>(null);
 
   readonly robotConfig = this._robotConfig.asReadonly();
   readonly sensorConfig = this._sensorConfig.asReadonly();
@@ -45,6 +46,7 @@ export class TableVisualizationService {
   readonly currentPose = computed(() => this._currentPose() ?? this._startPose());
   readonly computedPath = this._computedPath.asReadonly();
   readonly plannedPath = this._plannedPath.asReadonly();
+  readonly plannedMissionEndIndices = this._plannedMissionEndIndices.asReadonly();
 
   /** Set the start pose */
   setStartPose(x: number, y: number, thetaDeg: number): void {
@@ -94,6 +96,14 @@ export class TableVisualizationService {
   /** Set the planned path (array of poses) */
   setPlannedPath(path: Pose2D[] | null): void {
     this._plannedPath.set(path);
+    if (!path) {
+      this._plannedMissionEndIndices.set(null);
+    }
+  }
+
+  /** Set indices for planned mission end poses */
+  setPlannedMissionEndIndices(indices: number[] | null): void {
+    this._plannedMissionEndIndices.set(indices?.length ? [...indices] : null);
   }
 
   /** Add a single pose to the path (for building incrementally) */
@@ -130,6 +140,7 @@ export class TableVisualizationService {
     this._currentPose.set(null);
     this._computedPath.set(null);
     this._plannedPath.set(null);
+    this._plannedMissionEndIndices.set(null);
   }
 
   /** Configure default sensors (typical 2-sensor setup for line following) */

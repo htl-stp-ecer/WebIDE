@@ -15,7 +15,7 @@ import { TableMapService } from './services';
 import { TableVisualizationService, type ComputedPath } from './services';
 import { Pose2D, thetaToDegrees } from './models';
 import { SensorStepType } from './models';
-import { applyWallPhysicsToPath, applyWallPhysicsToPathWithSegments, buildCollisionWalls } from './physics';
+import { applyWallPhysicsToPathWithSegments, buildCollisionWalls, type PathWithSegments } from './physics';
 
 /** Line thickness in cm for rendering */
 const LINE_THICKNESS_CM = 2.54;
@@ -51,6 +51,7 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
   private resizeObserver!: ResizeObserver;
   private adjustedPlannedPath: Pose2D[] | null = null;
   private adjustedComputedPath: ComputedPath | null = null;
+  private adjustedPlannedMissionEnds: Pose2D[] | null = null;
 
   constructor() {
     effect(() => {
@@ -62,10 +63,18 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
       const robotConfig = this.vizService.robotConfig();
       const collisionWalls = buildCollisionWalls(wallSegments, mapConfig);
       const plannedPath = this.vizService.plannedPath();
+      const plannedMissionEndIndices = this.vizService.plannedMissionEndIndices();
       const computedPath = this.vizService.computedPath();
-      this.adjustedPlannedPath = plannedPath
-        ? applyWallPhysicsToPath(plannedPath, robotConfig, collisionWalls)
-        : null;
+      if (plannedPath) {
+        const adjustedPlanned = applyWallPhysicsToPathWithSegments(plannedPath, robotConfig, collisionWalls);
+        this.adjustedPlannedPath = adjustedPlanned.poses;
+        this.adjustedPlannedMissionEnds = plannedMissionEndIndices?.length
+          ? this.mapMissionEndIndices(plannedMissionEndIndices, adjustedPlanned, plannedPath.length)
+          : null;
+      } else {
+        this.adjustedPlannedPath = null;
+        this.adjustedPlannedMissionEnds = null;
+      }
       this.adjustedComputedPath = computedPath
         ? this.applyWallPhysicsToComputedPath(computedPath, robotConfig, collisionWalls)
         : null;
@@ -437,19 +446,24 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
   }
 
   private renderGhostRobot(width: number, height: number): void {
-    const planned = this.adjustedPlannedPath ?? this.vizService.plannedPath();
-    if (!planned || planned.length === 0) return;
+    let ghostPoses = this.adjustedPlannedMissionEnds;
+    if (!ghostPoses || ghostPoses.length === 0) {
+      const planned = this.adjustedPlannedPath ?? this.vizService.plannedPath();
+      if (!planned || planned.length === 0) return;
+      ghostPoses = [planned[planned.length - 1]];
+    }
 
-    const pose = planned[planned.length - 1];
-    this.renderRobotAtPose(pose, width, height, {
-      bodyFill: 'rgba(239, 68, 68, 0.12)',
-      bodyStroke: 'rgba(239, 68, 68, 0.6)',
-      arrowFill: 'rgba(239, 68, 68, 0.6)',
-      rotationCenterFill: 'rgba(168, 85, 247, 0.7)',
-      geometricCenterFill: 'rgba(239, 68, 68, 0.4)',
-      showSensors: false,
-      dashed: true,
-    });
+    for (const pose of ghostPoses) {
+      this.renderRobotAtPose(pose, width, height, {
+        bodyFill: 'rgba(239, 68, 68, 0.12)',
+        bodyStroke: 'rgba(239, 68, 68, 0.6)',
+        arrowFill: 'rgba(239, 68, 68, 0.6)',
+        rotationCenterFill: 'rgba(168, 85, 247, 0.7)',
+        geometricCenterFill: 'rgba(239, 68, 68, 0.4)',
+        showSensors: false,
+        dashed: true,
+      });
+    }
   }
 
   private renderRobotAtPose(
@@ -552,6 +566,41 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
     const adjusted = applyWallPhysicsToPathWithSegments(path.poses, robotConfig, walls);
     const expandedSteps = adjusted.segments.map(idx => path.expandedSteps[idx] ?? {});
     return { poses: adjusted.poses, expandedSteps };
+  }
+
+  private mapMissionEndIndices(
+    missionEndIndices: number[],
+    adjusted: PathWithSegments,
+    plannedLength: number
+  ): Pose2D[] {
+    if (!missionEndIndices.length || !adjusted.poses.length) return [];
+
+    const segmentCount = Math.max(0, plannedLength - 1);
+    if (segmentCount === 0) {
+      return missionEndIndices.map(() => adjusted.poses[0]);
+    }
+
+    const segmentEndIndex = new Array<number>(segmentCount).fill(0);
+    for (let i = 0; i < adjusted.segments.length; i++) {
+      const segmentIndex = adjusted.segments[i];
+      if (segmentIndex < 0 || segmentIndex >= segmentCount) continue;
+      segmentEndIndex[segmentIndex] = i + 1;
+    }
+
+    for (let i = 1; i < segmentCount; i++) {
+      if (segmentEndIndex[i] === 0) {
+        segmentEndIndex[i] = segmentEndIndex[i - 1];
+      }
+    }
+
+    return missionEndIndices
+      .filter(index => index >= 0)
+      .map(index => {
+        if (index === 0) return adjusted.poses[0];
+        const segmentIndex = Math.min(index - 1, segmentCount - 1);
+        const adjustedIndex = segmentEndIndex[segmentIndex] ?? 0;
+        return adjusted.poses[adjustedIndex] ?? adjusted.poses[0];
+      });
   }
 
   onCanvasPointerDown(event: PointerEvent): void {
