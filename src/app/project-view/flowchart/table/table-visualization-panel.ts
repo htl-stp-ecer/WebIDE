@@ -10,9 +10,10 @@ import {
 } from '@angular/core';
 import { TranslateModule } from '@ngx-translate/core';
 import { TableMapService } from './services';
-import { TableVisualizationService } from './services';
+import { TableVisualizationService, type ComputedPath } from './services';
 import { Pose2D } from './models';
 import { SensorStepType } from './models';
+import { applyWallPhysicsToPath, applyWallPhysicsToPathWithSegments, buildCollisionWalls } from './physics';
 
 /** Line thickness in cm for rendering */
 const LINE_THICKNESS_CM = 2.54;
@@ -41,16 +42,27 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
   private ctx!: CanvasRenderingContext2D;
   private animationFrameId: number | null = null;
   private resizeObserver!: ResizeObserver;
+  private adjustedPlannedPath: Pose2D[] | null = null;
+  private adjustedComputedPath: ComputedPath | null = null;
 
   constructor() {
     effect(() => {
       // React to changes in map and visualization state
       this.mapService.mapImage();
       this.mapService.lineSegmentsCm();
-      this.mapService.wallSegmentsCm();
-      this.vizService.computedPath();
+      const wallSegments = this.mapService.wallSegmentsCm();
+      const mapConfig = this.mapService.config();
+      const robotConfig = this.vizService.robotConfig();
+      const collisionWalls = buildCollisionWalls(wallSegments, mapConfig);
+      const plannedPath = this.vizService.plannedPath();
+      const computedPath = this.vizService.computedPath();
+      this.adjustedPlannedPath = plannedPath
+        ? applyWallPhysicsToPath(plannedPath, robotConfig, collisionWalls)
+        : null;
+      this.adjustedComputedPath = computedPath
+        ? this.applyWallPhysicsToComputedPath(computedPath, robotConfig, collisionWalls)
+        : null;
       this.vizService.currentPose();
-      this.vizService.plannedPath();
       this.render();
     });
   }
@@ -261,7 +273,7 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
   }
 
   private renderPath(width: number, height: number): void {
-    const pathData = this.vizService.computedPath();
+    const pathData = this.adjustedComputedPath ?? this.vizService.computedPath();
     if (!pathData || pathData.poses.length < 2) return;
 
     const { poses, expandedSteps } = pathData;
@@ -304,7 +316,7 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
   }
 
   private renderPlannedPath(width: number, height: number): void {
-    const planned = this.vizService.plannedPath();
+    const planned = this.adjustedPlannedPath ?? this.vizService.plannedPath();
     if (!planned || planned.length < 2) return;
 
     this.ctx.strokeStyle = '#ef4444';
@@ -391,7 +403,7 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
   }
 
   private renderGhostRobot(width: number, height: number): void {
-    const planned = this.vizService.plannedPath();
+    const planned = this.adjustedPlannedPath ?? this.vizService.plannedPath();
     if (!planned || planned.length === 0) return;
 
     const pose = planned[planned.length - 1];
@@ -496,5 +508,15 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
     }
 
     this.ctx.restore();
+  }
+
+  private applyWallPhysicsToComputedPath(
+    path: ComputedPath,
+    robotConfig: { widthCm: number; lengthCm: number; rotationCenterForwardCm: number; rotationCenterStrafeCm: number },
+    walls: { startX: number; startY: number; endX: number; endY: number }[]
+  ): ComputedPath {
+    const adjusted = applyWallPhysicsToPathWithSegments(path.poses, robotConfig, walls);
+    const expandedSteps = adjusted.segments.map(idx => path.expandedSteps[idx] ?? {});
+    return { poses: adjusted.poses, expandedSteps };
   }
 }

@@ -2,6 +2,46 @@ import { MissionSimulationData, SimulationStepData } from '../../../entities/Sim
 import { Pose2D, applyLocalDelta } from './models';
 
 const EPSILON = 1e-6;
+const LABEL_CM_PATTERN = /(?:^|[,(])\s*cm\s*=\s*([-+]?\d*\.?\d+)/i;
+const LABEL_FIRST_NUMBER_PATTERN = /\(([-+]?\d*\.?\d+)/;
+
+function parseDistanceCmFromLabel(label?: string): number | null {
+  if (!label) return null;
+  const cmMatch = label.match(LABEL_CM_PATTERN);
+  if (cmMatch) {
+    const value = Number.parseFloat(cmMatch[1]);
+    return Number.isFinite(value) ? value : null;
+  }
+  const firstNumberMatch = label.match(LABEL_FIRST_NUMBER_PATTERN);
+  if (firstNumberMatch) {
+    const value = Number.parseFloat(firstNumberMatch[1]);
+    return Number.isFinite(value) ? value : null;
+  }
+  return null;
+}
+
+function normalizeStepDelta(step: SimulationStepData): { forwardCm: number; strafeCm: number } {
+  const forwardCm = step.delta.forward * 100;
+  const strafeCm = step.delta.strafe * 100;
+  const fn = (step.function_name || step.step_type || '').toLowerCase();
+  if (!fn) return { forwardCm, strafeCm };
+
+  const labelDistance = parseDistanceCmFromLabel(step.label);
+  if (labelDistance === null) return { forwardCm, strafeCm };
+
+  switch (fn) {
+    case 'drive_forward':
+      return { forwardCm: labelDistance, strafeCm };
+    case 'drive_backward':
+      return { forwardCm: -labelDistance, strafeCm };
+    case 'strafe_left':
+      return { forwardCm, strafeCm: -labelDistance };
+    case 'strafe_right':
+      return { forwardCm, strafeCm: labelDistance };
+    default:
+      return { forwardCm, strafeCm };
+  }
+}
 
 function isParallelStep(step: SimulationStepData): boolean {
   const fn = (step.function_name || '').toLowerCase();
@@ -38,8 +78,7 @@ export function buildPlannedPathFromSimulation(
     const delta = step.delta;
     if (!delta) continue;
 
-    const forwardCm = delta.forward * 100;
-    const strafeCm = delta.strafe * 100;
+    const { forwardCm, strafeCm } = normalizeStepDelta(step);
     const angular = delta.angular;
 
     // Simulation uses strafe > 0 = right; pose utils treat strafe > 0 = left.

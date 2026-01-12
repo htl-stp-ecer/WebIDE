@@ -140,24 +140,26 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
 
   // Dimensions - Inline Edit (separate width/length)
   startEditDimension(dimension: 'width' | 'length') {
+    const dims = this.getDisplayDimensions();
     if (dimension === 'width') {
-      this.tempWidth = this.toDimensionString(this.connectionInfo?.width_cm);
+      this.tempWidth = this.toDimensionString(dims?.width);
       this.editingWidth = true;
       this.pendingFocus = 'width';
     } else {
-      this.tempLength = this.toDimensionString(this.connectionInfo?.length_cm);
+      this.tempLength = this.toDimensionString(dims?.length);
       this.editingLength = true;
       this.pendingFocus = 'length';
     }
   }
 
   cancelDimensionEdit(dimension: 'width' | 'length') {
+    const dims = this.getDisplayDimensions();
     if (dimension === 'width') {
       this.editingWidth = false;
-      this.tempWidth = this.toDimensionString(this.connectionInfo?.width_cm);
+      this.tempWidth = this.toDimensionString(dims?.width);
     } else {
       this.editingLength = false;
-      this.tempLength = this.toDimensionString(this.connectionInfo?.length_cm);
+      this.tempLength = this.toDimensionString(dims?.length);
     }
   }
 
@@ -173,12 +175,13 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
   }
 
   saveDimension(dimension: 'width' | 'length') {
+    const dims = this.getDisplayDimensions();
     const newWidth = dimension === 'width'
       ? this.parseDimension(this.tempWidth)
-      : this.connectionInfo?.width_cm;
+      : dims?.width;
     const newLength = dimension === 'length'
       ? this.parseDimension(this.tempLength)
-      : this.connectionInfo?.length_cm;
+      : dims?.length;
 
     if (newWidth === undefined || newLength === undefined || newWidth <= 0 || newLength <= 0) {
       this.cancelDimensionEdit(dimension);
@@ -501,8 +504,11 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
   private getDisplayDimensions(): { width: number; length: number } | null {
     const w = this.connectionInfo?.width_cm;
     const l = this.connectionInfo?.length_cm;
-    if (w === undefined || l === undefined || w <= 0 || l <= 0) return null;
-    return { width: w, length: l };
+    const fallback = this.vizService.robotConfig();
+    const width = typeof w === 'number' && w > 0 ? w : fallback.widthCm;
+    const length = typeof l === 'number' && l > 0 ? l : fallback.lengthCm;
+    if (width <= 0 || length <= 0) return null;
+    return { width, length };
   }
 
   getSensorMarkerStyle(sensor: Sensor): Record<string, string> {
