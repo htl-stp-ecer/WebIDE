@@ -11,7 +11,7 @@ import {
 import { TranslateModule } from '@ngx-translate/core';
 import { TableMapService } from './services';
 import { TableVisualizationService, type ComputedPath } from './services';
-import { Pose2D } from './models';
+import { Pose2D, thetaToDegrees } from './models';
 import { SensorStepType } from './models';
 import { applyWallPhysicsToPath, applyWallPhysicsToPathWithSegments, buildCollisionWalls } from './physics';
 
@@ -35,6 +35,9 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
   @ViewChild('canvas') canvasRef!: ElementRef<HTMLCanvasElement>;
 
   readonly visible = input<boolean>(true);
+  readonly allowStartPoseEdit = input<boolean>(false);
+  readonly showHeader = input<boolean>(true);
+  readonly embedded = input<boolean>(false);
 
   readonly mapService = inject(TableMapService);
   readonly vizService = inject(TableVisualizationService);
@@ -269,6 +272,27 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
     return {
       x: offsetX + pose.x * scaleX,
       y: offsetY + drawHeight - pose.y * scaleY,
+    };
+  }
+
+  private canvasToTable(
+    canvasX: number,
+    canvasY: number,
+    width: number,
+    height: number
+  ): { x: number; y: number } | null {
+    const { drawWidth, drawHeight, offsetX, offsetY, scaleX, scaleY } = this.getDrawParams(width, height);
+    if (
+      canvasX < offsetX ||
+      canvasX > offsetX + drawWidth ||
+      canvasY < offsetY ||
+      canvasY > offsetY + drawHeight
+    ) {
+      return null;
+    }
+    return {
+      x: (canvasX - offsetX) / scaleX,
+      y: (drawHeight - (canvasY - offsetY)) / scaleY,
     };
   }
 
@@ -518,5 +542,18 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
     const adjusted = applyWallPhysicsToPathWithSegments(path.poses, robotConfig, walls);
     const expandedSteps = adjusted.segments.map(idx => path.expandedSteps[idx] ?? {});
     return { poses: adjusted.poses, expandedSteps };
+  }
+
+  onCanvasPointerDown(event: PointerEvent): void {
+    if (!this.allowStartPoseEdit() || event.button !== 0) return;
+    const canvas = this.canvasRef.nativeElement;
+    const rect = canvas.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+    const tablePos = this.canvasToTable(x, y, rect.width, rect.height);
+    if (!tablePos) return;
+
+    const current = this.vizService.startPose();
+    this.vizService.setStartPose(tablePos.x, tablePos.y, thetaToDegrees(current.theta));
   }
 }

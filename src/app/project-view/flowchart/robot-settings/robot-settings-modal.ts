@@ -10,9 +10,11 @@ import { TypeDefinition } from '../../../entities/TypeDefinition';
 import { Subject } from 'rxjs';
 import { debounceTime } from 'rxjs/operators';
 import { TableEditorView } from '../table/table-editor-view';
-import { TableVisualizationService } from '../table/services';
+import { TableVisualizationPanel } from '../table/table-visualization-panel';
+import { TableMapService, TableVisualizationService } from '../table/services';
+import { thetaToDegrees } from '../table/models';
 
-type SettingsTab = 'robot' | 'map';
+type SettingsTab = 'robot' | 'start' | 'map';
 type EditTarget = { type: 'sensor'; id: number } | { type: 'rotation' } | null;
 
 interface Sensor {
@@ -32,7 +34,7 @@ interface CenterPoint {
 @Component({
   selector: 'app-robot-settings-modal',
   standalone: true,
-  imports: [FormsModule, NgClass, NgStyle, Dialog, InputText, TranslateModule, TableEditorView],
+  imports: [FormsModule, NgClass, NgStyle, Dialog, InputText, TranslateModule, TableEditorView, TableVisualizationPanel],
   templateUrl: './robot-settings-modal.html',
   styleUrl: './robot-settings-modal.scss'
 })
@@ -77,7 +79,8 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
   constructor(
     private http: HttpService,
     private translate: TranslateService,
-    private vizService: TableVisualizationService
+    private vizService: TableVisualizationService,
+    private mapService: TableMapService
   ) {
     // Debounce persistence during drag
     this.persistSubject.pipe(debounceTime(300)).subscribe(() => {
@@ -569,7 +572,50 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
     return { '--center-x': `${center.x_pct}%`, '--center-y': `${center.y_pct}%` };
   }
 
+  get startPoseXcm(): number {
+    return this.roundToTwo(this.vizService.startPose().x);
+  }
+
+  get startPoseYcm(): number {
+    return this.roundToTwo(this.vizService.startPose().y);
+  }
+
+  get startPoseThetaDeg(): number {
+    return this.roundToTwo(thetaToDegrees(this.vizService.startPose().theta));
+  }
+
+  setStartPoseXcm(value: number | null) {
+    this.updateStartPose({ x: value });
+  }
+
+  setStartPoseYcm(value: number | null) {
+    this.updateStartPose({ y: value });
+  }
+
+  setStartPoseThetaDeg(value: number | null) {
+    this.updateStartPose({ thetaDeg: value });
+  }
+
   private roundToTwo(value: number): number {
     return Math.round(value * 100) / 100;
+  }
+
+  private updateStartPose(update: { x?: number | null; y?: number | null; thetaDeg?: number | null }) {
+    const current = this.vizService.startPose();
+    const config = this.mapService.config();
+    const nextX = this.clampValue(this.coerceNumber(update.x, current.x), 0, config.widthCm);
+    const nextY = this.clampValue(this.coerceNumber(update.y, current.y), 0, config.heightCm);
+    const nextTheta = this.coerceNumber(update.thetaDeg, thetaToDegrees(current.theta));
+    this.vizService.setStartPose(nextX, nextY, nextTheta);
+  }
+
+  private coerceNumber(value: number | null | undefined, fallback: number): number {
+    if (value === null || value === undefined) return fallback;
+    const parsed = Number(value);
+    return Number.isNaN(parsed) ? fallback : parsed;
+  }
+
+  private clampValue(value: number, min: number, max: number): number {
+    return Math.min(Math.max(value, min), max);
   }
 }

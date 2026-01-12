@@ -5,7 +5,7 @@
   [draggable]="false"
   [resizable]="false"
   [showHeader]="false"
-  [style]="{ width: activeTab() === 'map' ? '900px' : '800px', maxWidth: '95vw' }"
+  [style]="{ width: activeTab() === 'map' || activeTab() === 'start' ? '900px' : '800px', maxWidth: '95vw' }"
   [contentStyle]="{ padding: 0 }">
 
   <!-- Tab Header -->
@@ -17,6 +17,14 @@
       (click)="activeTab.set('robot')">
       <i class="pi pi-cog"></i>
       {{ 'ROBOT_SETTINGS.TITLE' | translate }}
+    </button>
+    <button
+      type="button"
+      class="settings-tab"
+      [class.active]="activeTab() === 'start'"
+      (click)="activeTab.set('start')">
+      <i class="pi pi-compass"></i>
+      {{ 'ROBOT_SETTINGS.START_POSE_TAB' | translate }}
     </button>
     <button
       type="button"
@@ -317,6 +325,58 @@
   @if (activeTab() === 'map') {
     <div class="map-editor-container">
       <app-table-editor-view></app-table-editor-view>
+    </div>
+  }
+
+  <!-- Start Pose Tab -->
+  @if (activeTab() === 'start') {
+    <div class="start-pose-container">
+      <aside class="start-pose-sidebar">
+        <h3 class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">
+          {{ 'ROBOT_SETTINGS.START_POSE_TITLE' | translate }}
+        </h3>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="text-xs text-slate-500 mb-1 block">{{ 'ROBOT_SETTINGS.START_POSE_X' | translate }}</label>
+            <input
+              type="number"
+              [ngModel]="startPoseXcm"
+              (ngModelChange)="setStartPoseXcm($event)"
+              pInputText
+              class="w-full font-mono text-sm"/>
+          </div>
+          <div>
+            <label class="text-xs text-slate-500 mb-1 block">{{ 'ROBOT_SETTINGS.START_POSE_Y' | translate }}</label>
+            <input
+              type="number"
+              [ngModel]="startPoseYcm"
+              (ngModelChange)="setStartPoseYcm($event)"
+              pInputText
+              class="w-full font-mono text-sm"/>
+          </div>
+          <div class="col-span-2">
+            <label class="text-xs text-slate-500 mb-1 block">{{ 'ROBOT_SETTINGS.START_POSE_ROTATION' | translate }}</label>
+            <input
+              type="number"
+              [ngModel]="startPoseThetaDeg"
+              (ngModelChange)="setStartPoseThetaDeg($event)"
+              pInputText
+              class="w-full font-mono text-sm"/>
+          </div>
+        </div>
+        <p class="start-pose-hint">
+          <i class="pi pi-info-circle mr-2"></i>
+          {{ 'ROBOT_SETTINGS.START_POSE_HINT' | translate }}
+        </p>
+      </aside>
+      <div class="start-pose-view">
+        <app-table-visualization-panel
+          [visible]="true"
+          [showHeader]="false"
+          [embedded]="true"
+          [allowStartPoseEdit]="true">
+        </app-table-visualization-panel>
+      </div>
     </div>
   }
 

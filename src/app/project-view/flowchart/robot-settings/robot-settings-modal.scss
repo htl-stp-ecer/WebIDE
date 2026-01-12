@@ -106,6 +106,54 @@
   }
 }
 
+// Start pose tab
+.start-pose-container {
+  height: 500px;
+  max-height: 70vh;
+  display: flex;
+  flex-direction: row;
+}
+
+.start-pose-sidebar {
+  width: 260px;
+  padding: 1rem;
+  border-right: 1px solid #e2e8f0;
+  background: #f8fafc;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.start-pose-hint {
+  margin-top: auto;
+  font-size: 0.875rem;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+}
+
+.start-pose-view {
+  flex: 1;
+  padding: 1rem;
+  display: flex;
+}
+
+.start-pose-view app-table-visualization-panel {
+  flex: 1;
+  display: block;
+}
+
+:host-context(.dark) .start-pose-sidebar,
+:host-context(.p-dark) .start-pose-sidebar {
+  border-right-color: #334155;
+  background: #0f172a;
+}
+
+:host-context(.dark) .start-pose-hint,
+:host-context(.p-dark) .start-pose-hint {
+  color: #94a3b8;
+}
+
 // Robot canvas background with grid
 .robot-canvas-bg {
   background-color: #f8fafc;
