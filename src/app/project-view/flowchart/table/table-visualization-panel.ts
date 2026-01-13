@@ -486,7 +486,7 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
         arrowFill: 'rgba(239, 68, 68, 0.6)',
         rotationCenterFill: 'rgba(168, 85, 247, 0.7)',
         geometricCenterFill: 'rgba(239, 68, 68, 0.4)',
-        showSensors: false,
+        showSensors: true,
         dashed: true,
       });
     }
