@@ -126,6 +126,22 @@ export function buildPlannedPathFromSimulation(
       }
       continue;
     }
+    if (fn === 'drive_until_black') {
+      const drivePoses = simulateDriveUntilColor(current, options?.lineup, 'black');
+      if (drivePoses.length) {
+        poses.push(...drivePoses);
+        current = drivePoses[drivePoses.length - 1];
+      }
+      continue;
+    }
+    if (fn === 'drive_until_white') {
+      const drivePoses = simulateDriveUntilColor(current, options?.lineup, 'white');
+      if (drivePoses.length) {
+        poses.push(...drivePoses);
+        current = drivePoses[drivePoses.length - 1];
+      }
+      continue;
+    }
     const delta = step.delta;
     if (!delta) continue;
 
@@ -399,6 +415,43 @@ function selectLineupSensors(lineSensors: LineSensor[]): { left: LineSensor; rig
   const left = sorted[sorted.length - 1];
   if (!left || !right || left === right) return null;
   return { left, right };
+}
+
+function simulateDriveUntilColor(
+  startPose: Pose2D,
+  context: LineupSimulationContext | null | undefined,
+  target: 'black' | 'white'
+): Pose2D[] {
+  if (!context) return [];
+  const { lineSensors, rotationCenterForwardCm, rotationCenterStrafeCm } = context;
+  if (!lineSensors || lineSensors.length === 0) return [];
+
+  const stepCm = context.stepCm ?? DEFAULT_LINEUP_STEP_CM;
+  const maxDistance = context.maxDistanceCm ?? DEFAULT_LINEUP_MAX_DISTANCE_CM;
+  const path: Pose2D[] = [];
+  let pose = startPose;
+  let traveled = 0;
+  let iterations = 0;
+  const maxIterations = Math.ceil(maxDistance / stepCm);
+
+  const isSensorOnTarget = (sensor: LineSensor, checkPose: Pose2D) => {
+    const world = sensorWorldPosition(checkPose, sensor, rotationCenterForwardCm, rotationCenterStrafeCm);
+    const onBlack = context.isOnBlackLine(world.x, world.y);
+    return target === 'black' ? onBlack : !onBlack;
+  };
+
+  while (traveled < maxDistance && iterations < maxIterations) {
+    const anyOnTarget = lineSensors.some(sensor => isSensorOnTarget(sensor, pose));
+    if (anyOnTarget) {
+      break;
+    }
+    pose = forwardMove(pose, stepCm);
+    path.push(pose);
+    traveled += stepCm;
+    iterations += 1;
+  }
+
+  return path;
 }
 
 function sensorWorldPosition(
