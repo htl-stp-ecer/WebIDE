@@ -22,11 +22,11 @@
     <app-flowchart></app-flowchart>
   </div>
 
+  <!-- Right Panel -->
   @if (!rightCollapsed()) {
     <div class="panel-resizer" (pointerdown)="startResize($event, 'right')" aria-label="Resize step panel"></div>
   }
 
-  <!-- Right Panel (scrollable step panel) -->
   <div class="panel panel-right" [class.collapsed]="rightCollapsed()" #rightPanel>
     @if (rightCollapsed()) {
       <button class="panel-toggle-btn" (click)="toggleRightPanel()" aria-label="Expand step panel">

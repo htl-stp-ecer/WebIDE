@@ -1,80 +1,209 @@
-<div class="planning-overlay">
-  <!-- Toolbar -->
-  <div class="planning-toolbar">
-    <div class="toolbar-title">
-      <i class="pi pi-pencil"></i>
-      <span>{{ 'FLOWCHART.PLANNING_MODE' | translate }}</span>
+<div class="planning-fullscreen">
+  <!-- Top Bar -->
+  <div class="planning-topbar">
+    <div class="topbar-left">
+      <p-button
+        icon="pi pi-arrow-left"
+        label="Back"
+        [text]="true"
+        severity="secondary"
+        (onClick)="onCancel()"
+        pTooltip="Back to Editor"
+        tooltipPosition="bottom">
+      </p-button>
+      <span class="topbar-divider"></span>
+      <span class="topbar-title">PATH PLANNER</span>
     </div>
 
-    <div class="planning-slider">
-      <label>Accuracy</label>
-      <input
-        type="range"
-        min="0"
-        max="1"
-        step="0.1"
-        [value]="planningService.lineupThreshold()"
-        (input)="onThresholdChange($event)" />
-      <span class="slider-value">{{ planningService.lineupThreshold() | number:'1.1-1' }}</span>
+    <div class="topbar-center">
+      <p-button
+        icon="pi pi-undo"
+        [text]="true"
+        severity="secondary"
+        [disabled]="!canUndo()"
+        (onClick)="onUndo()"
+        pTooltip="Undo (Ctrl+Z)"
+        tooltipPosition="bottom">
+      </p-button>
+      <p-button
+        icon="pi pi-refresh"
+        [text]="true"
+        severity="secondary"
+        [disabled]="!canRedo()"
+        (onClick)="onRedo()"
+        pTooltip="Redo (Ctrl+Shift+Z)"
+        tooltipPosition="bottom"
+        styleClass="redo-btn">
+      </p-button>
+      <span class="topbar-divider"></span>
+      <p-button
+        icon="pi pi-trash"
+        label="Clear"
+        [text]="true"
+        severity="secondary"
+        [disabled]="!planningService.waypoints().length"
+        (onClick)="onClear()"
+        pTooltip="Clear All Waypoints"
+        tooltipPosition="bottom">
+      </p-button>
     </div>
 
-    <div class="toolbar-spacer"></div>
-
-    <button
-      class="planning-btn"
-      (click)="onClear()"
-      [disabled]="!planningService.waypoints().length">
-      <i class="pi pi-trash"></i>
-      <span>{{ 'COMMON.CLEAR' | translate }}</span>
-    </button>
-
-    <button
-      class="planning-btn planning-btn-cancel"
-      (click)="onCancel()">
-      <span>{{ 'COMMON.CANCEL' | translate }}</span>
-    </button>
-
-    <button
-      class="planning-btn planning-btn-primary"
-      [disabled]="!planningService.canAddSteps()"
-      (click)="onAddSteps()">
-      <i class="pi pi-plus"></i>
-      <span>{{ 'FLOWCHART.ADD_STEPS' | translate }}</span>
-    </button>
+    <div class="topbar-right">
+      @if (planningService.waypoints().length) {
+        <span class="waypoint-count">
+          {{ planningService.waypoints().length }} waypoint{{ planningService.waypoints().length !== 1 ? 's' : '' }}
+        </span>
+      }
+    </div>
   </div>
 
-  <!-- Canvas for drawing waypoints -->
-  <canvas
-    #canvas
-    class="planning-canvas"
-    (pointerdown)="onPointerDown($event)"
-    (pointermove)="onPointerMove($event)"
-    (pointerup)="onPointerUp($event)"
-    (pointerleave)="onPointerLeave()"
-    (dblclick)="onDoubleClick($event)">
-  </canvas>
+  <!-- Main Content Area -->
+  <div class="planning-main">
+    <!-- Map Canvas -->
+    <div class="planning-canvas-container">
+      <canvas
+        #canvas
+        class="planning-canvas"
+        (pointerdown)="onPointerDown($event)"
+        (pointermove)="onPointerMove($event)"
+        (pointerup)="onPointerUp($event)"
+        (pointerleave)="onPointerLeave()"
+        (dblclick)="onDoubleClick($event)">
+      </canvas>
 
-  <!-- Step preview panel -->
-  @if (planningService.generatedSteps().length) {
-    <div class="step-preview-panel">
-      <div class="step-preview-header">
-        {{ 'FLOWCHART.GENERATED_STEPS' | translate }} ({{ planningService.generatedSteps().length }})
-      </div>
-      <div class="step-preview-list">
-        @for (step of planningService.generatedSteps(); track $index) {
-          <div class="step-preview-item">
-            <i [class]="getStepIcon(step)"></i>
-            <span class="step-text">{{ formatStep(step) }}</span>
+      @if (!planningService.waypoints().length) {
+        <div class="planning-hint">
+          Click on the map to add waypoints. Drag to move, double-click to delete.
+        </div>
+      }
+    </div>
+
+    <!-- Right Side Panel -->
+    <div class="planning-sidebar" [class.collapsed]="sidebarCollapsed()">
+      <button class="sidebar-toggle" (click)="toggleSidebar()" [pTooltip]="sidebarCollapsed() ? 'Expand panel' : 'Collapse panel'">
+        <i [class]="sidebarCollapsed() ? 'pi pi-chevron-left' : 'pi pi-chevron-right'"></i>
+      </button>
+
+      @if (!sidebarCollapsed()) {
+        <!-- Settings Section -->
+        <div class="sidebar-section">
+          <div class="section-header" (click)="toggleSettingsSection()">
+            <span>SETTINGS</span>
+            <i [class]="settingsExpanded() ? 'pi pi-chevron-up' : 'pi pi-chevron-down'"></i>
           </div>
-        }
-      </div>
-    </div>
-  }
+          @if (settingsExpanded()) {
+            <div class="section-content">
+              <!-- Snap Controls -->
+              <div class="settings-group">
+                <label class="settings-label">SNAPPING</label>
+                <div class="snap-toggles">
+                  <p-toggleButton
+                    [(ngModel)]="snapGridValue"
+                    onLabel="Grid"
+                    offLabel="Grid"
+                    onIcon="pi pi-th-large"
+                    offIcon="pi pi-th-large"
+                    (onChange)="onSnapGridChange($event)"
+                    pTooltip="Snap to grid (G)"
+                    tooltipPosition="top"
+                    styleClass="snap-toggle">
+                  </p-toggleButton>
+                  <p-toggleButton
+                    [(ngModel)]="snapAnglesValue"
+                    onLabel="45°"
+                    offLabel="45°"
+                    onIcon="pi pi-sliders-h"
+                    offIcon="pi pi-sliders-h"
+                    (onChange)="onSnapAnglesChange($event)"
+                    pTooltip="Snap to angles (A)"
+                    tooltipPosition="top"
+                    styleClass="snap-toggle">
+                  </p-toggleButton>
+                  <p-toggleButton
+                    [(ngModel)]="snapLinesValue"
+                    onLabel="Lines"
+                    offLabel="Lines"
+                    onIcon="pi pi-minus"
+                    offIcon="pi pi-minus"
+                    (onChange)="onSnapLinesChange($event)"
+                    pTooltip="Snap to lines (L)"
+                    tooltipPosition="top"
+                    styleClass="snap-toggle">
+                  </p-toggleButton>
+                </div>
+              </div>
 
-  <!-- Help text when no waypoints -->
-  @if (!planningService.waypoints().length) {
-    <div class="planning-hint">
-      {{ 'FLOWCHART.PLANNING_HINT' | translate }}
+              <!-- Optimization -->
+              <div class="settings-group">
+                <label class="settings-label">LINEUP THRESHOLD</label>
+                <div class="slider-control">
+                  <p-slider
+                    [(ngModel)]="thresholdValue"
+                    [min]="0"
+                    [max]="1"
+                    [step]="0.1"
+                    (onChange)="onThresholdSliderChange($event)"
+                    styleClass="threshold-slider">
+                  </p-slider>
+                  <span class="slider-value">{{ planningService.lineupThreshold() | number:'1.1-1' }}</span>
+                </div>
+              </div>
+            </div>
+          }
+        </div>
+
+        <!-- Generated Steps Section -->
+        <div class="sidebar-section steps-section">
+          <div class="section-header" (click)="toggleStepsSection()">
+            <span>GENERATED STEPS <span class="step-count">({{ planningService.generatedSteps().length }})</span></span>
+            <i [class]="stepsExpanded() ? 'pi pi-chevron-up' : 'pi pi-chevron-down'"></i>
+          </div>
+          @if (stepsExpanded()) {
+            <div class="section-content steps-content">
+              @if (planningService.generatedSteps().length) {
+                <div class="steps-list">
+                  @for (step of planningService.generatedSteps(); track $index) {
+                    <div class="step-item">
+                      <span class="step-number">{{ $index + 1 }}.</span>
+                      <i [class]="getStepIcon(step)"></i>
+                      <span class="step-text">{{ formatStep(step) }}</span>
+                      @if (step.function_name.includes('lineup')) {
+                        <span class="step-badge" pTooltip="Lineup optimization">⚡</span>
+                      }
+                    </div>
+                  }
+                </div>
+                <div class="steps-summary">
+                  Total: {{ planningService.generatedSteps().length }} steps
+                </div>
+              } @else {
+                <div class="steps-empty">
+                  Add waypoints to generate steps
+                </div>
+              }
+            </div>
+          }
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="sidebar-actions">
+          <p-button
+            label="Cancel"
+            severity="secondary"
+            [outlined]="true"
+            (onClick)="onCancel()"
+            styleClass="action-btn">
+          </p-button>
+          <p-button
+            label="Apply Path"
+            icon="pi pi-check"
+            severity="success"
+            [disabled]="!planningService.canAddSteps()"
+            (onClick)="onAddSteps()"
+            styleClass="action-btn">
+          </p-button>
+        </div>
+      }
     </div>
-  }
+  </div>
 </div>

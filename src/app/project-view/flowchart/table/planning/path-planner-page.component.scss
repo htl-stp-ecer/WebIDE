@@ -1,17 +1,16 @@
 :host {
   display: block;
-  position: absolute;
-  inset: 0;
-  pointer-events: auto;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
 }
 
-.planning-fullscreen {
-  position: relative;
+.path-planner-page {
   width: 100%;
   height: 100%;
   display: flex;
   flex-direction: column;
-  background: transparent;
+  background: var(--p-surface-ground);
 }
 
 // ===== Top Bar =====
@@ -21,8 +20,8 @@
   justify-content: space-between;
   height: 48px;
   padding: 0 12px;
-  background: var(--p-surface-card, #252536);
-  border-bottom: 1px solid var(--p-surface-border, rgba(255, 255, 255, 0.1));
+  background: var(--p-surface-section);
+  border-bottom: 1px solid var(--p-content-border-color);
   flex-shrink: 0;
 }
 
@@ -52,22 +51,22 @@
   font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.05em;
-  color: var(--p-text-color, #e2e8f0);
+  color: var(--p-text-color);
 }
 
 .topbar-divider {
   width: 1px;
   height: 20px;
-  background: var(--p-surface-border, rgba(255, 255, 255, 0.15));
+  background: var(--p-content-border-color);
   margin: 0 4px;
 }
 
 .waypoint-count {
   font-family: 'SF Mono', 'Menlo', 'Monaco', monospace;
   font-size: 11px;
-  color: var(--p-text-muted-color, #94a3b8);
+  color: var(--p-text-muted-color);
   padding: 4px 10px;
-  background: var(--p-surface-100, rgba(255, 255, 255, 0.05));
+  background: var(--p-surface-100);
   border-radius: 4px;
 }
 
@@ -81,14 +80,15 @@
   flex: 1;
   display: flex;
   overflow: hidden;
-  background: transparent;
+  background: var(--p-surface-ground);
+  min-height: 0;
 }
 
 .planning-canvas-container {
-  flex: 1;
+  flex: 1 1 0;
+  min-width: 0;
   position: relative;
-  background: transparent;
-  pointer-events: none;
+  background: var(--p-surface-ground);
 }
 
 .planning-canvas {
@@ -96,8 +96,6 @@
   height: 100%;
   display: block;
   cursor: crosshair;
-  pointer-events: auto;
-  background: transparent;
 }
 
 .planning-hint {
@@ -106,11 +104,11 @@
   left: 50%;
   transform: translateX(-50%);
   padding: 10px 20px;
-  background: var(--p-surface-card, rgba(30, 41, 59, 0.9));
-  border: 1px solid var(--p-surface-border, rgba(148, 163, 184, 0.2));
+  background: var(--p-surface-overlay);
+  border: 1px solid var(--p-content-border-color);
   border-radius: 8px;
   font-size: 13px;
-  color: var(--p-text-muted-color, #94a3b8);
+  color: var(--p-text-muted-color);
   white-space: nowrap;
   pointer-events: none;
   backdrop-filter: blur(8px);
@@ -118,18 +116,32 @@
 
 // ===== Right Sidebar =====
 .planning-sidebar {
+  flex: 0 0 280px;
   width: 280px;
-  background: var(--p-surface-card, #252536);
-  border-left: 1px solid var(--p-surface-border, rgba(255, 255, 255, 0.1));
-  display: flex;
-  flex-direction: column;
+  background: var(--p-surface-section);
+  border-left: 1px solid var(--p-content-border-color);
   position: relative;
-  transition: width 0.2s ease;
+  transition: flex-basis 0.2s ease, width 0.2s ease;
   overflow: hidden;
 
   &.collapsed {
+    flex: 0 0 40px;
     width: 40px;
   }
+}
+
+.sidebar-content {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.sidebar-sections {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .sidebar-toggle {
@@ -142,17 +154,17 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--p-surface-card, #252536);
-  border: 1px solid var(--p-surface-border, rgba(255, 255, 255, 0.1));
+  background: var(--p-surface-section);
+  border: 1px solid var(--p-content-border-color);
   border-radius: 6px;
-  color: var(--p-text-muted-color, #94a3b8);
+  color: var(--p-text-muted-color);
   cursor: pointer;
   z-index: 10;
   transition: all 0.15s ease;
 
   &:hover {
-    background: var(--p-surface-hover, #333348);
-    color: var(--p-text-color, #e2e8f0);
+    background: var(--p-surface-hover);
+    color: var(--p-text-color);
   }
 
   i {
@@ -161,8 +173,7 @@
 }
 
 .sidebar-section {
-  border-bottom: 1px solid var(--p-surface-border, rgba(255, 255, 255, 0.08));
-  flex-shrink: 0;
+  border-bottom: 1px solid var(--p-content-border-color);
 }
 
 .section-header {
@@ -173,13 +184,13 @@
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.05em;
-  color: var(--p-text-muted-color, #64748b);
+  color: var(--p-text-muted-color);
   cursor: pointer;
   user-select: none;
   transition: background 0.12s ease;
 
   &:hover {
-    background: var(--p-surface-hover, rgba(255, 255, 255, 0.05));
+    background: var(--p-surface-hover);
   }
 
   i {
@@ -190,12 +201,13 @@
   .step-count {
     font-weight: 400;
     margin-left: 4px;
-    color: var(--p-text-muted-color, #94a3b8);
+    color: var(--p-text-muted-color);
   }
 }
 
 .section-content {
   padding: 0 16px 16px;
+  overflow: hidden;
 }
 
 // ===== Settings Group =====
@@ -212,38 +224,48 @@
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.05em;
-  color: var(--p-text-muted-color, #64748b);
+  color: var(--p-text-muted-color);
   margin-bottom: 8px;
 }
 
 .snap-toggles {
   display: flex;
   gap: 6px;
+  width: 100%;
+  min-width: 0;
 }
 
 // PrimeNG toggle button customization
 :host ::ng-deep .snap-toggle {
-  flex: 1;
+  flex: 1 1 0;
+  min-width: 0;
 
   .p-togglebutton {
     width: 100%;
     justify-content: center;
-    padding: 6px 8px;
+    padding: 6px 4px;
     font-size: 11px;
-    background: var(--p-surface-100, rgba(255, 255, 255, 0.05));
-    border-color: var(--p-surface-border, rgba(255, 255, 255, 0.1));
+    background: var(--p-surface-100);
+    border-color: var(--p-content-border-color);
+    white-space: nowrap;
+    overflow: hidden;
 
     &:not(.p-togglebutton-checked):hover {
-      background: var(--p-surface-hover, rgba(255, 255, 255, 0.1));
+      background: var(--p-surface-hover);
     }
 
     &.p-togglebutton-checked {
-      background: var(--p-primary-color, #3b82f6);
-      border-color: var(--p-primary-color, #3b82f6);
+      background: var(--p-primary-color);
+      border-color: var(--p-primary-color);
+      color: var(--p-primary-contrast-color);
     }
 
     .p-button-label {
       font-weight: 500;
+    }
+
+    .p-button-icon {
+      display: none; // Hide icons to save space
     }
   }
 }
@@ -258,7 +280,7 @@
   flex: 1;
 
   .p-slider {
-    background: var(--p-surface-200, rgba(255, 255, 255, 0.1));
+    background: var(--p-surface-200);
   }
 }
 
@@ -266,29 +288,21 @@
   font-family: 'SF Mono', 'Menlo', 'Monaco', monospace;
   font-size: 11px;
   min-width: 28px;
-  color: var(--p-primary-color, #60a5fa);
+  color: var(--p-primary-color);
 }
 
 // ===== Steps Section =====
 .steps-section {
-  flex: 1 1 0;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  overflow: hidden;
+  // No flex: 1 - let it take natural height inside scrollable container
 }
 
 .steps-content {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  overflow: hidden;
+  // Natural flow
 }
 
 .steps-list {
-  flex: 1;
   overflow-y: auto;
+  max-height: 200px;
 }
 
 .step-item {
@@ -297,17 +311,17 @@
   gap: 6px;
   padding: 6px 0;
   font-size: 11px;
-  color: var(--p-text-color, #e2e8f0);
+  color: var(--p-text-color);
 
   .step-number {
     font-family: 'SF Mono', 'Menlo', 'Monaco', monospace;
-    color: var(--p-text-muted-color, #64748b);
+    color: var(--p-text-muted-color);
     min-width: 20px;
   }
 
   i {
     font-size: 11px;
-    color: var(--p-text-muted-color, #94a3b8);
+    color: var(--p-text-muted-color);
     width: 16px;
     text-align: center;
   }
@@ -315,7 +329,7 @@
   .step-text {
     font-family: 'SF Mono', 'Menlo', 'Monaco', monospace;
     font-size: 10px;
-    color: var(--p-primary-300, #93c5fd);
+    color: var(--p-primary-color);
     flex: 1;
   }
 
@@ -328,28 +342,26 @@
 .steps-summary {
   padding-top: 8px;
   margin-top: 8px;
-  border-top: 1px solid var(--p-surface-border, rgba(255, 255, 255, 0.08));
+  border-top: 1px solid var(--p-content-border-color);
   font-size: 11px;
-  color: var(--p-text-muted-color, #64748b);
+  color: var(--p-text-muted-color);
 }
 
 .steps-empty {
   padding: 16px;
   text-align: center;
   font-size: 12px;
-  color: var(--p-text-muted-color, #64748b);
+  color: var(--p-text-muted-color);
   font-style: italic;
 }
 
 // ===== Action Buttons =====
 .sidebar-actions {
+  flex-shrink: 0;
   padding: 16px;
-  border-top: 1px solid var(--p-surface-border, rgba(255, 255, 255, 0.08));
+  border-top: 1px solid var(--p-content-border-color);
   display: flex;
   gap: 10px;
-  margin-top: auto;
-  flex-shrink: 0;
-  background: var(--p-surface-card, #252536);
 }
 
 :host ::ng-deep .action-btn {

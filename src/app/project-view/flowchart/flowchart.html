@@ -1,5 +1,19 @@
-<div class="flow-wrapper">
-  <div class="run-toolbar">
+<div class="flow-wrapper" [class.planning-mode-active]="planningService.isActive()">
+  <!-- Fullscreen Planning Mode -->
+  @if (planningService.isActive()) {
+    <div class="fullscreen-planning">
+      <app-table-visualization-panel
+        [visible]="true"
+        [showHeader]="false"
+        [embedded]="true"
+        [showPaths]="true"
+        (addPlannedSteps)="actions.addPlannedSteps($event)">
+      </app-table-visualization-panel>
+    </div>
+  }
+
+  <!-- Regular Flowchart View (hidden in planning mode) -->
+  <div class="run-toolbar" [class.hidden]="planningService.isActive()">
     <div class="toolbar-left">
       <button
         type="button"
@@ -88,7 +102,7 @@
     </div>
   </div>
 
-  <div class="flow-surface" #flowSurface (contextmenu)="actions.onCanvasContextMenu($event)">
+  <div class="flow-surface" [class.hidden]="planningService.isActive()" #flowSurface (contextmenu)="actions.onCanvasContextMenu($event)">
     @if (typeDefinitionsLoading()) {
       <div class="flow-loading-overlay">
         <div class="flow-loading-content">

@@ -37,6 +37,7 @@ import { TimingPanel, type TimingViewMode } from './timing/timing-panel';
 import { RobotSettingsModal } from './robot-settings/robot-settings-modal';
 import { TableMapService, TableVisualizationService } from './table/services';
 import { buildPlannedPathFromProjectSimulation } from './table/simulation-path';
+import { PlanningModeService } from './table/planning';
 
 interface DefinitionOption {
   label: string;
@@ -144,7 +145,8 @@ export class Flowchart implements AfterViewChecked, OnDestroy, OnInit {
     readonly history: FlowHistory,
     readonly translate: TranslateService,
     readonly tableViz: TableVisualizationService,
-    readonly tableMap: TableMapService
+    readonly tableMap: TableMapService,
+    readonly planningService: PlanningModeService
   ) {
     this.historyManager = createHistoryManager(this);
     this.runManager = createRunManager(this);
