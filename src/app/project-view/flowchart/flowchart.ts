@@ -30,6 +30,7 @@ import { createFlowchartActions, FlowchartActions } from './flowchart-actions';
 import { TypeDefinition } from '../../entities/TypeDefinition';
 import { Select } from 'primeng/select';
 import { DecimalPipe } from '@angular/common';
+import { ProgressSpinner } from 'primeng/progressspinner';
 import { TableVisualizationPanel } from './table/table-visualization-panel';
 import { TimingPanel, type TimingViewMode } from './timing/timing-panel';
 import { RobotSettingsModal } from './robot-settings/robot-settings-modal';
@@ -68,7 +69,7 @@ const DEFAULT_PANEL_OFFSETS: Record<FloatingPanelKey, PanelOffset> = {
 
 @Component({
   selector: 'app-flowchart',
-  imports: [FFlowComponent, FFlowModule, InputNumberModule, CheckboxModule, InputTextModule, ContextMenuModule, Tooltip, SelectButtonModule, FormsModule, TranslateModule, Select, DecimalPipe, TableVisualizationPanel, TimingPanel, RobotSettingsModal],
+  imports: [FFlowComponent, FFlowModule, InputNumberModule, CheckboxModule, InputTextModule, ContextMenuModule, Tooltip, SelectButtonModule, FormsModule, TranslateModule, Select, DecimalPipe, ProgressSpinner, TableVisualizationPanel, TimingPanel, RobotSettingsModal],
   templateUrl: './flowchart.html',
   styleUrl: './flowchart.scss',
   providers: [FlowHistory],
@@ -95,6 +96,7 @@ export class Flowchart implements AfterViewChecked, OnDestroy, OnInit {
   readonly runManager: FlowchartRunManager;
   readonly typeDefinitionOptions = signal<DefinitionGroups>({});
   readonly typeDefinitions = signal<TypeDefinition[]>([]);
+  readonly typeDefinitionsLoading = signal<boolean>(true);
   readonly viewToggleState = signal<Record<string, boolean>>(readStoredViewToggleState(DEFAULT_VIEW_TOGGLE_STATE));
   readonly viewToggleOptions = [
     { key: 'timestamps', labelKey: 'FLOWCHART.VIEW_TOGGLE_TIMESTAMPS', icon: 'pi pi-clock' },
@@ -181,12 +183,15 @@ export class Flowchart implements AfterViewChecked, OnDestroy, OnInit {
     if (!projectUUID) {
       this.typeDefinitionOptions.set({});
       this.typeDefinitions.set([]);
+      this.typeDefinitionsLoading.set(false);
       return;
     }
+    this.typeDefinitionsLoading.set(true);
     this.typeDefinitionsSub = this.http.getTypeDefinitions(projectUUID).subscribe({
       next: defs => {
         this.typeDefinitions.set(defs);
         this.typeDefinitionOptions.set(this.groupDefinitionsByType(defs));
+        this.typeDefinitionsLoading.set(false);
         if (this.deviceInfo) {
           this.applyDeviceVisualizationInfo(this.deviceInfo);
         }
@@ -194,6 +199,7 @@ export class Flowchart implements AfterViewChecked, OnDestroy, OnInit {
       error: () => {
         this.typeDefinitions.set([]);
         this.typeDefinitionOptions.set({});
+        this.typeDefinitionsLoading.set(false);
       },
     });
   }

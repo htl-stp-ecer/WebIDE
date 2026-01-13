@@ -92,6 +92,11 @@
   gap: 8px;
 }
 
+.viz-loading-spinner {
+  font-size: 14px;
+  color: #3b82f6;
+}
+
 .viz-pill {
   display: inline-flex;
   align-items: center;
@@ -117,8 +122,74 @@
   width: 100%;
   height: 100%;
   display: block;
+  transition: filter 0.2s ease;
 }
 
 .viz-canvas.viz-canvas-editable {
   cursor: crosshair;
+}
+
+.viz-canvas.viz-canvas-loading {
+  filter: blur(4px);
+  pointer-events: none;
+}
+
+.viz-loading-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 15, 35, 0.4);
+  z-index: 10;
+}
+
+.viz-overlay-spinner {
+  font-size: 32px;
+  color: #3b82f6;
+}
+
+// Action button
+.viz-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 6px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(35, 40, 48, 0.9);
+  color: #e5e7eb;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+
+  &:hover {
+    background: rgba(55, 65, 81, 0.9);
+    border-color: rgba(148, 163, 184, 0.6);
+  }
+
+  &.active {
+    background: #3b82f6;
+    border-color: #2563eb;
+    color: #fff;
+  }
+}
+
+:host-context(.dark) .viz-action-btn {
+  background: rgba(35, 40, 48, 0.9);
+  border-color: rgba(148, 163, 184, 0.35);
+  color: #e5e7eb;
+
+  &:hover {
+    background: rgba(55, 65, 81, 0.9);
+    border-color: rgba(148, 163, 184, 0.6);
+  }
+
+  &.active {
+    background: #3b82f6;
+    border-color: #2563eb;
+    color: #fff;
+  }
 }

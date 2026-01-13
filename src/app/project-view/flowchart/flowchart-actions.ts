@@ -5,7 +5,8 @@ import type { FCreateConnectionEvent, FCreateNodeEvent, FDropToGroupEvent, FNode
 import { handleLoaded, startNodePosition } from './layout-handlers';
 import { handleOrientationChange, isVerticalOrientation } from './orientation-handlers';
 import { handleUndo, handleRedo } from './history-handlers';
-import { handleNodeMoved } from './mission-handlers';
+import { handleNodeMoved, handleAddPlannedSteps } from './mission-handlers';
+import { MissionStep } from '../../entities/MissionStep';
 import { handleCreateNode, deleteNode as removeNode } from './node-handlers';
 import { handleArgumentChange } from './argument-handlers';
 import { handleAddBreakpoint, handleAddConnection, handleNodeIntersected as handleSplitConnection, handleRemoveBreakpoint } from './connection-handlers';
@@ -83,6 +84,7 @@ export interface FlowchartActions {
   stopRun(): void;
   continueDebug(): void;
   onArgumentChange(nodeId: string, argName: string, index: number, value: unknown): void;
+  addPlannedSteps(steps: MissionStep[]): void;
 }
 
 export function createFlowchartActions(flow: Flowchart): FlowchartActions {
@@ -137,5 +139,6 @@ export function createFlowchartActions(flow: Flowchart): FlowchartActions {
     stopRun: () => handleStop(flow),
     continueDebug: () => handleContinueDebug(flow),
     onArgumentChange: (nodeId, argName, index, value) => handleArgumentChange(flow, nodeId, argName, index, value),
+    addPlannedSteps: steps => handleAddPlannedSteps(flow, steps),
   };
 }

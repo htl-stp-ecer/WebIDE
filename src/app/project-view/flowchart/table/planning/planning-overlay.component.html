@@ -1,0 +1,68 @@
+<div class="planning-overlay">
+  <!-- Toolbar -->
+  <div class="planning-toolbar">
+    <div class="toolbar-title">
+      <i class="pi pi-pencil"></i>
+      <span>{{ 'FLOWCHART.PLANNING_MODE' | translate }}</span>
+    </div>
+
+    <div class="toolbar-spacer"></div>
+
+    <button
+      class="planning-btn"
+      (click)="onClear()"
+      [disabled]="!planningService.waypoints().length">
+      <i class="pi pi-trash"></i>
+      <span>{{ 'COMMON.CLEAR' | translate }}</span>
+    </button>
+
+    <button
+      class="planning-btn planning-btn-cancel"
+      (click)="onCancel()">
+      <span>{{ 'COMMON.CANCEL' | translate }}</span>
+    </button>
+
+    <button
+      class="planning-btn planning-btn-primary"
+      [disabled]="!planningService.canAddSteps()"
+      (click)="onAddSteps()">
+      <i class="pi pi-plus"></i>
+      <span>{{ 'FLOWCHART.ADD_STEPS' | translate }}</span>
+    </button>
+  </div>
+
+  <!-- Canvas for drawing waypoints -->
+  <canvas
+    #canvas
+    class="planning-canvas"
+    (pointerdown)="onPointerDown($event)"
+    (pointermove)="onPointerMove($event)"
+    (pointerup)="onPointerUp($event)"
+    (pointerleave)="onPointerLeave()"
+    (dblclick)="onDoubleClick($event)">
+  </canvas>
+
+  <!-- Step preview panel -->
+  @if (planningService.generatedSteps().length) {
+    <div class="step-preview-panel">
+      <div class="step-preview-header">
+        {{ 'FLOWCHART.GENERATED_STEPS' | translate }} ({{ planningService.generatedSteps().length }})
+      </div>
+      <div class="step-preview-list">
+        @for (step of planningService.generatedSteps(); track $index) {
+          <div class="step-preview-item">
+            <i [class]="getStepIcon(step)"></i>
+            <span class="step-text">{{ formatStep(step) }}</span>
+          </div>
+        }
+      </div>
+    </div>
+  }
+
+  <!-- Help text when no waypoints -->
+  @if (!planningService.waypoints().length) {
+    <div class="planning-hint">
+      {{ 'FLOWCHART.PLANNING_HINT' | translate }}
+    </div>
+  }
+</div>

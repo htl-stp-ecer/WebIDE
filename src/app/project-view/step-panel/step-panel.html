@@ -1,25 +1,39 @@
 <div class="external-panel">
-<!--  <h2 class="text-xl mb-2 text-center font-bold select-none">Steps</h2>-->
-
   <div class="groups-scroll flex-1 min-h-0 flex flex-col gap-4">
-    @for (group of stepGroups; track group.headline) {
-      <div>
-        <h3 class="text-lg font-semibold mb-1 capitalize">{{ group.headline }}</h3>
-        <div class="flex flex-col gap-2">
-          @for (step of group.steps; track step.name) {
-            <div
-              class="external-item p-2 rounded border border-gray-300 dark:border-gray-700
-                         bg-white dark:bg-gray-800 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700
-                         select-none"
-              fExternalItem
-              [fData]="step"
-              [fPreviewMatchSize]="true"
-            >
-              {{ step.name }}
-            </div>
-          }
+    @if (stepsLoading) {
+      <!-- Loading Skeleton -->
+      @for (groupIndex of [1, 2, 3]; track groupIndex) {
+        <div>
+          <p-skeleton width="40%" height="1.25rem" styleClass="mb-2"></p-skeleton>
+          <div class="flex flex-col gap-2">
+            @for (stepIndex of [1, 2, 3]; track stepIndex) {
+              <div class="p-2 rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+                <p-skeleton width="80%" height="1rem"></p-skeleton>
+              </div>
+            }
+          </div>
         </div>
-      </div>
+      }
+    } @else {
+      @for (group of stepGroups; track group.headline) {
+        <div>
+          <h3 class="text-lg font-semibold mb-1 capitalize">{{ group.headline }}</h3>
+          <div class="flex flex-col gap-2">
+            @for (step of group.steps; track step.name) {
+              <div
+                class="external-item p-2 rounded border border-gray-300 dark:border-gray-700
+                           bg-white dark:bg-gray-800 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700
+                           select-none"
+                fExternalItem
+                [fData]="step"
+                [fPreviewMatchSize]="true"
+              >
+                {{ step.name }}
+              </div>
+            }
+          </div>
+        </div>
+      }
     }
   </div>
 </div>

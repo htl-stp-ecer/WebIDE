@@ -203,3 +203,20 @@ export function handleNodeMoved(flow: Flowchart, nodeId: string, pos: { x: numbe
 
   flow.historyManager.recordHistory('move-node');
 }
+
+/**
+ * Add planned steps (from planning mode) to the current mission.
+ */
+export function handleAddPlannedSteps(flow: Flowchart, steps: MissionStep[]): void {
+  if (!steps.length) return;
+
+  const mission = flow.missionState.currentMission();
+  if (!mission) return;
+
+  // Append steps to mission
+  mission.steps = [...(mission.steps ?? []), ...steps];
+
+  rebuildFromMission(flow, mission);
+  flow.layoutFlags.needsAdjust = true;
+  flow.historyManager.recordHistory('add-planned-steps');
+}

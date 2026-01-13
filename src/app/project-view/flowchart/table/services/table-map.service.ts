@@ -69,6 +69,7 @@ export class TableMapService {
   private readonly _mapImage = signal<HTMLImageElement | null>(null);
   private readonly _imageData = signal<ImageData | null>(null);
   private readonly _parsedData = signal<ParsedMapData | null>(null);
+  private readonly _isLoading = signal<boolean>(false);
   // Default dimensions: 79x40 pixels mapped to 200x100 cm
   private readonly _config = signal<MapConfig>({
     widthCm: 79 * CM_PER_PIXEL_X,  // 200 cm
@@ -79,6 +80,7 @@ export class TableMapService {
   readonly mapImage = this._mapImage.asReadonly();
   readonly config = this._config.asReadonly();
   readonly isLoaded = computed(() => this._mapImage() !== null);
+  readonly isLoading = this._isLoading.asReadonly();
 
   /** Line segments in table coordinates (cm) */
   readonly lineSegmentsCm = computed<LineSegmentCm[]>(() => {
@@ -116,6 +118,7 @@ export class TableMapService {
 
   /** Load a map image from a URL */
   async loadMap(url: string): Promise<void> {
+    this._isLoading.set(true);
     return new Promise((resolve, reject) => {
       const img = new Image();
       img.crossOrigin = 'anonymous';
@@ -132,9 +135,13 @@ export class TableMapService {
           pixelsPerCm: 1 / CM_PER_PIXEL_AVG,
         }));
 
+        this._isLoading.set(false);
         resolve();
       };
-      img.onerror = reject;
+      img.onerror = (err) => {
+        this._isLoading.set(false);
+        reject(err);
+      };
       img.src = url;
     });
   }

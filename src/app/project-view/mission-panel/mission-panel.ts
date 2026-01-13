@@ -19,11 +19,12 @@ import {ConfirmDialog} from 'primeng/confirmdialog';
 import { Dialog } from 'primeng/dialog';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { decodeRouteIp, encodeRouteIp } from '../../services/route-ip-serializer';
+import { Skeleton } from 'primeng/skeleton';
 
 @Component({
   selector: 'app-mission-panel',
   standalone: true,
-  imports: [Card, PrimeTemplate, FormsModule, InputText, Button, Timeline, DragDropModule, NgClass, ContextMenu, ConfirmDialog, Dialog, TranslateModule],
+  imports: [Card, PrimeTemplate, FormsModule, InputText, Button, Timeline, DragDropModule, NgClass, ContextMenu, ConfirmDialog, Dialog, TranslateModule, Skeleton],
   templateUrl: './mission-panel.html',
   styleUrl: './mission-panel.scss',
   providers: [ConfirmationService]
@@ -39,6 +40,8 @@ export class MissionPanel implements OnInit {
   newMissionName = "";
   currentMission: Mission | undefined;
   contextMenuItems: MenuItem[] = [];
+  missionsLoading = true;
+  missionDetailLoading = false;
   private contextMission?: Mission;
 
   // Rename dialog state
@@ -75,10 +78,12 @@ export class MissionPanel implements OnInit {
   }
 
   getMissions(): void {
+    this.missionsLoading = true;
     this.http.getAllMissions(this.projectUUID!).subscribe({
       next: result => {
         this.missions = result;
         this.updateTimelineData();
+        this.missionsLoading = false;
         if (result.length) {
           this.getDetailedMission(result[0].name);
         } else {
@@ -87,6 +92,7 @@ export class MissionPanel implements OnInit {
         }
       },
       error: error => {
+        this.missionsLoading = false;
         NotificationService.showError(
           this.translate.instant('MISSION.ERROR_LOAD_MISSIONS'),
           this.translate.instant('COMMON.ERROR')
@@ -97,11 +103,14 @@ export class MissionPanel implements OnInit {
   }
 
   getDetailedMission(name: string) {
+    this.missionDetailLoading = true;
     this.http.getDetailedMission(this.projectUUID!, name).subscribe({
       next: result => {
         this.currentMission = result;
-        this.missionState.setMission(result)
+        this.missionState.setMission(result);
+        this.missionDetailLoading = false;
       }, error: error => {
+        this.missionDetailLoading = false;
         NotificationService.showError(error);
       }
     })
