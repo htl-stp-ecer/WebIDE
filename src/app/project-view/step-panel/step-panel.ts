@@ -2,7 +2,8 @@ import { Component, OnInit } from '@angular/core';
 import { FExternalItemDirective } from '@foblex/flow';
 import { HttpService } from '../../services/http-service';
 import { StepsStateService } from '../../services/steps-state-service';
-import {ActivatedRoute} from '@angular/router';
+import { ActivatedRoute } from '@angular/router';
+import { Skeleton } from 'primeng/skeleton';
 
 interface StepGroup {
   headline: string;
@@ -14,11 +15,13 @@ interface StepGroup {
   templateUrl: './step-panel.html',
   imports: [
     FExternalItemDirective,
+    Skeleton,
   ],
   styleUrls: ['./step-panel.scss']
 })
 export class StepPanel implements OnInit {
   stepGroups: StepGroup[] = [];
+  stepsLoading = true;
 
   constructor(private http: HttpService, private stepStateService: StepsStateService, private route: ActivatedRoute) {}
 
@@ -26,16 +29,20 @@ export class StepPanel implements OnInit {
     const projectUUID = this.route.snapshot.paramMap.get('uuid');
     if (!projectUUID) {
       this.stepGroups = [];
+      this.stepsLoading = false;
       return;
     }
+    this.stepsLoading = true;
     this.http.getAllSteps(projectUUID).subscribe({
       next: steps => {
         this.stepStateService.setSteps(steps);
         this.groupSteps(steps);
+        this.stepsLoading = false;
       },
       error: () => {
         this.stepGroups = [];
         this.stepStateService.setSteps([]);
+        this.stepsLoading = false;
       },
     });
   }

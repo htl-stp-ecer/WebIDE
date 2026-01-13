@@ -50,6 +50,15 @@ export class TableVisualizationService {
   readonly plannedMissionEndIndices = this._plannedMissionEndIndices.asReadonly();
   readonly plannedHighlightRange = this._plannedHighlightRange.asReadonly();
 
+  /** End pose after all planned steps (or start pose if no path) */
+  readonly plannedEndPose = computed<Pose2D>(() => {
+    const path = this._plannedPath();
+    if (path && path.length > 0) {
+      return path[path.length - 1];
+    }
+    return this._startPose();
+  });
+
   /** Set the start pose */
   setStartPose(x: number, y: number, thetaDeg: number): void {
     this._startPose.set(createPose(x, y, thetaDeg));

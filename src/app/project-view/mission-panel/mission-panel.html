@@ -25,76 +25,88 @@
   </p-dialog>
   <!-- Timeline Section -->
   <div class="flex-1 min-h-0 overflow-y-auto">
-    <!-- Fixed Top: setups (and both) -->
-    <p-timeline
-      [value]="topMissions"
-      layout="vertical"
-      class="p-4"
-    >
-      <ng-template let-item let-i="index" pTemplate="content">
-        <div
-          class="flex items-center gap-3 cursor-pointer px-2 py-1 rounded-lg transition-colors"
-          (click)="getDetailedMission(item.name)"
-          [ngClass]="{
-      'bg-blue-100 border border-blue-400 dark:bg-blue-900 dark:border-blue-500':
-        currentMission?.name === item.name
-    }"
-        >
-          <span class="text-gray-500 dark:text-gray-400">{{ item.order }}</span>
-          <span class="text-gray-800 dark:text-gray-200">{{ item.name }}</span>
-          <i class="pi pi-lock text-gray-400 dark:text-gray-500 ml-auto"></i>
-        </div>
-      </ng-template>
-    </p-timeline>
+    @if (missionsLoading) {
+      <!-- Loading Skeleton -->
+      <div class="p-4 space-y-3">
+        @for (i of [1, 2, 3, 4, 5]; track i) {
+          <div class="flex items-center gap-3 px-2 py-2">
+            <p-skeleton width="1.5rem" height="1.5rem" shape="circle"></p-skeleton>
+            <p-skeleton width="70%" height="1rem"></p-skeleton>
+          </div>
+        }
+      </div>
+    } @else {
+      <!-- Fixed Top: setups (and both) -->
+      <p-timeline
+        [value]="topMissions"
+        layout="vertical"
+        class="p-4"
+      >
+        <ng-template let-item let-i="index" pTemplate="content">
+          <div
+            class="flex items-center gap-3 cursor-pointer px-2 py-1 rounded-lg transition-colors"
+            (click)="getDetailedMission(item.name)"
+            [ngClass]="{
+        'bg-blue-100 border border-blue-400 dark:bg-blue-900 dark:border-blue-500':
+          currentMission?.name === item.name
+      }"
+          >
+            <span class="text-gray-500 dark:text-gray-400">{{ item.order }}</span>
+            <span class="text-gray-800 dark:text-gray-200">{{ item.name }}</span>
+            <i class="pi pi-lock text-gray-400 dark:text-gray-500 ml-auto"></i>
+          </div>
+        </ng-template>
+      </p-timeline>
 
-    <!-- Reorderable Middle -->
-    <p-timeline
-      cdkDropList
-      [cdkDropListData]="middleMissions"
-      (cdkDropListDropped)="dropMiddle($event)"
-      [value]="middleMissions"
-      layout="vertical"
-      class="p-4"
-    >
-      <ng-template let-item let-i="index" pTemplate="content">
-        <div
-          cdkDrag
-          class="flex items-center gap-3 cursor-pointer px-2 py-1 rounded-lg transition-colors"
-          (click)="getDetailedMission(item.name)"
-          (contextmenu)="onRightClickMission($event, item)"
-          [ngClass]="{
-      'bg-blue-100 border border-blue-400 dark:bg-blue-900 dark:border-blue-500':
-        currentMission?.name === item.name
-    }"
-        >
-          <span class="text-gray-500 dark:text-gray-400">{{ item.order }}</span>
-          <span class="text-gray-800 dark:text-gray-200">{{ item.name }}</span>
-          <i class="pi pi-bars text-gray-400 dark:text-gray-500 ml-auto"></i>
-        </div>
-      </ng-template>
-    </p-timeline>
+      <!-- Reorderable Middle -->
+      <p-timeline
+        cdkDropList
+        [cdkDropListData]="middleMissions"
+        (cdkDropListDropped)="dropMiddle($event)"
+        [value]="middleMissions"
+        layout="vertical"
+        class="p-4"
+      >
+        <ng-template let-item let-i="index" pTemplate="content">
+          <div
+            cdkDrag
+            class="flex items-center gap-3 cursor-pointer px-2 py-1 rounded-lg transition-colors"
+            (click)="getDetailedMission(item.name)"
+            (contextmenu)="onRightClickMission($event, item)"
+            [ngClass]="{
+        'bg-blue-100 border border-blue-400 dark:bg-blue-900 dark:border-blue-500':
+          currentMission?.name === item.name
+      }"
+          >
+            <span class="text-gray-500 dark:text-gray-400">{{ item.order }}</span>
+            <span class="text-gray-800 dark:text-gray-200">{{ item.name }}</span>
+            <i class="pi pi-bars text-gray-400 dark:text-gray-500 ml-auto"></i>
+          </div>
+        </ng-template>
+      </p-timeline>
 
-    <!-- Fixed Bottom: shutdown-only -->
-    <p-timeline
-      [value]="bottomMissions"
-      layout="vertical"
-      class="p-4"
-    >
-      <ng-template let-item let-i="index" pTemplate="content">
-        <div
-          class="flex items-center gap-3 cursor-pointer px-2 py-1 rounded-lg transition-colors"
-          (click)="getDetailedMission(item.name)"
-          [ngClass]="{
-      'bg-blue-100 border border-blue-400 dark:bg-blue-900 dark:border-blue-500':
-        currentMission?.name === item.name
-    }"
-        >
-          <span class="text-gray-500 dark:text-gray-400">{{ item.order }}</span>
-          <span class="text-gray-800 dark:text-gray-200">{{ item.name }}</span>
-          <i class="pi pi-lock text-gray-400 dark:text-gray-500 ml-auto"></i>
-        </div>
-      </ng-template>
-    </p-timeline>
+      <!-- Fixed Bottom: shutdown-only -->
+      <p-timeline
+        [value]="bottomMissions"
+        layout="vertical"
+        class="p-4"
+      >
+        <ng-template let-item let-i="index" pTemplate="content">
+          <div
+            class="flex items-center gap-3 cursor-pointer px-2 py-1 rounded-lg transition-colors"
+            (click)="getDetailedMission(item.name)"
+            [ngClass]="{
+        'bg-blue-100 border border-blue-400 dark:bg-blue-900 dark:border-blue-500':
+          currentMission?.name === item.name
+      }"
+          >
+            <span class="text-gray-500 dark:text-gray-400">{{ item.order }}</span>
+            <span class="text-gray-800 dark:text-gray-200">{{ item.name }}</span>
+            <i class="pi pi-lock text-gray-400 dark:text-gray-500 ml-auto"></i>
+          </div>
+        </ng-template>
+      </p-timeline>
+    }
   </div>
   <!-- Add Mission Section (Outside Timeline) -->
   <div class="p-4 pb-0 border-t border-gray-200">

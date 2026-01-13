@@ -6,9 +6,18 @@
         <span>{{ 'FLOWCHART.VIEW_TOGGLE_TABLE_VIZ' | translate }}</span>
       </div>
       <div class="viz-status">
-        @if (mapService.isLoaded()) {
+        @if (mapService.isLoading()) {
+          <i class="pi pi-spin pi-spinner viz-loading-spinner"></i>
+        } @else if (mapService.isLoaded()) {
           <span class="viz-pill viz-pill-ready">Map Loaded</span>
         }
+        <button
+          class="viz-action-btn"
+          [class.active]="planningService.isActive()"
+          (click)="togglePlanningMode(); $event.stopPropagation()"
+          [title]="'FLOWCHART.PLANNING_MODE' | translate">
+          <i class="pi pi-pencil"></i>
+        </button>
       </div>
     </div>
   }
@@ -16,7 +25,21 @@
     <canvas
       #canvas
       class="viz-canvas"
-      [class.viz-canvas-editable]="allowStartPoseEdit()"
+      [class.viz-canvas-editable]="allowStartPoseEdit() && !planningService.isActive()"
+      [class.viz-canvas-loading]="mapService.isLoading()"
       (pointerdown)="onCanvasPointerDown($event)"></canvas>
+
+    @if (mapService.isLoading()) {
+      <div class="viz-loading-overlay">
+        <i class="pi pi-spin pi-spinner viz-overlay-spinner"></i>
+      </div>
+    }
+
+    @if (planningService.isActive()) {
+      <app-planning-overlay
+        (addSteps)="onPlanningAddSteps($event)"
+        (close)="onPlanningClose()">
+      </app-planning-overlay>
+    }
   </div>
 </div>

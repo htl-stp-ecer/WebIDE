@@ -16,6 +16,9 @@ import { TableVisualizationService, type ComputedPath } from './services';
 import { Pose2D, thetaToDegrees } from './models';
 import { SensorStepType } from './models';
 import { applyWallPhysicsToPathWithSegments, buildCollisionWalls, type PathWithSegments } from './physics';
+import { PlanningModeService, PlanningOverlayComponent } from './planning';
+import { MissionStep } from '../../../entities/MissionStep';
+import { HttpService } from '../../../services/http-service';
 
 /** Line thickness in cm for rendering */
 const LINE_THICKNESS_CM = 2.54;
@@ -30,7 +33,7 @@ const HIGHLIGHT_COLOR = '#3b82f6';
 @Component({
   selector: 'app-table-visualization-panel',
   standalone: true,
-  imports: [TranslateModule],
+  imports: [TranslateModule, PlanningOverlayComponent],
   templateUrl: './table-visualization-panel.html',
   styleUrl: './table-visualization-panel.scss',
 })
@@ -43,9 +46,12 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
   readonly embedded = input<boolean>(false);
   readonly showPaths = input<boolean>(true);
   @Output() startPoseChange = new EventEmitter<Pose2D>();
+  @Output() addPlannedSteps = new EventEmitter<MissionStep[]>();
 
   readonly mapService = inject(TableMapService);
   readonly vizService = inject(TableVisualizationService);
+  readonly planningService = inject(PlanningModeService);
+  private readonly httpService = inject(HttpService);
 
   private ctx!: CanvasRenderingContext2D;
   private animationFrameId: number | null = null;
@@ -102,6 +108,23 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
 
     this.resizeCanvas();
     this.startRenderLoop();
+    this.loadStoredMap();
+  }
+
+  /** Load stored map from backend on first render */
+  private loadStoredMap(): void {
+    if (this.mapService.isLoaded()) return;
+
+    this.httpService.getTableMap().subscribe({
+      next: (response) => {
+        if (response.image) {
+          this.mapService.loadMapFromBase64(response.image);
+        }
+      },
+      error: (err) => {
+        console.warn('Failed to load stored table map:', err);
+      },
+    });
   }
 
   ngOnDestroy(): void {
@@ -676,5 +699,24 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
     };
     this.vizService.setStartPose(nextPose.x, nextPose.y, thetaToDegrees(nextPose.theta));
     this.startPoseChange.emit(nextPose);
+  }
+
+  // --- Planning Mode ---
+
+  togglePlanningMode(): void {
+    if (!this.planningService.isActive()) {
+      // Set start pose from mission end position (after all steps)
+      const endPose = this.vizService.plannedEndPose();
+      this.planningService.setStartPose(endPose.x, endPose.y, endPose.theta);
+    }
+    this.planningService.toggle();
+  }
+
+  onPlanningAddSteps(steps: MissionStep[]): void {
+    this.addPlannedSteps.emit(steps);
+  }
+
+  onPlanningClose(): void {
+    this.planningService.deactivate();
   }
 }

@@ -90,6 +90,14 @@
   </div>
 
   <div class="flow-surface" #flowSurface (contextmenu)="actions.onCanvasContextMenu($event)">
+    @if (typeDefinitionsLoading()) {
+      <div class="flow-loading-overlay">
+        <div class="flow-loading-content">
+          <p-progressSpinner strokeWidth="4" animationDuration="1s" styleClass="flow-spinner"></p-progressSpinner>
+          <span class="flow-loading-text">{{ 'FLOWCHART.LOADING' | translate }}</span>
+        </div>
+      </div>
+    }
     <f-flow class="flow-root" fDraggable fEmitOnNodeIntersect (fNodeIntersectedWithConnections)="actions.onNodeIntersected($event)" (fDropToGroup)="actions.onDropToGroup($event)" (fLoaded)="actions.onLoaded()" (fCreateNode)="actions.onCreateNode($event)" (fCreateConnection)="actions.addConnection($event)" (fDragEnded)="actions.onSave()">
       <f-background class="flow-bg"><f-circle-pattern color="#4a5565"></f-circle-pattern></f-background>
       <f-canvas fZoom class="flow-canvas">
@@ -223,7 +231,8 @@
       [style.transform]="panelTransform('unity')"
       (pointerdown)="startPanelDrag($event, 'unity')"
       [visible]="isToggleEnabled('tableVisualization')"
-      [class.is-hidden]="!isToggleEnabled('tableVisualization')"></app-table-visualization-panel>
+      [class.is-hidden]="!isToggleEnabled('tableVisualization')"
+      (addPlannedSteps)="actions.addPlannedSteps($event)"></app-table-visualization-panel>
   </div>
 
   <p-contextMenu #cm [model]="contextMenu.items" [appendTo]="'body'"></p-contextMenu>

@@ -13,6 +13,7 @@ export const enTranslations = {
     INFO: 'Info',
     WARNING: 'Warning',
     CONFIRM_DELETION: 'Confirm Deletion',
+    CLEAR: 'Clear',
   },
   NAVBAR: {
     BATTERY_PERCENT: '({{ value }}%)',
@@ -188,6 +189,11 @@ export const enTranslations = {
     TABLE_UPLOAD_SUCCESS: 'Image uploaded',
     TABLE_UPLOAD_INVALID_SIZE: 'Invalid size (expected {{ expected }}, got {{ actual }})',
     TABLE_UPLOAD_INVALID_COLORS: 'Image contains invalid colors',
+    PLANNING_MODE: 'Planning',
+    PLANNING_HINT: 'Click to place waypoints',
+    GENERATED_STEPS: 'Generated Steps',
+    ADD_STEPS: 'Add Steps',
+    LOADING: 'Loading...',
   },
 };
 
@@ -206,6 +212,7 @@ export const deTranslations = {
     INFO: 'Info',
     WARNING: 'Warnung',
     CONFIRM_DELETION: 'Löschen bestätigen',
+    CLEAR: 'Leeren',
   },
   NAVBAR: {
     BATTERY_PERCENT: '({{ value }}%)',
@@ -381,6 +388,11 @@ export const deTranslations = {
     TABLE_UPLOAD_SUCCESS: 'Bild hochgeladen',
     TABLE_UPLOAD_INVALID_SIZE: 'Ungültige Größe (erwartet {{ expected }}, erhalten {{ actual }})',
     TABLE_UPLOAD_INVALID_COLORS: 'Bild enthält ungültige Farben',
+    PLANNING_MODE: 'Planung',
+    PLANNING_HINT: 'Klicken, um Wegpunkte zu setzen',
+    GENERATED_STEPS: 'Generierte Schritte',
+    ADD_STEPS: 'Schritte hinzufügen',
+    LOADING: 'Lädt...',
   },
 };
 
