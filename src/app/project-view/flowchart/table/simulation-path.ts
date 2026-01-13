@@ -7,6 +7,14 @@ const LABEL_FIRST_NUMBER_PATTERN = /\(([-+]?\d*\.?\d+)/;
 const DEFAULT_LINEUP_STEP_CM = 0.5;
 const DEFAULT_LINEUP_MAX_DISTANCE_CM = 200;
 const DEFAULT_LINEUP_ROTATE_STEP_RAD = Math.PI / 90;
+const DEFAULT_FOLLOW_LINE_ROTATE_STEP_RAD = Math.PI / 90;
+const FOLLOW_LINE_SAMPLE_COUNT: number = 9;
+const FOLLOW_LINE_GAIN_MAX = 0.02;
+const FOLLOW_LINE_GAIN_DECAY_MIN_CM = 4;
+const FOLLOW_LINE_GAIN_DECAY_SCALE = 0.9;
+const FOLLOW_LINE_MAX_TURN_RAD = Math.PI / 60;
+const FOLLOW_LINE_WHITE_BIAS = 0.5;
+const FOLLOW_LINE_WHITE_DECAY = 0.12;
 
 export interface LineupSimulationContext {
   isOnBlackLine: (xCm: number, yCm: number) => boolean;
@@ -141,6 +149,17 @@ export function buildPlannedPathFromSimulation(
         current = drivePoses[drivePoses.length - 1];
       }
       continue;
+    }
+    if (fn === 'follow_line') {
+      const targetCm = parseDistanceCmFromLabel(step.label) ?? (step.delta?.forward ?? 0) * 100;
+      if (options?.lineup && targetCm > 0) {
+        const followPoses = simulateFollowLine(current, options.lineup, targetCm);
+        if (followPoses.length) {
+          poses.push(...followPoses);
+          current = followPoses[followPoses.length - 1];
+          continue;
+        }
+      }
     }
     const delta = step.delta;
     if (!delta) continue;
@@ -454,6 +473,81 @@ function simulateDriveUntilColor(
   return path;
 }
 
+function simulateFollowLine(
+  startPose: Pose2D,
+  context: LineupSimulationContext,
+  distanceCm: number
+): Pose2D[] {
+  const { lineSensors, rotationCenterForwardCm, rotationCenterStrafeCm } = context;
+  if (!lineSensors || lineSensors.length < 2) return [];
+
+  const selected = selectLineupSensors(lineSensors);
+  if (!selected) return [];
+
+  const stepCm = context.stepCm ?? DEFAULT_LINEUP_STEP_CM;
+  const maxDistance = Math.max(0, distanceCm);
+  const rotateStepBase = context.rotateStepRad ?? DEFAULT_LINEUP_ROTATE_STEP_RAD;
+  const rotateStep = Math.max(rotateStepBase, DEFAULT_FOLLOW_LINE_ROTATE_STEP_RAD);
+  const path: Pose2D[] = [];
+  let pose = startPose;
+  let traveled = 0;
+  let iterations = 0;
+  let lastTurnDir = 0;
+  let whiteStreak = 0;
+  const maxIterations = Math.ceil(maxDistance / stepCm) + 2;
+
+  const isOnBlack = (sensor: LineSensor, checkPose: Pose2D) => {
+    const world = sensorWorldPosition(checkPose, sensor, rotationCenterForwardCm, rotationCenterStrafeCm);
+    return context.isOnBlackLine(world.x, world.y);
+  };
+
+  while (traveled < maxDistance && iterations < maxIterations) {
+    const leftOnBlack = isOnBlack(selected.left, pose);
+    const rightOnBlack = isOnBlack(selected.right, pose);
+    let turn = 0;
+
+    if (leftOnBlack && rightOnBlack) {
+      turn = 0;
+      whiteStreak = 0;
+    } else if (!leftOnBlack && !rightOnBlack) {
+      whiteStreak += 1;
+      if (lastTurnDir !== 0) {
+        const decay = Math.max(0, 1 - whiteStreak * FOLLOW_LINE_WHITE_DECAY);
+        turn = lastTurnDir * rotateStep * FOLLOW_LINE_WHITE_BIAS * decay;
+      } else {
+        turn = 0;
+      }
+    } else {
+      whiteStreak = 0;
+      const lineOffset = estimateLineOffset(pose, context, selected.left, selected.right);
+      if (lineOffset !== null) {
+        const sensorMid =
+          (selected.left.strafeCm + selected.right.strafeCm) * 0.5 - rotationCenterStrafeCm;
+        const lineError = lineOffset - sensorMid;
+        const absOffset = Math.abs(lineError);
+        const sensorSpan = Math.abs(selected.left.strafeCm - selected.right.strafeCm);
+        const decay = Math.max(FOLLOW_LINE_GAIN_DECAY_MIN_CM, sensorSpan * FOLLOW_LINE_GAIN_DECAY_SCALE);
+        const ratio = absOffset / decay;
+        const gain = FOLLOW_LINE_GAIN_MAX * Math.exp(-(ratio * ratio));
+        turn = clamp(lineError * gain, -FOLLOW_LINE_MAX_TURN_RAD, FOLLOW_LINE_MAX_TURN_RAD);
+      } else {
+        turn = leftOnBlack ? rotateStep : -rotateStep;
+      }
+    }
+
+    if (Math.abs(turn) > 1e-6) {
+      lastTurnDir = Math.sign(turn);
+    }
+
+    pose = applyLocalDelta(pose, stepCm, 0, turn);
+    path.push(pose);
+    traveled += stepCm;
+    iterations += 1;
+  }
+
+  return path;
+}
+
 function sensorWorldPosition(
   pose: Pose2D,
   sensor: LineSensor,
@@ -464,4 +558,36 @@ function sensorWorldPosition(
   const strafeFromRc = sensor.strafeCm - rotationCenterStrafeCm;
   const sensorPose = applyLocalDelta(pose, forwardFromRc, strafeFromRc, 0);
   return { x: sensorPose.x, y: sensorPose.y };
+}
+
+function estimateLineOffset(
+  pose: Pose2D,
+  context: LineupSimulationContext,
+  left: LineSensor,
+  right: LineSensor
+): number | null {
+  const forwardOffset = (left.forwardCm + right.forwardCm) * 0.5 - context.rotationCenterForwardCm;
+  const leftStrafe = left.strafeCm - context.rotationCenterStrafeCm;
+  const rightStrafe = right.strafeCm - context.rotationCenterStrafeCm;
+  const start = Math.min(leftStrafe, rightStrafe);
+  const end = Math.max(leftStrafe, rightStrafe);
+  const samples = FOLLOW_LINE_SAMPLE_COUNT;
+  const blackSamples: number[] = [];
+
+  for (let i = 0; i < samples; i++) {
+    const t = samples === 1 ? 0.5 : i / (samples - 1);
+    const strafe = start + (end - start) * t;
+    const samplePose = applyLocalDelta(pose, forwardOffset, strafe, 0);
+    if (context.isOnBlackLine(samplePose.x, samplePose.y)) {
+      blackSamples.push(strafe);
+    }
+  }
+
+  if (!blackSamples.length) return null;
+  const avg = blackSamples.reduce((sum, value) => sum + value, 0) / blackSamples.length;
+  return avg;
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max);
 }
