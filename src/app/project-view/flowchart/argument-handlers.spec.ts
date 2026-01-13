@@ -62,7 +62,11 @@ describe('handleArgumentChange', () => {
         nodeIdToStep: new Map([[nodeId, missionStep]]),
         stepToNodeId: new Map([[missionStep, nodeId]]),
       } as any,
-      historyManager: { recordHistory: jasmine.createSpy('recordHistory') } as any,
+      historyManager: {
+        recordHistory: jasmine.createSpy('recordHistory'),
+        hasUnsavedChanges: () => true,
+        markSaved: jasmine.createSpy('markSaved'),
+      } as any,
       missionState: { currentMission: () => mission } as any,
       projectUUID: 'proj-123',
       http: { saveMission: saveMissionSpy } as any,

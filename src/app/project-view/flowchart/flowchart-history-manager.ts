@@ -10,6 +10,7 @@ export class FlowchartHistoryManager {
   private isRestoringHistory = false;
   private ignoreMissionEffect = false;
   private isHistoryTraversal = false;
+  private hasPendingChanges = false;
 
   constructor(private readonly ctx: FlowchartHistoryContext) {}
   getMissionKey(): string | null {
@@ -24,6 +25,12 @@ export class FlowchartHistoryManager {
       return false;
     }
     return true;
+  }
+  hasUnsavedChanges(): boolean {
+    return this.hasPendingChanges;
+  }
+  markSaved(): void {
+    this.hasPendingChanges = false;
   }
   prepareForMission(mission: Mission | null): boolean {
     const newKey = this.buildMissionKey(mission);
@@ -51,6 +58,7 @@ export class FlowchartHistoryManager {
       this.ctx.markViewportResetPending();
       this.currentMissionKey = newKey;
       this.historyInitialized = false;
+      this.hasPendingChanges = false;
     }
 
     return missionChanged;
@@ -62,6 +70,7 @@ export class FlowchartHistoryManager {
     this.ctx.connections.set([]);
     this.ctx.comments.set([]);
     this.ctx.groups.set([]);
+    this.hasPendingChanges = false;
   }
   recordHistory(notifier: string): void {
     if (this.isRestoringHistory) {
@@ -72,15 +81,18 @@ export class FlowchartHistoryManager {
     if (!this.historyInitialized) {
       this.ctx.history.initialize(snapshot);
       this.historyInitialized = true;
+      this.hasPendingChanges = true;
       return;
     }
 
     this.ctx.history.update(snapshot, notifier);
+    this.hasPendingChanges = true;
   }
   resetHistoryWithCurrentState(): void {
     const snapshot = this.buildSnapshot();
     this.ctx.history.initialize(snapshot);
     this.historyInitialized = true;
+    this.hasPendingChanges = false;
   }
   beginHistoryTraversal(): void {
     this.isHistoryTraversal = true;
@@ -127,6 +139,7 @@ export class FlowchartHistoryManager {
       this.ctx.recomputeMergedView();
       this.ctx.markNeedsAdjust();
       this.historyInitialized = true;
+      this.hasPendingChanges = true;
     } finally {
       this.isRestoringHistory = false;
     }
