@@ -33,6 +33,24 @@ export function setupFlowchartEffects(flow: Flowchart): void {
   });
 
   effect(() => {
+    const steps = flow.stepsState.currentSteps();
+    if (steps === null) {
+      return;
+    }
+    if (!flow.historyManager.shouldProcessMissionEffect()) {
+      return;
+    }
+    const mission = untracked(() => flow.missionState.currentMission());
+    if (!mission) {
+      return;
+    }
+    untracked(() => {
+      rebuildFromMission(flow, mission);
+      flow.layoutFlags.needsAdjust = true;
+    });
+  });
+
+  effect(() => {
     flow.history.changes();
     if (!flow.historyManager.isTraversingHistory()) {
       return;

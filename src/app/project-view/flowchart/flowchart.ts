@@ -123,6 +123,9 @@ export class Flowchart implements AfterViewChecked, OnDestroy, OnInit {
   themeObserver?: MutationObserver;
   typeDefinitionsSub?: Subscription;
   simulationPathSub?: Subscription;
+  private stepsSub?: Subscription;
+  private missionListSub?: Subscription;
+  private missionDetailSub?: Subscription;
   private _useAutoLayout = readStoredAutoLayout();
   private activePanelDrag: PanelDragState | null = null;
   private deviceInfo: ConnectionInfo | null = null;
@@ -146,6 +149,7 @@ export class Flowchart implements AfterViewChecked, OnDestroy, OnInit {
 
   ngOnInit(): void {
     this.loadTypeDefinitions();
+    this.preloadMissionAndSteps();
   }
 
   get useAutoLayout(): boolean {
@@ -175,6 +179,9 @@ export class Flowchart implements AfterViewChecked, OnDestroy, OnInit {
     this.themeObserver?.disconnect();
     this.typeDefinitionsSub?.unsubscribe();
     this.simulationPathSub?.unsubscribe();
+    this.stepsSub?.unsubscribe();
+    this.missionListSub?.unsubscribe();
+    this.missionDetailSub?.unsubscribe();
   }
 
   private loadTypeDefinitions(): void {
@@ -202,6 +209,63 @@ export class Flowchart implements AfterViewChecked, OnDestroy, OnInit {
         this.typeDefinitionsLoading.set(false);
       },
     });
+  }
+
+  private preloadMissionAndSteps(): void {
+    const projectUUID = this.projectUUID;
+    if (!projectUUID) return;
+
+    try {
+      this.stepsSub?.unsubscribe();
+      this.stepsSub = this.http.getAllSteps(projectUUID).subscribe({
+        next: steps => {
+          this.stepsState.setSteps(steps);
+        },
+        error: () => {
+          this.stepsState.setSteps([]);
+        },
+      });
+    } catch {
+      this.stepsState.setSteps([]);
+    }
+
+    try {
+      this.missionListSub?.unsubscribe();
+      this.missionListSub = this.http.getAllMissions(projectUUID).subscribe({
+        next: missions => {
+          if (this.missionState.currentMission()) {
+            return;
+          }
+          const first = missions[0];
+          if (!first) {
+            this.missionState.setMission(null);
+            return;
+          }
+          this.missionDetailSub?.unsubscribe();
+          this.missionDetailSub = this.http.getDetailedMission(projectUUID, first.name).subscribe({
+            next: mission => {
+              if (!this.missionState.currentMission()) {
+                this.missionState.setMission(mission);
+              }
+            },
+            error: () => {
+              if (!this.missionState.currentMission()) {
+                this.missionState.setMission(null);
+              }
+            },
+          });
+        },
+        error: () => {
+          if (!this.missionState.currentMission()) {
+            this.missionState.setMission(null);
+          }
+        },
+      });
+    } catch {
+      if (!this.missionState.currentMission()) {
+        this.missionState.setMission(null);
+      }
+    }
   }
 
   isToggleEnabled(key: string): boolean {
