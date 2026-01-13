@@ -19,7 +19,7 @@
         <div>
           <h3 class="text-lg font-semibold mb-1 capitalize">{{ group.headline }}</h3>
           <div class="flex flex-col gap-2">
-            @for (step of group.steps; track step.name) {
+            @for (step of group.steps; track step.name + ':' + step.import + ':' + step.file + ':' + $index) {
               <div
                 class="external-item p-2 rounded border border-gray-300 dark:border-gray-700
                            bg-white dark:bg-gray-800 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700
