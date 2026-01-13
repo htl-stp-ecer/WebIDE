@@ -1,19 +1,32 @@
-import { Component, ElementRef, EventEmitter, Input, OnChanges, OnInit, Output, signal, SimpleChanges, ViewChild, AfterViewChecked, WritableSignal } from '@angular/core';
-import { FormsModule } from '@angular/forms';
-import { DecimalPipe, NgClass, NgStyle } from '@angular/common';
-import { Dialog } from 'primeng/dialog';
-import { InputText } from 'primeng/inputtext';
-import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { HttpService } from '../../../services/http-service';
-import { NotificationService } from '../../../services/NotificationService';
-import { TypeDefinition } from '../../../entities/TypeDefinition';
-import { Subject } from 'rxjs';
-import { debounceTime } from 'rxjs/operators';
-import { TableEditorView } from '../table/table-editor-view';
-import { TableVisualizationPanel } from '../table/table-visualization-panel';
-import { TableMapService, TableVisualizationService } from '../table/services';
-import { Pose2D, thetaToDegrees } from '../table/models';
-import { FlowOrientation } from '../models';
+import {
+  AfterViewChecked,
+  Component,
+  ElementRef,
+  EventEmitter,
+  Input,
+  OnChanges,
+  OnInit,
+  Output,
+  signal,
+  SimpleChanges,
+  ViewChild,
+  WritableSignal
+} from '@angular/core';
+import {FormsModule} from '@angular/forms';
+import {NgClass, NgStyle} from '@angular/common';
+import {Dialog} from 'primeng/dialog';
+import {InputText} from 'primeng/inputtext';
+import {TranslateModule, TranslateService} from '@ngx-translate/core';
+import {HttpService} from '../../../services/http-service';
+import {NotificationService} from '../../../services/NotificationService';
+import {TypeDefinition} from '../../../entities/TypeDefinition';
+import {Subject} from 'rxjs';
+import {debounceTime} from 'rxjs/operators';
+import {TableEditorView} from '../table/table-editor-view';
+import {TableVisualizationPanel} from '../table/table-visualization-panel';
+import {TableMapService, TableVisualizationService} from '../table/services';
+import {Pose2D, thetaToDegrees} from '../table/models';
+import {FlowOrientation} from '../models';
 
 type SettingsTab = 'project' | 'robot' | 'start' | 'map';
 type EditTarget = { type: 'sensor'; id: number } | { type: 'rotation' } | null;
@@ -57,7 +70,7 @@ interface CenterPoint {
 @Component({
   selector: 'app-robot-settings-modal',
   standalone: true,
-  imports: [FormsModule, DecimalPipe, NgClass, NgStyle, Dialog, InputText, TranslateModule, TableEditorView, TableVisualizationPanel],
+  imports: [FormsModule, NgClass, NgStyle, Dialog, InputText, TranslateModule, TableEditorView, TableVisualizationPanel],
   templateUrl: './robot-settings-modal.html',
   styleUrl: './robot-settings-modal.scss'
 })
@@ -106,11 +119,11 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
   private readonly SNAP_THRESHOLD = 5; // percentage threshold for snapping
   private readonly GRID_SNAP_CM = 1; // snap to whole cm values
   private readonly GRID_SNAP_THRESHOLD_CM = 0.3; // threshold in cm for grid snapping
-  activeGuidelines: ActiveGuidelines = { x: null, y: null };
+  activeGuidelines: ActiveGuidelines = {x: null, y: null};
   horizontalGuidelines: Guideline[] = [];
   verticalGuidelines: Guideline[] = [];
   dragDistances: DragDistances | null = null;
-  snappedToGrid: { x: boolean; y: boolean } = { x: false, y: false };
+  snappedToGrid: { x: boolean; y: boolean } = {x: false, y: false};
   private persistCentersSubject = new Subject<void>();
   private persistStartPoseSubject = new Subject<void>();
 
@@ -268,7 +281,7 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
     this.sensors = this.sensors.map(sensor => {
       if (sensor.clearance_cm !== undefined && sensor.clearance_cm > maxClearance) {
         needsPersist = true;
-        return { ...sensor, clearance_cm: maxClearance };
+        return {...sensor, clearance_cm: maxClearance};
       }
       return sensor;
     });
@@ -380,12 +393,12 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
     if (this.editTarget?.type === 'sensor' && this.editTarget.id === sensorId) {
       this.editTarget = null;
     } else {
-      this.editTarget = { type: 'sensor', id: sensorId };
+      this.editTarget = {type: 'sensor', id: sensorId};
     }
   }
 
   selectRotationCenter() {
-    this.editTarget = this.editTarget?.type === 'rotation' ? null : { type: 'rotation' };
+    this.editTarget = this.editTarget?.type === 'rotation' ? null : {type: 'rotation'};
   }
 
   get selectedSensorId(): number | null {
@@ -439,7 +452,7 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
 
     this.sensors = this.sensors.map(sensor => {
       if (sensor.id !== this.selectedSensorId) return sensor;
-      return { ...sensor, x_pct: axis === 'x' ? percent : sensor.x_pct, y_pct: axis === 'y' ? percent : sensor.y_pct };
+      return {...sensor, x_pct: axis === 'x' ? percent : sensor.x_pct, y_pct: axis === 'y' ? percent : sensor.y_pct};
     });
     this.syncTableVisualizationSensors();
     this.persistSensors();
@@ -453,7 +466,7 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
 
     this.sensors = this.sensors.map(sensor => {
       if (sensor.id !== this.selectedSensorId) return sensor;
-      return { ...sensor, clearance_cm: clamped };
+      return {...sensor, clearance_cm: clamped};
     });
     this.persistSensors();
   }
@@ -506,7 +519,7 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
       const dist = Math.hypot(sensor.x_pct - clickX, sensor.y_pct - clickY);
       if (dist < closestDistance) {
         closestDistance = dist;
-        closestElement = { type: 'sensor', id: sensor.id };
+        closestElement = {type: 'sensor', id: sensor.id};
       }
     }
 
@@ -515,7 +528,7 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
       const dist = Math.hypot(this.rotationCenter.x_pct - clickX, this.rotationCenter.y_pct - clickY);
       if (dist < closestDistance) {
         closestDistance = dist;
-        closestElement = { type: 'rotation' };
+        closestElement = {type: 'rotation'};
       }
     }
 
@@ -562,12 +575,12 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
       const targetId = this.editTarget.id;
       this.sensors = this.sensors.map(sensor => {
         if (sensor.id !== targetId) return sensor;
-        return { ...sensor, x_pct: x, y_pct: y };
+        return {...sensor, x_pct: x, y_pct: y};
       });
       this.syncTableVisualizationSensors();
       this.persistSubject.next();
     } else if (this.editTarget?.type === 'rotation') {
-      this.rotationCenter = { x_pct: x, y_pct: y };
+      this.rotationCenter = {x_pct: x, y_pct: y};
       this.syncTableVisualizationRotationCenter(this.connectionInfo, this.rotationCenter);
       this.persistCentersSubject.next();
     }
@@ -579,31 +592,31 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
     const vertical: Guideline[] = [];
 
     // Center guidelines (always present)
-    horizontal.push({ position: 50, type: 'center' });
-    vertical.push({ position: 50, type: 'center' });
+    horizontal.push({position: 50, type: 'center'});
+    vertical.push({position: 50, type: 'center'});
 
     // Edge guidelines
-    horizontal.push({ position: 0, type: 'edge' });
-    horizontal.push({ position: 100, type: 'edge' });
-    vertical.push({ position: 0, type: 'edge' });
-    vertical.push({ position: 100, type: 'edge' });
+    horizontal.push({position: 0, type: 'edge'});
+    horizontal.push({position: 100, type: 'edge'});
+    vertical.push({position: 0, type: 'edge'});
+    vertical.push({position: 100, type: 'edge'});
 
     // Guidelines from other sensors (excluding the one being dragged)
     const editingSensorId = this.editTarget?.type === 'sensor' ? this.editTarget.id : null;
     for (const sensor of this.sensors) {
       if (sensor.id === editingSensorId) continue;
       if (sensor.x_pct !== undefined) {
-        vertical.push({ position: sensor.x_pct, type: 'sensor', sourceId: sensor.id });
+        vertical.push({position: sensor.x_pct, type: 'sensor', sourceId: sensor.id});
       }
       if (sensor.y_pct !== undefined) {
-        horizontal.push({ position: sensor.y_pct, type: 'sensor', sourceId: sensor.id });
+        horizontal.push({position: sensor.y_pct, type: 'sensor', sourceId: sensor.id});
       }
     }
 
     // Guidelines from rotation center (if not editing it)
     if (this.editTarget?.type !== 'rotation' && this.rotationCenter) {
-      vertical.push({ position: this.rotationCenter.x_pct, type: 'rotation' });
-      horizontal.push({ position: this.rotationCenter.y_pct, type: 'rotation' });
+      vertical.push({position: this.rotationCenter.x_pct, type: 'rotation'});
+      horizontal.push({position: this.rotationCenter.y_pct, type: 'rotation'});
     }
 
     this.horizontalGuidelines = horizontal;
@@ -611,8 +624,8 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
   }
 
   private applySnapping(x: number, y: number): { x: number; y: number } {
-    this.activeGuidelines = { x: null, y: null };
-    this.snappedToGrid = { x: false, y: false };
+    this.activeGuidelines = {x: null, y: null};
+    this.snappedToGrid = {x: false, y: false};
 
     const dims = this.getDisplayDimensions();
 
@@ -668,15 +681,15 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
       }
     }
 
-    return { x, y };
+    return {x, y};
   }
 
   private clearGuidelines() {
-    this.activeGuidelines = { x: null, y: null };
+    this.activeGuidelines = {x: null, y: null};
     this.horizontalGuidelines = [];
     this.verticalGuidelines = [];
     this.dragDistances = null;
-    this.snappedToGrid = { x: false, y: false };
+    this.snappedToGrid = {x: false, y: false};
   }
 
   private computeDragDistances(xPct: number, yPct: number) {
@@ -762,7 +775,7 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
 
   get robotScale() {
     const dims = this.getDisplayDimensions();
-    if (!dims) return { widthPct: this.ROBOT_SCALE_FACTOR, heightPct: this.ROBOT_SCALE_FACTOR };
+    if (!dims) return {widthPct: this.ROBOT_SCALE_FACTOR, heightPct: this.ROBOT_SCALE_FACTOR};
     const max = Math.max(dims.width, dims.length);
     return {
       widthPct: (dims.width / max) * this.ROBOT_SCALE_FACTOR,
@@ -789,11 +802,11 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
     const width = typeof w === 'number' && w > 0 ? w : fallbackWidth;
     const length = typeof l === 'number' && l > 0 ? l : fallbackLength;
     if (width <= 0 || length <= 0) return null;
-    return { width, length };
+    return {width, length};
   }
 
   getSensorMarkerStyle(sensor: Sensor): Record<string, string> {
-    const style: Record<string, string> = { '--sensor-x': `${sensor.x_pct}%`, '--sensor-y': `${sensor.y_pct}%` };
+    const style: Record<string, string> = {'--sensor-x': `${sensor.x_pct}%`, '--sensor-y': `${sensor.y_pct}%`};
     const clearance = this.getSensorClearanceDiameter(sensor);
     if (clearance) {
       style['--sensor-clear-x'] = `${clearance.x}%`;
@@ -810,7 +823,7 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
     if (sensor.clearance_cm === undefined) return null;
     const dims = this.getDisplayDimensions();
     if (!dims || dims.width === 0 || dims.length === 0) return null;
-    return { x: (sensor.clearance_cm * 2 / dims.width) * 100, y: (sensor.clearance_cm * 2 / dims.length) * 100 };
+    return {x: (sensor.clearance_cm * 2 / dims.width) * 100, y: (sensor.clearance_cm * 2 / dims.length) * 100};
   }
 
   // Rotation center getters (geometric is always at robot center - 50%, 50%)
@@ -847,7 +860,7 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
 
   getCenterMarkerStyle(center: CenterPoint | null): Record<string, string> {
     if (!center) return {};
-    return { '--center-x': `${center.x_pct}%`, '--center-y': `${center.y_pct}%` };
+    return {'--center-x': `${center.x_pct}%`, '--center-y': `${center.y_pct}%`};
   }
 
   get startPoseXcm(): number {
@@ -863,15 +876,15 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
   }
 
   setStartPoseXcm(value: number | null) {
-    this.updateStartPose({ x: value });
+    this.updateStartPose({x: value});
   }
 
   setStartPoseYcm(value: number | null) {
-    this.updateStartPose({ y: value });
+    this.updateStartPose({y: value});
   }
 
   setStartPoseThetaDeg(value: number | null) {
-    this.updateStartPose({ thetaDeg: value });
+    this.updateStartPose({thetaDeg: value});
   }
 
   onStartPosePicked(pose: Pose2D) {
@@ -927,8 +940,8 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
 
   // Layout settings
   readonly orientationOptions: { label: string; value: FlowOrientation }[] = [
-    { label: '↕', value: 'vertical' },
-    { label: '↔', value: 'horizontal' },
+    {label: '↕', value: 'vertical'},
+    {label: '↔', value: 'horizontal'},
   ];
 
   get currentOrientation(): FlowOrientation {
