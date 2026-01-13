@@ -317,6 +317,25 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
         this.editTarget = null;
       }
     }
+    this.syncTableVisualizationSensors();
+  }
+
+  private syncTableVisualizationSensors() {
+    const dims = this.getDisplayDimensions();
+    if (!dims) {
+      this.vizService.clearSensors();
+      return;
+    }
+
+    this.vizService.clearSensors();
+    this.sensors.forEach((sensor, index) => {
+      if (sensor.x_pct === undefined || sensor.y_pct === undefined) return;
+      const xCm = (dims.width * sensor.x_pct) / 100;
+      const yCm = dims.length * (1 - sensor.y_pct / 100);
+      const forwardCm = yCm - dims.length / 2;
+      const strafeCm = (dims.width / 2) - xCm;
+      this.vizService.configureLineSensor(index, forwardCm, strafeCm);
+    });
   }
 
   // Selection
@@ -385,6 +404,7 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
       if (sensor.id !== this.selectedSensorId) return sensor;
       return { ...sensor, x_pct: axis === 'x' ? percent : sensor.x_pct, y_pct: axis === 'y' ? percent : sensor.y_pct };
     });
+    this.syncTableVisualizationSensors();
     this.persistSensors();
   }
 
@@ -447,6 +467,7 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
         if (sensor.id !== targetId) return sensor;
         return { ...sensor, x_pct: x, y_pct: y };
       });
+      this.syncTableVisualizationSensors();
       this.persistSubject.next();
     } else if (this.editTarget?.type === 'rotation') {
       this.rotationCenter = { x_pct: x, y_pct: y };
@@ -519,8 +540,10 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
     const w = this.connectionInfo?.width_cm;
     const l = this.connectionInfo?.length_cm;
     const fallback = this.vizService.robotConfig();
-    const width = typeof w === 'number' && w > 0 ? w : fallback.widthCm;
-    const length = typeof l === 'number' && l > 0 ? l : fallback.lengthCm;
+    const fallbackWidth = typeof fallback.widthCm === 'number' && fallback.widthCm > 0 ? fallback.widthCm : 15;
+    const fallbackLength = typeof fallback.lengthCm === 'number' && fallback.lengthCm > 0 ? fallback.lengthCm : 22;
+    const width = typeof w === 'number' && w > 0 ? w : fallbackWidth;
+    const length = typeof l === 'number' && l > 0 ? l : fallbackLength;
     if (width <= 0 || length <= 0) return null;
     return { width, length };
   }

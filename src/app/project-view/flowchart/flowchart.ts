@@ -33,7 +33,7 @@ import { DecimalPipe } from '@angular/common';
 import { TableVisualizationPanel } from './table/table-visualization-panel';
 import { TimingPanel, type TimingViewMode } from './timing/timing-panel';
 import { RobotSettingsModal } from './robot-settings/robot-settings-modal';
-import { TableVisualizationService } from './table/services';
+import { TableMapService, TableVisualizationService } from './table/services';
 import { buildPlannedPathFromProjectSimulation } from './table/simulation-path';
 
 interface DefinitionOption {
@@ -123,6 +123,8 @@ export class Flowchart implements AfterViewChecked, OnDestroy, OnInit {
   simulationPathSub?: Subscription;
   private _useAutoLayout = readStoredAutoLayout();
   private activePanelDrag: PanelDragState | null = null;
+  private deviceInfo: ConnectionInfo | null = null;
+  private loadingDeviceInfo = false;
 
   constructor(
     readonly missionState: MissionStateService,
@@ -131,7 +133,8 @@ export class Flowchart implements AfterViewChecked, OnDestroy, OnInit {
     readonly route: ActivatedRoute,
     readonly history: FlowHistory,
     readonly translate: TranslateService,
-    readonly tableViz: TableVisualizationService
+    readonly tableViz: TableVisualizationService,
+    readonly tableMap: TableMapService
   ) {
     this.historyManager = createHistoryManager(this);
     this.runManager = createRunManager(this);
@@ -184,6 +187,9 @@ export class Flowchart implements AfterViewChecked, OnDestroy, OnInit {
       next: defs => {
         this.typeDefinitions.set(defs);
         this.typeDefinitionOptions.set(this.groupDefinitionsByType(defs));
+        if (this.deviceInfo) {
+          this.applyDeviceVisualizationInfo(this.deviceInfo);
+        }
       },
       error: () => {
         this.typeDefinitions.set([]);
@@ -223,10 +229,25 @@ export class Flowchart implements AfterViewChecked, OnDestroy, OnInit {
       return;
     }
 
+    this.loadDeviceVisualizationInfo();
+
     this.simulationPathSub = this.http.getProjectSimulationData(this.projectUUID).subscribe({
       next: data => {
         const startPose = this.tableViz.startPose();
-        const planned = buildPlannedPathFromProjectSimulation(startPose, data);
+        const robotConfig = this.tableViz.robotConfig();
+        const sensorConfig = this.tableViz.sensorConfig();
+        const mapConfig = this.tableMap.config();
+        const hasLineupContext = this.tableMap.isLoaded() && sensorConfig.lineSensors.length >= 2;
+        const lineupContext = hasLineupContext
+          ? {
+              isOnBlackLine: (xCm: number, yCm: number) => this.tableMap.isOnBlackLine(xCm, yCm),
+              lineSensors: sensorConfig.lineSensors,
+              rotationCenterForwardCm: robotConfig.rotationCenterForwardCm,
+              rotationCenterStrafeCm: robotConfig.rotationCenterStrafeCm,
+              maxDistanceCm: Math.max(mapConfig.widthCm, mapConfig.heightCm),
+            }
+          : null;
+        const planned = buildPlannedPathFromProjectSimulation(startPose, data, { lineup: lineupContext });
         const highlightRange = planned.missionRanges.find(range => range.name === mission.name) ?? null;
         this.tableViz.setPlannedPath(planned.poses.length > 1 ? planned.poses : null);
         this.tableViz.setPlannedMissionEndIndices(
@@ -242,6 +263,67 @@ export class Flowchart implements AfterViewChecked, OnDestroy, OnInit {
         this.tableViz.setPlannedMissionEndIndices(null);
         this.tableViz.setPlannedHighlightRange(null);
       },
+    });
+  }
+
+  private loadDeviceVisualizationInfo(): void {
+    if (this.deviceInfo || this.loadingDeviceInfo) return;
+    this.loadingDeviceInfo = true;
+    try {
+      this.http.getDeviceInfoDefault().subscribe({
+        next: info => {
+          this.deviceInfo = info;
+          this.loadingDeviceInfo = false;
+          this.applyDeviceVisualizationInfo(info);
+        },
+        error: () => {
+          this.loadingDeviceInfo = false;
+        },
+      });
+    } catch {
+      this.loadingDeviceInfo = false;
+    }
+  }
+
+  private applyDeviceVisualizationInfo(info: ConnectionInfo): void {
+    const isPositiveNumber = (value: unknown): value is number =>
+      typeof value === 'number' && Number.isFinite(value) && value > 0;
+    const fallback = this.tableViz.robotConfig();
+    const fallbackWidth = isPositiveNumber(fallback.widthCm) ? fallback.widthCm : 15;
+    const fallbackLength = isPositiveNumber(fallback.lengthCm) ? fallback.lengthCm : 22;
+    const width = isPositiveNumber(info.width_cm) ? info.width_cm : fallbackWidth;
+    const length = isPositiveNumber(info.length_cm) ? info.length_cm : fallbackLength;
+    if (isPositiveNumber(info.width_cm) && isPositiveNumber(info.length_cm)) {
+      this.tableViz.setRobotDimensions(info.width_cm, info.length_cm);
+    } else if (!isPositiveNumber(fallback.widthCm) || !isPositiveNumber(fallback.lengthCm)) {
+      this.tableViz.setRobotDimensions(fallbackWidth, fallbackLength);
+    }
+
+    if (info.rotation_center && isPositiveNumber(width) && isPositiveNumber(length)) {
+      const xCm = (width * info.rotation_center.x_pct) / 100;
+      const yCm = length * (1 - info.rotation_center.y_pct / 100);
+      const forwardCm = yCm - length / 2;
+      const strafeCm = (width / 2) - xCm;
+      this.tableViz.setRotationCenter(forwardCm, strafeCm);
+    }
+
+    const sensors = info.sensors ?? [];
+    const definitions = this.typeDefinitions();
+    const irDefs = definitions.filter(d => d.type === 'IRSensor');
+    const sensorLookup = new Map(sensors.map(sensor => [sensor.name, sensor]));
+    const orderedSensors = irDefs.length
+      ? irDefs.map(def => sensorLookup.get(def.name)).filter((s): s is DeviceSensorInfo => !!s)
+      : sensors;
+
+    this.tableViz.clearSensors();
+    if (!isPositiveNumber(width) || !isPositiveNumber(length)) return;
+    orderedSensors.forEach((sensor, index) => {
+      if (sensor.x_pct === undefined || sensor.y_pct === undefined) return;
+      const xCm = (width * sensor.x_pct) / 100;
+      const yCm = length * (1 - sensor.y_pct / 100);
+      const forwardCm = yCm - length / 2;
+      const strafeCm = (width / 2) - xCm;
+      this.tableViz.configureLineSensor(index, forwardCm, strafeCm);
     });
   }
 

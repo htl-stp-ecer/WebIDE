@@ -1,9 +1,26 @@
 import { MissionSimulationData, ProjectSimulationData, SimulationStepData } from '../../../entities/Simulation';
-import { Pose2D, applyLocalDelta } from './models';
+import { LineSensor, Pose2D, applyLocalDelta, forwardMove, rotate } from './models';
 
 const EPSILON = 1e-6;
 const LABEL_CM_PATTERN = /(?:^|[,(])\s*cm\s*=\s*([-+]?\d*\.?\d+)/i;
 const LABEL_FIRST_NUMBER_PATTERN = /\(([-+]?\d*\.?\d+)/;
+const DEFAULT_LINEUP_STEP_CM = 0.5;
+const DEFAULT_LINEUP_MAX_DISTANCE_CM = 200;
+const DEFAULT_LINEUP_ROTATE_STEP_RAD = Math.PI / 90;
+
+export interface LineupSimulationContext {
+  isOnBlackLine: (xCm: number, yCm: number) => boolean;
+  lineSensors: LineSensor[];
+  rotationCenterForwardCm: number;
+  rotationCenterStrafeCm: number;
+  stepCm?: number;
+  maxDistanceCm?: number;
+  rotateStepRad?: number;
+}
+
+export interface PathSimulationOptions {
+  lineup?: LineupSimulationContext | null;
+}
 
 function parseDistanceCmFromLabel(label?: string): number | null {
   if (!label) return null;
@@ -68,13 +85,23 @@ function flattenSimulationSteps(steps: SimulationStepData[]): SimulationStepData
 
 export function buildPlannedPathFromSimulation(
   startPose: Pose2D,
-  simulation: MissionSimulationData
+  simulation: MissionSimulationData,
+  options?: PathSimulationOptions
 ): Pose2D[] {
   const poses: Pose2D[] = [startPose];
   let current = startPose;
 
   const steps = flattenSimulationSteps(simulation.steps ?? []);
   for (const step of steps) {
+    const fn = (step.function_name || step.step_type || '').toLowerCase();
+    if (fn === 'forward_lineup_on_black') {
+      const lineupPoses = simulateForwardLineupOnBlack(current, options?.lineup);
+      if (lineupPoses.length) {
+        poses.push(...lineupPoses);
+        current = lineupPoses[lineupPoses.length - 1];
+      }
+      continue;
+    }
     const delta = step.delta;
     if (!delta) continue;
 
@@ -110,7 +137,8 @@ export interface MissionPlannedRange {
 
 export function buildPlannedPathFromProjectSimulation(
   startPose: Pose2D,
-  simulation: ProjectSimulationData
+  simulation: ProjectSimulationData,
+  options?: PathSimulationOptions
 ): PlannedProjectPath {
   const missions = [...(simulation.missions ?? [])].sort((a, b) => a.order - b.order);
   const poses: Pose2D[] = [startPose];
@@ -120,7 +148,7 @@ export function buildPlannedPathFromProjectSimulation(
 
   for (const mission of missions) {
     const startIndex = poses.length - 1;
-    const missionPath = buildPlannedPathFromSimulation(current, mission);
+    const missionPath = buildPlannedPathFromSimulation(current, mission, options);
     if (missionPath.length > 1) {
       poses.push(...missionPath.slice(1));
     }
@@ -136,4 +164,80 @@ export function buildPlannedPathFromProjectSimulation(
   }
 
   return { poses, missionEndIndices, missionRanges };
+}
+
+function simulateForwardLineupOnBlack(startPose: Pose2D, context?: LineupSimulationContext | null): Pose2D[] {
+  if (!context) return [];
+  const { lineSensors, rotationCenterForwardCm, rotationCenterStrafeCm } = context;
+  if (!lineSensors || lineSensors.length < 2) return [];
+
+  const selected = selectLineupSensors(lineSensors);
+  if (!selected) return [];
+
+  const stepCm = context.stepCm ?? DEFAULT_LINEUP_STEP_CM;
+  const maxDistance = context.maxDistanceCm ?? DEFAULT_LINEUP_MAX_DISTANCE_CM;
+  const rotateStep = context.rotateStepRad ?? DEFAULT_LINEUP_ROTATE_STEP_RAD;
+  const path: Pose2D[] = [];
+  let pose = startPose;
+  let traveled = 0;
+  let iterations = 0;
+  const maxIterations = Math.ceil(maxDistance / stepCm) + Math.ceil((Math.PI * 4) / rotateStep);
+
+  const isOnBlack = (sensor: LineSensor, checkPose: Pose2D) => {
+    const world = sensorWorldPosition(checkPose, sensor, rotationCenterForwardCm, rotationCenterStrafeCm);
+    return context.isOnBlackLine(world.x, world.y);
+  };
+
+  if (isOnBlack(selected.left, pose)) {
+    while (traveled < maxDistance && iterations < maxIterations && isOnBlack(selected.left, pose)) {
+      pose = forwardMove(pose, stepCm);
+      path.push(pose);
+      traveled += stepCm;
+      iterations += 1;
+    }
+  }
+
+  while (traveled < maxDistance && iterations < maxIterations) {
+    const leftOnBlack = isOnBlack(selected.left, pose);
+    const rightOnBlack = isOnBlack(selected.right, pose);
+    if (leftOnBlack && rightOnBlack) {
+      break;
+    }
+
+    if (leftOnBlack !== rightOnBlack) {
+      const direction = leftOnBlack ? 1 : -1;
+      pose = rotate(pose, direction * rotateStep);
+      path.push(pose);
+      iterations += 1;
+      continue;
+    }
+
+    pose = forwardMove(pose, stepCm);
+    path.push(pose);
+    traveled += stepCm;
+    iterations += 1;
+  }
+
+  return path;
+}
+
+function selectLineupSensors(lineSensors: LineSensor[]): { left: LineSensor; right: LineSensor } | null {
+  if (lineSensors.length < 2) return null;
+  const sorted = [...lineSensors].sort((a, b) => a.strafeCm - b.strafeCm);
+  const right = sorted[0];
+  const left = sorted[sorted.length - 1];
+  if (!left || !right || left === right) return null;
+  return { left, right };
+}
+
+function sensorWorldPosition(
+  pose: Pose2D,
+  sensor: LineSensor,
+  rotationCenterForwardCm: number,
+  rotationCenterStrafeCm: number
+): { x: number; y: number } {
+  const forwardFromRc = sensor.forwardCm - rotationCenterForwardCm;
+  const strafeFromRc = sensor.strafeCm - rotationCenterStrafeCm;
+  const sensorPose = applyLocalDelta(pose, forwardFromRc, strafeFromRc, 0);
+  return { x: sensorPose.x, y: sensorPose.y };
 }
