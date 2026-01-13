@@ -1,4 +1,4 @@
-import { AfterViewChecked, Component, ElementRef, OnDestroy, OnInit, QueryList, Signal, ViewChild, ViewChildren, signal, viewChild } from '@angular/core';
+import { AfterViewChecked, Component, ElementRef, OnDestroy, OnInit, QueryList, Signal, ViewChild, ViewChildren, effect, signal, viewChild } from '@angular/core';
 import { EFMarkerType, FCanvasComponent, FFlowComponent, FFlowModule } from '@foblex/flow';
 import { ContextMenu, ContextMenuModule } from 'primeng/contextmenu';
 import { CheckboxModule } from 'primeng/checkbox';
@@ -132,6 +132,7 @@ export class Flowchart implements AfterViewChecked, OnDestroy, OnInit {
   private deviceInfo: ConnectionInfo | null = null;
   private loadingDeviceInfo = false;
   private projectSimulationCache: ProjectSimulationData | null = null;
+  private robotSettingsWasOpen = false;
 
   constructor(
     readonly missionState: MissionStateService,
@@ -147,6 +148,14 @@ export class Flowchart implements AfterViewChecked, OnDestroy, OnInit {
     this.runManager = createRunManager(this);
     this.actions = createFlowchartActions(this);
     initializeFlowchart(this);
+
+    effect(() => {
+      const isOpen = this.robotSettingsVisible();
+      if (this.robotSettingsWasOpen && !isOpen) {
+        this.refreshPlannedPathAfterRobotSettings();
+      }
+      this.robotSettingsWasOpen = isOpen;
+    });
   }
 
   ngOnInit(): void {
@@ -384,6 +393,18 @@ export class Flowchart implements AfterViewChecked, OnDestroy, OnInit {
     }
     missions[idx] = missionData;
     return { missions };
+  }
+
+  private refreshPlannedPathAfterRobotSettings(): void {
+    const mission = this.missionState.currentMission();
+    if (!mission) {
+      return;
+    }
+    if (this.projectSimulationCache) {
+      this.applyPlannedPathFromSimulation(mission, this.projectSimulationCache);
+      return;
+    }
+    this.updatePlannedPathForMission(mission);
   }
 
   private loadDeviceVisualizationInfo(): void {
