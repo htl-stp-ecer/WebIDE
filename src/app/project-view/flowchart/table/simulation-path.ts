@@ -110,6 +110,14 @@ export function buildPlannedPathFromSimulation(
       }
       continue;
     }
+    if (fn === 'backward_lineup_on_black') {
+      const lineupPoses = simulateBackwardLineupOnBlack(current, options?.lineup);
+      if (lineupPoses.length) {
+        poses.push(...lineupPoses);
+        current = lineupPoses[lineupPoses.length - 1];
+      }
+      continue;
+    }
     const delta = step.delta;
     if (!delta) continue;
 
@@ -274,6 +282,61 @@ function simulateForwardLineupOnWhite(startPose: Pose2D, context?: LineupSimulat
     }
 
     pose = forwardMove(pose, stepCm);
+    path.push(pose);
+    traveled += stepCm;
+    iterations += 1;
+  }
+
+  return path;
+}
+
+function simulateBackwardLineupOnBlack(startPose: Pose2D, context?: LineupSimulationContext | null): Pose2D[] {
+  if (!context) return [];
+  const { lineSensors, rotationCenterForwardCm, rotationCenterStrafeCm } = context;
+  if (!lineSensors || lineSensors.length < 2) return [];
+
+  const selected = selectLineupSensors(lineSensors);
+  if (!selected) return [];
+
+  const stepCm = context.stepCm ?? DEFAULT_LINEUP_STEP_CM;
+  const maxDistance = context.maxDistanceCm ?? DEFAULT_LINEUP_MAX_DISTANCE_CM;
+  const rotateStep = context.rotateStepRad ?? DEFAULT_LINEUP_ROTATE_STEP_RAD;
+  const path: Pose2D[] = [];
+  let pose = startPose;
+  let traveled = 0;
+  let iterations = 0;
+  const maxIterations = Math.ceil(maxDistance / stepCm) + Math.ceil((Math.PI * 4) / rotateStep);
+
+  const isOnBlack = (sensor: LineSensor, checkPose: Pose2D) => {
+    const world = sensorWorldPosition(checkPose, sensor, rotationCenterForwardCm, rotationCenterStrafeCm);
+    return context.isOnBlackLine(world.x, world.y);
+  };
+
+  if (isOnBlack(selected.left, pose)) {
+    while (traveled < maxDistance && iterations < maxIterations && isOnBlack(selected.left, pose)) {
+      pose = forwardMove(pose, -stepCm);
+      path.push(pose);
+      traveled += stepCm;
+      iterations += 1;
+    }
+  }
+
+  while (traveled < maxDistance && iterations < maxIterations) {
+    const leftOnBlack = isOnBlack(selected.left, pose);
+    const rightOnBlack = isOnBlack(selected.right, pose);
+    if (leftOnBlack && rightOnBlack) {
+      break;
+    }
+
+    if (leftOnBlack !== rightOnBlack) {
+      const direction = leftOnBlack ? 1 : -1;
+      pose = rotate(pose, direction * rotateStep);
+      path.push(pose);
+      iterations += 1;
+      continue;
+    }
+
+    pose = forwardMove(pose, -stepCm);
     path.push(pose);
     traveled += stepCm;
     iterations += 1;
