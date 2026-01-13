@@ -74,7 +74,6 @@ export class TableEditorView implements OnInit, AfterViewInit, OnDestroy {
   private readonly http = inject(HttpService);
 
   private ctx!: CanvasRenderingContext2D;
-  private initialLoadDone = false;
   private drawing = false;
   private lastPoint: { x: number; y: number } | null = null;
   private isPanning = false;
