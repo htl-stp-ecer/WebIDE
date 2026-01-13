@@ -15,6 +15,7 @@ import { StepsStateService } from '../../services/steps-state-service';
 import { HttpService } from '../../services/http-service';
 import { FlowHistory } from '../../entities/flow-history';
 import { Mission } from '../../entities/Mission';
+import { MissionSimulationData, ProjectSimulationData } from '../../entities/Simulation';
 import { Connection, FlowComment, FlowGroup, FlowNode, FlowOrientation } from './models';
 import { FlowchartHistoryManager } from './flowchart-history-manager';
 import { FlowchartRunManager } from './flowchart-run-manager';
@@ -130,6 +131,7 @@ export class Flowchart implements AfterViewChecked, OnDestroy, OnInit {
   private activePanelDrag: PanelDragState | null = null;
   private deviceInfo: ConnectionInfo | null = null;
   private loadingDeviceInfo = false;
+  private projectSimulationCache: ProjectSimulationData | null = null;
 
   constructor(
     readonly missionState: MissionStateService,
@@ -293,47 +295,95 @@ export class Flowchart implements AfterViewChecked, OnDestroy, OnInit {
     this.simulationPathSub = undefined;
 
     if (!mission || !this.projectUUID) {
+      this.tableViz.setPlannedPathLoading(false);
       this.tableViz.setPlannedPath(null);
       this.tableViz.setPlannedMissionEndIndices(null);
       this.tableViz.setPlannedHighlightRange(null);
       return;
     }
 
+    this.tableViz.setPlannedPathLoading(true);
     this.loadDeviceVisualizationInfo();
 
+    const cachedSimulation = this.projectSimulationCache;
+    if (cachedSimulation) {
+      this.applyPlannedPathFromSimulation(mission, cachedSimulation);
+      this.simulationPathSub = this.http.getMissionSimulationData(this.projectUUID, mission.name).subscribe({
+        next: data => {
+          const merged = this.mergeMissionSimulation(cachedSimulation, data);
+          if (!merged) {
+            this.fetchProjectSimulationData(mission);
+            return;
+          }
+          this.projectSimulationCache = merged;
+          this.applyPlannedPathFromSimulation(mission, merged);
+          this.tableViz.setPlannedPathLoading(false);
+        },
+        error: err => {
+          console.warn('[Flowchart] Failed to load mission simulation data', err);
+          this.tableViz.setPlannedPathLoading(false);
+        },
+      });
+      return;
+    }
+
+    this.fetchProjectSimulationData(mission);
+  }
+
+  private fetchProjectSimulationData(mission: Mission): void {
+    if (!this.projectUUID) return;
+    this.simulationPathSub?.unsubscribe();
     this.simulationPathSub = this.http.getProjectSimulationData(this.projectUUID).subscribe({
       next: data => {
-        const startPose = this.tableViz.startPose();
-        const robotConfig = this.tableViz.robotConfig();
-        const sensorConfig = this.tableViz.sensorConfig();
-        const mapConfig = this.tableMap.config();
-        const hasLineupContext = this.tableMap.isLoaded() && sensorConfig.lineSensors.length >= 2;
-        const lineupContext = hasLineupContext
-          ? {
-              isOnBlackLine: (xCm: number, yCm: number) => this.tableMap.isOnBlackLine(xCm, yCm),
-              lineSensors: sensorConfig.lineSensors,
-              rotationCenterForwardCm: robotConfig.rotationCenterForwardCm,
-              rotationCenterStrafeCm: robotConfig.rotationCenterStrafeCm,
-              maxDistanceCm: Math.max(mapConfig.widthCm, mapConfig.heightCm),
-            }
-          : null;
-        const planned = buildPlannedPathFromProjectSimulation(startPose, data, { lineup: lineupContext });
-        const highlightRange = planned.missionRanges.find(range => range.name === mission.name) ?? null;
-        this.tableViz.setPlannedPath(planned.poses.length > 1 ? planned.poses : null);
-        this.tableViz.setPlannedMissionEndIndices(
-          planned.missionEndIndices.length ? planned.missionEndIndices : null
-        );
-        this.tableViz.setPlannedHighlightRange(
-          highlightRange ? { startIndex: highlightRange.startIndex, endIndex: highlightRange.endIndex } : null
-        );
+        this.projectSimulationCache = data;
+        this.applyPlannedPathFromSimulation(mission, data);
+        this.tableViz.setPlannedPathLoading(false);
       },
       error: err => {
         console.warn('[Flowchart] Failed to load simulation data', err);
         this.tableViz.setPlannedPath(null);
         this.tableViz.setPlannedMissionEndIndices(null);
         this.tableViz.setPlannedHighlightRange(null);
+        this.tableViz.setPlannedPathLoading(false);
       },
     });
+  }
+
+  private applyPlannedPathFromSimulation(mission: Mission, data: ProjectSimulationData): void {
+    const startPose = this.tableViz.startPose();
+    const robotConfig = this.tableViz.robotConfig();
+    const sensorConfig = this.tableViz.sensorConfig();
+    const mapConfig = this.tableMap.config();
+    const hasLineupContext = this.tableMap.isLoaded() && sensorConfig.lineSensors.length >= 2;
+    const lineupContext = hasLineupContext
+      ? {
+          isOnBlackLine: (xCm: number, yCm: number) => this.tableMap.isOnBlackLine(xCm, yCm),
+          lineSensors: sensorConfig.lineSensors,
+          rotationCenterForwardCm: robotConfig.rotationCenterForwardCm,
+          rotationCenterStrafeCm: robotConfig.rotationCenterStrafeCm,
+          maxDistanceCm: Math.max(mapConfig.widthCm, mapConfig.heightCm),
+        }
+      : null;
+    const planned = buildPlannedPathFromProjectSimulation(startPose, data, { lineup: lineupContext });
+    const highlightRange = planned.missionRanges.find(range => range.name === mission.name) ?? null;
+    this.tableViz.setPlannedPath(planned.poses.length > 1 ? planned.poses : null);
+    this.tableViz.setPlannedMissionEndIndices(planned.missionEndIndices.length ? planned.missionEndIndices : null);
+    this.tableViz.setPlannedHighlightRange(
+      highlightRange ? { startIndex: highlightRange.startIndex, endIndex: highlightRange.endIndex } : null
+    );
+  }
+
+  private mergeMissionSimulation(
+    cache: ProjectSimulationData,
+    missionData: MissionSimulationData
+  ): ProjectSimulationData | null {
+    const missions = [...(cache.missions ?? [])];
+    const idx = missions.findIndex(m => m.name === missionData.name);
+    if (idx === -1) {
+      return null;
+    }
+    missions[idx] = missionData;
+    return { missions };
   }
 
   private loadDeviceVisualizationInfo(): void {

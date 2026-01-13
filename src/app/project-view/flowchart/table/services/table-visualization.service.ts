@@ -40,6 +40,7 @@ export class TableVisualizationService {
   private readonly _plannedPath = signal<Pose2D[] | null>(null);
   private readonly _plannedMissionEndIndices = signal<number[] | null>(null);
   private readonly _plannedHighlightRange = signal<{ startIndex: number; endIndex: number } | null>(null);
+  private readonly _plannedPathLoading = signal<boolean>(false);
 
   readonly robotConfig = this._robotConfig.asReadonly();
   readonly sensorConfig = this._sensorConfig.asReadonly();
@@ -49,6 +50,7 @@ export class TableVisualizationService {
   readonly plannedPath = this._plannedPath.asReadonly();
   readonly plannedMissionEndIndices = this._plannedMissionEndIndices.asReadonly();
   readonly plannedHighlightRange = this._plannedHighlightRange.asReadonly();
+  readonly plannedPathLoading = this._plannedPathLoading.asReadonly();
 
   /** End pose after all planned steps (or start pose if no path) */
   readonly plannedEndPose = computed<Pose2D>(() => {
@@ -113,6 +115,11 @@ export class TableVisualizationService {
     }
   }
 
+  /** Toggle loading state for planned path updates */
+  setPlannedPathLoading(loading: boolean): void {
+    this._plannedPathLoading.set(loading);
+  }
+
   /** Set indices for planned mission end poses */
   setPlannedMissionEndIndices(indices: number[] | null): void {
     this._plannedMissionEndIndices.set(indices?.length ? [...indices] : null);
@@ -159,6 +166,7 @@ export class TableVisualizationService {
     this._plannedPath.set(null);
     this._plannedMissionEndIndices.set(null);
     this._plannedHighlightRange.set(null);
+    this._plannedPathLoading.set(false);
   }
 
   /** Configure default sensors (typical 2-sensor setup for line following) */

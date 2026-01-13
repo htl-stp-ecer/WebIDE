@@ -26,10 +26,10 @@
       #canvas
       class="viz-canvas"
       [class.viz-canvas-editable]="allowStartPoseEdit() && !planningService.isActive()"
-      [class.viz-canvas-loading]="mapService.isLoading()"
+      [class.viz-canvas-loading]="mapService.isLoading() || vizService.plannedPathLoading()"
       (pointerdown)="onCanvasPointerDown($event)"></canvas>
 
-    @if (mapService.isLoading()) {
+    @if (mapService.isLoading() || vizService.plannedPathLoading()) {
       <div class="viz-loading-overlay">
         <i class="pi pi-spin pi-spinner viz-overlay-spinner"></i>
       </div>
