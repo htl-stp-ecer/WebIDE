@@ -1,7 +1,9 @@
-import { Injectable, signal, computed } from '@angular/core';
+import { Injectable, inject, signal, computed } from '@angular/core';
 import { Waypoint, createWaypoint } from './models';
 import { MissionStep } from '../../../../entities/MissionStep';
-import { waypointsToMissionSteps } from './path-to-steps';
+import { optimizeWaypointsToSteps, OptimizationContext } from './path-optimizer';
+import { TableMapService } from '../services/table-map.service';
+import { TableVisualizationService } from '../services/table-visualization.service';
 
 /**
  * Service for managing planning mode state.
@@ -9,22 +11,28 @@ import { waypointsToMissionSteps } from './path-to-steps';
  */
 @Injectable({ providedIn: 'root' })
 export class PlanningModeService {
+  private readonly mapService = inject(TableMapService);
+  private readonly vizService = inject(TableVisualizationService);
+
   private readonly _isActive = signal<boolean>(false);
   private readonly _waypoints = signal<Waypoint[]>([]);
   private readonly _selectedIndex = signal<number | null>(null);
   private readonly _draggingIndex = signal<number | null>(null);
   private readonly _startPose = signal<{ x: number; y: number; theta: number }>({ x: 0, y: 0, theta: 0 });
+  private readonly _lineupThreshold = signal<number>(0.5);
 
   readonly isActive = this._isActive.asReadonly();
   readonly waypoints = this._waypoints.asReadonly();
   readonly selectedIndex = this._selectedIndex.asReadonly();
   readonly draggingIndex = this._draggingIndex.asReadonly();
   readonly startPose = this._startPose.asReadonly();
+  readonly lineupThreshold = this._lineupThreshold.asReadonly();
 
-  /** Computed: generated mission steps from current waypoints */
+  /** Computed: generated mission steps from current waypoints (with lineup optimization) */
   readonly generatedSteps = computed<MissionStep[]>(() => {
     const wps = this._waypoints();
     const start = this._startPose();
+    const threshold = this._lineupThreshold();
     if (wps.length < 1) return [];
 
     // Include robot start position as first waypoint for path calculation
@@ -33,9 +41,18 @@ export class PlanningModeService {
       ...wps,
     ];
 
-    return waypointsToMissionSteps(fullPath, {
-      startHeading: start.theta,
-    });
+    const context: OptimizationContext = {
+      lineSegments: this.mapService.lineSegmentsCm(),
+      sensorConfig: this.vizService.sensorConfig(),
+      isOnBlackLine: (x, y) => this.mapService.isOnBlackLine(x, y),
+    };
+
+    return optimizeWaypointsToSteps(
+      fullPath,
+      { x: start.x, y: start.y, theta: start.theta },
+      context,
+      { lineupThreshold: threshold }
+    );
   });
 
   /** Computed: whether we have enough waypoints to generate steps */
@@ -66,6 +83,11 @@ export class PlanningModeService {
   /** Set the start pose (from robot's current pose) */
   setStartPose(x: number, y: number, theta: number): void {
     this._startPose.set({ x, y, theta });
+  }
+
+  /** Set the lineup threshold (0 = never, 1 = always) */
+  setLineupThreshold(threshold: number): void {
+    this._lineupThreshold.set(Math.max(0, Math.min(1, threshold)));
   }
 
   /** Add a waypoint at the given position */

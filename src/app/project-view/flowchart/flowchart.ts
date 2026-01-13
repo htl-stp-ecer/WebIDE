@@ -107,6 +107,8 @@ export class Flowchart implements AfterViewChecked, OnDestroy, OnInit {
   readonly timingViewMode = signal<TimingViewMode>('list');
   readonly simulateRuns = signal<boolean>(true);
   readonly robotSettingsVisible = signal<boolean>(false);
+  readonly saveStatus = signal<'idle' | 'saving' | 'saved'>('idle');
+  private saveStatusTimeout?: ReturnType<typeof setTimeout>;
   actions!: FlowchartActions;
   readonly eMarkerType = EFMarkerType;
   orientationOptions: { label: string; value: FlowOrientation }[] = [];
@@ -193,6 +195,22 @@ export class Flowchart implements AfterViewChecked, OnDestroy, OnInit {
     this.stepsSub?.unsubscribe();
     this.missionListSub?.unsubscribe();
     this.missionDetailSub?.unsubscribe();
+    if (this.saveStatusTimeout) {
+      clearTimeout(this.saveStatusTimeout);
+    }
+  }
+
+  setSaveStatus(status: 'idle' | 'saving' | 'saved'): void {
+    if (this.saveStatusTimeout) {
+      clearTimeout(this.saveStatusTimeout);
+      this.saveStatusTimeout = undefined;
+    }
+    this.saveStatus.set(status);
+    if (status === 'saved') {
+      this.saveStatusTimeout = setTimeout(() => {
+        this.saveStatus.set('idle');
+      }, 2000);
+    }
   }
 
   private loadTypeDefinitions(): void {

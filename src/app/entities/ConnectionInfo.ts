@@ -19,7 +19,7 @@ interface DeviceStartPose {
 interface ConnectionInfo {
   hostname: string;
   ip: string;
-  battery_percent: number;
+  battery_voltage_v?: number;
   width_cm?: number;
   length_cm?: number;
   sensors?: DeviceSensorInfo[];

@@ -1,4 +1,5 @@
 import { Component, computed, OnInit, signal, OnDestroy } from '@angular/core';
+import { DecimalPipe } from '@angular/common';
 import { Button } from "primeng/button";
 import { Select } from "primeng/select";
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -17,7 +18,8 @@ import { decodeRouteIp } from '../services/route-ip-serializer';
     FormsModule,
     RouterLink,
     RouterLinkActive,
-    TranslateModule
+    TranslateModule,
+    DecimalPipe,
   ],
   templateUrl: './navbar.html',
   styleUrl: './navbar.scss'

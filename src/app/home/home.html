@@ -56,11 +56,11 @@
 
             <p class="text-base text-gray-400 flex items-center">
               {{ 'COMMON.STATUS' | translate }}
-              @if (connection.battery_percent > 0) {
+              @if (connection.battery_voltage_v) {
                 <span class="flex items-center ml-2">
                   {{ 'COMMON.ONLINE' | translate }}
                   <span class="text-sm text-gray-400 ml-2">
-                    {{ 'HOME.BATTERY_PERCENT' | translate:{ value: connection.battery_percent } }}
+                    {{ connection.battery_voltage_v | number:'1.2-2' }} V
                   </span>
                   <span class="w-3 h-3 bg-green-500 rounded-full ml-2 mt-1"></span>
                 </span>

@@ -1,4 +1,5 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
+import { DecimalPipe } from '@angular/common';
 import { InputGroup } from 'primeng/inputgroup';
 import { InputText } from 'primeng/inputtext';
 import { Button } from 'primeng/button';
@@ -24,6 +25,7 @@ import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
     Card,
     ProgressSpinner,
     TranslateModule,
+    DecimalPipe,
   ],
   templateUrl: './home.html',
   styleUrl: './home.scss'
@@ -48,8 +50,8 @@ export class Home implements OnInit, OnDestroy {
     if (connections) {
       try {
         this.previousConnections = JSON.parse(connections) as ConnectionInfo[];
-        // initialize battery_percent to 0
-        this.previousConnections.forEach(conn => conn.battery_percent = 0);
+        // initialize battery_voltage_v to undefined (offline)
+        this.previousConnections.forEach(conn => conn.battery_voltage_v = undefined);
       } catch (e) {
         console.error('Error parsing previousConnections from localStorage', e);
         this.previousConnections = [];
@@ -71,7 +73,7 @@ export class Home implements OnInit, OnDestroy {
     for (const conn of this.previousConnections) {
       this.httpService.getDeviceInfo(conn.ip).subscribe({
         next: res => {
-          conn.battery_percent = res.battery_percent;
+          conn.battery_voltage_v = res.battery_voltage_v;
           conn.hostname = res.hostname;
           if (this.corsConfirmIp === conn.ip) {
             this.corsConfirmIp = undefined;
@@ -80,7 +82,7 @@ export class Home implements OnInit, OnDestroy {
           }
         },
         error: err => {
-          conn.battery_percent = 0
+          conn.battery_voltage_v = undefined;
           console.error(`Failed to fetch device info for ${conn.ip}`, err);
         }
       });
@@ -105,7 +107,7 @@ export class Home implements OnInit, OnDestroy {
 
         if (existing) {
           existing.hostname = res.hostname;
-          existing.battery_percent = res.battery_percent;
+          existing.battery_voltage_v = res.battery_voltage_v;
         } else {
           this.previousConnections.push(res);
         }

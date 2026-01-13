@@ -106,6 +106,17 @@ function createDriveStep(distanceCm: number): MissionStep {
 export function formatStepForPreview(step: MissionStep): string {
   const fn = step.function_name;
   const arg = step.arguments[0];
+
+  // Lineup steps have no arguments
+  if (fn.includes('lineup')) {
+    // Shorten the name for display
+    if (fn === 'forward_lineup_on_black') return 'lineup(black)';
+    if (fn === 'forward_lineup_on_white') return 'lineup(white)';
+    if (fn === 'backward_lineup_on_black') return 'lineup_bwd(black)';
+    if (fn === 'backward_lineup_on_white') return 'lineup_bwd(white)';
+    return fn;
+  }
+
   if (!arg) return fn;
 
   if (fn === 'turn_cw' || fn === 'turn_ccw' || fn === 'tank_turn_cw' || fn === 'tank_turn_ccw') {

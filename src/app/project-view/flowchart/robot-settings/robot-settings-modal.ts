@@ -1,6 +1,6 @@
-import { Component, ElementRef, EventEmitter, Input, OnChanges, OnInit, Output, signal, SimpleChanges, ViewChild, AfterViewChecked } from '@angular/core';
+import { Component, ElementRef, EventEmitter, Input, OnChanges, OnInit, Output, signal, SimpleChanges, ViewChild, AfterViewChecked, WritableSignal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { NgClass, NgStyle } from '@angular/common';
+import { DecimalPipe, NgClass, NgStyle } from '@angular/common';
 import { Dialog } from 'primeng/dialog';
 import { InputText } from 'primeng/inputtext';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -13,9 +13,32 @@ import { TableEditorView } from '../table/table-editor-view';
 import { TableVisualizationPanel } from '../table/table-visualization-panel';
 import { TableMapService, TableVisualizationService } from '../table/services';
 import { Pose2D, thetaToDegrees } from '../table/models';
+import { FlowOrientation } from '../models';
 
-type SettingsTab = 'robot' | 'start' | 'map';
+type SettingsTab = 'project' | 'robot' | 'start' | 'map';
 type EditTarget = { type: 'sensor'; id: number } | { type: 'rotation' } | null;
+
+interface Guideline {
+  position: number;  // percentage 0-100
+  type: 'center' | 'edge' | 'sensor' | 'rotation';
+  sourceId?: number; // for sensor-based guidelines
+}
+
+interface ActiveGuidelines {
+  x: Guideline | null;
+  y: Guideline | null;
+}
+
+interface DragDistances {
+  left: number;   // cm from left edge
+  right: number;  // cm from right edge
+  top: number;    // cm from top (front of robot)
+  bottom: number; // cm from bottom (back of robot)
+  centerX: number; // cm from vertical center line
+  centerY: number; // cm from horizontal center line
+  symmetricX: boolean; // left === right
+  symmetricY: boolean; // top === bottom
+}
 
 interface Sensor {
   id: number;
@@ -34,7 +57,7 @@ interface CenterPoint {
 @Component({
   selector: 'app-robot-settings-modal',
   standalone: true,
-  imports: [FormsModule, NgClass, NgStyle, Dialog, InputText, TranslateModule, TableEditorView, TableVisualizationPanel],
+  imports: [FormsModule, DecimalPipe, NgClass, NgStyle, Dialog, InputText, TranslateModule, TableEditorView, TableVisualizationPanel],
   templateUrl: './robot-settings-modal.html',
   styleUrl: './robot-settings-modal.scss'
 })
@@ -42,9 +65,13 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
   @Input() visible = false;
   @Input() projectUuid: string | null = null;
   @Input() typeDefinitions: TypeDefinition[] = [];
+  @Input() orientation: WritableSignal<FlowOrientation> | null = null;
+  @Input() useAutoLayout = false;
   @Output() visibleChange = new EventEmitter<boolean>();
+  @Output() orientationChange = new EventEmitter<FlowOrientation>();
+  @Output() useAutoLayoutChange = new EventEmitter<boolean>();
 
-  readonly activeTab = signal<SettingsTab>('robot');
+  readonly activeTab = signal<SettingsTab>('project');
 
   @ViewChild('robotBody') robotBodyRef!: ElementRef<HTMLDivElement>;
   @ViewChild('widthInput') widthInputRef?: ElementRef<HTMLInputElement>;
@@ -74,6 +101,16 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
   // Drag state
   private isDragging = false;
   private persistSubject = new Subject<void>();
+
+  // Guidelines and snapping
+  private readonly SNAP_THRESHOLD = 5; // percentage threshold for snapping
+  private readonly GRID_SNAP_CM = 1; // snap to whole cm values
+  private readonly GRID_SNAP_THRESHOLD_CM = 0.3; // threshold in cm for grid snapping
+  activeGuidelines: ActiveGuidelines = { x: null, y: null };
+  horizontalGuidelines: Guideline[] = [];
+  verticalGuidelines: Guideline[] = [];
+  dragDistances: DragDistances | null = null;
+  snappedToGrid: { x: boolean; y: boolean } = { x: false, y: false };
   private persistCentersSubject = new Subject<void>();
   private persistStartPoseSubject = new Subject<void>();
 
@@ -426,12 +463,63 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
     return dims ? Math.min(dims.width, dims.length) / 2 : null;
   }
 
+  // Hit-testing threshold in percentage (how close click must be to select an element)
+  private readonly HIT_TEST_THRESHOLD = 8;
+
   // Mouse events for live drag placement
   onRobotMouseDown(event: MouseEvent) {
-    if (!this.editTarget) return;
     event.preventDefault();
+
+    // Calculate click position as percentage
+    const target = event.currentTarget as HTMLElement | null;
+    if (!target) return;
+    const rect = target.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return;
+
+    const clickX = ((event.clientX - rect.left) / rect.width) * 100;
+    const clickY = ((event.clientY - rect.top) / rect.height) * 100;
+
+    // Check if clicking on an existing element - auto-select it
+    const hitElement = this.hitTestElement(clickX, clickY);
+    if (hitElement) {
+      this.editTarget = hitElement;
+    }
+
+    // Only start dragging if we have a target
+    if (!this.editTarget) return;
+
     this.isDragging = true;
+    this.computeGuidelines();
     this.updateTargetPosition(event);
+  }
+
+  /**
+   * Find which element (sensor or rotation center) is closest to the click position
+   */
+  private hitTestElement(clickX: number, clickY: number): EditTarget {
+    let closestElement: EditTarget = null;
+    let closestDistance = this.HIT_TEST_THRESHOLD;
+
+    // Check sensors
+    for (const sensor of this.sensors) {
+      if (sensor.x_pct === undefined || sensor.y_pct === undefined) continue;
+      const dist = Math.hypot(sensor.x_pct - clickX, sensor.y_pct - clickY);
+      if (dist < closestDistance) {
+        closestDistance = dist;
+        closestElement = { type: 'sensor', id: sensor.id };
+      }
+    }
+
+    // Check rotation center
+    if (this.rotationCenter) {
+      const dist = Math.hypot(this.rotationCenter.x_pct - clickX, this.rotationCenter.y_pct - clickY);
+      if (dist < closestDistance) {
+        closestDistance = dist;
+        closestElement = { type: 'rotation' };
+      }
+    }
+
+    return closestElement;
   }
 
   onRobotMouseMove(event: MouseEvent) {
@@ -443,6 +531,7 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
   onRobotMouseUp() {
     if (this.isDragging) {
       this.isDragging = false;
+      this.clearGuidelines();
       // Final persist on mouse up
       if (this.editTarget?.type === 'sensor') {
         this.persistSensorsToServer();
@@ -458,8 +547,16 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
     const rect = target.getBoundingClientRect();
     if (rect.width === 0 || rect.height === 0) return;
 
-    const x = Math.min(Math.max(((event.clientX - rect.left) / rect.width) * 100, 0), 100);
-    const y = Math.min(Math.max(((event.clientY - rect.top) / rect.height) * 100, 0), 100);
+    let x = Math.min(Math.max(((event.clientX - rect.left) / rect.width) * 100, 0), 100);
+    let y = Math.min(Math.max(((event.clientY - rect.top) / rect.height) * 100, 0), 100);
+
+    // Apply snapping
+    const snapped = this.applySnapping(x, y);
+    x = snapped.x;
+    y = snapped.y;
+
+    // Compute distances for display
+    this.computeDragDistances(x, y);
 
     if (this.editTarget?.type === 'sensor') {
       const targetId = this.editTarget.id;
@@ -474,6 +571,148 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
       this.syncTableVisualizationRotationCenter(this.connectionInfo, this.rotationCenter);
       this.persistCentersSubject.next();
     }
+  }
+
+  // Guidelines and snapping
+  private computeGuidelines() {
+    const horizontal: Guideline[] = [];
+    const vertical: Guideline[] = [];
+
+    // Center guidelines (always present)
+    horizontal.push({ position: 50, type: 'center' });
+    vertical.push({ position: 50, type: 'center' });
+
+    // Edge guidelines
+    horizontal.push({ position: 0, type: 'edge' });
+    horizontal.push({ position: 100, type: 'edge' });
+    vertical.push({ position: 0, type: 'edge' });
+    vertical.push({ position: 100, type: 'edge' });
+
+    // Guidelines from other sensors (excluding the one being dragged)
+    const editingSensorId = this.editTarget?.type === 'sensor' ? this.editTarget.id : null;
+    for (const sensor of this.sensors) {
+      if (sensor.id === editingSensorId) continue;
+      if (sensor.x_pct !== undefined) {
+        vertical.push({ position: sensor.x_pct, type: 'sensor', sourceId: sensor.id });
+      }
+      if (sensor.y_pct !== undefined) {
+        horizontal.push({ position: sensor.y_pct, type: 'sensor', sourceId: sensor.id });
+      }
+    }
+
+    // Guidelines from rotation center (if not editing it)
+    if (this.editTarget?.type !== 'rotation' && this.rotationCenter) {
+      vertical.push({ position: this.rotationCenter.x_pct, type: 'rotation' });
+      horizontal.push({ position: this.rotationCenter.y_pct, type: 'rotation' });
+    }
+
+    this.horizontalGuidelines = horizontal;
+    this.verticalGuidelines = vertical;
+  }
+
+  private applySnapping(x: number, y: number): { x: number; y: number } {
+    this.activeGuidelines = { x: null, y: null };
+    this.snappedToGrid = { x: false, y: false };
+
+    const dims = this.getDisplayDimensions();
+
+    // Find closest vertical guideline for X
+    let closestX: Guideline | null = null;
+    let closestXDist = Infinity;
+    for (const g of this.verticalGuidelines) {
+      const dist = Math.abs(g.position - x);
+      if (dist < this.SNAP_THRESHOLD && dist < closestXDist) {
+        closestXDist = dist;
+        closestX = g;
+      }
+    }
+
+    // Find closest horizontal guideline for Y
+    let closestY: Guideline | null = null;
+    let closestYDist = Infinity;
+    for (const g of this.horizontalGuidelines) {
+      const dist = Math.abs(g.position - y);
+      if (dist < this.SNAP_THRESHOLD && dist < closestYDist) {
+        closestYDist = dist;
+        closestY = g;
+      }
+    }
+
+    // Apply guideline snapping first (takes priority)
+    if (closestX) {
+      x = closestX.position;
+      this.activeGuidelines.x = closestX;
+    }
+    if (closestY) {
+      y = closestY.position;
+      this.activeGuidelines.y = closestY;
+    }
+
+    // Apply grid snapping (whole cm values) if not already snapped to a guideline
+    if (dims) {
+      if (!closestX) {
+        const xCm = (x / 100) * dims.width;
+        const snappedXcm = Math.round(xCm / this.GRID_SNAP_CM) * this.GRID_SNAP_CM;
+        if (Math.abs(xCm - snappedXcm) < this.GRID_SNAP_THRESHOLD_CM) {
+          x = (snappedXcm / dims.width) * 100;
+          this.snappedToGrid.x = true;
+        }
+      }
+      if (!closestY) {
+        const yCm = (y / 100) * dims.length;
+        const snappedYcm = Math.round(yCm / this.GRID_SNAP_CM) * this.GRID_SNAP_CM;
+        if (Math.abs(yCm - snappedYcm) < this.GRID_SNAP_THRESHOLD_CM) {
+          y = (snappedYcm / dims.length) * 100;
+          this.snappedToGrid.y = true;
+        }
+      }
+    }
+
+    return { x, y };
+  }
+
+  private clearGuidelines() {
+    this.activeGuidelines = { x: null, y: null };
+    this.horizontalGuidelines = [];
+    this.verticalGuidelines = [];
+    this.dragDistances = null;
+    this.snappedToGrid = { x: false, y: false };
+  }
+
+  private computeDragDistances(xPct: number, yPct: number) {
+    const dims = this.getDisplayDimensions();
+    if (!dims) {
+      this.dragDistances = null;
+      return;
+    }
+
+    const left = this.roundToTwo((xPct / 100) * dims.width);
+    const right = this.roundToTwo(((100 - xPct) / 100) * dims.width);
+    const top = this.roundToTwo((yPct / 100) * dims.length);
+    const bottom = this.roundToTwo(((100 - yPct) / 100) * dims.length);
+    const centerX = this.roundToTwo(Math.abs(xPct - 50) / 100 * dims.width);
+    const centerY = this.roundToTwo(Math.abs(yPct - 50) / 100 * dims.length);
+
+    // Check symmetry with small tolerance (0.1 cm)
+    const SYMMETRY_TOLERANCE = 0.1;
+    const symmetricX = Math.abs(left - right) < SYMMETRY_TOLERANCE;
+    const symmetricY = Math.abs(top - bottom) < SYMMETRY_TOLERANCE;
+
+    this.dragDistances = {
+      left, right, top, bottom,
+      centerX, centerY,
+      symmetricX, symmetricY
+    };
+  }
+
+  get showGuidelines(): boolean {
+    return this.isDragging;
+  }
+
+  isGuidelineActive(guideline: Guideline, axis: 'x' | 'y'): boolean {
+    const active = axis === 'x' ? this.activeGuidelines.x : this.activeGuidelines.y;
+    if (!active) return false;
+    return active.position === guideline.position && active.type === guideline.type;
   }
 
   private persistSensors() {
@@ -518,12 +757,17 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
     });
   }
 
-  // Robot preview
+  // Robot preview - scale factor leaves room for measurement markings
+  private readonly ROBOT_SCALE_FACTOR = 55;
+
   get robotScale() {
     const dims = this.getDisplayDimensions();
-    if (!dims) return { widthPct: 70, heightPct: 70 };
+    if (!dims) return { widthPct: this.ROBOT_SCALE_FACTOR, heightPct: this.ROBOT_SCALE_FACTOR };
     const max = Math.max(dims.width, dims.length);
-    return { widthPct: (dims.width / max) * 100, heightPct: (dims.length / max) * 100 };
+    return {
+      widthPct: (dims.width / max) * this.ROBOT_SCALE_FACTOR,
+      heightPct: (dims.length / max) * this.ROBOT_SCALE_FACTOR
+    };
   }
 
   get robotWidthLabel(): string {
@@ -679,5 +923,23 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
         );
       }
     });
+  }
+
+  // Layout settings
+  readonly orientationOptions: { label: string; value: FlowOrientation }[] = [
+    { label: '↕', value: 'vertical' },
+    { label: '↔', value: 'horizontal' },
+  ];
+
+  get currentOrientation(): FlowOrientation {
+    return this.orientation?.() ?? 'vertical';
+  }
+
+  onOrientationChange(value: FlowOrientation): void {
+    this.orientationChange.emit(value);
+  }
+
+  onAutoLayoutChange(value: boolean): void {
+    this.useAutoLayoutChange.emit(value);
   }
 }

@@ -9,7 +9,7 @@ import {
   input,
   output,
 } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { CommonModule, DecimalPipe } from '@angular/common';
 import { TranslateModule } from '@ngx-translate/core';
 import { PlanningModeService } from './planning-mode.service';
 import { formatStepForPreview } from './path-to-steps';
@@ -25,7 +25,7 @@ const WAYPOINT_VISUAL_RADIUS = 8;
 @Component({
   selector: 'app-planning-overlay',
   standalone: true,
-  imports: [CommonModule, TranslateModule],
+  imports: [CommonModule, DecimalPipe, TranslateModule],
   templateUrl: './planning-overlay.component.html',
   styleUrl: './planning-overlay.component.scss',
 })
@@ -363,6 +363,11 @@ export class PlanningOverlayComponent implements AfterViewInit, OnDestroy {
 
   // --- Helpers for template ---
 
+  onThresholdChange(event: Event): void {
+    const value = parseFloat((event.target as HTMLInputElement).value);
+    this.planningService.setLineupThreshold(value);
+  }
+
   formatStep(step: MissionStep): string {
     return formatStepForPreview(step);
   }
@@ -377,6 +382,9 @@ export class PlanningOverlayComponent implements AfterViewInit, OnDestroy {
     }
     if (fn === 'drive_backward') {
       return 'pi pi-arrow-down';
+    }
+    if (fn.includes('lineup')) {
+      return 'pi pi-align-center';
     }
     return 'pi pi-circle';
   }
