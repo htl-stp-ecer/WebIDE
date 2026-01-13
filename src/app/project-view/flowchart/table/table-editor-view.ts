@@ -13,7 +13,7 @@ import {
 import { CommonModule } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { TableEditorToolbar } from './table-editor-toolbar';
-import { TableMapService } from './services/table-map.service';
+import { TableMapService } from './services';
 import { HttpService } from '../../../services/http-service';
 import {
   DrawingTool,
@@ -539,6 +539,12 @@ export class TableEditorView implements OnInit, AfterViewInit, OnDestroy {
         this.ctx.drawImage(img, 0, 0);
         // Also load into map service
         this.mapService.loadMapFromBase64(base64);
+        this.message.set(
+          this.translate.instant('FLOWCHART.TABLE_MESSAGE_LOADED', {
+            width: MAP_WIDTH,
+            height: MAP_HEIGHT,
+          })
+        );
       }
     };
     img.src = `data:image/png;base64,${base64}`;

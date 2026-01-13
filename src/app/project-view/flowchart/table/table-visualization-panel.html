@@ -9,7 +9,7 @@
         @if (mapService.isLoading()) {
           <i class="pi pi-spin pi-spinner viz-loading-spinner"></i>
         } @else if (mapService.isLoaded()) {
-          <span class="viz-pill viz-pill-ready">Map Loaded</span>
+          <span class="viz-pill viz-pill-ready">{{ 'FLOWCHART.TABLE_MAP_LOADED_STATUS' | translate }}</span>
         }
         <button
           class="viz-action-btn"

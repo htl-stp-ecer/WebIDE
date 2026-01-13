@@ -97,6 +97,7 @@ export const enTranslations = {
     ROTATION_CENTER: 'Rotation Center',
     CENTER_SAVE_ERROR: 'Could not save reference points',
     SELECT_ITEM_HINT: 'Select an item to position',
+    NOT_SET: 'Not set',
   },
   MISSION: {
     ERROR_LOAD_MISSIONS: 'Could not get missions',
@@ -169,6 +170,7 @@ export const enTranslations = {
     TABLE_TITLE: 'Table editor',
     TABLE_UNITY_READY: 'Unity ready',
     TABLE_UNITY_NOT_READY: 'Unity not ready',
+    TABLE_MAP_LOADED_STATUS: 'Map loaded',
     TABLE_CLEAR: 'Clear',
     TABLE_LOAD: 'Load Map',
     TABLE_MESSAGE_CLEARED: 'Canvas cleared',
@@ -296,6 +298,7 @@ export const deTranslations = {
     ROTATION_CENTER: 'Rotationszentrum',
     CENTER_SAVE_ERROR: 'Referenzpunkte konnten nicht gespeichert werden',
     SELECT_ITEM_HINT: 'Element zum Positionieren auswählen',
+    NOT_SET: 'Nicht gesetzt',
   },
   MISSION: {
     ERROR_LOAD_MISSIONS: 'Missionen konnten nicht geladen werden',
@@ -368,6 +371,7 @@ export const deTranslations = {
     TABLE_TITLE: 'Tabelleneditor',
     TABLE_UNITY_READY: 'Unity bereit',
     TABLE_UNITY_NOT_READY: 'Unity nicht bereit',
+    TABLE_MAP_LOADED_STATUS: 'Karte geladen',
     TABLE_CLEAR: 'Leeren',
     TABLE_LOAD: 'Karte laden',
     TABLE_MESSAGE_CLEARED: 'Canvas geleert',
