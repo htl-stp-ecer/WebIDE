@@ -2,53 +2,121 @@
   [(visible)]="visible"
   (visibleChange)="visibleChange.emit($event)"
   [modal]="true"
-  [draggable]="false"
+  [draggable]="true"
   [resizable]="false"
-  [showHeader]="false"
-  [style]="{ width: activeTab() === 'map' || activeTab() === 'start' ? '900px' : '800px', maxWidth: '95vw' }"
-  [contentStyle]="{ padding: 0 }">
+  [style]="{ width: '900px', maxWidth: '95vw' }"
+  [contentStyle]="{ padding: 0 }"
+  styleClass="settings-dialog">
 
-  <!-- Tab Header -->
-  <div class="settings-tabs">
-    <button
-      type="button"
-      class="settings-tab"
-      [class.active]="activeTab() === 'robot'"
-      (click)="activeTab.set('robot')">
+  <ng-template pTemplate="header">
+    <div class="dialog-drag-header">
       <i class="pi pi-cog"></i>
-      {{ 'ROBOT_SETTINGS.TITLE' | translate }}
-    </button>
-    <button
-      type="button"
-      class="settings-tab"
-      [class.active]="activeTab() === 'start'"
-      (click)="activeTab.set('start')">
-      <i class="pi pi-compass"></i>
-      {{ 'ROBOT_SETTINGS.START_POSE_TAB' | translate }}
-    </button>
-    <button
-      type="button"
-      class="settings-tab"
-      [class.active]="activeTab() === 'map'"
-      (click)="activeTab.set('map')">
-      <i class="pi pi-table"></i>
-      {{ 'FLOWCHART.TABLE_TITLE' | translate }}
-    </button>
-    <div class="settings-tab-spacer"></div>
-    <button
-      type="button"
-      class="settings-close-btn"
-      (click)="closeModal()">
-      <i class="pi pi-times"></i>
-    </button>
-  </div>
+      <span>{{ 'ROBOT_SETTINGS.MODAL_TITLE' | translate }}</span>
+      <button type="button" class="dialog-close-btn" (click)="closeModal()">
+        <i class="pi pi-times"></i>
+      </button>
+    </div>
+  </ng-template>
 
-  <!-- Robot Settings Tab -->
-  @if (activeTab() === 'robot') {
-    <div class="flex flex-col lg:flex-row h-[500px] max-h-[70vh]">
+  <div class="modal-layout">
+    <!-- Sidebar Navigation -->
+    <aside class="modal-sidebar">
+      <nav class="sidebar-nav">
+        <button
+          type="button"
+          class="sidebar-nav-item"
+          [class.active]="activeTab() === 'project'"
+          (click)="activeTab.set('project')">
+          <i class="pi pi-sliders-h"></i>
+          <span>{{ 'ROBOT_SETTINGS.PROJECT_TAB' | translate }}</span>
+        </button>
+        <button
+          type="button"
+          class="sidebar-nav-item"
+          [class.active]="activeTab() === 'robot'"
+          (click)="activeTab.set('robot')">
+          <i class="pi pi-box"></i>
+          <span>{{ 'ROBOT_SETTINGS.ROBOT_TAB' | translate }}</span>
+        </button>
+        <button
+          type="button"
+          class="sidebar-nav-item"
+          [class.active]="activeTab() === 'start'"
+          (click)="activeTab.set('start')">
+          <i class="pi pi-flag"></i>
+          <span>{{ 'ROBOT_SETTINGS.START_TAB' | translate }}</span>
+        </button>
+        <button
+          type="button"
+          class="sidebar-nav-item"
+          [class.active]="activeTab() === 'map'"
+          (click)="activeTab.set('map')">
+          <i class="pi pi-th-large"></i>
+          <span>{{ 'ROBOT_SETTINGS.MAP_TAB' | translate }}</span>
+        </button>
+      </nav>
+    </aside>
 
-      <!-- Left Sidebar: Sensors List -->
-      <aside class="w-full lg:w-64 border-b lg:border-b-0 lg:border-r border-slate-200 dark:border-slate-700 flex flex-col bg-slate-50 dark:bg-slate-800/50">
+    <!-- Main Content -->
+    <div class="modal-content">
+
+      <!-- Project Settings Tab -->
+      @if (activeTab() === 'project') {
+        <div class="tab-content tab-content-project">
+          <div class="project-settings-grid">
+            <!-- Orientation Card -->
+            <div class="setting-card">
+              <div class="setting-card-header">
+                <i class="pi pi-arrows-alt"></i>
+                <span>{{ 'FLOWCHART.ORIENTATION' | translate }}</span>
+              </div>
+              <p class="setting-card-desc">{{ 'ROBOT_SETTINGS.ORIENTATION_DESC' | translate }}</p>
+              <div class="orientation-options">
+                <button
+                  type="button"
+                  class="orientation-btn"
+                  [class.active]="currentOrientation === 'vertical'"
+                  (click)="onOrientationChange('vertical')">
+                  <i class="pi pi-arrows-v"></i>
+                  <span>{{ 'FLOWCHART.ORIENTATION_VERTICAL' | translate }}</span>
+                </button>
+                <button
+                  type="button"
+                  class="orientation-btn"
+                  [class.active]="currentOrientation === 'horizontal'"
+                  (click)="onOrientationChange('horizontal')">
+                  <i class="pi pi-arrows-h"></i>
+                  <span>{{ 'FLOWCHART.ORIENTATION_HORIZONTAL' | translate }}</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Auto Layout Card -->
+            <div class="setting-card">
+              <div class="setting-card-header">
+                <i class="pi pi-objects-column"></i>
+                <span>{{ 'FLOWCHART.AUTO_LAYOUT' | translate }}</span>
+              </div>
+              <p class="setting-card-desc">{{ 'ROBOT_SETTINGS.AUTO_LAYOUT_DESC' | translate }}</p>
+              <label class="toggle-switch">
+                <input
+                  type="checkbox"
+                  [checked]="useAutoLayout"
+                  (change)="onAutoLayoutChange($any($event.target).checked)" />
+                <span class="toggle-slider"></span>
+                <span class="toggle-text">{{ useAutoLayout ? ('COMMON.ENABLED' | translate) : ('COMMON.DISABLED' | translate) }}</span>
+              </label>
+            </div>
+          </div>
+        </div>
+      }
+
+      <!-- Robot Settings Tab -->
+      @if (activeTab() === 'robot') {
+        <div class="tab-content tab-content-robot">
+          <!-- Left Sidebar: Sensors List -->
+          <aside class="robot-sidebar">
+
         <div class="p-4 border-b border-slate-200 dark:border-slate-700">
           <h3 class="text-xs font-semibold text-slate-500 uppercase tracking-wider">
             {{ 'ROBOT_SETTINGS.SENSORS_HEADING' | translate }}
@@ -183,10 +251,10 @@
             </div>
           </div>
         }
-      </aside>
+          </aside>
 
-      <!-- Main: Robot Visualization -->
-      <main class="flex-1 flex flex-col">
+          <!-- Main: Robot Visualization -->
+          <main class="robot-main">
         <!-- Robot Canvas -->
         <div class="flex-1 flex items-center justify-center p-6 robot-canvas-bg">
           <div class="relative robot-frame"
@@ -249,6 +317,54 @@
               }
             </div>
 
+            <!-- Distance Indicators (visible during drag) -->
+            @if (showGuidelines && dragDistances) {
+              <!-- Left distance -->
+              <div class="distance-indicator distance-left"
+                   [ngClass]="{
+                     'distance-symmetric': dragDistances.symmetricX,
+                     'distance-grid-snap': snappedToGrid.x
+                   }"
+                   [style.--robot-width]="robotScale.widthPct + '%'"
+                   [style.--robot-height]="robotScale.heightPct + '%'">
+                <span class="distance-line"></span>
+                <span class="distance-label">{{ dragDistances.left }}</span>
+              </div>
+              <!-- Right distance -->
+              <div class="distance-indicator distance-right"
+                   [ngClass]="{
+                     'distance-symmetric': dragDistances.symmetricX,
+                     'distance-grid-snap': snappedToGrid.x
+                   }"
+                   [style.--robot-width]="robotScale.widthPct + '%'"
+                   [style.--robot-height]="robotScale.heightPct + '%'">
+                <span class="distance-line"></span>
+                <span class="distance-label">{{ dragDistances.right }}</span>
+              </div>
+              <!-- Top distance -->
+              <div class="distance-indicator distance-top"
+                   [ngClass]="{
+                     'distance-symmetric': dragDistances.symmetricY,
+                     'distance-grid-snap': snappedToGrid.y
+                   }"
+                   [style.--robot-width]="robotScale.widthPct + '%'"
+                   [style.--robot-height]="robotScale.heightPct + '%'">
+                <span class="distance-line"></span>
+                <span class="distance-label">{{ dragDistances.top }}</span>
+              </div>
+              <!-- Bottom distance -->
+              <div class="distance-indicator distance-bottom"
+                   [ngClass]="{
+                     'distance-symmetric': dragDistances.symmetricY,
+                     'distance-grid-snap': snappedToGrid.y
+                   }"
+                   [style.--robot-width]="robotScale.widthPct + '%'"
+                   [style.--robot-height]="robotScale.heightPct + '%'">
+                <span class="distance-line"></span>
+                <span class="distance-label">{{ dragDistances.bottom }}</span>
+              </div>
+            }
+
             <!-- Robot Body -->
             <div
               #robotBody
@@ -263,6 +379,38 @@
               (mousemove)="onRobotMouseMove($event)"
               (mouseup)="onRobotMouseUp()"
               (mouseleave)="onRobotMouseUp()">
+
+              <!-- Guidelines (visible during drag) -->
+              @if (showGuidelines) {
+                <!-- Vertical guidelines (for X alignment) -->
+                @for (guideline of verticalGuidelines; track guideline.position + '-' + guideline.type) {
+                  <span
+                    class="guideline guideline-vertical"
+                    [ngClass]="{
+                      'guideline-active': isGuidelineActive(guideline, 'x'),
+                      'guideline-center': guideline.type === 'center',
+                      'guideline-edge': guideline.type === 'edge',
+                      'guideline-sensor': guideline.type === 'sensor',
+                      'guideline-rotation': guideline.type === 'rotation'
+                    }"
+                    [style.--guide-pos]="guideline.position + '%'">
+                  </span>
+                }
+                <!-- Horizontal guidelines (for Y alignment) -->
+                @for (guideline of horizontalGuidelines; track guideline.position + '-' + guideline.type) {
+                  <span
+                    class="guideline guideline-horizontal"
+                    [ngClass]="{
+                      'guideline-active': isGuidelineActive(guideline, 'y'),
+                      'guideline-center': guideline.type === 'center',
+                      'guideline-edge': guideline.type === 'edge',
+                      'guideline-sensor': guideline.type === 'sensor',
+                      'guideline-rotation': guideline.type === 'rotation'
+                    }"
+                    [style.--guide-pos]="guideline.position + '%'">
+                  </span>
+                }
+              }
 
               <!-- Geometric Center Marker (fixed at center) -->
               <span class="center-marker center-marker-geometric center-marker-fixed">
@@ -308,78 +456,73 @@
           </div>
         </div>
 
-        <!-- Hint -->
-        @if (editTarget !== null) {
-          <div class="p-3 bg-blue-50 dark:bg-blue-900/30 border-t border-blue-200 dark:border-blue-800">
-            <p class="text-sm text-blue-700 dark:text-blue-300 text-center">
-              <i class="pi pi-info-circle mr-2"></i>
-              {{ 'ROBOT_SETTINGS.DRAG_TO_PLACE' | translate }}
+            <!-- Hint -->
+            @if (editTarget !== null) {
+              <div class="robot-hint">
+                <i class="pi pi-info-circle"></i>
+                {{ 'ROBOT_SETTINGS.DRAG_TO_PLACE' | translate }}
+              </div>
+            }
+          </main>
+        </div>
+      }
+
+      <!-- Map Editor Tab -->
+      @if (activeTab() === 'map') {
+        <div class="tab-content tab-content-map">
+          <app-table-editor-view></app-table-editor-view>
+        </div>
+      }
+
+      <!-- Start Pose Tab -->
+      @if (activeTab() === 'start') {
+        <div class="tab-content tab-content-start">
+          <!-- Input fields at top -->
+          <div class="start-controls">
+            <div class="start-fields-row">
+              <div class="start-field">
+                <label>{{ 'ROBOT_SETTINGS.START_POSE_X' | translate }}</label>
+                <input
+                  type="number"
+                  [ngModel]="startPoseXcm"
+                  (ngModelChange)="setStartPoseXcm($event)"
+                  pInputText />
+              </div>
+              <div class="start-field">
+                <label>{{ 'ROBOT_SETTINGS.START_POSE_Y' | translate }}</label>
+                <input
+                  type="number"
+                  [ngModel]="startPoseYcm"
+                  (ngModelChange)="setStartPoseYcm($event)"
+                  pInputText />
+              </div>
+              <div class="start-field">
+                <label>{{ 'ROBOT_SETTINGS.START_POSE_ROTATION' | translate }}</label>
+                <input
+                  type="number"
+                  [ngModel]="startPoseThetaDeg"
+                  (ngModelChange)="setStartPoseThetaDeg($event)"
+                  pInputText />
+              </div>
+            </div>
+            <p class="start-hint">
+              <i class="pi pi-info-circle"></i>
+              {{ 'ROBOT_SETTINGS.START_POSE_HINT' | translate }}
             </p>
           </div>
-        }
-      </main>
-    </div>
-  }
-
-  <!-- Map Editor Tab -->
-  @if (activeTab() === 'map') {
-    <div class="map-editor-container">
-      <app-table-editor-view></app-table-editor-view>
-    </div>
-  }
-
-  <!-- Start Pose Tab -->
-  @if (activeTab() === 'start') {
-    <div class="start-pose-container">
-      <aside class="start-pose-sidebar">
-        <h3 class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">
-          {{ 'ROBOT_SETTINGS.START_POSE_TITLE' | translate }}
-        </h3>
-        <div class="grid grid-cols-2 gap-3">
-          <div>
-            <label class="text-xs text-slate-500 mb-1 block">{{ 'ROBOT_SETTINGS.START_POSE_X' | translate }}</label>
-            <input
-              type="number"
-              [ngModel]="startPoseXcm"
-              (ngModelChange)="setStartPoseXcm($event)"
-              pInputText
-              class="w-full font-mono text-sm"/>
-          </div>
-          <div>
-            <label class="text-xs text-slate-500 mb-1 block">{{ 'ROBOT_SETTINGS.START_POSE_Y' | translate }}</label>
-            <input
-              type="number"
-              [ngModel]="startPoseYcm"
-              (ngModelChange)="setStartPoseYcm($event)"
-              pInputText
-              class="w-full font-mono text-sm"/>
-          </div>
-          <div class="col-span-2">
-            <label class="text-xs text-slate-500 mb-1 block">{{ 'ROBOT_SETTINGS.START_POSE_ROTATION' | translate }}</label>
-            <input
-              type="number"
-              [ngModel]="startPoseThetaDeg"
-              (ngModelChange)="setStartPoseThetaDeg($event)"
-              pInputText
-              class="w-full font-mono text-sm"/>
+          <!-- Canvas fills remaining space -->
+          <div class="start-canvas">
+            <app-table-visualization-panel
+              [visible]="true"
+              [showHeader]="false"
+              [embedded]="true"
+              [allowStartPoseEdit]="true"
+              [showPaths]="false"
+              (startPoseChange)="onStartPosePicked($event)">
+            </app-table-visualization-panel>
           </div>
         </div>
-        <p class="start-pose-hint">
-          <i class="pi pi-info-circle mr-2"></i>
-          {{ 'ROBOT_SETTINGS.START_POSE_HINT' | translate }}
-        </p>
-      </aside>
-      <div class="start-pose-view">
-        <app-table-visualization-panel
-          [visible]="true"
-          [showHeader]="false"
-          [embedded]="true"
-          [allowStartPoseEdit]="true"
-          [showPaths]="false"
-          (startPoseChange)="onStartPosePicked($event)">
-        </app-table-visualization-panel>
-      </div>
+      }
     </div>
-  }
-
+  </div>
 </p-dialog>

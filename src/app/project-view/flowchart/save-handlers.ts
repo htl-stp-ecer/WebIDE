@@ -7,10 +7,15 @@ export function handleSave(flow: Flowchart): void {
   if (!mission || !projectId) {
     return;
   }
+  flow.setSaveStatus('saving');
   flow.http.saveMission(projectId, mission).subscribe({
     next: () => {
+      flow.setSaveStatus('saved');
       flow.updatePlannedPathForMission?.(mission);
     },
-    error: error => NotificationService.showError('Could not save settings', String(error)),
+    error: error => {
+      flow.setSaveStatus('idle');
+      NotificationService.showError('Could not save settings', String(error));
+    },
   });
 }
