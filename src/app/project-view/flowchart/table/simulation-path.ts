@@ -8,6 +8,7 @@ const DEFAULT_LINEUP_STEP_CM = 0.5;
 const DEFAULT_LINEUP_MAX_DISTANCE_CM = 200;
 const DEFAULT_LINEUP_ROTATE_STEP_RAD = Math.PI / 90;
 const DEFAULT_FOLLOW_LINE_ROTATE_STEP_RAD = Math.PI / 90;
+const DEFAULT_FOLLOW_LINE_MAX_DISTANCE_CM = 300;
 const FOLLOW_LINE_SAMPLE_COUNT: number = 9;
 const FOLLOW_LINE_GAIN_MAX = 0.02;
 const FOLLOW_LINE_GAIN_DECAY_MIN_CM = 4;
@@ -152,12 +153,16 @@ export function buildPlannedPathFromSimulation(
     }
     if (fn === 'follow_line') {
       const targetCm = parseDistanceCmFromLabel(step.label) ?? (step.delta?.forward ?? 0) * 100;
-      if (options?.lineup && targetCm > 0) {
-        const followPoses = simulateFollowLine(current, options.lineup, targetCm);
-        if (followPoses.length) {
-          poses.push(...followPoses);
-          current = followPoses[followPoses.length - 1];
-          continue;
+      if (options?.lineup) {
+        const stopOnIntersection = targetCm <= 0;
+        const maxDistance = stopOnIntersection ? DEFAULT_FOLLOW_LINE_MAX_DISTANCE_CM : targetCm;
+        if (maxDistance > 0) {
+          const followPoses = simulateFollowLine(current, options.lineup, maxDistance, stopOnIntersection);
+          if (followPoses.length) {
+            poses.push(...followPoses);
+            current = followPoses[followPoses.length - 1];
+            continue;
+          }
         }
       }
     }
@@ -476,7 +481,8 @@ function simulateDriveUntilColor(
 function simulateFollowLine(
   startPose: Pose2D,
   context: LineupSimulationContext,
-  distanceCm: number
+  distanceCm: number,
+  stopOnIntersection = false
 ): Pose2D[] {
   const { lineSensors, rotationCenterForwardCm, rotationCenterStrafeCm } = context;
   if (!lineSensors || lineSensors.length < 2) return [];
@@ -505,6 +511,10 @@ function simulateFollowLine(
     const leftOnBlack = isOnBlack(selected.left, pose);
     const rightOnBlack = isOnBlack(selected.right, pose);
     let turn = 0;
+
+    if (stopOnIntersection && leftOnBlack && rightOnBlack) {
+      break;
+    }
 
     if (leftOnBlack && rightOnBlack) {
       turn = 0;
