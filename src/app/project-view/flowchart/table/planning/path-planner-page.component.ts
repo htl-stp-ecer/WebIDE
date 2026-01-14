@@ -115,6 +115,8 @@ export class PathPlannerPage implements OnInit, AfterViewInit, OnDestroy {
       this.planningService.selectedIndex();
       this.planningService.draggingIndex();
       this.planningService.startPose();
+      this.planningService.computedTrajectory(); // React to trajectory changes
+      this.planningService.endPose(); // React to end pose changes
       this.render();
     });
   }
@@ -221,8 +223,10 @@ export class PathPlannerPage implements OnInit, AfterViewInit, OnDestroy {
       this.renderAngleGuide(width, height, angleSnap);
     }
 
+    this.renderActualPath(width, height);
     this.renderPathLines(width, height);
     this.renderWaypoints(width, height);
+    this.renderGhostRobot(width, height);
   }
 
   private renderMap(width: number, height: number): void {
@@ -342,6 +346,50 @@ export class PathPlannerPage implements OnInit, AfterViewInit, OnDestroy {
     this.ctx.restore();
   }
 
+  private renderActualPath(width: number, height: number): void {
+    const trajectory = this.planningService.computedTrajectory();
+    if (trajectory.length < 2) return;
+
+    // Draw the actual computed path as a solid orange line
+    this.ctx.strokeStyle = '#f97316'; // Orange color
+    this.ctx.lineWidth = 3;
+    this.ctx.lineCap = 'round';
+    this.ctx.lineJoin = 'round';
+    this.ctx.setLineDash([]);
+
+    this.ctx.beginPath();
+    for (let i = 0; i < trajectory.length; i++) {
+      const pose = trajectory[i];
+      const pos = this.tableToCanvas(pose.x, pose.y, width, height);
+      if (i === 0) {
+        this.ctx.moveTo(pos.x, pos.y);
+      } else {
+        this.ctx.lineTo(pos.x, pos.y);
+      }
+    }
+    this.ctx.stroke();
+
+    // Draw direction indicators along the path
+    const indicatorInterval = Math.max(1, Math.floor(trajectory.length / 10));
+    this.ctx.fillStyle = '#f97316';
+    for (let i = indicatorInterval; i < trajectory.length; i += indicatorInterval) {
+      const pose = trajectory[i];
+      const pos = this.tableToCanvas(pose.x, pose.y, width, height);
+
+      // Draw small direction arrow
+      this.ctx.save();
+      this.ctx.translate(pos.x, pos.y);
+      this.ctx.rotate(-pose.theta); // Negative because canvas Y is flipped
+      this.ctx.beginPath();
+      this.ctx.moveTo(6, 0);
+      this.ctx.lineTo(-3, -4);
+      this.ctx.lineTo(-3, 4);
+      this.ctx.closePath();
+      this.ctx.fill();
+      this.ctx.restore();
+    }
+  }
+
   private renderPathLines(width: number, height: number): void {
     const waypoints = this.planningService.waypoints();
     const startPose = this.planningService.startPose();
@@ -353,9 +401,10 @@ export class PathPlannerPage implements OnInit, AfterViewInit, OnDestroy {
 
     if (pathPoints.length < 2) return;
 
-    this.ctx.strokeStyle = '#3b82f6';
-    this.ctx.lineWidth = 2;
-    this.ctx.setLineDash([6, 4]);
+    // Draw dashed line showing direct waypoint connections (for reference)
+    this.ctx.strokeStyle = 'rgba(59, 130, 246, 0.4)'; // Semi-transparent blue
+    this.ctx.lineWidth = 1;
+    this.ctx.setLineDash([4, 4]);
     this.ctx.lineCap = 'round';
     this.ctx.lineJoin = 'round';
 
@@ -370,12 +419,6 @@ export class PathPlannerPage implements OnInit, AfterViewInit, OnDestroy {
     }
     this.ctx.stroke();
     this.ctx.setLineDash([]);
-
-    for (let i = 0; i < pathPoints.length - 1; i++) {
-      const from = this.tableToCanvas(pathPoints[i].x, pathPoints[i].y, width, height);
-      const to = this.tableToCanvas(pathPoints[i + 1].x, pathPoints[i + 1].y, width, height);
-      this.drawArrow(from.x, from.y, to.x, to.y);
-    }
   }
 
   private drawArrow(x1: number, y1: number, x2: number, y2: number): void {
@@ -434,6 +477,63 @@ export class PathPlannerPage implements OnInit, AfterViewInit, OnDestroy {
       this.ctx.textBaseline = 'middle';
       this.ctx.fillText(String(i + 1), pos.x, pos.y);
     }
+  }
+
+  private renderGhostRobot(width: number, height: number): void {
+    const endPose = this.planningService.endPose();
+    if (!endPose) return;
+
+    const robotConfig = this.vizService.robotConfig();
+    const { scaleX, scaleY } = this.getDrawParams(width, height);
+
+    const rotationCenter = this.tableToCanvas(endPose.x, endPose.y, width, height);
+
+    const robotWidthPx = robotConfig.widthCm * scaleX;
+    const robotLengthPx = robotConfig.lengthCm * scaleY;
+
+    const rcOffsetForwardPx = robotConfig.rotationCenterForwardCm * scaleX;
+    const rcOffsetStrafePx = robotConfig.rotationCenterStrafeCm * scaleY;
+
+    this.ctx.save();
+    this.ctx.translate(rotationCenter.x, rotationCenter.y);
+    this.ctx.rotate(-endPose.theta);
+
+    const bodyCenterX = -rcOffsetForwardPx;
+    const bodyCenterY = rcOffsetStrafePx;
+
+    // Ghost robot with orange semi-transparent color
+    this.ctx.fillStyle = 'rgba(249, 115, 22, 0.3)'; // Orange transparent
+    this.ctx.strokeStyle = '#f97316'; // Orange
+    this.ctx.lineWidth = 2;
+    this.ctx.setLineDash([4, 4]);
+    this.ctx.beginPath();
+    this.ctx.rect(
+      bodyCenterX - robotLengthPx / 2,
+      bodyCenterY - robotWidthPx / 2,
+      robotLengthPx,
+      robotWidthPx
+    );
+    this.ctx.fill();
+    this.ctx.stroke();
+    this.ctx.setLineDash([]);
+
+    // Direction arrow
+    this.ctx.fillStyle = '#f97316';
+    this.ctx.beginPath();
+    const arrowTipX = bodyCenterX + robotLengthPx / 2;
+    this.ctx.moveTo(arrowTipX, bodyCenterY);
+    this.ctx.lineTo(arrowTipX - 10, bodyCenterY - 6);
+    this.ctx.lineTo(arrowTipX - 10, bodyCenterY + 6);
+    this.ctx.closePath();
+    this.ctx.fill();
+
+    // Rotation center marker
+    this.ctx.fillStyle = '#f97316';
+    this.ctx.beginPath();
+    this.ctx.arc(0, 0, 3, 0, Math.PI * 2);
+    this.ctx.fill();
+
+    this.ctx.restore();
   }
 
   private renderGridOverlay(width: number, height: number): void {

@@ -315,3 +315,70 @@ function scale(v: Vec2, s: number): Vec2 {
 function negate(v: Vec2): Vec2 {
   return { x: -v.x, y: -v.y };
 }
+
+// --- Exported collision utilities for A* pathfinding ---
+
+/**
+ * Check if a robot at the given pose collides with any wall.
+ * Reusable by pathfinding algorithms.
+ */
+export function checkRobotCollision(
+  pose: Pose2D,
+  robotConfig: RobotConfig,
+  walls: WallSegment[]
+): boolean {
+  for (const wall of walls) {
+    if (computeCollision(pose, robotConfig, wall)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Check if the robot pose is within map bounds (with buffer for robot size).
+ */
+export function isRobotInBounds(
+  pose: Pose2D,
+  mapConfig: MapConfig,
+  robotConfig: RobotConfig
+): boolean {
+  const maxExtent = Math.max(robotConfig.widthCm, robotConfig.lengthCm) / 2;
+  return (
+    pose.x >= maxExtent &&
+    pose.x <= mapConfig.widthCm - maxExtent &&
+    pose.y >= maxExtent &&
+    pose.y <= mapConfig.heightCm - maxExtent
+  );
+}
+
+/**
+ * Check if the path from one pose to another passes through any walls.
+ * Checks intermediate positions along the trajectory.
+ */
+export function checkPathCollision(
+  startPose: Pose2D,
+  endPose: Pose2D,
+  robotConfig: RobotConfig,
+  walls: WallSegment[],
+  steps: number = 5
+): boolean {
+  // Check both endpoints
+  if (checkRobotCollision(startPose, robotConfig, walls)) return true;
+  if (checkRobotCollision(endPose, robotConfig, walls)) return true;
+
+  // Check intermediate points
+  for (let i = 1; i < steps; i++) {
+    const t = i / steps;
+    const intermediatePose: Pose2D = {
+      x: startPose.x + (endPose.x - startPose.x) * t,
+      y: startPose.y + (endPose.y - startPose.y) * t,
+      theta: startPose.theta + (endPose.theta - startPose.theta) * t,
+    };
+    if (checkRobotCollision(intermediatePose, robotConfig, walls)) {
+      return true;
+    }
+  }
+
+  return false;
+}

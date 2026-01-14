@@ -1,0 +1,379 @@
+import { Pose2D, normalizeAngle } from '../../models/pose2d';
+import { MissionStep } from '../../../../../entities/MissionStep';
+import { RobotConfig } from '../../services/table-visualization.service';
+import { MapConfig } from '../../services/table-map.service';
+import { WallSegment, applyWallPhysicsToPath } from '../../physics';
+import { simulateCommand, getSingleCommandTrajectory } from './pose-simulator';
+
+// --- Configuration ---
+
+export interface AStarConfig {
+  /** Position discretization in cm (for visited state detection) */
+  positionResolutionCm: number;
+  /** Angle discretization in degrees (for visited state detection) */
+  angleResolutionDeg: number;
+  /** Goal tolerance in cm (how close is "at goal") */
+  goalToleranceCm: number;
+  /** Maximum iterations before giving up */
+  maxIterations: number;
+}
+
+export const DEFAULT_ASTAR_CONFIG: AStarConfig = {
+  positionResolutionCm: 5,
+  angleResolutionDeg: 15,
+  goalToleranceCm: 5,
+  maxIterations: 50000,
+};
+
+// --- Command Generation ---
+
+function createDriveStep(distanceCm: number): MissionStep {
+  return {
+    step_type: '',
+    function_name: 'drive_forward',
+    arguments: [{ name: 'cm', value: distanceCm, type: 'float' }],
+    position: { x: 0, y: 0 },
+    children: [],
+  };
+}
+
+function createTurnStep(angleDeg: number): MissionStep {
+  const isClockwise = angleDeg < 0;
+  return {
+    step_type: '',
+    function_name: isClockwise ? 'turn_cw' : 'turn_ccw',
+    arguments: [{ name: 'deg', value: Math.abs(angleDeg), type: 'float' }],
+    position: { x: 0, y: 0 },
+    children: [],
+  };
+}
+
+/** Available commands for A* exploration */
+const AVAILABLE_COMMANDS: MissionStep[] = [
+  // Drive commands
+  createDriveStep(5),
+  createDriveStep(10),
+  createDriveStep(20),
+  // Turn commands (clockwise)
+  createTurnStep(-15),
+  createTurnStep(-45),
+  createTurnStep(-90),
+  // Turn commands (counter-clockwise)
+  createTurnStep(15),
+  createTurnStep(45),
+  createTurnStep(90),
+];
+
+// --- A* Node ---
+
+interface AStarNode {
+  pose: Pose2D;
+  g: number;  // Cost from start
+  h: number;  // Heuristic to goal
+  f: number;  // Total cost (g + h)
+  parent: AStarNode | null;
+  command: MissionStep | null;  // Command that led to this node
+}
+
+// --- Min Heap Implementation ---
+
+class MinHeap {
+  private heap: AStarNode[] = [];
+
+  push(node: AStarNode): void {
+    this.heap.push(node);
+    this.bubbleUp(this.heap.length - 1);
+  }
+
+  pop(): AStarNode | undefined {
+    if (this.heap.length === 0) return undefined;
+    if (this.heap.length === 1) return this.heap.pop();
+
+    const min = this.heap[0];
+    this.heap[0] = this.heap.pop()!;
+    this.bubbleDown(0);
+    return min;
+  }
+
+  isEmpty(): boolean {
+    return this.heap.length === 0;
+  }
+
+  size(): number {
+    return this.heap.length;
+  }
+
+  private bubbleUp(index: number): void {
+    while (index > 0) {
+      const parentIndex = Math.floor((index - 1) / 2);
+      if (this.heap[parentIndex].f <= this.heap[index].f) break;
+      [this.heap[parentIndex], this.heap[index]] = [this.heap[index], this.heap[parentIndex]];
+      index = parentIndex;
+    }
+  }
+
+  private bubbleDown(index: number): void {
+    const length = this.heap.length;
+    while (true) {
+      const leftChild = 2 * index + 1;
+      const rightChild = 2 * index + 2;
+      let smallest = index;
+
+      if (leftChild < length && this.heap[leftChild].f < this.heap[smallest].f) {
+        smallest = leftChild;
+      }
+      if (rightChild < length && this.heap[rightChild].f < this.heap[smallest].f) {
+        smallest = rightChild;
+      }
+      if (smallest === index) break;
+
+      [this.heap[smallest], this.heap[index]] = [this.heap[index], this.heap[smallest]];
+      index = smallest;
+    }
+  }
+}
+
+// --- Helper Functions ---
+
+/**
+ * Convert pose to a discretized state key for visited set.
+ */
+function poseToStateKey(pose: Pose2D, config: AStarConfig): string {
+  const x = Math.round(pose.x / config.positionResolutionCm) * config.positionResolutionCm;
+  const y = Math.round(pose.y / config.positionResolutionCm) * config.positionResolutionCm;
+  const thetaDeg = pose.theta * 180 / Math.PI;
+  const theta = Math.round(thetaDeg / config.angleResolutionDeg) * config.angleResolutionDeg;
+  return `${x},${y},${theta}`;
+}
+
+/**
+ * Check if pose is at the goal (within tolerance).
+ */
+function isAtGoal(pose: Pose2D, goal: { x: number; y: number }, toleranceCm: number): boolean {
+  const dx = pose.x - goal.x;
+  const dy = pose.y - goal.y;
+  return Math.sqrt(dx * dx + dy * dy) <= toleranceCm;
+}
+
+/**
+ * Calculate the cost of executing a command.
+ */
+function calculateCost(command: MissionStep): number {
+  const fn = command.function_name;
+  const arg = (command.arguments[0]?.value as number) ?? 0;
+
+  if (fn === 'drive_forward' || fn === 'drive_backward') {
+    // Cost proportional to distance (0.1 per cm)
+    return arg * 0.1;
+  }
+  if (fn.includes('turn')) {
+    // Cost proportional to angle (0.02 per degree)
+    // Turns are relatively cheap to encourage proper facing
+    return arg * 0.02;
+  }
+  return 1;
+}
+
+/**
+ * Heuristic function: estimated cost to reach goal.
+ * Uses Euclidean distance scaled by typical cost.
+ */
+function heuristic(pose: Pose2D, goal: { x: number; y: number }): number {
+  const dx = goal.x - pose.x;
+  const dy = goal.y - pose.y;
+  const distance = Math.sqrt(dx * dx + dy * dy);
+
+  // Estimate: need to turn to face goal, then drive
+  // Assume average turn cost is small relative to drive
+  return distance * 0.1;
+}
+
+/**
+ * Reconstruct the path from start to goal.
+ */
+function reconstructPath(node: AStarNode): { commands: MissionStep[]; finalPose: Pose2D } {
+  const commands: MissionStep[] = [];
+  let current: AStarNode | null = node;
+
+  while (current?.parent) {
+    if (current.command) {
+      commands.unshift(current.command);
+    }
+    current = current.parent;
+  }
+
+  return { commands, finalPose: node.pose };
+}
+
+// --- Main A* Algorithm ---
+
+export interface FindPathResult {
+  commands: MissionStep[];
+  finalPose: Pose2D;
+  nodesExplored: number;
+}
+
+/**
+ * Find a path from start pose to goal position using command-based A*.
+ *
+ * @param startPose - Starting robot pose
+ * @param goal - Goal position (x, y) in cm
+ * @param walls - Wall segments to avoid
+ * @param robotConfig - Robot dimensions
+ * @param mapConfig - Map dimensions
+ * @param config - A* configuration
+ * @returns Path result or null if no path found
+ */
+export function findPath(
+  startPose: Pose2D,
+  goal: { x: number; y: number },
+  walls: WallSegment[],
+  robotConfig: RobotConfig,
+  mapConfig: MapConfig,
+  config: AStarConfig = DEFAULT_ASTAR_CONFIG
+): FindPathResult | null {
+  console.log('[A*] findPath called:', {
+    startPose,
+    goal,
+    wallCount: walls.length,
+    robotConfig,
+    mapConfig: { widthCm: mapConfig.widthCm, heightCm: mapConfig.heightCm },
+  });
+
+  // Check if already at goal
+  if (isAtGoal(startPose, goal, config.goalToleranceCm)) {
+    console.log('[A*] Already at goal');
+    return { commands: [], finalPose: startPose, nodesExplored: 0 };
+  }
+
+  const openSet = new MinHeap();
+  const visited = new Set<string>();
+
+  // Initialize with start node
+  const startNode: AStarNode = {
+    pose: startPose,
+    g: 0,
+    h: heuristic(startPose, goal),
+    f: heuristic(startPose, goal),
+    parent: null,
+    command: null,
+  };
+  openSet.push(startNode);
+
+  let iterations = 0;
+
+  while (!openSet.isEmpty() && iterations < config.maxIterations) {
+    iterations++;
+    const current = openSet.pop()!;
+
+    // Check if we've reached the goal
+    if (isAtGoal(current.pose, goal, config.goalToleranceCm)) {
+      console.log('[A*] Path found! Iterations:', iterations);
+      return { ...reconstructPath(current), nodesExplored: iterations };
+    }
+
+    // Mark as visited
+    const stateKey = poseToStateKey(current.pose, config);
+    if (visited.has(stateKey)) continue;
+    visited.add(stateKey);
+
+    // Explore all available commands
+    for (const command of AVAILABLE_COMMANDS) {
+      // Get trajectory for this command with intermediate steps
+      const trajectory = getSingleCommandTrajectory(current.pose, command, 2);
+
+      // Apply wall physics to get actual final pose (with wall sliding)
+      const physicsResult = applyWallPhysicsToPath(trajectory, robotConfig, walls);
+      const newPose = physicsResult.length > 0
+        ? physicsResult[physicsResult.length - 1]
+        : current.pose;
+
+      // Skip if already visited (at discretized level)
+      const newStateKey = poseToStateKey(newPose, config);
+      if (visited.has(newStateKey)) continue;
+
+      // Skip if we didn't move at all (stuck against wall)
+      const dx = newPose.x - current.pose.x;
+      const dy = newPose.y - current.pose.y;
+      const dTheta = Math.abs(normalizeAngle(newPose.theta - current.pose.theta));
+      const movedDistance = Math.sqrt(dx * dx + dy * dy);
+      if (movedDistance < 0.5 && dTheta < 0.01) continue;
+
+      // Calculate costs
+      const g = current.g + calculateCost(command);
+      const h = heuristic(newPose, goal);
+      const f = g + h;
+
+      const newNode: AStarNode = {
+        pose: newPose,
+        g,
+        h,
+        f,
+        parent: current,
+        command,
+      };
+
+      openSet.push(newNode);
+    }
+  }
+
+  console.warn(`A* pathfinding: No path found after ${iterations} iterations`);
+  return null;
+}
+
+/**
+ * Optimize the resulting path by merging consecutive same-type commands.
+ * E.g., [drive(5), drive(10)] -> [drive(15)]
+ */
+export function optimizePath(result: FindPathResult): FindPathResult {
+  if (result.commands.length <= 1) return result;
+
+  const optimized: MissionStep[] = [];
+  let i = 0;
+
+  while (i < result.commands.length) {
+    const current = result.commands[i];
+    const fn = current.function_name;
+
+    // Try to merge consecutive same commands
+    if (fn === 'drive_forward' || fn === 'drive_backward') {
+      let totalDistance = (current.arguments[0]?.value as number) ?? 0;
+      let j = i + 1;
+
+      while (j < result.commands.length && result.commands[j].function_name === fn) {
+        totalDistance += (result.commands[j].arguments[0]?.value as number) ?? 0;
+        j++;
+      }
+
+      optimized.push({
+        ...current,
+        arguments: [{ name: 'cm', value: totalDistance, type: 'float' }],
+      });
+      i = j;
+    } else if (fn === 'turn_cw' || fn === 'turn_ccw') {
+      // Merge same-direction turns
+      let totalAngle = (current.arguments[0]?.value as number) ?? 0;
+      let j = i + 1;
+
+      while (j < result.commands.length && result.commands[j].function_name === fn) {
+        totalAngle += (result.commands[j].arguments[0]?.value as number) ?? 0;
+        j++;
+      }
+
+      // Normalize angle (shouldn't exceed 360)
+      totalAngle = totalAngle % 360;
+      if (totalAngle > 0) {
+        optimized.push({
+          ...current,
+          arguments: [{ name: 'deg', value: totalAngle, type: 'float' }],
+        });
+      }
+      i = j;
+    } else {
+      optimized.push(current);
+      i++;
+    }
+  }
+
+  return { ...result, commands: optimized };
+}
