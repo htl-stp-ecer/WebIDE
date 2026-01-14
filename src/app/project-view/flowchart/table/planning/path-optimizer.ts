@@ -1,13 +1,12 @@
 import { MissionStep } from '../../../../entities/MissionStep';
 import { Waypoint } from './models';
 import { Pose2D, normalizeAngle } from '../models';
-import { LineSegmentCm } from '../services/table-map.service';
-import { SensorConfig, LineSensor } from '../models/sensor';
+import { LineSegmentCm } from '../services';
+import { SensorConfig } from '../models';
 
-// --- Uncertainty Constants ---
-const UNCERTAINTY_PER_TURN = 0.8;        // Per rotation operation
-const UNCERTAINTY_PER_CM = 0.03;         // Per cm driven (0.3 per 10cm)
-const MIN_PERPENDICULAR_DEG = 60;        // Minimum approach angle for lineup
+// --- Lineup Angle Thresholds ---
+const MIN_LINEUP_ANGLE_DEG = 20;         // Minimum approach angle at threshold 0
+const MAX_LINEUP_ANGLE_DEG = 85;         // Minimum approach angle at threshold 1
 const SENSOR_FIT_MULTIPLIER = 1.5;       // Line must be >= sensor spacing * this
 
 // --- Interfaces ---
@@ -19,7 +18,7 @@ export interface OptimizationContext {
 }
 
 export interface OptimizationOptions {
-  /** Lineup threshold: 0=never, 1=always, 0.5=balanced (default: 0.5) */
+  /** Lineup angle threshold: 0=permissive, 1=strict (default: 0.5) */
   lineupThreshold?: number;
   /** Use tank turn functions (default: false) */
   useTankTurn?: boolean;
@@ -55,12 +54,12 @@ export function optimizeWaypointsToSteps(
   if (waypoints.length < 2) return [];
 
   const threshold = options?.lineupThreshold ?? 0.5;
+  const lineupAngleThreshold = getLineupAngleThreshold(threshold);
   const useTankTurn = options?.useTankTurn ?? false;
   const minRotateDeg = options?.minRotateDeg ?? 1;
 
   const steps: MissionStep[] = [];
   let currentHeading = startPose.theta;
-  let accumulatedUncertainty = 0;
 
   for (let i = 0; i < waypoints.length - 1; i++) {
     const from = waypoints[i];
@@ -80,7 +79,6 @@ export function optimizeWaypointsToSteps(
     // Generate turn step if needed
     if (Math.abs(angleDeg) >= minRotateDeg) {
       steps.push(createTurnStep(Math.round(angleDeg), useTankTurn));
-      accumulatedUncertainty += UNCERTAINTY_PER_TURN;
       currentHeading = targetHeading;
     }
 
@@ -92,17 +90,25 @@ export function optimizeWaypointsToSteps(
 
     // Process segment with potential lineup injections
     let distanceTraveled = 0;
+    let lineupInjected = false;
 
     for (const crossing of crossings) {
-      const feasibility = checkLineupFeasibility(crossing, context.sensorConfig, context.isOnBlackLine);
+      if (lineupInjected) {
+        continue;
+      }
 
-      if (shouldInjectLineup(feasibility, accumulatedUncertainty, threshold)) {
+      const feasibility = checkLineupFeasibility(
+        crossing,
+        context.sensorConfig,
+        context.isOnBlackLine,
+        lineupAngleThreshold
+      );
+
+      if (feasibility.canLineup) {
         // Lineup automatically drives to the line and aligns - no manual drive needed
         steps.push(createLineupStep(feasibility.lineColor, 'forward'));
-        accumulatedUncertainty = 0; // Reset uncertainty after lineup
-
-        // Update distance traveled to crossing point
         distanceTraveled = crossing.distanceFromStart;
+        lineupInjected = true;
       }
     }
 
@@ -110,7 +116,6 @@ export function optimizeWaypointsToSteps(
     const remainingDistance = totalDistance - distanceTraveled;
     if (remainingDistance > 1) {
       steps.push(createDriveStep(Math.round(remainingDistance)));
-      accumulatedUncertainty += remainingDistance * UNCERTAINTY_PER_CM;
     }
   }
 
@@ -187,10 +192,11 @@ function lineIntersection(
 function checkLineupFeasibility(
   crossing: LineCrossing,
   sensorConfig: SensorConfig,
-  isOnBlackLine: (x: number, y: number) => boolean
+  isOnBlackLine: (x: number, y: number) => boolean,
+  minApproachAngleDeg: number
 ): LineupFeasibility {
   // Check approach angle (must be roughly perpendicular)
-  if (crossing.approachAngle < MIN_PERPENDICULAR_DEG) {
+  if (crossing.approachAngle < minApproachAngleDeg) {
     return { canLineup: false, reason: 'approach_angle_too_shallow', lineColor: 'black' };
   }
 
@@ -201,28 +207,13 @@ function checkLineupFeasibility(
     return { canLineup: false, reason: 'line_too_short_for_sensors', lineColor: 'black' };
   }
 
-  // Detect what color to search for based on current surface
-  // If sensors are on white, we search for black lines (and vice versa)
-  const onBlack = isOnBlackLine(crossing.position.x, crossing.position.y);
-  const lineColor = onBlack ? 'white' : 'black';
-
-  return { canLineup: true, lineColor };
+  // Always use black lineup to keep a single lineup function.
+  return { canLineup: true, lineColor: 'black' };
 }
 
-/**
- * Decide whether to inject a lineup based on uncertainty and threshold.
- */
-function shouldInjectLineup(
-  feasibility: LineupFeasibility,
-  accumulatedUncertainty: number,
-  threshold: number
-): boolean {
-  if (!feasibility.canLineup) return false;
-  if (threshold === 0) return false;
-  if (threshold >= 1) return true;
-
-  // Lineup when uncertainty exceeds (1 - threshold)
-  return accumulatedUncertainty >= (1.0 - threshold);
+function getLineupAngleThreshold(threshold: number): number {
+  const clamped = Math.max(0, Math.min(1, threshold));
+  return MIN_LINEUP_ANGLE_DEG + (MAX_LINEUP_ANGLE_DEG - MIN_LINEUP_ANGLE_DEG) * clamped;
 }
 
 /**
