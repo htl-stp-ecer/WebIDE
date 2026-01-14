@@ -12,11 +12,11 @@
           <span class="viz-pill viz-pill-ready">{{ 'FLOWCHART.TABLE_MAP_LOADED_STATUS' | translate }}</span>
         }
         <button
-          class="viz-action-btn"
-          [class.active]="planningService.isActive()"
-          (click)="togglePlanningMode(); $event.stopPropagation()"
+          class="edit-path-btn"
+          (click)="navigateToPathPlanner(); $event.stopPropagation()"
           [title]="'FLOWCHART.PLANNING_MODE' | translate">
-          <i class="pi pi-pencil"></i>
+          <i class="pi pi-map-marker"></i>
+          <span>Edit Path</span>
         </button>
       </div>
     </div>
@@ -25,7 +25,7 @@
     <canvas
       #canvas
       class="viz-canvas"
-      [class.viz-canvas-editable]="allowStartPoseEdit() && !planningService.isActive()"
+      [class.viz-canvas-editable]="allowStartPoseEdit()"
       [class.viz-canvas-loading]="mapService.isLoading() || vizService.plannedPathLoading()"
       (pointerdown)="onCanvasPointerDown($event)"></canvas>
 
@@ -33,13 +33,6 @@
       <div class="viz-loading-overlay">
         <i class="pi pi-spin pi-spinner viz-overlay-spinner"></i>
       </div>
-    }
-
-    @if (planningService.isActive()) {
-      <app-planning-overlay
-        (addSteps)="onPlanningAddSteps($event)"
-        (close)="onPlanningClose()">
-      </app-planning-overlay>
     }
   </div>
 </div>

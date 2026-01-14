@@ -4,15 +4,15 @@ import {
   ViewChild,
   AfterViewInit,
   OnDestroy,
+  OnInit,
   inject,
   effect,
-  input,
-  output,
   signal,
   HostListener,
 } from '@angular/core';
 import { CommonModule, DecimalPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { Router, ActivatedRoute } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 import { ButtonModule } from 'primeng/button';
 import { SliderModule } from 'primeng/slider';
@@ -22,6 +22,7 @@ import { PlanningModeService } from './planning-mode.service';
 import { formatStepForPreview } from './path-to-steps';
 import { MissionStep } from '../../../../entities/MissionStep';
 import { TableMapService, TableVisualizationService } from '../services';
+import { HttpService } from '../../../../services/http-service';
 
 /** Hit radius for waypoint markers in pixels */
 const WAYPOINT_HIT_RADIUS = 12;
@@ -31,13 +32,9 @@ const WAYPOINT_VISUAL_RADIUS = 8;
 
 /** Snap configuration constants */
 const SNAP_CONFIG = {
-  /** Grid size in cm */
   gridSize: 5,
-  /** Angle increments in degrees for angle snap */
   angleIncrements: [0, 45, 90, 135, 180, 225, 270, 315, 360],
-  /** Distance threshold in cm to snap to a black line */
   lineSnapDistance: 3,
-  /** Visual colors */
   gridColor: 'rgba(59, 130, 246, 0.15)',
   gridMajorColor: 'rgba(59, 130, 246, 0.3)',
   angleGuideColor: 'rgba(251, 191, 36, 0.6)',
@@ -55,7 +52,7 @@ const STORAGE_KEYS = {
 } as const;
 
 @Component({
-  selector: 'app-planning-overlay',
+  selector: 'app-path-planner-page',
   standalone: true,
   imports: [
     CommonModule,
@@ -67,25 +64,22 @@ const STORAGE_KEYS = {
     ToggleButtonModule,
     TooltipModule,
   ],
-  templateUrl: './planning-overlay.component.html',
-  styleUrl: './planning-overlay.component.scss',
+  templateUrl: './path-planner-page.component.html',
+  styleUrl: './path-planner-page.component.scss',
 })
-export class PlanningOverlayComponent implements AfterViewInit, OnDestroy {
+export class PathPlannerPage implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('canvas') canvasRef!: ElementRef<HTMLCanvasElement>;
 
-  /** Parent canvas dimensions for coordinate conversion */
-  readonly parentWidth = input<number>(0);
-  readonly parentHeight = input<number>(0);
-
-  /** Emitted when steps should be added to mission */
-  readonly addSteps = output<MissionStep[]>();
-
-  /** Emitted when planning mode should close */
-  readonly close = output<void>();
-
+  private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
+  private readonly httpService = inject(HttpService);
   readonly planningService = inject(PlanningModeService);
   readonly mapService = inject(TableMapService);
   readonly vizService = inject(TableVisualizationService);
+
+  // Route params
+  private ip = '';
+  private uuid = '';
 
   // UI State signals
   readonly sidebarCollapsed = signal(localStorage.getItem(STORAGE_KEYS.sidebarCollapsed) === 'true');
@@ -99,9 +93,9 @@ export class PlanningOverlayComponent implements AfterViewInit, OnDestroy {
   snapGridValue = localStorage.getItem(STORAGE_KEYS.snapGrid) === 'true';
   snapAnglesValue = localStorage.getItem(STORAGE_KEYS.snapAngles) === 'true';
   snapLinesValue = localStorage.getItem(STORAGE_KEYS.snapLines) === 'true';
-  thresholdValue = 0.7; // Will be synced from service
+  thresholdValue = 0.7;
 
-  // Active snap feedback (for visual indicators)
+  // Active snap feedback
   private activeAngleSnap = signal<{ fromX: number; fromY: number; angle: number } | null>(null);
   private activeLineSnap = signal<{ startX: number; startY: number; endX: number; endY: number } | null>(null);
 
@@ -114,16 +108,47 @@ export class PlanningOverlayComponent implements AfterViewInit, OnDestroy {
   private resizeObserver!: ResizeObserver;
 
   constructor() {
-    // Sync threshold from service
     this.thresholdValue = this.planningService.lineupThreshold();
 
     effect(() => {
-      // React to waypoint and pose changes
       this.planningService.waypoints();
       this.planningService.selectedIndex();
       this.planningService.draggingIndex();
       this.planningService.startPose();
       this.render();
+    });
+  }
+
+  ngOnInit(): void {
+    // Get route params
+    this.route.params.subscribe(params => {
+      this.ip = decodeURIComponent(params['ip'] || '');
+      this.uuid = params['uuid'] || '';
+    });
+
+    // Activate planning mode
+    this.planningService.activate();
+
+    // Set start pose from mission end position
+    const endPose = this.vizService.plannedEndPose();
+    this.planningService.setStartPose(endPose.x, endPose.y, endPose.theta);
+
+    // Load map if not already loaded
+    this.loadStoredMap();
+  }
+
+  private loadStoredMap(): void {
+    if (this.mapService.isLoaded()) return;
+
+    this.httpService.getTableMap().subscribe({
+      next: (response) => {
+        if (response.image) {
+          this.mapService.loadMapFromBase64(response.image);
+        }
+      },
+      error: (err) => {
+        console.warn('Failed to load stored table map:', err);
+      },
     });
   }
 
@@ -146,6 +171,7 @@ export class PlanningOverlayComponent implements AfterViewInit, OnDestroy {
       cancelAnimationFrame(this.animationFrameId);
     }
     this.resizeObserver?.disconnect();
+    this.planningService.deactivate();
   }
 
   private resizeCanvas(): void {
@@ -179,51 +205,38 @@ export class PlanningOverlayComponent implements AfterViewInit, OnDestroy {
 
     this.ctx.clearRect(0, 0, width, height);
 
-    // Draw the map (table surface with lines)
     this.renderMap(width, height);
-
-    // Draw the robot at its current/start position
     this.renderRobot(width, height);
 
-    // Draw grid overlay if grid snap is enabled
     if (this.snapGrid()) {
       this.renderGridOverlay(width, height);
     }
 
-    // Highlight nearby black lines if line snap is enabled and dragging
     if (this.snapLines() && this.planningService.draggingIndex() !== null) {
       this.renderLineHighlights(width, height);
     }
 
-    // Draw angle guide if angle snap is active
     const angleSnap = this.activeAngleSnap();
     if (angleSnap) {
       this.renderAngleGuide(width, height, angleSnap);
     }
 
-    // Always draw path from robot position
     this.renderPathLines(width, height);
-
-    // Draw waypoint markers
     this.renderWaypoints(width, height);
   }
 
-  /** Render the table map (white surface with black lines and walls) */
   private renderMap(width: number, height: number): void {
     const lineSegments = this.mapService.lineSegmentsCm();
     const wallSegments = this.mapService.wallSegmentsCm();
     const { drawWidth, drawHeight, offsetX, offsetY, scaleX, scaleY } = this.getDrawParams(width, height);
 
-    // Draw white background (table surface)
     this.ctx.fillStyle = '#ffffff';
     this.ctx.fillRect(offsetX, offsetY, drawWidth, drawHeight);
 
-    // Draw a subtle border around the table
     this.ctx.strokeStyle = '#e0e0e0';
     this.ctx.lineWidth = 1;
     this.ctx.strokeRect(offsetX, offsetY, drawWidth, drawHeight);
 
-    // Draw black line segments
     this.ctx.strokeStyle = '#000000';
     this.ctx.lineCap = 'round';
     this.ctx.lineJoin = 'round';
@@ -239,7 +252,6 @@ export class PlanningOverlayComponent implements AfterViewInit, OnDestroy {
       this.ctx.stroke();
     }
 
-    // Draw wall segments (gray)
     this.ctx.strokeStyle = '#808080';
     this.ctx.lineWidth = Math.max(2, 2.5 * Math.min(scaleX, scaleY));
 
@@ -253,7 +265,6 @@ export class PlanningOverlayComponent implements AfterViewInit, OnDestroy {
       this.ctx.stroke();
     }
 
-    // Draw "No Map Loaded" hint if no data
     if (!this.mapService.isLoaded()) {
       this.ctx.fillStyle = 'rgba(148, 163, 184, 0.5)';
       this.ctx.font = '500 12px system-ui, -apple-system, sans-serif';
@@ -263,7 +274,6 @@ export class PlanningOverlayComponent implements AfterViewInit, OnDestroy {
     }
   }
 
-  /** Render the robot at the planning start position */
   private renderRobot(width: number, height: number): void {
     const startPose = this.planningService.startPose();
     const robotConfig = this.vizService.robotConfig();
@@ -284,7 +294,6 @@ export class PlanningOverlayComponent implements AfterViewInit, OnDestroy {
     const bodyCenterX = -rcOffsetForwardPx;
     const bodyCenterY = rcOffsetStrafePx;
 
-    // Draw robot body
     this.ctx.fillStyle = 'rgba(74, 222, 128, 0.7)';
     this.ctx.strokeStyle = '#4ade80';
     this.ctx.lineWidth = 2;
@@ -298,7 +307,6 @@ export class PlanningOverlayComponent implements AfterViewInit, OnDestroy {
     this.ctx.fill();
     this.ctx.stroke();
 
-    // Draw forward indicator (arrow)
     this.ctx.fillStyle = '#facc15';
     this.ctx.beginPath();
     const arrowTipX = bodyCenterX + robotLengthPx / 2;
@@ -308,13 +316,11 @@ export class PlanningOverlayComponent implements AfterViewInit, OnDestroy {
     this.ctx.closePath();
     this.ctx.fill();
 
-    // Draw rotation center marker (purple dot)
     this.ctx.fillStyle = '#a855f7';
     this.ctx.beginPath();
     this.ctx.arc(0, 0, 4, 0, Math.PI * 2);
     this.ctx.fill();
 
-    // Draw geometric center marker if offset is non-zero
     if (robotConfig.rotationCenterForwardCm !== 0 || robotConfig.rotationCenterStrafeCm !== 0) {
       this.ctx.fillStyle = '#facc15';
       this.ctx.beginPath();
@@ -322,7 +328,6 @@ export class PlanningOverlayComponent implements AfterViewInit, OnDestroy {
       this.ctx.fill();
     }
 
-    // Draw sensors
     const sensorConfig = this.vizService.sensorConfig();
     for (const sensor of sensorConfig.lineSensors) {
       const sensorX = bodyCenterX + sensor.forwardCm * scaleX;
@@ -341,7 +346,6 @@ export class PlanningOverlayComponent implements AfterViewInit, OnDestroy {
     const waypoints = this.planningService.waypoints();
     const startPose = this.planningService.startPose();
 
-    // Build full path: planning start position + waypoints
     const pathPoints: { x: number; y: number }[] = [
       { x: startPose.x, y: startPose.y },
       ...waypoints,
@@ -367,7 +371,6 @@ export class PlanningOverlayComponent implements AfterViewInit, OnDestroy {
     this.ctx.stroke();
     this.ctx.setLineDash([]);
 
-    // Draw direction arrows between all points (including from robot)
     for (let i = 0; i < pathPoints.length - 1; i++) {
       const from = this.tableToCanvas(pathPoints[i].x, pathPoints[i].y, width, height);
       const to = this.tableToCanvas(pathPoints[i + 1].x, pathPoints[i + 1].y, width, height);
@@ -379,9 +382,8 @@ export class PlanningOverlayComponent implements AfterViewInit, OnDestroy {
     const dx = x2 - x1;
     const dy = y2 - y1;
     const len = Math.sqrt(dx * dx + dy * dy);
-    if (len < 30) return; // Skip arrows on short segments
+    if (len < 30) return;
 
-    // Position arrow at midpoint
     const midX = (x1 + x2) / 2;
     const midY = (y1 + y2) / 2;
     const angle = Math.atan2(dy, dx);
@@ -416,7 +418,6 @@ export class PlanningOverlayComponent implements AfterViewInit, OnDestroy {
       const isSelected = selectedIndex === i;
       const isDragging = draggingIndex === i;
 
-      // Outer ring
       this.ctx.beginPath();
       this.ctx.arc(pos.x, pos.y, WAYPOINT_VISUAL_RADIUS, 0, Math.PI * 2);
       this.ctx.fillStyle = isSelected || isDragging
@@ -427,7 +428,6 @@ export class PlanningOverlayComponent implements AfterViewInit, OnDestroy {
       this.ctx.lineWidth = 2;
       this.ctx.stroke();
 
-      // Number label
       this.ctx.fillStyle = '#ffffff';
       this.ctx.font = 'bold 10px system-ui, -apple-system, sans-serif';
       this.ctx.textAlign = 'center';
@@ -436,7 +436,6 @@ export class PlanningOverlayComponent implements AfterViewInit, OnDestroy {
     }
   }
 
-  /** Render grid overlay when grid snap is enabled */
   private renderGridOverlay(width: number, height: number): void {
     const config = this.mapService.config();
     const { offsetX, offsetY, scaleX, scaleY, drawWidth, drawHeight } = this.getDrawParams(width, height);
@@ -447,7 +446,6 @@ export class PlanningOverlayComponent implements AfterViewInit, OnDestroy {
     this.ctx.rect(offsetX, offsetY, drawWidth, drawHeight);
     this.ctx.clip();
 
-    // Draw vertical grid lines
     for (let xCm = 0; xCm <= config.widthCm; xCm += gridSize) {
       const x = offsetX + xCm * scaleX;
       const isMajor = xCm % (gridSize * 4) === 0;
@@ -459,7 +457,6 @@ export class PlanningOverlayComponent implements AfterViewInit, OnDestroy {
       this.ctx.stroke();
     }
 
-    // Draw horizontal grid lines
     for (let yCm = 0; yCm <= config.heightCm; yCm += gridSize) {
       const y = offsetY + drawHeight - yCm * scaleY;
       const isMajor = yCm % (gridSize * 4) === 0;
@@ -474,7 +471,6 @@ export class PlanningOverlayComponent implements AfterViewInit, OnDestroy {
     this.ctx.restore();
   }
 
-  /** Render highlights for nearby black lines when line snap is enabled */
   private renderLineHighlights(width: number, height: number): void {
     const lineSnap = this.activeLineSnap();
     if (!lineSnap) return;
@@ -490,7 +486,6 @@ export class PlanningOverlayComponent implements AfterViewInit, OnDestroy {
     this.ctx.lineTo(end.x, end.y);
     this.ctx.stroke();
 
-    // Draw glow effect
     this.ctx.strokeStyle = 'rgba(34, 197, 94, 0.3)';
     this.ctx.lineWidth = 8;
     this.ctx.beginPath();
@@ -499,22 +494,19 @@ export class PlanningOverlayComponent implements AfterViewInit, OnDestroy {
     this.ctx.stroke();
   }
 
-  /** Render angle guide line when angle snap is active */
   private renderAngleGuide(
     width: number,
     height: number,
     snap: { fromX: number; fromY: number; angle: number }
   ): void {
     const fromPos = this.tableToCanvas(snap.fromX, snap.fromY, width, height);
-    const guideLength = 150; // pixels
+    const guideLength = 150;
 
-    // Convert angle to radians (adjusting for canvas Y-axis inversion)
     const angleRad = (-snap.angle * Math.PI) / 180;
 
     const toX = fromPos.x + Math.cos(angleRad) * guideLength;
     const toY = fromPos.y + Math.sin(angleRad) * guideLength;
 
-    // Draw dashed guide line
     this.ctx.strokeStyle = SNAP_CONFIG.angleGuideColor;
     this.ctx.lineWidth = 2;
     this.ctx.setLineDash([8, 4]);
@@ -525,7 +517,6 @@ export class PlanningOverlayComponent implements AfterViewInit, OnDestroy {
     this.ctx.stroke();
     this.ctx.setLineDash([]);
 
-    // Draw angle label
     const labelX = fromPos.x + Math.cos(angleRad) * 40;
     const labelY = fromPos.y + Math.sin(angleRad) * 40;
     this.ctx.fillStyle = SNAP_CONFIG.angleGuideColor;
@@ -586,22 +577,13 @@ export class PlanningOverlayComponent implements AfterViewInit, OnDestroy {
 
   // --- Snap Logic ---
 
-  /**
-   * Apply all enabled snap constraints to a position
-   * @param x X coordinate in table cm
-   * @param y Y coordinate in table cm
-   * @param waypointIndex Index of waypoint being moved (to get previous point for angle snap)
-   * @returns Snapped position
-   */
   private applySnap(x: number, y: number, waypointIndex: number): { x: number; y: number } {
     let snappedX = x;
     let snappedY = y;
 
-    // Clear previous snap indicators
     this.activeAngleSnap.set(null);
     this.activeLineSnap.set(null);
 
-    // Get reference point for angle snap (previous waypoint or start pose)
     const waypoints = this.planningService.waypoints();
     const startPose = this.planningService.startPose();
     let refX: number, refY: number;
@@ -618,7 +600,6 @@ export class PlanningOverlayComponent implements AfterViewInit, OnDestroy {
       refY = y;
     }
 
-    // Apply line snap first (highest priority)
     if (this.snapLines()) {
       const lineResult = this.applyLineSnap(snappedX, snappedY);
       if (lineResult) {
@@ -627,14 +608,12 @@ export class PlanningOverlayComponent implements AfterViewInit, OnDestroy {
       }
     }
 
-    // Apply angle snap (constrains direction from reference point)
     if (this.snapAngles()) {
       const angleResult = this.applyAngleSnap(snappedX, snappedY, refX, refY);
       snappedX = angleResult.x;
       snappedY = angleResult.y;
     }
 
-    // Apply grid snap last (rounds to grid)
     if (this.snapGrid()) {
       const gridResult = this.applyGridSnap(snappedX, snappedY);
       snappedX = gridResult.x;
@@ -644,9 +623,6 @@ export class PlanningOverlayComponent implements AfterViewInit, OnDestroy {
     return { x: snappedX, y: snappedY };
   }
 
-  /**
-   * Snap position to nearest grid point
-   */
   private applyGridSnap(x: number, y: number): { x: number; y: number } {
     const gridSize = SNAP_CONFIG.gridSize;
     return {
@@ -655,27 +631,21 @@ export class PlanningOverlayComponent implements AfterViewInit, OnDestroy {
     };
   }
 
-  /**
-   * Snap angle to nearest 45° increment from reference point
-   */
   private applyAngleSnap(x: number, y: number, refX: number, refY: number): { x: number; y: number } {
     const dx = x - refX;
     const dy = y - refY;
     const distance = Math.sqrt(dx * dx + dy * dy);
 
     if (distance < 1) {
-      return { x, y }; // Too close to reference, don't snap
+      return { x, y };
     }
 
-    // Calculate current angle in degrees (0° = right, 90° = up)
     const currentAngle = Math.atan2(dy, dx) * (180 / Math.PI);
 
-    // Find nearest snap angle
     let nearestAngle = 0;
     let minDiff = 360;
 
     for (const snapAngle of SNAP_CONFIG.angleIncrements) {
-      // Normalize angles for comparison
       const normalizedCurrent = ((currentAngle % 360) + 360) % 360;
       const normalizedSnap = ((snapAngle % 360) + 360) % 360;
       let diff = Math.abs(normalizedCurrent - normalizedSnap);
@@ -687,12 +657,10 @@ export class PlanningOverlayComponent implements AfterViewInit, OnDestroy {
       }
     }
 
-    // Convert back to position
     const angleRad = (nearestAngle * Math.PI) / 180;
     const snappedX = refX + Math.cos(angleRad) * distance;
     const snappedY = refY + Math.sin(angleRad) * distance;
 
-    // Set visual feedback
     this.activeAngleSnap.set({
       fromX: refX,
       fromY: refY,
@@ -702,9 +670,6 @@ export class PlanningOverlayComponent implements AfterViewInit, OnDestroy {
     return { x: snappedX, y: snappedY };
   }
 
-  /**
-   * Snap to nearest black line if within threshold distance
-   */
   private applyLineSnap(x: number, y: number): { x: number; y: number } | null {
     const lines = this.mapService.lineSegmentsCm();
     if (lines.length === 0) return null;
@@ -733,7 +698,6 @@ export class PlanningOverlayComponent implements AfterViewInit, OnDestroy {
     }
 
     if (nearestLine) {
-      // Set visual feedback for line highlight
       this.activeLineSnap.set({
         startX: nearestLine.startX,
         startY: nearestLine.startY,
@@ -746,9 +710,6 @@ export class PlanningOverlayComponent implements AfterViewInit, OnDestroy {
     return null;
   }
 
-  /**
-   * Find the closest point on a line segment to a given point
-   */
   private closestPointOnSegment(
     px: number, py: number,
     x1: number, y1: number,
@@ -759,10 +720,9 @@ export class PlanningOverlayComponent implements AfterViewInit, OnDestroy {
     const lengthSq = dx * dx + dy * dy;
 
     if (lengthSq === 0) {
-      return { x: x1, y: y1 }; // Segment is a point
+      return { x: x1, y: y1 };
     }
 
-    // Project point onto line, clamped to segment
     let t = ((px - x1) * dx + (py - y1) * dy) / lengthSq;
     t = Math.max(0, Math.min(1, t));
 
@@ -772,9 +732,6 @@ export class PlanningOverlayComponent implements AfterViewInit, OnDestroy {
     };
   }
 
-  /**
-   * Clear all snap visual indicators
-   */
   private clearSnapIndicators(): void {
     this.activeAngleSnap.set(null);
     this.activeLineSnap.set(null);
@@ -790,25 +747,22 @@ export class PlanningOverlayComponent implements AfterViewInit, OnDestroy {
     const x = event.clientX - rect.left;
     const y = event.clientY - rect.top;
 
-    // Check if clicking on existing waypoint
     const hitIndex = this.hitTestWaypoint(x, y, rect.width, rect.height);
     if (hitIndex !== null) {
       this.planningService.selectWaypoint(hitIndex);
       this.planningService.startDragging(hitIndex);
-      this.saveUndoState(); // Save state before dragging
+      this.saveUndoState();
       canvas.setPointerCapture(event.pointerId);
       return;
     }
 
-    // Add new waypoint
     const tablePos = this.canvasToTable(x, y, rect.width, rect.height);
     if (tablePos) {
-      this.saveUndoState(); // Save state before adding
-      // Apply snap constraints when adding new waypoint
+      this.saveUndoState();
       const waypoints = this.planningService.waypoints();
       const snapped = this.applySnap(tablePos.x, tablePos.y, waypoints.length);
       this.planningService.addWaypoint(snapped.x, snapped.y);
-      this.clearSnapIndicators(); // Clear immediately since not dragging
+      this.clearSnapIndicators();
     }
   }
 
@@ -823,7 +777,6 @@ export class PlanningOverlayComponent implements AfterViewInit, OnDestroy {
 
     const tablePos = this.canvasToTable(x, y, rect.width, rect.height);
     if (tablePos) {
-      // Apply snap constraints if any are enabled
       const snapped = this.applySnap(tablePos.x, tablePos.y, draggingIndex);
       this.planningService.moveWaypoint(draggingIndex, snapped.x, snapped.y);
     }
@@ -849,7 +802,7 @@ export class PlanningOverlayComponent implements AfterViewInit, OnDestroy {
 
     const hitIndex = this.hitTestWaypoint(x, y, rect.width, rect.height);
     if (hitIndex !== null) {
-      this.saveUndoState(); // Save state before removing
+      this.saveUndoState();
       this.planningService.removeWaypoint(hitIndex);
     }
   }
@@ -872,28 +825,28 @@ export class PlanningOverlayComponent implements AfterViewInit, OnDestroy {
 
   onClear(): void {
     if (this.planningService.waypoints().length > 0) {
-      this.saveUndoState(); // Save state before clearing
+      this.saveUndoState();
     }
     this.planningService.clear();
   }
 
   onCancel(): void {
     this.planningService.clear();
-    this.close.emit();
+    this.navigateBack();
   }
 
   onAddSteps(): void {
     const steps = this.planningService.consumeSteps();
-    this.addSteps.emit(steps);
-    this.close.emit();
+    // Store steps to be picked up by the project view
+    sessionStorage.setItem('planned-steps', JSON.stringify(steps));
+    this.navigateBack();
+  }
+
+  private navigateBack(): void {
+    this.router.navigate(['/', this.ip, 'projects', this.uuid]);
   }
 
   // --- Helpers for template ---
-
-  onThresholdChange(event: Event): void {
-    const value = parseFloat((event.target as HTMLInputElement).value);
-    this.planningService.setLineupThreshold(value);
-  }
 
   formatStep(step: MissionStep): string {
     return formatStepForPreview(step);
@@ -957,7 +910,6 @@ export class PlanningOverlayComponent implements AfterViewInit, OnDestroy {
     localStorage.setItem(STORAGE_KEYS.snapLines, String(newState));
   }
 
-  // PrimeNG toggle button event handlers
   onSnapGridChange(event: { checked?: boolean }): void {
     const value = event.checked ?? false;
     this.snapGrid.set(value);
@@ -986,8 +938,7 @@ export class PlanningOverlayComponent implements AfterViewInit, OnDestroy {
   private saveUndoState(): void {
     const waypoints = this.planningService.waypoints().map(wp => ({ id: wp.id, x: wp.x, y: wp.y }));
     this.undoStack.push({ waypoints });
-    this.redoStack = []; // Clear redo stack on new action
-    // Limit stack size
+    this.redoStack = [];
     if (this.undoStack.length > 50) {
       this.undoStack.shift();
     }
@@ -1028,23 +979,18 @@ export class PlanningOverlayComponent implements AfterViewInit, OnDestroy {
 
   @HostListener('window:keydown', ['$event'])
   onKeyDown(event: KeyboardEvent): void {
-    if (!this.planningService.isActive()) return;
-
-    // Escape - Cancel
     if (event.key === 'Escape') {
       event.preventDefault();
       this.onCancel();
       return;
     }
 
-    // Enter - Apply
     if (event.key === 'Enter' && this.planningService.canAddSteps()) {
       event.preventDefault();
       this.onAddSteps();
       return;
     }
 
-    // Delete - Remove selected waypoint
     if (event.key === 'Delete' || event.key === 'Backspace') {
       const selected = this.planningService.selectedIndex();
       if (selected !== null) {
@@ -1055,35 +1001,30 @@ export class PlanningOverlayComponent implements AfterViewInit, OnDestroy {
       return;
     }
 
-    // Ctrl+Z - Undo
     if ((event.ctrlKey || event.metaKey) && event.key === 'z' && !event.shiftKey) {
       event.preventDefault();
       this.onUndo();
       return;
     }
 
-    // Ctrl+Shift+Z or Ctrl+Y - Redo
     if ((event.ctrlKey || event.metaKey) && (event.key === 'Z' || event.key === 'y')) {
       event.preventDefault();
       this.onRedo();
       return;
     }
 
-    // G - Toggle grid snap
     if (event.key === 'g' || event.key === 'G') {
       event.preventDefault();
       this.toggleSnapGrid();
       return;
     }
 
-    // A - Toggle angle snap
     if (event.key === 'a' || event.key === 'A') {
       event.preventDefault();
       this.toggleSnapAngles();
       return;
     }
 
-    // L - Toggle line snap
     if (event.key === 'l' || event.key === 'L') {
       event.preventDefault();
       this.toggleSnapLines();

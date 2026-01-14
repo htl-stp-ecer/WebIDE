@@ -5,3 +5,35 @@
 @use './styles/comment';
 @use './styles/group';
 @use './styles/floating';
+
+// ===== Fullscreen Planning Mode =====
+.fullscreen-planning {
+  position: absolute;
+  inset: 0;
+  z-index: 100;
+  background: var(--p-surface-ground, #1e1e2e);
+  display: flex;
+  flex-direction: column;
+
+  // Ensure table-visualization-panel fills the container
+  app-table-visualization-panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+
+    .viz-panel {
+      background: var(--p-surface-ground, #1e1e2e);
+    }
+  }
+}
+
+.hidden {
+  display: none !important;
+}
+
+.flow-wrapper.planning-mode-active {
+  .run-toolbar,
+  .flow-surface {
+    pointer-events: none;
+  }
+}
