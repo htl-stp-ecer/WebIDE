@@ -928,9 +928,9 @@ export class PathPlannerPage implements OnInit, AfterViewInit, OnDestroy {
     localStorage.setItem(STORAGE_KEYS.snapLines, String(value));
   }
 
-  onThresholdSliderChange(event: { value?: number | number[] }): void {
-    const value = Array.isArray(event.value) ? event.value[0] : (event.value ?? 0.7);
-    this.planningService.setLineupThreshold(value);
+  onThresholdSliderChange(value?: number | number[]): void {
+    const nextValue = Array.isArray(value) ? value[0] : (value ?? this.thresholdValue);
+    this.planningService.setLineupThreshold(nextValue);
   }
 
   // --- Undo/Redo ---

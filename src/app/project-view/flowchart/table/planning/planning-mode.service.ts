@@ -2,8 +2,8 @@ import { Injectable, inject, signal, computed } from '@angular/core';
 import { Waypoint, createWaypoint } from './models';
 import { MissionStep } from '../../../../entities/MissionStep';
 import { optimizeWaypointsToSteps, OptimizationContext } from './path-optimizer';
-import { TableMapService } from '../services/table-map.service';
-import { TableVisualizationService } from '../services/table-visualization.service';
+import { TableMapService } from '../services';
+import { TableVisualizationService } from '../services';
 
 /**
  * Service for managing planning mode state.
@@ -85,7 +85,7 @@ export class PlanningModeService {
     this._startPose.set({ x, y, theta });
   }
 
-  /** Set the lineup threshold (0 = never, 1 = always) */
+  /** Set the lineup angle threshold (0 = permissive, 1 = strict) */
   setLineupThreshold(threshold: number): void {
     this._lineupThreshold.set(Math.max(0, Math.min(1, threshold)));
   }

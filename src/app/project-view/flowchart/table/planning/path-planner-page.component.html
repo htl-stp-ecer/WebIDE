@@ -132,16 +132,16 @@
 
                   <!-- Optimization -->
                   <div class="settings-group">
-                    <label class="settings-label">LINEUP THRESHOLD</label>
+                <label class="settings-label">LINEUP ANGLE</label>
                     <div class="slider-control">
-                      <p-slider
-                        [(ngModel)]="thresholdValue"
-                        [min]="0"
-                        [max]="1"
-                        [step]="0.1"
-                        (onChange)="onThresholdSliderChange($event)"
-                        styleClass="threshold-slider">
-                      </p-slider>
+                  <p-slider
+                    [(ngModel)]="thresholdValue"
+                    [min]="0"
+                    [max]="1"
+                    [step]="0.1"
+                    (ngModelChange)="onThresholdSliderChange($event)"
+                    styleClass="threshold-slider">
+                  </p-slider>
                       <span class="slider-value">{{ planningService.lineupThreshold() | number:'1.1-1' }}</span>
                     </div>
                   </div>
