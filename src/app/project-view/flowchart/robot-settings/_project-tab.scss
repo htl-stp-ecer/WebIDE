@@ -14,13 +14,17 @@
 
 .setting-card {
   padding: 20px;
+  background: rgba(15, 23, 42, 0.04);
   border: 1px solid rgba(0, 0, 0, 0.06);
   border-radius: 10px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 
 :host-context(.dark) .setting-card,
 :host-context(.p-dark) .setting-card {
+  background: rgba(248, 250, 252, 0.06);
   border-color: rgba(255, 255, 255, 0.06);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
 .setting-card-header {
@@ -74,6 +78,7 @@
   padding: 16px 12px;
   border: 1px solid rgba(0, 0, 0, 0.1);
   border-radius: 8px;
+  background: rgba(15, 23, 42, 0.03);
   color: #64748b;
   font-size: 12px;
   font-weight: 500;
@@ -87,9 +92,11 @@
   &:hover {
     border-color: rgba(59, 130, 246, 0.3);
     color: #3b82f6;
+    background: rgba(15, 23, 42, 0.06);
   }
 
   &.active {
+    background: rgba(15, 23, 42, 0.1);
     border-color: #3b82f6;
     color: #3b82f6;
   }
@@ -97,15 +104,18 @@
 
 :host-context(.dark) .orientation-btn,
 :host-context(.p-dark) .orientation-btn {
-  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(248, 250, 252, 0.05);
+  border-color: rgba(255, 255, 255, 0.12);
   color: #94a3b8;
 
   &:hover {
     border-color: rgba(96, 165, 250, 0.4);
     color: #60a5fa;
+    background: rgba(248, 250, 252, 0.1);
   }
 
   &.active {
+    background: rgba(248, 250, 252, 0.14);
     border-color: #60a5fa;
     color: #60a5fa;
   }
