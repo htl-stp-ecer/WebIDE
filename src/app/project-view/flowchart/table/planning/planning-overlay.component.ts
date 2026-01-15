@@ -12,7 +12,6 @@ import {
   signal,
   HostListener,
 } from '@angular/core';
-import { CommonModule, DecimalPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
 import { ButtonModule } from 'primeng/button';
@@ -24,6 +23,7 @@ import { formatStepForPreview } from './path-to-steps';
 import { MissionStep } from '../../../../entities/MissionStep';
 import { TableMapService, TableVisualizationService } from '../services';
 import { HttpService } from '../../../../services/http-service';
+import {CommonModule} from '@angular/common';
 
 /** Hit radius for waypoint markers in pixels */
 const WAYPOINT_HIT_RADIUS = 12;
@@ -61,7 +61,6 @@ const STORAGE_KEYS = {
   standalone: true,
   imports: [
     CommonModule,
-    DecimalPipe,
     FormsModule,
     TranslateModule,
     ButtonModule,
@@ -102,7 +101,6 @@ export class PlanningOverlayComponent implements OnInit, AfterViewInit, OnDestro
   snapGridValue = localStorage.getItem(STORAGE_KEYS.snapGrid) === 'true';
   snapAnglesValue = localStorage.getItem(STORAGE_KEYS.snapAngles) === 'true';
   snapLinesValue = localStorage.getItem(STORAGE_KEYS.snapLines) === 'true';
-  thresholdValue = 0.7; // Will be synced from service
 
   // Active snap feedback (for visual indicators)
   private activeAngleSnap = signal<{ fromX: number; fromY: number; angle: number } | null>(null);
@@ -117,9 +115,6 @@ export class PlanningOverlayComponent implements OnInit, AfterViewInit, OnDestro
   private resizeObserver!: ResizeObserver;
 
   constructor() {
-    // Sync threshold from service
-    this.thresholdValue = this.planningService.lineupThreshold();
-
     effect(() => {
       // React to waypoint and pose changes
       this.planningService.waypoints();
@@ -223,11 +218,13 @@ export class PlanningOverlayComponent implements OnInit, AfterViewInit, OnDestro
       this.renderAngleGuide(width, height, angleSnap);
     }
 
-    // Always draw path from robot position
+    // Draw computed trajectory (orange) then the waypoint path
+    this.renderActualPath(width, height);
     this.renderPathLines(width, height);
 
-    // Draw waypoint markers
+    // Draw waypoint markers and ghost robot
     this.renderWaypoints(width, height);
+    this.renderGhostRobot(width, height);
   }
 
   /** Render the table map (white surface with black lines and walls) */
@@ -395,6 +392,101 @@ export class PlanningOverlayComponent implements OnInit, AfterViewInit, OnDestro
       const to = this.tableToCanvas(pathPoints[i + 1].x, pathPoints[i + 1].y, width, height);
       this.drawArrow(from.x, from.y, to.x, to.y);
     }
+  }
+
+  private renderActualPath(width: number, height: number): void {
+    const trajectory = this.planningService.computedTrajectory();
+    if (trajectory.length < 2) return;
+
+    this.ctx.strokeStyle = '#f97316';
+    this.ctx.lineWidth = 3;
+    this.ctx.lineCap = 'round';
+    this.ctx.lineJoin = 'round';
+    this.ctx.setLineDash([]);
+
+    this.ctx.beginPath();
+    for (let i = 0; i < trajectory.length; i++) {
+      const pose = trajectory[i];
+      const pos = this.tableToCanvas(pose.x, pose.y, width, height);
+      if (i === 0) {
+        this.ctx.moveTo(pos.x, pos.y);
+      } else {
+        this.ctx.lineTo(pos.x, pos.y);
+      }
+    }
+    this.ctx.stroke();
+
+    const indicatorInterval = Math.max(1, Math.floor(trajectory.length / 10));
+    this.ctx.fillStyle = '#f97316';
+    for (let i = indicatorInterval; i < trajectory.length; i += indicatorInterval) {
+      const pose = trajectory[i];
+      const pos = this.tableToCanvas(pose.x, pose.y, width, height);
+
+      this.ctx.save();
+      this.ctx.translate(pos.x, pos.y);
+      this.ctx.rotate(-pose.theta);
+      this.ctx.beginPath();
+      this.ctx.moveTo(6, 0);
+      this.ctx.lineTo(-3, -4);
+      this.ctx.lineTo(-3, 4);
+      this.ctx.closePath();
+      this.ctx.fill();
+      this.ctx.restore();
+    }
+  }
+
+  private renderGhostRobot(width: number, height: number): void {
+    const endPose = this.planningService.endPose();
+    if (!endPose) return;
+
+    const robotConfig = this.vizService.robotConfig();
+    const { scaleX, scaleY } = this.getDrawParams(width, height);
+
+    const rotationCenter = this.tableToCanvas(endPose.x, endPose.y, width, height);
+
+    const robotWidthPx = robotConfig.widthCm * scaleX;
+    const robotLengthPx = robotConfig.lengthCm * scaleY;
+
+    const rcOffsetForwardPx = robotConfig.rotationCenterForwardCm * scaleX;
+    const rcOffsetStrafePx = robotConfig.rotationCenterStrafeCm * scaleY;
+
+    this.ctx.save();
+    this.ctx.translate(rotationCenter.x, rotationCenter.y);
+    this.ctx.rotate(-endPose.theta);
+
+    const bodyCenterX = -rcOffsetForwardPx;
+    const bodyCenterY = rcOffsetStrafePx;
+
+    this.ctx.fillStyle = 'rgba(249, 115, 22, 0.3)';
+    this.ctx.strokeStyle = '#f97316';
+    this.ctx.lineWidth = 2;
+    this.ctx.setLineDash([4, 4]);
+    this.ctx.beginPath();
+    this.ctx.rect(
+      bodyCenterX - robotLengthPx / 2,
+      bodyCenterY - robotWidthPx / 2,
+      robotLengthPx,
+      robotWidthPx
+    );
+    this.ctx.fill();
+    this.ctx.stroke();
+    this.ctx.setLineDash([]);
+
+    this.ctx.fillStyle = '#f97316';
+    this.ctx.beginPath();
+    const arrowTipX = bodyCenterX + robotLengthPx / 2;
+    this.ctx.moveTo(arrowTipX, bodyCenterY);
+    this.ctx.lineTo(arrowTipX - 10, bodyCenterY - 6);
+    this.ctx.lineTo(arrowTipX - 10, bodyCenterY + 6);
+    this.ctx.closePath();
+    this.ctx.fill();
+
+    this.ctx.fillStyle = '#f97316';
+    this.ctx.beginPath();
+    this.ctx.arc(0, 0, 3, 0, Math.PI * 2);
+    this.ctx.fill();
+
+    this.ctx.restore();
   }
 
   private drawArrow(x1: number, y1: number, x2: number, y2: number): void {
@@ -996,11 +1088,6 @@ export class PlanningOverlayComponent implements OnInit, AfterViewInit, OnDestro
     const value = event.checked ?? false;
     this.snapLines.set(value);
     localStorage.setItem(STORAGE_KEYS.snapLines, String(value));
-  }
-
-  onThresholdSliderChange(value?: number | number[]): void {
-    const nextValue = Array.isArray(value) ? value[0] : (value ?? this.thresholdValue);
-    this.planningService.setLineupThreshold(nextValue);
   }
 
   // --- Undo/Redo ---

@@ -10,7 +10,7 @@ import {
   signal,
   HostListener,
 } from '@angular/core';
-import { CommonModule, DecimalPipe } from '@angular/common';
+import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, ActivatedRoute } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
@@ -56,7 +56,6 @@ const STORAGE_KEYS = {
   standalone: true,
   imports: [
     CommonModule,
-    DecimalPipe,
     FormsModule,
     TranslateModule,
     ButtonModule,
@@ -93,7 +92,6 @@ export class PathPlannerPage implements OnInit, AfterViewInit, OnDestroy {
   snapGridValue = localStorage.getItem(STORAGE_KEYS.snapGrid) === 'true';
   snapAnglesValue = localStorage.getItem(STORAGE_KEYS.snapAngles) === 'true';
   snapLinesValue = localStorage.getItem(STORAGE_KEYS.snapLines) === 'true';
-  thresholdValue = 0.7;
 
   // Active snap feedback
   private activeAngleSnap = signal<{ fromX: number; fromY: number; angle: number } | null>(null);
@@ -108,8 +106,6 @@ export class PathPlannerPage implements OnInit, AfterViewInit, OnDestroy {
   private resizeObserver!: ResizeObserver;
 
   constructor() {
-    this.thresholdValue = this.planningService.lineupThreshold();
-
     effect(() => {
       this.planningService.waypoints();
       this.planningService.selectedIndex();
@@ -1026,11 +1022,6 @@ export class PathPlannerPage implements OnInit, AfterViewInit, OnDestroy {
     const value = event.checked ?? false;
     this.snapLines.set(value);
     localStorage.setItem(STORAGE_KEYS.snapLines, String(value));
-  }
-
-  onThresholdSliderChange(value?: number | number[]): void {
-    const nextValue = Array.isArray(value) ? value[0] : (value ?? this.thresholdValue);
-    this.planningService.setLineupThreshold(nextValue);
   }
 
   // --- Undo/Redo ---

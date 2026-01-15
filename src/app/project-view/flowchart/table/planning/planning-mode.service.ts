@@ -2,8 +2,10 @@ import { Injectable, inject, signal, computed } from '@angular/core';
 import { Waypoint, createWaypoint } from './models';
 import { MissionStep } from '../../../../entities/MissionStep';
 import { optimizeWaypointsToSteps, OptimizationContext } from './path-optimizer';
-import { TableMapService } from '../services';
-import { TableVisualizationService } from '../services';
+import { TableMapService, TableVisualizationService } from '../services';
+import { buildCollisionWalls, applyWallPhysicsToPath } from '../physics';
+import { findPath, optimizePath, DEFAULT_ASTAR_CONFIG, simulateCommand } from './pathfinding';
+import { Pose2D } from '../models';
 
 /**
  * Service for managing planning mode state.
@@ -20,6 +22,7 @@ export class PlanningModeService {
   private readonly _draggingIndex = signal<number | null>(null);
   private readonly _startPose = signal<{ x: number; y: number; theta: number }>({ x: 0, y: 0, theta: 0 });
   private readonly _lineupThreshold = signal<number>(0.5);
+  private readonly _useAStarPathfinding = signal<boolean>(true);
 
   readonly isActive = this._isActive.asReadonly();
   readonly waypoints = this._waypoints.asReadonly();
@@ -27,14 +30,81 @@ export class PlanningModeService {
   readonly draggingIndex = this._draggingIndex.asReadonly();
   readonly startPose = this._startPose.asReadonly();
   readonly lineupThreshold = this._lineupThreshold.asReadonly();
+  readonly useAStarPathfinding = this._useAStarPathfinding.asReadonly();
 
-  /** Computed: generated mission steps from current waypoints (with lineup optimization) */
+  /** Computed: generated mission steps from current waypoints (with A* pathfinding or direct optimization) */
   readonly generatedSteps = computed<MissionStep[]>(() => {
     const wps = this._waypoints();
     const start = this._startPose();
     const threshold = this._lineupThreshold();
+    const useAStar = this._useAStarPathfinding();
     if (wps.length < 1) return [];
 
+    if (useAStar) {
+      return this.generateStepsWithAStar(wps, start);
+    }
+
+    return this.generateStepsDirectly(wps, start, threshold);
+  });
+
+  /**
+   * Generate steps using A* pathfinding algorithm.
+   * Finds collision-free paths around obstacles.
+   */
+  private generateStepsWithAStar(
+    wps: Waypoint[],
+    start: { x: number; y: number; theta: number }
+  ): MissionStep[] {
+    const wallSegments = this.mapService.wallSegmentsCm();
+    const mapConfig = this.mapService.config();
+    const walls = buildCollisionWalls(wallSegments, mapConfig);
+    const robotConfig = this.vizService.robotConfig();
+
+    console.log('[A*] Wall segments from map:', wallSegments.length);
+    console.log('[A*] Total walls (incl. boundaries):', walls.length);
+    console.log('[A*] Map config:', mapConfig);
+    console.log('[A*] Robot config:', robotConfig);
+
+    const allSteps: MissionStep[] = [];
+    let currentPose: Pose2D = { x: start.x, y: start.y, theta: start.theta };
+
+    for (const wp of wps) {
+      const result = findPath(
+        currentPose,
+        { x: wp.x, y: wp.y },
+        walls,
+        robotConfig,
+        mapConfig,
+        DEFAULT_ASTAR_CONFIG
+      );
+
+      if (!result) {
+        console.warn(`A* pathfinding failed for waypoint (${wp.x}, ${wp.y}), using direct path`);
+        const directSteps = this.generateStepsDirectly(
+          [wp],
+          { x: currentPose.x, y: currentPose.y, theta: currentPose.theta },
+          0
+        );
+        allSteps.push(...directSteps);
+        currentPose = this.simulateFinalPose(currentPose, directSteps);
+      } else {
+        const optimized = optimizePath(result);
+        allSteps.push(...optimized.commands);
+        currentPose = optimized.finalPose;
+      }
+    }
+
+    return allSteps;
+  }
+
+  /**
+   * Generate steps using direct waypoint-to-steps conversion (original behavior).
+   */
+  private generateStepsDirectly(
+    wps: Waypoint[],
+    start: { x: number; y: number; theta: number },
+    threshold: number
+  ): MissionStep[] {
     // Include robot start position as first waypoint for path calculation
     const fullPath: Waypoint[] = [
       { id: 'start', x: start.x, y: start.y },
@@ -53,6 +123,83 @@ export class PlanningModeService {
       context,
       { lineupThreshold: threshold }
     );
+  }
+
+  /**
+   * Simulate the final pose after executing a sequence of steps.
+   */
+  private simulateFinalPose(startPose: Pose2D, steps: MissionStep[]): Pose2D {
+    let pose = startPose;
+    for (const step of steps) {
+      const fn = step.function_name;
+      const arg = (step.arguments[0]?.value as number) ?? 0;
+
+      if (fn === 'drive_forward') {
+        pose = {
+          x: pose.x + arg * Math.cos(pose.theta),
+          y: pose.y + arg * Math.sin(pose.theta),
+          theta: pose.theta,
+        };
+      } else if (fn === 'turn_cw') {
+        pose = { ...pose, theta: pose.theta - arg * Math.PI / 180 };
+      } else if (fn === 'turn_ccw') {
+        pose = { ...pose, theta: pose.theta + arg * Math.PI / 180 };
+      }
+    }
+    return pose;
+  }
+
+  /** Computed: trajectory poses from the generated steps (with wall physics) */
+  readonly computedTrajectory = computed<Pose2D[]>(() => {
+    const steps = this.generatedSteps();
+    const start = this._startPose();
+    if (steps.length === 0) return [];
+
+    // First, compute the raw trajectory from commands
+    const rawPoses: Pose2D[] = [];
+    let currentPose: Pose2D = { x: start.x, y: start.y, theta: start.theta };
+    rawPoses.push({ ...currentPose });
+
+    for (const step of steps) {
+      // For drive commands, add intermediate poses for smooth visualization
+      const fn = step.function_name;
+      const arg = (step.arguments[0]?.value as number) ?? 0;
+
+      if (fn === 'drive_forward' || fn === 'drive_backward') {
+        // Add intermediate points every 2cm for smooth path and accurate physics
+        const distance = fn === 'drive_backward' ? -arg : arg;
+        const numSteps = Math.max(1, Math.ceil(Math.abs(distance) / 2));
+        const stepDist = distance / numSteps;
+
+        for (let i = 0; i < numSteps; i++) {
+          currentPose = {
+            x: currentPose.x + stepDist * Math.cos(currentPose.theta),
+            y: currentPose.y + stepDist * Math.sin(currentPose.theta),
+            theta: currentPose.theta,
+          };
+          rawPoses.push({ ...currentPose });
+        }
+      } else {
+        // For turns and other commands, just compute the final pose
+        currentPose = simulateCommand(currentPose, step);
+        rawPoses.push({ ...currentPose });
+      }
+    }
+
+    // Apply wall physics to get the actual trajectory with wall sliding
+    const wallSegments = this.mapService.wallSegmentsCm();
+    const mapConfig = this.mapService.config();
+    const walls = buildCollisionWalls(wallSegments, mapConfig);
+    const robotConfig = this.vizService.robotConfig();
+
+    return applyWallPhysicsToPath(rawPoses, robotConfig, walls);
+  });
+
+  /** Computed: final pose after all steps */
+  readonly endPose = computed<Pose2D | null>(() => {
+    const trajectory = this.computedTrajectory();
+    if (trajectory.length === 0) return null;
+    return trajectory[trajectory.length - 1];
   });
 
   /** Computed: whether we have enough waypoints to generate steps */
@@ -88,6 +235,16 @@ export class PlanningModeService {
   /** Set the lineup angle threshold (0 = permissive, 1 = strict) */
   setLineupThreshold(threshold: number): void {
     this._lineupThreshold.set(Math.max(0, Math.min(1, threshold)));
+  }
+
+  /** Enable or disable A* pathfinding */
+  setUseAStarPathfinding(enabled: boolean): void {
+    this._useAStarPathfinding.set(enabled);
+  }
+
+  /** Toggle A* pathfinding on/off */
+  toggleAStarPathfinding(): void {
+    this._useAStarPathfinding.update(v => !v);
   }
 
   /** Add a waypoint at the given position */
