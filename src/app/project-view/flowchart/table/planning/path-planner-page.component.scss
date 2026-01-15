@@ -71,6 +71,21 @@
   border-radius: 4px;
 }
 
+.planner-loading {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  background: var(--p-surface-100);
+  color: var(--p-text-muted-color);
+
+  i {
+    font-size: 12px;
+  }
+}
+
 // Redo button flip
 :host ::ng-deep .redo-btn .p-button-icon {
   transform: scaleX(-1);

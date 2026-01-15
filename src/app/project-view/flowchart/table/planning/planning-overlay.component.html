@@ -49,6 +49,11 @@
     </div>
 
     <div class="topbar-right">
+      @if (planningService.isGenerating()) {
+        <span class="planner-loading" pTooltip="Generating path">
+          <i class="pi pi-spin pi-spinner"></i>
+        </span>
+      }
       @if (planningService.waypoints().length) {
         <span class="waypoint-count">
           {{ planningService.waypoints().length }} waypoint{{ planningService.waypoints().length !== 1 ? 's' : '' }}
