@@ -2,13 +2,10 @@
   <!-- Fullscreen Planning Mode -->
   @if (planningService.isActive()) {
     <div class="fullscreen-planning">
-      <app-table-visualization-panel
-        [visible]="true"
-        [showHeader]="false"
-        [embedded]="true"
-        [showPaths]="true"
-        (addPlannedSteps)="actions.addPlannedSteps($event)">
-      </app-table-visualization-panel>
+      <app-planning-overlay
+        (addSteps)="actions.addPlannedSteps($event)"
+        (close)="planningService.deactivate()">
+      </app-planning-overlay>
     </div>
   }
 
