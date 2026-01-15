@@ -23,7 +23,6 @@
 :host ::ng-deep .settings-dialog {
   .p-dialog-header {
     padding: 12px 16px;
-    background: #f8fafc;
     border-bottom: 1px solid rgba(0, 0, 0, 0.08);
     cursor: grab;
 
@@ -40,7 +39,6 @@
 :host-context(.dark) ::ng-deep .settings-dialog,
 :host-context(.p-dark) ::ng-deep .settings-dialog {
   .p-dialog-header {
-    background: #0f172a;
     border-bottom-color: rgba(255, 255, 255, 0.08);
   }
 }
@@ -111,13 +109,11 @@
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  background: #f8fafc;
   border-right: 1px solid rgba(0, 0, 0, 0.08);
 }
 
 :host-context(.dark) .modal-sidebar,
 :host-context(.p-dark) .modal-sidebar {
-  background: #0f172a;
   border-right-color: rgba(255, 255, 255, 0.08);
 }
 
@@ -150,14 +146,11 @@
   }
 
   &:hover {
-    background: rgba(0, 0, 0, 0.04);
     color: #334155;
   }
 
   &.active {
-    background: #fff;
     color: #1e293b;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
   }
 }
 
@@ -166,14 +159,11 @@
   color: #94a3b8;
 
   &:hover {
-    background: rgba(255, 255, 255, 0.04);
     color: #e2e8f0;
   }
 
   &.active {
-    background: #1e293b;
     color: #f1f5f9;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
   }
 }
 
@@ -188,12 +178,10 @@
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  background: #fff;
 }
 
 :host-context(.dark) .modal-content,
 :host-context(.p-dark) .modal-content {
-  background: #1e293b;
 }
 
 // ============================================
