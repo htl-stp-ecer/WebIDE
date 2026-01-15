@@ -704,10 +704,28 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
   // --- Planning Mode ---
 
   openPlanningOverlay(): void {
-    // Set start pose from mission end position (after all steps)
-    const endPose = this.vizService.plannedEndPose();
-    this.planningService.setStartPose(endPose.x, endPose.y, endPose.theta);
+    const startPose = this.getPlanningStartPose();
+    this.planningService.setStartPose(startPose.x, startPose.y, startPose.theta);
     this.planningService.activate();
+  }
+
+  private getPlanningStartPose(): Pose2D {
+    const missionEnds = this.adjustedPlannedMissionEnds;
+    if (missionEnds && missionEnds.length > 0) {
+      return missionEnds[missionEnds.length - 1];
+    }
+
+    const adjusted = this.adjustedPlannedPath;
+    if (adjusted && adjusted.length > 0) {
+      return adjusted[adjusted.length - 1];
+    }
+
+    const planned = this.vizService.plannedPath();
+    if (planned && planned.length > 0) {
+      return planned[planned.length - 1];
+    }
+
+    return this.vizService.startPose();
   }
 
   onPlanningAddSteps(steps: MissionStep[]): void {
