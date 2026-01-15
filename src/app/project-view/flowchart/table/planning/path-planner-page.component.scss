@@ -4,6 +4,16 @@
   height: 100%;
   min-height: 0;
   overflow: hidden;
+  --planner-badge-bg: var(--p-surface-100);
+  --planner-badge-fg: var(--p-text-muted-color);
+  --planner-badge-border: transparent;
+}
+
+:host-context(.dark),
+:host-context(.p-dark) {
+  --planner-badge-bg: rgba(255, 255, 255, 0.08);
+  --planner-badge-fg: var(--p-text-muted-color, #94a3b8);
+  --planner-badge-border: rgba(255, 255, 255, 0.12);
 }
 
 .path-planner-page {
@@ -65,10 +75,11 @@
 .waypoint-count {
   font-family: 'SF Mono', 'Menlo', 'Monaco', monospace;
   font-size: 11px;
-  color: var(--p-text-muted-color);
+  color: var(--planner-badge-fg);
   padding: 4px 10px;
-  background: var(--p-surface-100);
+  background: var(--planner-badge-bg);
   border-radius: 4px;
+  border: 1px solid var(--planner-badge-border);
 }
 
 .planner-loading {
@@ -78,8 +89,9 @@
   width: 22px;
   height: 22px;
   border-radius: 4px;
-  background: var(--p-surface-100);
-  color: var(--p-text-muted-color);
+  background: var(--planner-badge-bg);
+  color: var(--planner-badge-fg);
+  border: 1px solid var(--planner-badge-border);
 
   i {
     font-size: 12px;
