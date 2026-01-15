@@ -2,8 +2,8 @@ import { Pose2D, normalizeAngle } from '../../models/pose2d';
 import { MissionStep } from '../../../../../entities/MissionStep';
 import { RobotConfig } from '../../services/table-visualization.service';
 import { MapConfig } from '../../services/table-map.service';
-import { WallSegment, applyWallPhysicsToPath } from '../../physics';
-import { simulateCommand, getSingleCommandTrajectory } from './pose-simulator';
+import { WallSegment, checkPathCollision, checkRobotCollision, isRobotInBounds } from '../../physics';
+import { simulateCommand } from './pose-simulator';
 
 // --- Configuration ---
 
@@ -37,6 +37,16 @@ function createDriveStep(distanceCm: number): MissionStep {
   };
 }
 
+function createReverseStep(distanceCm: number): MissionStep {
+  return {
+    step_type: '',
+    function_name: 'drive_backward',
+    arguments: [{ name: 'cm', value: distanceCm, type: 'float' }],
+    position: { x: 0, y: 0 },
+    children: [],
+  };
+}
+
 function createTurnStep(angleDeg: number): MissionStep {
   const isClockwise = angleDeg < 0;
   return {
@@ -54,6 +64,9 @@ const AVAILABLE_COMMANDS: MissionStep[] = [
   createDriveStep(5),
   createDriveStep(10),
   createDriveStep(20),
+  createReverseStep(5),
+  createReverseStep(10),
+  createReverseStep(20),
   // Turn commands (clockwise)
   createTurnStep(-15),
   createTurnStep(-45),
@@ -63,6 +76,30 @@ const AVAILABLE_COMMANDS: MissionStep[] = [
   createTurnStep(45),
   createTurnStep(90),
 ];
+
+function checkPathCollisionExcludingStart(
+  startPose: Pose2D,
+  endPose: Pose2D,
+  robotConfig: RobotConfig,
+  walls: WallSegment[],
+  steps: number
+): boolean {
+  if (checkRobotCollision(endPose, robotConfig, walls)) return true;
+
+  for (let i = 1; i <= steps; i++) {
+    const t = i / steps;
+    const intermediatePose: Pose2D = {
+      x: startPose.x + (endPose.x - startPose.x) * t,
+      y: startPose.y + (endPose.y - startPose.y) * t,
+      theta: startPose.theta + (endPose.theta - startPose.theta) * t,
+    };
+    if (checkRobotCollision(intermediatePose, robotConfig, walls)) {
+      return true;
+    }
+  }
+
+  return false;
+}
 
 // --- A* Node ---
 
@@ -279,14 +316,20 @@ export function findPath(
 
     // Explore all available commands
     for (const command of AVAILABLE_COMMANDS) {
-      // Get trajectory for this command with intermediate steps
-      const trajectory = getSingleCommandTrajectory(current.pose, command, 2);
+      const newPose = simulateCommand(current.pose, command);
+      const fn = command.function_name;
+      const arg = (command.arguments[0]?.value as number) ?? 0;
+      const steps = Math.max(5, Math.ceil(Math.abs(arg) / 2));
+      const isTurn = fn === 'turn_cw' || fn === 'turn_ccw' || fn === 'tank_turn_cw' || fn === 'tank_turn_ccw';
 
-      // Apply wall physics to get actual final pose (with wall sliding)
-      const physicsResult = applyWallPhysicsToPath(trajectory, robotConfig, walls);
-      const newPose = physicsResult.length > 0
-        ? physicsResult[physicsResult.length - 1]
-        : current.pose;
+      if (!isRobotInBounds(newPose, mapConfig, robotConfig)) continue;
+      if (!isTurn) {
+        const startCollides = checkRobotCollision(current.pose, robotConfig, walls);
+        const blocked = startCollides
+          ? checkPathCollisionExcludingStart(current.pose, newPose, robotConfig, walls, steps)
+          : checkPathCollision(current.pose, newPose, robotConfig, walls, steps);
+        if (blocked) continue;
+      }
 
       // Skip if already visited (at discretized level)
       const newStateKey = poseToStateKey(newPose, config);

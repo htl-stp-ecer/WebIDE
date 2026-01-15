@@ -2,9 +2,22 @@ import { Injectable, inject, signal, computed } from '@angular/core';
 import { Waypoint, createWaypoint } from './models';
 import { MissionStep } from '../../../../entities/MissionStep';
 import { optimizeWaypointsToSteps, OptimizationContext } from './path-optimizer';
-import { TableMapService, TableVisualizationService } from '../services';
-import { buildCollisionWalls, applyWallPhysicsToPath } from '../physics';
-import { findPath, optimizePath, DEFAULT_ASTAR_CONFIG, simulateCommand } from './pathfinding';
+import { TableMapService, TableVisualizationService, type MapConfig, type RobotConfig } from '../services';
+import {
+  buildCollisionWalls,
+  applyWallPhysicsToPath,
+  applyWallPhysicsToPathWithSegments,
+  checkRobotCollision,
+  isRobotInBounds,
+  type WallSegment,
+} from '../physics';
+import {
+  findPath,
+  optimizePath,
+  DEFAULT_ASTAR_CONFIG,
+  simulateCommand,
+  getCommandTrajectory,
+} from './pathfinding';
 import { Pose2D } from '../models';
 
 /**
@@ -89,8 +102,29 @@ export class PlanningModeService {
         currentPose = this.simulateFinalPose(currentPose, directSteps);
       } else {
         const optimized = optimizePath(result);
-        allSteps.push(...optimized.commands);
-        currentPose = optimized.finalPose;
+        const validation = this.validateAStarPath(
+          optimized.commands,
+          currentPose,
+          { x: wp.x, y: wp.y },
+          walls,
+          robotConfig,
+          mapConfig,
+          DEFAULT_ASTAR_CONFIG.goalToleranceCm
+        );
+
+        if (!validation.ok) {
+          console.warn(`A* validation failed for waypoint (${wp.x}, ${wp.y}), using direct path`);
+          const directSteps = this.generateStepsDirectly(
+            [wp],
+            { x: currentPose.x, y: currentPose.y, theta: currentPose.theta },
+            0
+          );
+          allSteps.push(...directSteps);
+          currentPose = this.simulateFinalPose(currentPose, directSteps);
+        } else {
+          allSteps.push(...optimized.commands);
+          currentPose = validation.finalPose;
+        }
       }
     }
 
@@ -147,6 +181,52 @@ export class PlanningModeService {
       }
     }
     return pose;
+  }
+
+  private validateAStarPath(
+    commands: MissionStep[],
+    startPose: Pose2D,
+    goal: { x: number; y: number },
+    walls: WallSegment[],
+    robotConfig: RobotConfig,
+    mapConfig: MapConfig,
+    goalToleranceCm: number
+  ): { ok: boolean; finalPose: Pose2D } {
+    const rawTrajectory = getCommandTrajectory(startPose, commands);
+    if (rawTrajectory.length === 0) {
+      return { ok: false, finalPose: startPose };
+    }
+
+    const adjusted = applyWallPhysicsToPathWithSegments(rawTrajectory, robotConfig, walls);
+    if (!adjusted.poses.length) {
+      return { ok: false, finalPose: startPose };
+    }
+
+    const finalPose = adjusted.poses[adjusted.poses.length - 1];
+    const dx = finalPose.x - goal.x;
+    const dy = finalPose.y - goal.y;
+    const distanceToGoal = Math.sqrt(dx * dx + dy * dy);
+    if (distanceToGoal > goalToleranceCm) {
+      return { ok: false, finalPose };
+    }
+
+    let prevPose = adjusted.poses[0];
+    for (const pose of adjusted.poses) {
+      if (!isRobotInBounds(pose, mapConfig, robotConfig)) {
+        return { ok: false, finalPose };
+      }
+
+      const dx = pose.x - prevPose.x;
+      const dy = pose.y - prevPose.y;
+      const movedDistance = Math.sqrt(dx * dx + dy * dy);
+      if (movedDistance >= 0.01 && checkRobotCollision(pose, robotConfig, walls)) {
+        return { ok: false, finalPose };
+      }
+
+      prevPose = pose;
+    }
+
+    return { ok: true, finalPose };
   }
 
   /** Computed: trajectory poses from the generated steps (with wall physics) */
