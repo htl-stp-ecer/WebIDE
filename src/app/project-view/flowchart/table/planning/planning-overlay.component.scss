@@ -3,6 +3,7 @@
   position: absolute;
   inset: 0;
   pointer-events: auto;
+  background: var(--p-surface-ground, #1b1b2b);
 }
 
 .planning-fullscreen {
