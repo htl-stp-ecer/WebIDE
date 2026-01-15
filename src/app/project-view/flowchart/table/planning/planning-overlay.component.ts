@@ -3,6 +3,7 @@ import {
   ElementRef,
   ViewChild,
   AfterViewInit,
+  OnInit,
   OnDestroy,
   inject,
   effect,
@@ -22,6 +23,7 @@ import { PlanningModeService } from './planning-mode.service';
 import { formatStepForPreview } from './path-to-steps';
 import { MissionStep } from '../../../../entities/MissionStep';
 import { TableMapService, TableVisualizationService } from '../services';
+import { HttpService } from '../../../../services/http-service';
 
 /** Hit radius for waypoint markers in pixels */
 const WAYPOINT_HIT_RADIUS = 12;
@@ -70,7 +72,7 @@ const STORAGE_KEYS = {
   templateUrl: './planning-overlay.component.html',
   styleUrl: './planning-overlay.component.scss',
 })
-export class PlanningOverlayComponent implements AfterViewInit, OnDestroy {
+export class PlanningOverlayComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('canvas') canvasRef!: ElementRef<HTMLCanvasElement>;
 
   /** Parent canvas dimensions for coordinate conversion */
@@ -86,6 +88,7 @@ export class PlanningOverlayComponent implements AfterViewInit, OnDestroy {
   readonly planningService = inject(PlanningModeService);
   readonly mapService = inject(TableMapService);
   readonly vizService = inject(TableVisualizationService);
+  private readonly httpService = inject(HttpService);
 
   // UI State signals
   readonly sidebarCollapsed = signal(localStorage.getItem(STORAGE_KEYS.sidebarCollapsed) === 'true');
@@ -127,6 +130,10 @@ export class PlanningOverlayComponent implements AfterViewInit, OnDestroy {
     });
   }
 
+  ngOnInit(): void {
+    this.loadStoredMap();
+  }
+
   ngAfterViewInit(): void {
     const canvas = this.canvasRef.nativeElement;
     this.ctx = canvas.getContext('2d')!;
@@ -139,6 +146,21 @@ export class PlanningOverlayComponent implements AfterViewInit, OnDestroy {
 
     this.resizeCanvas();
     this.startRenderLoop();
+  }
+
+  private loadStoredMap(): void {
+    if (this.mapService.isLoaded()) return;
+
+    this.httpService.getTableMap().subscribe({
+      next: (response) => {
+        if (response.image) {
+          this.mapService.loadMapFromBase64(response.image);
+        }
+      },
+      error: (err) => {
+        console.warn('Failed to load stored table map:', err);
+      },
+    });
   }
 
   ngOnDestroy(): void {
