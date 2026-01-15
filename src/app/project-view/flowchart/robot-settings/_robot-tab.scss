@@ -52,6 +52,47 @@
   color: #60a5fa;
 }
 
+// Sidebar item shading
+.robot-list-item {
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  background: rgba(15, 23, 42, 0.03);
+}
+
+.robot-list-item--idle:hover {
+  background: rgba(15, 23, 42, 0.06);
+}
+
+.robot-list-item--active {
+  background: rgba(15, 23, 42, 0.1);
+  border-color: rgba(15, 23, 42, 0.2);
+}
+
+:host-context(.dark) .robot-list-item,
+:host-context(.p-dark) .robot-list-item {
+  background: rgba(248, 250, 252, 0.05);
+  border-color: rgba(148, 163, 184, 0.2);
+}
+
+:host-context(.dark) .robot-list-item--idle:hover,
+:host-context(.p-dark) .robot-list-item--idle:hover {
+  background: rgba(248, 250, 252, 0.1);
+}
+
+:host-context(.dark) .robot-list-item--active,
+:host-context(.p-dark) .robot-list-item--active {
+  background: rgba(248, 250, 252, 0.14);
+  border-color: rgba(148, 163, 184, 0.35);
+}
+
+.robot-position-panel {
+  background: rgba(15, 23, 42, 0.04);
+}
+
+:host-context(.dark) .robot-position-panel,
+:host-context(.p-dark) .robot-position-panel {
+  background: rgba(248, 250, 252, 0.06);
+}
+
 // ============================================
 // Robot Canvas & Visualization
 // ============================================
@@ -68,6 +109,33 @@
 
 :host-context(.dark) .robot-canvas-bg,
 :host-context(.p-dark) .robot-canvas-bg {
+}
+
+.robot-body {
+  background: rgba(15, 23, 42, 0.04);
+}
+
+.robot-body--active {
+  background: rgba(15, 23, 42, 0.08);
+}
+
+.robot-body--idle {
+  background: rgba(15, 23, 42, 0.04);
+}
+
+:host-context(.dark) .robot-body,
+:host-context(.p-dark) .robot-body {
+  background: rgba(248, 250, 252, 0.05);
+}
+
+:host-context(.dark) .robot-body--active,
+:host-context(.p-dark) .robot-body--active {
+  background: rgba(248, 250, 252, 0.1);
+}
+
+:host-context(.dark) .robot-body--idle,
+:host-context(.p-dark) .robot-body--idle {
+  background: rgba(248, 250, 252, 0.05);
 }
 
 // Robot frame - responsive sizing that always fits
