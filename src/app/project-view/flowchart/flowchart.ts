@@ -37,7 +37,7 @@ import { TimingPanel, type TimingViewMode } from './timing/timing-panel';
 import { RobotSettingsModal } from './robot-settings/robot-settings-modal';
 import { TableMapService, TableVisualizationService } from './table/services';
 import { buildPlannedPathFromProjectSimulation } from './table/simulation-path';
-import { PlanningModeService } from './table/planning';
+import { PlanningModeService, PlanningOverlayComponent } from './table/planning';
 
 interface DefinitionOption {
   label: string;
@@ -71,7 +71,7 @@ const DEFAULT_PANEL_OFFSETS: Record<FloatingPanelKey, PanelOffset> = {
 
 @Component({
   selector: 'app-flowchart',
-  imports: [FFlowComponent, FFlowModule, InputNumberModule, CheckboxModule, InputTextModule, ContextMenuModule, Tooltip, SelectButtonModule, FormsModule, TranslateModule, Select, DecimalPipe, ProgressSpinner, TableVisualizationPanel, TimingPanel, RobotSettingsModal],
+  imports: [FFlowComponent, FFlowModule, InputNumberModule, CheckboxModule, InputTextModule, ContextMenuModule, Tooltip, SelectButtonModule, FormsModule, TranslateModule, Select, DecimalPipe, ProgressSpinner, TableVisualizationPanel, PlanningOverlayComponent, TimingPanel, RobotSettingsModal],
   templateUrl: './flowchart.html',
   styleUrl: './flowchart.scss',
   providers: [FlowHistory],

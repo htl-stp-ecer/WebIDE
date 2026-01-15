@@ -10,7 +10,6 @@ import {
   EventEmitter,
   Output,
 } from '@angular/core';
-import { Router, ActivatedRoute } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 import { TableMapService } from './services';
 import { TableVisualizationService, type ComputedPath } from './services';
@@ -53,8 +52,6 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
   readonly vizService = inject(TableVisualizationService);
   readonly planningService = inject(PlanningModeService);
   private readonly httpService = inject(HttpService);
-  private readonly router = inject(Router);
-  private readonly route = inject(ActivatedRoute);
 
   private ctx!: CanvasRenderingContext2D;
   private animationFrameId: number | null = null;
@@ -706,21 +703,11 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
 
   // --- Planning Mode ---
 
-  navigateToPathPlanner(): void {
-    // Extract IP and UUID from current URL: /:ip/projects/:uuid
-    const urlParts = this.router.url.split('/').filter(Boolean);
-    const ip = urlParts[0] ?? '';
-    const uuid = urlParts[2] ?? ''; // [ip, 'projects', uuid]
-
+  openPlanningOverlay(): void {
     // Set start pose from mission end position (after all steps)
     const endPose = this.vizService.plannedEndPose();
     this.planningService.setStartPose(endPose.x, endPose.y, endPose.theta);
-
-    this.router.navigate(['/', ip, 'projects', uuid, 'path-planner']);
-  }
-
-  togglePlanningMode(): void {
-    this.navigateToPathPlanner();
+    this.planningService.activate();
   }
 
   onPlanningAddSteps(steps: MissionStep[]): void {
