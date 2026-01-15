@@ -6,7 +6,7 @@ import { TableMapService, TableVisualizationService, type MapConfig, type RobotC
 import {
   buildCollisionWalls,
   applyWallPhysicsToPath,
-  applyWallPhysicsToPathWithSegments,
+  checkPathCollision,
   checkRobotCollision,
   isRobotInBounds,
   type WallSegment,
@@ -16,9 +16,9 @@ import {
   optimizePath,
   DEFAULT_ASTAR_CONFIG,
   simulateCommand,
-  getCommandTrajectory,
+  type AStarConfig,
 } from './pathfinding';
-import { Pose2D } from '../models';
+import { Pose2D, normalizeAngle } from '../models';
 
 /**
  * Service for managing planning mode state.
@@ -81,17 +81,34 @@ export class PlanningModeService {
     const allSteps: MissionStep[] = [];
     let currentPose: Pose2D = { x: start.x, y: start.y, theta: start.theta };
 
+    const tightConfig: AStarConfig = {
+      ...DEFAULT_ASTAR_CONFIG,
+      positionResolutionCm: 2,
+      angleResolutionDeg: 5,
+      goalToleranceCm: 3,
+      maxIterations: DEFAULT_ASTAR_CONFIG.maxIterations * 2,
+    };
+
     for (const wp of wps) {
-      const result = findPath(
+      const goal = { x: wp.x, y: wp.y };
+      const primary = this.findValidatedAStarPath(
         currentPose,
-        { x: wp.x, y: wp.y },
+        goal,
         walls,
         robotConfig,
         mapConfig,
         DEFAULT_ASTAR_CONFIG
       );
+      const candidate = primary ?? this.findValidatedAStarPath(
+        currentPose,
+        goal,
+        walls,
+        robotConfig,
+        mapConfig,
+        tightConfig
+      );
 
-      if (!result) {
+      if (!candidate) {
         console.warn(`A* pathfinding failed for waypoint (${wp.x}, ${wp.y}), using direct path`);
         const directSteps = this.generateStepsDirectly(
           [wp],
@@ -101,30 +118,8 @@ export class PlanningModeService {
         allSteps.push(...directSteps);
         currentPose = this.simulateFinalPose(currentPose, directSteps);
       } else {
-        const optimized = optimizePath(result);
-        const validation = this.validateAStarPath(
-          optimized.commands,
-          currentPose,
-          { x: wp.x, y: wp.y },
-          walls,
-          robotConfig,
-          mapConfig,
-          DEFAULT_ASTAR_CONFIG.goalToleranceCm
-        );
-
-        if (!validation.ok) {
-          console.warn(`A* validation failed for waypoint (${wp.x}, ${wp.y}), using direct path`);
-          const directSteps = this.generateStepsDirectly(
-            [wp],
-            { x: currentPose.x, y: currentPose.y, theta: currentPose.theta },
-            0
-          );
-          allSteps.push(...directSteps);
-          currentPose = this.simulateFinalPose(currentPose, directSteps);
-        } else {
-          allSteps.push(...optimized.commands);
-          currentPose = validation.finalPose;
-        }
+        allSteps.push(...candidate.commands);
+        currentPose = candidate.finalPose;
       }
     }
 
@@ -157,6 +152,43 @@ export class PlanningModeService {
       context,
       { lineupThreshold: threshold }
     );
+  }
+
+  private findValidatedAStarPath(
+    startPose: Pose2D,
+    goal: { x: number; y: number },
+    walls: WallSegment[],
+    robotConfig: RobotConfig,
+    mapConfig: MapConfig,
+    config: AStarConfig
+  ): { commands: MissionStep[]; finalPose: Pose2D } | null {
+    const result = findPath(
+      startPose,
+      goal,
+      walls,
+      robotConfig,
+      mapConfig,
+      config
+    );
+    if (!result) return null;
+
+    const optimized = optimizePath(result);
+    const validation = this.validateAStarPath(
+      optimized.commands,
+      startPose,
+      goal,
+      walls,
+      robotConfig,
+      mapConfig,
+      config.goalToleranceCm
+    );
+
+    if (!validation.ok) {
+      console.warn(`A* validation failed for waypoint (${goal.x}, ${goal.y})`);
+      return null;
+    }
+
+    return { commands: optimized.commands, finalPose: validation.finalPose };
   }
 
   /**
@@ -192,41 +224,94 @@ export class PlanningModeService {
     mapConfig: MapConfig,
     goalToleranceCm: number
   ): { ok: boolean; finalPose: Pose2D } {
-    const rawTrajectory = getCommandTrajectory(startPose, commands);
-    if (rawTrajectory.length === 0) {
+    if (!commands.length) {
       return { ok: false, finalPose: startPose };
     }
 
-    const adjusted = applyWallPhysicsToPathWithSegments(rawTrajectory, robotConfig, walls);
-    if (!adjusted.poses.length) {
-      return { ok: false, finalPose: startPose };
+    let pose = startPose;
+    for (const command of commands) {
+      const nextPose = simulateCommand(pose, command);
+      if (!isRobotInBounds(nextPose, mapConfig, robotConfig)) {
+        return { ok: false, finalPose: nextPose };
+      }
+
+      const fn = command.function_name;
+      const arg = (command.arguments[0]?.value as number) ?? 0;
+      const isTurn = fn === 'turn_cw' || fn === 'turn_ccw' || fn === 'tank_turn_cw' || fn === 'tank_turn_ccw';
+
+      if (isTurn) {
+        const angleSteps = Math.max(6, Math.ceil(Math.abs(arg) / 5));
+        if (this.checkRotationCollision(pose, nextPose, robotConfig, walls, angleSteps)) {
+          return { ok: false, finalPose: nextPose };
+        }
+      } else {
+        const steps = Math.max(5, Math.ceil(Math.abs(arg) / 2));
+        const startCollides = checkRobotCollision(pose, robotConfig, walls);
+        const blocked = startCollides
+          ? this.checkPathCollisionExcludingStart(pose, nextPose, robotConfig, walls, steps)
+          : checkPathCollision(pose, nextPose, robotConfig, walls, steps);
+        if (blocked) {
+          return { ok: false, finalPose: nextPose };
+        }
+      }
+
+      pose = nextPose;
     }
 
-    const finalPose = adjusted.poses[adjusted.poses.length - 1];
-    const dx = finalPose.x - goal.x;
-    const dy = finalPose.y - goal.y;
+    const dx = pose.x - goal.x;
+    const dy = pose.y - goal.y;
     const distanceToGoal = Math.sqrt(dx * dx + dy * dy);
     if (distanceToGoal > goalToleranceCm) {
-      return { ok: false, finalPose };
+      return { ok: false, finalPose: pose };
     }
 
-    let prevPose = adjusted.poses[0];
-    for (const pose of adjusted.poses) {
-      if (!isRobotInBounds(pose, mapConfig, robotConfig)) {
-        return { ok: false, finalPose };
-      }
+    return { ok: true, finalPose: pose };
+  }
 
-      const dx = pose.x - prevPose.x;
-      const dy = pose.y - prevPose.y;
-      const movedDistance = Math.sqrt(dx * dx + dy * dy);
-      if (movedDistance >= 0.01 && checkRobotCollision(pose, robotConfig, walls)) {
-        return { ok: false, finalPose };
-      }
+  private checkPathCollisionExcludingStart(
+    startPose: Pose2D,
+    endPose: Pose2D,
+    robotConfig: RobotConfig,
+    walls: WallSegment[],
+    steps: number
+  ): boolean {
+    if (checkRobotCollision(endPose, robotConfig, walls)) return true;
 
-      prevPose = pose;
+    for (let i = 1; i <= steps; i++) {
+      const t = i / steps;
+      const intermediatePose: Pose2D = {
+        x: startPose.x + (endPose.x - startPose.x) * t,
+        y: startPose.y + (endPose.y - startPose.y) * t,
+        theta: startPose.theta + (endPose.theta - startPose.theta) * t,
+      };
+      if (checkRobotCollision(intermediatePose, robotConfig, walls)) {
+        return true;
+      }
     }
 
-    return { ok: true, finalPose };
+    return false;
+  }
+
+  private checkRotationCollision(
+    startPose: Pose2D,
+    endPose: Pose2D,
+    robotConfig: RobotConfig,
+    walls: WallSegment[],
+    steps: number
+  ): boolean {
+    const delta = normalizeAngle(endPose.theta - startPose.theta);
+    for (let i = 1; i <= steps; i++) {
+      const t = i / steps;
+      const pose: Pose2D = {
+        x: startPose.x,
+        y: startPose.y,
+        theta: normalizeAngle(startPose.theta + delta * t),
+      };
+      if (checkRobotCollision(pose, robotConfig, walls)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /** Computed: trajectory poses from the generated steps (with wall physics) */

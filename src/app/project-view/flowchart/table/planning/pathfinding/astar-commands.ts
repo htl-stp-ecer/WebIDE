@@ -1,7 +1,7 @@
-import { Pose2D, normalizeAngle } from '../../models/pose2d';
+import { Pose2D, normalizeAngle } from '../../models';
 import { MissionStep } from '../../../../../entities/MissionStep';
-import { RobotConfig } from '../../services/table-visualization.service';
-import { MapConfig } from '../../services/table-map.service';
+import { RobotConfig } from '../../services';
+import { MapConfig } from '../../services';
 import { WallSegment, checkPathCollision, checkRobotCollision, isRobotInBounds } from '../../physics';
 import { simulateCommand } from './pose-simulator';
 
@@ -60,18 +60,22 @@ function createTurnStep(angleDeg: number): MissionStep {
 
 /** Available commands for A* exploration */
 const AVAILABLE_COMMANDS: MissionStep[] = [
-  // Drive commands
+  // Drive commands (smaller steps help in tight spaces)
+  createDriveStep(2),
   createDriveStep(5),
   createDriveStep(10),
   createDriveStep(20),
+  createReverseStep(2),
   createReverseStep(5),
   createReverseStep(10),
   createReverseStep(20),
   // Turn commands (clockwise)
+  createTurnStep(-5),
   createTurnStep(-15),
   createTurnStep(-45),
   createTurnStep(-90),
   // Turn commands (counter-clockwise)
+  createTurnStep(5),
   createTurnStep(15),
   createTurnStep(45),
   createTurnStep(90),
@@ -98,6 +102,28 @@ function checkPathCollisionExcludingStart(
     }
   }
 
+  return false;
+}
+
+function checkRotationCollision(
+  startPose: Pose2D,
+  endPose: Pose2D,
+  robotConfig: RobotConfig,
+  walls: WallSegment[],
+  steps: number
+): boolean {
+  const delta = normalizeAngle(endPose.theta - startPose.theta);
+  for (let i = 1; i <= steps; i++) {
+    const t = i / steps;
+    const pose: Pose2D = {
+      x: startPose.x,
+      y: startPose.y,
+      theta: normalizeAngle(startPose.theta + delta * t),
+    };
+    if (checkRobotCollision(pose, robotConfig, walls)) {
+      return true;
+    }
+  }
   return false;
 }
 
@@ -323,7 +349,10 @@ export function findPath(
       const isTurn = fn === 'turn_cw' || fn === 'turn_ccw' || fn === 'tank_turn_cw' || fn === 'tank_turn_ccw';
 
       if (!isRobotInBounds(newPose, mapConfig, robotConfig)) continue;
-      if (!isTurn) {
+      if (isTurn) {
+        const angleSteps = Math.max(6, Math.ceil(Math.abs(arg) / 5));
+        if (checkRotationCollision(current.pose, newPose, robotConfig, walls, angleSteps)) continue;
+      } else {
         const startCollides = checkRobotCollision(current.pose, robotConfig, walls);
         const blocked = startCollides
           ? checkPathCollisionExcludingStart(current.pose, newPose, robotConfig, walls, steps)
