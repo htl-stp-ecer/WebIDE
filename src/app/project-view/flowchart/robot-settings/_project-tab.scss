@@ -14,14 +14,12 @@
 
 .setting-card {
   padding: 20px;
-  background: #f8fafc;
   border: 1px solid rgba(0, 0, 0, 0.06);
   border-radius: 10px;
 }
 
 :host-context(.dark) .setting-card,
 :host-context(.p-dark) .setting-card {
-  background: #0f172a;
   border-color: rgba(255, 255, 255, 0.06);
 }
 
@@ -76,7 +74,6 @@
   padding: 16px 12px;
   border: 1px solid rgba(0, 0, 0, 0.1);
   border-radius: 8px;
-  background: #fff;
   color: #64748b;
   font-size: 12px;
   font-weight: 500;
@@ -93,7 +90,6 @@
   }
 
   &.active {
-    background: rgba(59, 130, 246, 0.1);
     border-color: #3b82f6;
     color: #3b82f6;
   }
@@ -101,7 +97,6 @@
 
 :host-context(.dark) .orientation-btn,
 :host-context(.p-dark) .orientation-btn {
-  background: #1e293b;
   border-color: rgba(255, 255, 255, 0.1);
   color: #94a3b8;
 
@@ -111,7 +106,6 @@
   }
 
   &.active {
-    background: rgba(59, 130, 246, 0.15);
     border-color: #60a5fa;
     color: #60a5fa;
   }
