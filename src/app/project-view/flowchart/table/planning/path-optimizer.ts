@@ -1,14 +1,20 @@
 import { MissionStep } from '../../../../entities/MissionStep';
 import { Waypoint } from './models';
-import { Pose2D, normalizeAngle } from '../models';
+import { Pose2D, applyLocalDelta, forwardMove, normalizeAngle } from '../models';
 import { LineSegmentCm } from '../services';
 import { SensorConfig } from '../models';
 import {
   closestLineNormalAngle,
   findClosestLineSegment,
   linePerpendicularScore,
-  DEFAULT_LINE_PROXIMITY_CM,
+  lineupPerpThreshold,
+  lineupProximityCm,
 } from './line-utils';
+import {
+  LineupSimulationContext,
+  simulateDriveUntilColor,
+  simulateForwardLineupOnBlack,
+} from '../simulation-path';
 
 // --- Interfaces ---
 
@@ -16,6 +22,9 @@ export interface OptimizationContext {
   lineSegments: LineSegmentCm[];
   sensorConfig: SensorConfig;
   isOnBlackLine: (x: number, y: number) => boolean;
+  rotationCenterForwardCm?: number;
+  rotationCenterStrafeCm?: number;
+  maxLineupDistanceCm?: number;
 }
 
 export interface OptimizationOptions {
@@ -44,54 +53,106 @@ export function optimizeWaypointsToSteps(
   const minRotateDeg = options?.minRotateDeg ?? 1;
   const lineupThreshold = options?.lineupThreshold ?? 0.5;
   const lineSegments = context.lineSegments ?? [];
+  const lineProximity = lineupProximityCm(lineupThreshold);
+  const perpThreshold = lineupPerpThreshold(lineupThreshold);
   const sensorCount = context.sensorConfig?.lineSensors?.length ?? 0;
   const canDriveUntil = sensorCount >= 1;
   const canLineup = sensorCount >= 2;
+  const lineupContext = buildLineupContext(context);
 
   const steps: MissionStep[] = [];
-  let currentHeading = startPose.theta;
+  let currentPose: Pose2D = { ...startPose };
 
   for (let i = 0; i < waypoints.length - 1; i++) {
-    const from = waypoints[i];
     const to = waypoints[i + 1];
+    let guard = 0;
+    while (guard < 6) {
+      guard += 1;
+      const dx = to.x - currentPose.x;
+      const dy = to.y - currentPose.y;
+      const totalDistance = Math.sqrt(dx * dx + dy * dy);
 
-    const dx = to.x - from.x;
-    const dy = to.y - from.y;
-    const totalDistance = Math.sqrt(dx * dx + dy * dy);
+      if (totalDistance < 0.1) break;
 
-    if (totalDistance < 0.1) continue;
+      // Calculate required heading
+      const targetHeading = Math.atan2(dy, dx);
+      const angleDiff = normalizeAngle(targetHeading - currentPose.theta);
+      const angleDeg = angleDiff * (180 / Math.PI);
 
-    // Calculate required heading
-    const targetHeading = Math.atan2(dy, dx);
-    const angleDiff = normalizeAngle(targetHeading - currentHeading);
-    const angleDeg = angleDiff * (180 / Math.PI);
-    const lineInfo = lineSegments.length
-      ? findClosestLineSegment(lineSegments, to.x, to.y)
-      : null;
-    const lineNear = !!lineInfo && lineInfo.distance <= DEFAULT_LINE_PROXIMITY_CM;
-    const linePerpScore = lineInfo ? linePerpendicularScore(targetHeading, lineInfo.angle) : 0;
-    const canAlignToLine = lineNear && linePerpScore >= lineupThreshold;
-    const endOnBlack = lineNear && context.isOnBlackLine(to.x, to.y);
-    const startOnBlack = lineNear && context.isOnBlackLine(from.x, from.y);
-
-    // Generate turn step if needed
-    if (Math.abs(angleDeg) >= minRotateDeg) {
-      steps.push(createTurnStep(Math.round(angleDeg), useTankTurn));
-      currentHeading = targetHeading;
-    }
-
-    // Drive full segment distance
-    if (totalDistance > 1) {
-      if (canDriveUntil && canAlignToLine && endOnBlack && !startOnBlack) {
-        steps.push(createDriveUntilStep('black'));
-      } else {
-        steps.push(createDriveStep(Math.round(totalDistance)));
+      // Generate turn step if needed
+      const roundedAngle = Math.round(angleDeg);
+      if (Math.abs(roundedAngle) >= minRotateDeg) {
+        steps.push(createTurnStep(roundedAngle, useTankTurn));
+        currentPose = {
+          ...currentPose,
+          theta: normalizeAngle(currentPose.theta + roundedAngle * Math.PI / 180),
+        };
       }
 
-      if (canLineup && canAlignToLine && endOnBlack && lineInfo) {
-        steps.push(createLineupStep('forward', 'black'));
-        currentHeading = closestLineNormalAngle(currentHeading, lineInfo.angle);
+      let handledLine = false;
+      if (totalDistance > 1 && canDriveUntil && lineupContext) {
+        const startOnBlack = isAnySensorOnBlack(currentPose, lineupContext);
+        if (!startOnBlack) {
+          const segmentContext = buildLineupContext(context, totalDistance);
+          if (segmentContext) {
+            const drivePoses = simulateDriveUntilColor(currentPose, segmentContext, 'black');
+            if (drivePoses.length) {
+              const hitPose = drivePoses[drivePoses.length - 1];
+              const endOnBlack = isAnySensorOnBlack(hitPose, segmentContext);
+              if (endOnBlack) {
+                const traveled = Math.hypot(hitPose.x - currentPose.x, hitPose.y - currentPose.y);
+                if (traveled + 0.25 < totalDistance) {
+                  const lineInfo = findClosestLineSegment(lineSegments, hitPose.x, hitPose.y);
+                  const linePerpScore = lineInfo ? linePerpendicularScore(currentPose.theta, lineInfo.angle) : 0;
+                  const canAlignToLine = !lineInfo || linePerpScore >= perpThreshold;
+
+                  steps.push(createDriveUntilStep('black'));
+                  currentPose = hitPose;
+                  handledLine = true;
+
+                  if (canLineup && canAlignToLine) {
+                    steps.push(createLineupStep('forward', 'black'));
+                    const lineupPoses = simulateForwardLineupOnBlack(currentPose, segmentContext);
+                    if (lineupPoses.length) {
+                      currentPose = lineupPoses[lineupPoses.length - 1];
+                    } else if (lineInfo) {
+                      currentPose = { ...currentPose, theta: closestLineNormalAngle(currentPose.theta, lineInfo.angle) };
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
       }
+
+      if (handledLine) {
+        continue;
+      }
+
+      if (totalDistance > 1) {
+        const roundedDistance = Math.round(totalDistance);
+        if (roundedDistance > 0) {
+          steps.push(createDriveStep(roundedDistance));
+          currentPose = forwardMove(currentPose, roundedDistance);
+        }
+      }
+
+      if (canLineup && lineupContext && isAnySensorOnBlack(currentPose, lineupContext)) {
+        const lineInfo = findClosestLineSegment(lineSegments, currentPose.x, currentPose.y);
+        const linePerpScore = lineInfo ? linePerpendicularScore(currentPose.theta, lineInfo.angle) : 0;
+        if (!lineInfo || linePerpScore >= perpThreshold) {
+          steps.push(createLineupStep('forward', 'black'));
+          const lineupPoses = simulateForwardLineupOnBlack(currentPose, lineupContext);
+          if (lineupPoses.length) {
+            currentPose = lineupPoses[lineupPoses.length - 1];
+          } else if (lineInfo) {
+            currentPose = { ...currentPose, theta: closestLineNormalAngle(currentPose.theta, lineInfo.angle) };
+          }
+        }
+      }
+
+      break;
     }
   }
 
@@ -151,4 +212,29 @@ function createLineupStep(direction: 'forward' | 'backward', color: 'black' | 'w
     position: { x: 0, y: 0 },
     children: [],
   };
+}
+
+function buildLineupContext(context: OptimizationContext, maxDistanceCm?: number): LineupSimulationContext | null {
+  const sensors = context.sensorConfig?.lineSensors ?? [];
+  if (sensors.length === 0) return null;
+
+  return {
+    isOnBlackLine: context.isOnBlackLine,
+    lineSensors: sensors,
+    rotationCenterForwardCm: context.rotationCenterForwardCm ?? 0,
+    rotationCenterStrafeCm: context.rotationCenterStrafeCm ?? 0,
+    maxDistanceCm: maxDistanceCm ?? context.maxLineupDistanceCm,
+  };
+}
+
+function isAnySensorOnBlack(pose: Pose2D, context: LineupSimulationContext): boolean {
+  for (const sensor of context.lineSensors) {
+    const forwardFromRc = sensor.forwardCm - context.rotationCenterForwardCm;
+    const strafeFromRc = sensor.strafeCm - context.rotationCenterStrafeCm;
+    const sensorPose = applyLocalDelta(pose, forwardFromRc, strafeFromRc, 0);
+    if (context.isOnBlackLine(sensorPose.x, sensorPose.y)) {
+      return true;
+    }
+  }
+  return false;
 }

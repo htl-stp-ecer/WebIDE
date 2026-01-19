@@ -212,6 +212,9 @@ export class PlanningModeService {
       lineSegments,
       lineupThreshold: threshold,
       lineSensorCount,
+      lineSensors: this.vizService.sensorConfig().lineSensors,
+      rotationCenterForwardCm: this.vizService.robotConfig().rotationCenterForwardCm,
+      rotationCenterStrafeCm: this.vizService.robotConfig().rotationCenterStrafeCm,
     });
   }
 
@@ -267,6 +270,9 @@ export class PlanningModeService {
       lineSegments: this.mapService.lineSegmentsCm(),
       sensorConfig: this.vizService.sensorConfig(),
       isOnBlackLine: (x, y) => this.mapService.isOnBlackLine(x, y),
+      rotationCenterForwardCm: this.vizService.robotConfig().rotationCenterForwardCm,
+      rotationCenterStrafeCm: this.vizService.robotConfig().rotationCenterStrafeCm,
+      maxLineupDistanceCm: Math.max(this.mapService.config().widthCm, this.mapService.config().heightCm),
     };
 
     return optimizeWaypointsToSteps(

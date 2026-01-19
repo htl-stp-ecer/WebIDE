@@ -57,6 +57,16 @@ export function closestLineNormalAngle(headingRad: number, lineAngleRad: number)
   return diffNormal <= diffOpposite ? normal : opposite;
 }
 
+export function lineupProximityCm(lineupThreshold: number): number {
+  const clamped = clamp01(lineupThreshold);
+  return DEFAULT_LINE_PROXIMITY_CM + (1 - clamped) * 2;
+}
+
+export function lineupPerpThreshold(lineupThreshold: number): number {
+  const clamped = clamp01(lineupThreshold);
+  return Math.max(0.1, clamped * 0.6);
+}
+
 function closestPointOnSegment(
   px: number,
   py: number,
@@ -73,4 +83,8 @@ function closestPointOnSegment(
   let t = ((px - x1) * dx + (py - y1) * dy) / lengthSq;
   t = Math.max(0, Math.min(1, t));
   return { x: x1 + t * dx, y: y1 + t * dy };
+}
+
+function clamp01(value: number): number {
+  return Math.max(0, Math.min(1, value));
 }
