@@ -22,6 +22,7 @@ import {
   simulateForwardLineupOnWhite,
 } from '../../simulation-path';
 import { optimizeWaypointsToSteps, type OptimizationContext } from '../path-optimizer';
+import { buildAdStarGrid, findAdStarPath } from './adstar-grid';
 
 interface AStarWorkerRequest {
   id: number;
@@ -63,6 +64,7 @@ ctx.addEventListener('message', (event: MessageEvent<AStarWorkerRequest>) => {
 function generateSteps(request: AStarWorkerRequest): MissionStep[] {
   let currentPose = request.startPose;
   const steps: MissionStep[] = [];
+  let grid = null as ReturnType<typeof buildAdStarGrid> | null;
 
   for (const waypoint of request.waypoints) {
     const direct = generateDirectSteps(currentPose, waypoint);
@@ -71,6 +73,21 @@ function generateSteps(request: AStarWorkerRequest): MissionStep[] {
       const lineAware = generateLineAwareDirectSteps(currentPose, waypoint, request);
       steps.push(...lineAware.steps);
       currentPose = lineAware.finalPose;
+      continue;
+    }
+
+    if (!grid) {
+      grid = buildAdStarGrid(
+        request.walls,
+        request.mapConfig,
+        request.robotConfig,
+        getAdStarNodeSize(request)
+      );
+    }
+    const adStarResult = generateAdStarSteps(currentPose, waypoint, request, grid);
+    if (adStarResult) {
+      steps.push(...adStarResult.steps);
+      currentPose = adStarResult.finalPose;
       continue;
     }
 
@@ -187,18 +204,8 @@ function generateLineAwareDirectSteps(
 ): { steps: MissionStep[]; finalPose: Pose2D } {
   const lineSegments = request.lineSegments ?? [];
   const lineupThreshold = request.lineupThreshold ?? 0.5;
-  const lineProximity = lineupProximityCm(lineupThreshold);
-  const detectDistance = Math.max(1.5, lineProximity * 0.5);
-  const sensorConfig = { lineSensors: request.lineSensors ?? [] };
-
-  const context: OptimizationContext = {
-    lineSegments,
-    sensorConfig,
-    isOnBlackLine: (x, y) => isPointOnLine(x, y, lineSegments, detectDistance),
-    rotationCenterForwardCm: request.rotationCenterForwardCm ?? 0,
-    rotationCenterStrafeCm: request.rotationCenterStrafeCm ?? 0,
-    maxLineupDistanceCm: Math.max(request.mapConfig.widthCm, request.mapConfig.heightCm),
-  };
+  const detectDistance = getLineDetectDistance(request);
+  const context = buildOptimizationContextForRequest(request, lineSegments, detectDistance);
 
   const waypoints = [
     { id: 'start', x: startPose.x, y: startPose.y },
@@ -206,6 +213,44 @@ function generateLineAwareDirectSteps(
   ];
 
   const steps = optimizeWaypointsToSteps(waypoints, startPose, context, { lineupThreshold });
+  const lineupContext = buildLineupContext(request, lineSegments, detectDistance);
+  const finalPose = lineupContext
+    ? simulateCommandsWithLineups(steps, startPose, lineupContext)
+    : simulateCommands(startPose, steps);
+
+  return { steps, finalPose };
+}
+
+function generateAdStarSteps(
+  startPose: Pose2D,
+  goal: { x: number; y: number },
+  request: AStarWorkerRequest,
+  grid: ReturnType<typeof buildAdStarGrid>
+): { steps: MissionStep[]; finalPose: Pose2D } | null {
+  const path = findAdStarPath(startPose, goal, grid);
+  if (!path || path.points.length < 2) return null;
+
+  const lineSegments = request.lineSegments ?? [];
+  const lineupThreshold = request.lineupThreshold ?? 0.5;
+  const detectDistance = getLineDetectDistance(request);
+  const context = buildOptimizationContextForRequest(request, lineSegments, detectDistance);
+
+  const waypoints = path.points.map((point, index) => ({
+    id: `adstar-${index}`,
+    x: point.x,
+    y: point.y,
+  }));
+
+  const baseContext: OptimizationContext = {
+    ...context,
+    sensorConfig: { lineSensors: [] },
+  };
+  const baseSteps = optimizeWaypointsToSteps(waypoints, startPose, baseContext, { lineupThreshold });
+  const validatedPose = validateCommands(startPose, baseSteps, request);
+  if (!validatedPose) return null;
+
+  const steps = optimizeWaypointsToSteps(waypoints, startPose, context, { lineupThreshold });
+
   const lineupContext = buildLineupContext(request, lineSegments, detectDistance);
   const finalPose = lineupContext
     ? simulateCommandsWithLineups(steps, startPose, lineupContext)
@@ -250,7 +295,7 @@ function applyLineAdjustments(
   const lineupThreshold = request.lineupThreshold ?? 0.5;
   const lineProximity = lineupProximityCm(lineupThreshold);
   const perpThreshold = lineupPerpThreshold(lineupThreshold);
-  const lineupContext = buildLineupContext(request, lineSegments, Math.max(1.5, lineProximity * 0.5));
+  const lineupContext = buildLineupContext(request, lineSegments, getLineDetectDistance(request));
   if (!lineupContext) {
     return { commands, finalPose };
   }
@@ -273,7 +318,9 @@ function applyLineAdjustments(
   const updated = [...commands];
   let lineupAdded = false;
   const startOnLine = isAnySensorOnLine(driveContext.startPose, lineupContext);
+  const canLineup = sensorCount >= 2;
   if (
+    !canLineup &&
     sensorCount >= 1 &&
     driveContext.command.function_name === 'drive_forward' &&
     !startOnLine
@@ -281,7 +328,7 @@ function applyLineAdjustments(
     updated[driveContext.index] = createDriveUntilStep('black');
   }
 
-  if (sensorCount >= 2) {
+  if (canLineup) {
     const direction = driveContext.command.function_name === 'drive_backward' ? 'backward' : 'forward';
     updated.push(createLineupStep(direction, 'black'));
     lineupAdded = true;
@@ -292,6 +339,32 @@ function applyLineAdjustments(
     ? { ...simulatedPose, theta: closestLineNormalAngle(simulatedPose.theta, lineInfo.angle) }
     : simulatedPose;
   return { commands: updated, finalPose: adjustedPose };
+}
+
+function buildOptimizationContextForRequest(
+  request: AStarWorkerRequest,
+  lineSegments: LineSegmentCm[],
+  detectDistanceCm: number
+): OptimizationContext {
+  return {
+    lineSegments,
+    sensorConfig: { lineSensors: request.lineSensors ?? [] },
+    isOnBlackLine: (x, y) => isPointOnLine(x, y, lineSegments, detectDistanceCm),
+    rotationCenterForwardCm: request.rotationCenterForwardCm ?? 0,
+    rotationCenterStrafeCm: request.rotationCenterStrafeCm ?? 0,
+    maxLineupDistanceCm: Math.max(request.mapConfig.widthCm, request.mapConfig.heightCm),
+  };
+}
+
+function getLineDetectDistance(request: AStarWorkerRequest): number {
+  const lineupThreshold = request.lineupThreshold ?? 0.5;
+  const lineProximity = lineupProximityCm(lineupThreshold);
+  return Math.max(1.5, lineProximity * 0.5);
+}
+
+function getAdStarNodeSize(request: AStarWorkerRequest): number {
+  const base = request.config?.positionResolutionCm ?? 5;
+  return Math.max(2, Math.round(base));
 }
 
 function findLastDriveContext(

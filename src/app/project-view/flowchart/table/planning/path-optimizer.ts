@@ -8,7 +8,6 @@ import {
   findClosestLineSegment,
   linePerpendicularScore,
   lineupPerpThreshold,
-  lineupProximityCm,
 } from './line-utils';
 import {
   LineupSimulationContext,
@@ -53,7 +52,6 @@ export function optimizeWaypointsToSteps(
   const minRotateDeg = options?.minRotateDeg ?? 1;
   const lineupThreshold = options?.lineupThreshold ?? 0.5;
   const lineSegments = context.lineSegments ?? [];
-  const lineProximity = lineupProximityCm(lineupThreshold);
   const perpThreshold = lineupPerpThreshold(lineupThreshold);
   const sensorCount = context.sensorConfig?.lineSensors?.length ?? 0;
   const canDriveUntil = sensorCount >= 1;
@@ -102,27 +100,28 @@ export function optimizeWaypointsToSteps(
               if (endOnBlack) {
                 const traveled = Math.hypot(hitPose.x - currentPose.x, hitPose.y - currentPose.y);
                 if (traveled + 0.25 < totalDistance) {
-                  const lineInfo = findClosestLineSegment(lineSegments, hitPose.x, hitPose.y);
-                  const linePerpScore = lineInfo ? linePerpendicularScore(currentPose.theta, lineInfo.angle) : 0;
-                  const canAlignToLine = !lineInfo || linePerpScore >= perpThreshold;
+                const lineInfo = findClosestLineSegment(lineSegments, hitPose.x, hitPose.y);
+                const linePerpScore = lineInfo ? linePerpendicularScore(currentPose.theta, lineInfo.angle) : 0;
+                const canAlignToLine = !lineInfo || linePerpScore >= perpThreshold;
 
+                if (canLineup && canAlignToLine) {
+                  steps.push(createLineupStep('forward', 'black'));
+                  const lineupPoses = simulateForwardLineupOnBlack(currentPose, segmentContext);
+                  if (lineupPoses.length) {
+                    currentPose = lineupPoses[lineupPoses.length - 1];
+                  } else if (lineInfo) {
+                    currentPose = { ...currentPose, theta: closestLineNormalAngle(currentPose.theta, lineInfo.angle) };
+                  }
+                  handledLine = true;
+                } else {
                   steps.push(createDriveUntilStep('black'));
                   currentPose = hitPose;
                   handledLine = true;
-
-                  if (canLineup && canAlignToLine) {
-                    steps.push(createLineupStep('forward', 'black'));
-                    const lineupPoses = simulateForwardLineupOnBlack(currentPose, segmentContext);
-                    if (lineupPoses.length) {
-                      currentPose = lineupPoses[lineupPoses.length - 1];
-                    } else if (lineInfo) {
-                      currentPose = { ...currentPose, theta: closestLineNormalAngle(currentPose.theta, lineInfo.angle) };
-                    }
-                  }
                 }
               }
             }
           }
+        }
         }
       }
 
