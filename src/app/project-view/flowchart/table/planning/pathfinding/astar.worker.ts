@@ -2,10 +2,16 @@
 
 import { MissionStep } from '../../../../../entities/MissionStep';
 import { Pose2D, normalizeAngle } from '../../models';
-import { MapConfig, RobotConfig } from '../../services';
+import { MapConfig, RobotConfig, type LineSegmentCm } from '../../services';
 import { WallSegment, checkPathCollision, checkRobotCollision, isRobotInBounds } from '../../physics';
 import { findPath, optimizePath, type AStarConfig } from './astar-commands';
 import { simulateCommand } from './pose-simulator';
+import {
+  closestLineNormalAngle,
+  findClosestLineSegment,
+  linePerpendicularScore,
+  DEFAULT_LINE_PROXIMITY_CM,
+} from '../line-utils';
 
 interface AStarWorkerRequest {
   id: number;
@@ -16,6 +22,9 @@ interface AStarWorkerRequest {
   mapConfig: MapConfig;
   config: AStarConfig;
   tightConfig?: AStarConfig;
+  lineSegments?: LineSegmentCm[];
+  lineupThreshold?: number;
+  lineSensorCount?: number;
 }
 
 interface AStarWorkerResponse {
@@ -45,14 +54,16 @@ function generateSteps(request: AStarWorkerRequest): MissionStep[] {
   for (const waypoint of request.waypoints) {
     const result = findValidatedAStarPath(currentPose, waypoint, request);
     if (result) {
-      steps.push(...result.commands);
-      currentPose = result.finalPose;
+      const adjusted = applyLineAdjustments(result.commands, currentPose, result.finalPose, request);
+      steps.push(...adjusted.commands);
+      currentPose = adjusted.finalPose;
       continue;
     }
 
     const fallback = generateDirectSteps(currentPose, waypoint);
-    steps.push(...fallback.steps);
-    currentPose = fallback.finalPose;
+    const adjustedFallback = applyLineAdjustments(fallback.steps, currentPose, fallback.finalPose, request);
+    steps.push(...adjustedFallback.commands);
+    currentPose = adjustedFallback.finalPose;
   }
 
   return steps;
@@ -163,6 +174,117 @@ function createDriveStep(distanceCm: number): MissionStep {
     step_type: '',
     function_name: 'drive_forward',
     arguments: [{ name: 'cm', value: distanceCm, type: 'float' }],
+    position: { x: 0, y: 0 },
+    children: [],
+  };
+}
+
+function applyLineAdjustments(
+  commands: MissionStep[],
+  startPose: Pose2D,
+  finalPose: Pose2D,
+  request: AStarWorkerRequest
+): { commands: MissionStep[]; finalPose: Pose2D } {
+  const lineSegments = request.lineSegments ?? [];
+  const sensorCount = request.lineSensorCount ?? 0;
+  if (!lineSegments.length || sensorCount < 1) {
+    return { commands, finalPose };
+  }
+
+  const driveContext = findLastDriveContext(commands, startPose);
+  if (!driveContext) {
+    return { commands, finalPose };
+  }
+
+  const lineInfo = findClosestLineSegment(lineSegments, driveContext.endPose.x, driveContext.endPose.y);
+  if (!lineInfo || lineInfo.distance > DEFAULT_LINE_PROXIMITY_CM) {
+    return { commands, finalPose };
+  }
+
+  const lineupThreshold = request.lineupThreshold ?? 0.5;
+  const perpScore = linePerpendicularScore(driveContext.endPose.theta, lineInfo.angle);
+  if (perpScore < lineupThreshold) {
+    return { commands, finalPose };
+  }
+
+  const updated = [...commands];
+  const startOnLine = isPoseNearLine(driveContext.startPose, lineSegments);
+  if (
+    sensorCount >= 1 &&
+    driveContext.command.function_name === 'drive_forward' &&
+    !startOnLine
+  ) {
+    updated[driveContext.index] = createDriveUntilStep('black');
+  }
+
+  if (sensorCount >= 2) {
+    const direction = driveContext.command.function_name === 'drive_backward' ? 'backward' : 'forward';
+    updated.push(createLineupStep(direction, 'black'));
+    const newHeading = closestLineNormalAngle(driveContext.endPose.theta, lineInfo.angle);
+    return { commands: updated, finalPose: { ...finalPose, theta: newHeading } };
+  }
+
+  return { commands: updated, finalPose };
+}
+
+function findLastDriveContext(
+  commands: MissionStep[],
+  startPose: Pose2D
+): { index: number; command: MissionStep; startPose: Pose2D; endPose: Pose2D } | null {
+  let pose = startPose;
+  let lastIndex = -1;
+  let lastCommand: MissionStep | null = null;
+  let lastStartPose = startPose;
+  let lastEndPose = startPose;
+
+  for (let i = 0; i < commands.length; i++) {
+    const command = commands[i];
+    const fn = command.function_name;
+    const isDrive = fn === 'drive_forward' || fn === 'drive_backward';
+    if (isDrive) {
+      lastIndex = i;
+      lastCommand = command;
+      lastStartPose = pose;
+    }
+    pose = simulateCommand(pose, command);
+    if (isDrive) {
+      lastEndPose = pose;
+    }
+  }
+
+  if (lastIndex < 0 || !lastCommand) {
+    return null;
+  }
+
+  return { index: lastIndex, command: lastCommand, startPose: lastStartPose, endPose: lastEndPose };
+}
+
+function isPoseNearLine(pose: Pose2D, lineSegments: LineSegmentCm[]): boolean {
+  const lineInfo = findClosestLineSegment(lineSegments, pose.x, pose.y);
+  return !!lineInfo && lineInfo.distance <= DEFAULT_LINE_PROXIMITY_CM;
+}
+
+function createDriveUntilStep(color: 'black' | 'white'): MissionStep {
+  return {
+    step_type: '',
+    function_name: color === 'black' ? 'drive_until_black' : 'drive_until_white',
+    arguments: [],
+    position: { x: 0, y: 0 },
+    children: [],
+  };
+}
+
+function createLineupStep(direction: 'forward' | 'backward', color: 'black' | 'white'): MissionStep {
+  let functionName = 'forward_lineup_on_black';
+  if (direction === 'forward' && color === 'black') functionName = 'forward_lineup_on_black';
+  if (direction === 'forward' && color === 'white') functionName = 'forward_lineup_on_white';
+  if (direction === 'backward' && color === 'black') functionName = 'backward_lineup_on_black';
+  if (direction === 'backward' && color === 'white') functionName = 'backward_lineup_on_white';
+
+  return {
+    step_type: '',
+    function_name: functionName,
+    arguments: [],
     position: { x: 0, y: 0 },
     children: [],
   };

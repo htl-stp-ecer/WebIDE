@@ -116,6 +116,8 @@ export function formatStepForPreview(step: MissionStep): string {
     if (fn === 'backward_lineup_on_white') return 'lineup_bwd(white)';
     return fn;
   }
+  if (fn === 'drive_until_black') return 'drive_until(black)';
+  if (fn === 'drive_until_white') return 'drive_until(white)';
 
   if (!arg) return fn;
 

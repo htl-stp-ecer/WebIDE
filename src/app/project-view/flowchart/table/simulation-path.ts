@@ -230,7 +230,7 @@ export function buildPlannedPathFromProjectSimulation(
   return { poses, missionEndIndices, missionRanges };
 }
 
-function simulateForwardLineupOnBlack(startPose: Pose2D, context?: LineupSimulationContext | null): Pose2D[] {
+export function simulateForwardLineupOnBlack(startPose: Pose2D, context?: LineupSimulationContext | null): Pose2D[] {
   if (!context) return [];
   const { lineSensors, rotationCenterForwardCm, rotationCenterStrafeCm } = context;
   if (!lineSensors || lineSensors.length < 2) return [];
@@ -285,7 +285,7 @@ function simulateForwardLineupOnBlack(startPose: Pose2D, context?: LineupSimulat
   return path;
 }
 
-function simulateForwardLineupOnWhite(startPose: Pose2D, context?: LineupSimulationContext | null): Pose2D[] {
+export function simulateForwardLineupOnWhite(startPose: Pose2D, context?: LineupSimulationContext | null): Pose2D[] {
   if (!context) return [];
   const { lineSensors, rotationCenterForwardCm, rotationCenterStrafeCm } = context;
   if (!lineSensors || lineSensors.length < 2) return [];
@@ -331,7 +331,7 @@ function simulateForwardLineupOnWhite(startPose: Pose2D, context?: LineupSimulat
   return path;
 }
 
-function simulateBackwardLineupOnBlack(startPose: Pose2D, context?: LineupSimulationContext | null): Pose2D[] {
+export function simulateBackwardLineupOnBlack(startPose: Pose2D, context?: LineupSimulationContext | null): Pose2D[] {
   if (!context) return [];
   const { lineSensors, rotationCenterForwardCm, rotationCenterStrafeCm } = context;
   if (!lineSensors || lineSensors.length < 2) return [];
@@ -386,7 +386,7 @@ function simulateBackwardLineupOnBlack(startPose: Pose2D, context?: LineupSimula
   return path;
 }
 
-function simulateBackwardLineupOnWhite(startPose: Pose2D, context?: LineupSimulationContext | null): Pose2D[] {
+export function simulateBackwardLineupOnWhite(startPose: Pose2D, context?: LineupSimulationContext | null): Pose2D[] {
   if (!context) return [];
   const { lineSensors, rotationCenterForwardCm, rotationCenterStrafeCm } = context;
   if (!lineSensors || lineSensors.length < 2) return [];
@@ -441,7 +441,7 @@ function selectLineupSensors(lineSensors: LineSensor[]): { left: LineSensor; rig
   return { left, right };
 }
 
-function simulateDriveUntilColor(
+export function simulateDriveUntilColor(
   startPose: Pose2D,
   context: LineupSimulationContext | null | undefined,
   target: 'black' | 'white'

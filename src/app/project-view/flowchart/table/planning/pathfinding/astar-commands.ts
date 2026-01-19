@@ -230,9 +230,9 @@ function calculateCost(command: MissionStep): number {
     return arg * 0.1;
   }
   if (fn.includes('turn')) {
-    // Cost proportional to angle (0.08 per degree)
-    // Penalize turns more to favor smoother paths
-    return arg * 0.08;
+    // Cost proportional to angle (0.02 per degree)
+    // Turns are relatively cheap to encourage proper facing
+    return arg * 0.02;
   }
   return 1;
 }

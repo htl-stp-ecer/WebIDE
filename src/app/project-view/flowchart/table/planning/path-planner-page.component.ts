@@ -959,6 +959,9 @@ export class PathPlannerPage implements OnInit, AfterViewInit, OnDestroy {
     if (fn === 'drive_backward') {
       return 'pi pi-arrow-down';
     }
+    if (fn === 'drive_until_black' || fn === 'drive_until_white') {
+      return 'pi pi-arrow-up';
+    }
     if (fn.includes('lineup')) {
       return 'pi pi-align-center';
     }

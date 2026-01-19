@@ -2,7 +2,14 @@ import { Injectable, inject, signal, computed, effect } from '@angular/core';
 import { Waypoint, createWaypoint } from './models';
 import { MissionStep } from '../../../../entities/MissionStep';
 import { optimizeWaypointsToSteps, OptimizationContext } from './path-optimizer';
-import { TableMapService, TableVisualizationService, type MapConfig, type RobotConfig, type WallSegmentCm } from '../services';
+import {
+  TableMapService,
+  TableVisualizationService,
+  type LineSegmentCm,
+  type MapConfig,
+  type RobotConfig,
+  type WallSegmentCm,
+} from '../services';
 import {
   buildCollisionWalls,
   applyWallPhysicsToPath,
@@ -12,6 +19,14 @@ import {
   simulateCommand,
   type AStarConfig,
 } from './pathfinding';
+import {
+  LineupSimulationContext,
+  simulateBackwardLineupOnBlack,
+  simulateBackwardLineupOnWhite,
+  simulateDriveUntilColor,
+  simulateForwardLineupOnBlack,
+  simulateForwardLineupOnWhite,
+} from '../simulation-path';
 import { Pose2D } from '../models';
 
 /**
@@ -57,8 +72,10 @@ export class PlanningModeService {
       const threshold = this._lineupThreshold();
       const useAStar = this._useAStarPathfinding();
       const wallSegments = this.mapService.wallSegmentsCm();
+      const lineSegments = this.mapService.lineSegmentsCm();
       const mapConfig = this.mapService.config();
       const robotConfig = this.vizService.robotConfig();
+      const sensorConfig = this.vizService.sensorConfig();
       const draggingIndex = this._draggingIndex();
 
       if (draggingIndex !== null) {
@@ -73,7 +90,17 @@ export class PlanningModeService {
         this.isDragging = false;
       }
 
-      this.scheduleStepGeneration(wps, start, threshold, useAStar, wallSegments, mapConfig, robotConfig);
+      this.scheduleStepGeneration(
+        wps,
+        start,
+        threshold,
+        useAStar,
+        wallSegments,
+        lineSegments,
+        sensorConfig.lineSensors.length,
+        mapConfig,
+        robotConfig
+      );
     });
   }
 
@@ -83,6 +110,8 @@ export class PlanningModeService {
     threshold: number,
     useAStar: boolean,
     wallSegments: WallSegmentCm[],
+    lineSegments: LineSegmentCm[],
+    lineSensorCount: number,
     mapConfig: MapConfig,
     robotConfig: RobotConfig
   ): void {
@@ -92,7 +121,17 @@ export class PlanningModeService {
 
     this.generationTimer = setTimeout(() => {
       this.generationTimer = null;
-      this.queueStepGeneration(wps, start, threshold, useAStar, wallSegments, mapConfig, robotConfig);
+      this.queueStepGeneration(
+        wps,
+        start,
+        threshold,
+        useAStar,
+        wallSegments,
+        lineSegments,
+        lineSensorCount,
+        mapConfig,
+        robotConfig
+      );
     }, this.generationDebounceMs);
   }
 
@@ -119,6 +158,8 @@ export class PlanningModeService {
     threshold: number,
     useAStar: boolean,
     wallSegments: WallSegmentCm[],
+    lineSegments: LineSegmentCm[],
+    lineSensorCount: number,
     mapConfig: MapConfig,
     robotConfig: RobotConfig
   ): void {
@@ -168,6 +209,9 @@ export class PlanningModeService {
       mapConfig,
       config: DEFAULT_ASTAR_CONFIG,
       tightConfig,
+      lineSegments,
+      lineupThreshold: threshold,
+      lineSensorCount,
     });
   }
 
@@ -233,11 +277,28 @@ export class PlanningModeService {
     );
   }
 
+  private buildLineupContext(): LineupSimulationContext | null {
+    if (!this.mapService.isLoaded()) return null;
+    const sensorConfig = this.vizService.sensorConfig();
+    if (sensorConfig.lineSensors.length === 0) return null;
+
+    const robotConfig = this.vizService.robotConfig();
+    const mapConfig = this.mapService.config();
+    return {
+      isOnBlackLine: (x, y) => this.mapService.isOnBlackLine(x, y),
+      lineSensors: sensorConfig.lineSensors,
+      rotationCenterForwardCm: robotConfig.rotationCenterForwardCm,
+      rotationCenterStrafeCm: robotConfig.rotationCenterStrafeCm,
+      maxDistanceCm: Math.max(mapConfig.widthCm, mapConfig.heightCm),
+    };
+  }
+
   /** Computed: trajectory poses from the generated steps (with wall physics) */
   readonly computedTrajectory = computed<Pose2D[]>(() => {
     const steps = this.generatedSteps();
     const start = this._startPose();
     if (steps.length === 0) return [];
+    const lineupContext = this.buildLineupContext();
 
     // First, compute the raw trajectory from commands
     const rawPoses: Pose2D[] = [];
@@ -245,9 +306,64 @@ export class PlanningModeService {
     rawPoses.push({ ...currentPose });
 
     for (const step of steps) {
-      // For drive commands, add intermediate poses for smooth visualization
       const fn = step.function_name;
       const arg = (step.arguments[0]?.value as number) ?? 0;
+
+      if (fn === 'drive_until_black' || fn === 'drive_until_white') {
+        if (lineupContext) {
+          const target = fn === 'drive_until_black' ? 'black' : 'white';
+          const drivePoses = simulateDriveUntilColor(currentPose, lineupContext, target);
+          if (drivePoses.length) {
+            rawPoses.push(...drivePoses);
+            currentPose = drivePoses[drivePoses.length - 1];
+          }
+        }
+        continue;
+      }
+
+      if (fn === 'forward_lineup_on_black') {
+        if (lineupContext) {
+          const lineupPoses = simulateForwardLineupOnBlack(currentPose, lineupContext);
+          if (lineupPoses.length) {
+            rawPoses.push(...lineupPoses);
+            currentPose = lineupPoses[lineupPoses.length - 1];
+          }
+        }
+        continue;
+      }
+
+      if (fn === 'forward_lineup_on_white') {
+        if (lineupContext) {
+          const lineupPoses = simulateForwardLineupOnWhite(currentPose, lineupContext);
+          if (lineupPoses.length) {
+            rawPoses.push(...lineupPoses);
+            currentPose = lineupPoses[lineupPoses.length - 1];
+          }
+        }
+        continue;
+      }
+
+      if (fn === 'backward_lineup_on_black') {
+        if (lineupContext) {
+          const lineupPoses = simulateBackwardLineupOnBlack(currentPose, lineupContext);
+          if (lineupPoses.length) {
+            rawPoses.push(...lineupPoses);
+            currentPose = lineupPoses[lineupPoses.length - 1];
+          }
+        }
+        continue;
+      }
+
+      if (fn === 'backward_lineup_on_white') {
+        if (lineupContext) {
+          const lineupPoses = simulateBackwardLineupOnWhite(currentPose, lineupContext);
+          if (lineupPoses.length) {
+            rawPoses.push(...lineupPoses);
+            currentPose = lineupPoses[lineupPoses.length - 1];
+          }
+        }
+        continue;
+      }
 
       if (fn === 'drive_forward' || fn === 'drive_backward') {
         // Add intermediate points every 2cm for smooth path and accurate physics
@@ -263,11 +379,12 @@ export class PlanningModeService {
           };
           rawPoses.push({ ...currentPose });
         }
-      } else {
-        // For turns and other commands, just compute the final pose
-        currentPose = simulateCommand(currentPose, step);
-        rawPoses.push({ ...currentPose });
+        continue;
       }
+
+      // For turns and other commands, just compute the final pose
+      currentPose = simulateCommand(currentPose, step);
+      rawPoses.push({ ...currentPose });
     }
 
     // Apply wall physics to get the actual trajectory with wall sliding
