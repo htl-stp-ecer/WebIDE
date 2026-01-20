@@ -315,6 +315,17 @@ function applyLineAdjustments(
     return { commands, finalPose };
   }
 
+  const direction = driveContext.command.function_name === 'drive_backward' ? 'backward' : 'forward';
+  const lineIsAhead = isLineAheadOfSensors(
+    driveContext.endPose,
+    direction,
+    lineupContext,
+    lineInfo.segment
+  );
+  if (!lineIsAhead) {
+    return { commands, finalPose };
+  }
+
   const updated = [...commands];
   let lineupAdded = false;
   const startOnLine = isAnySensorOnLine(driveContext.startPose, lineupContext);
@@ -329,7 +340,6 @@ function applyLineAdjustments(
   }
 
   if (canLineup) {
-    const direction = driveContext.command.function_name === 'drive_backward' ? 'backward' : 'forward';
     updated.push(createLineupStep(direction, 'black'));
     lineupAdded = true;
   }
@@ -436,6 +446,47 @@ function isAnySensorOnLine(pose: Pose2D, context: LineupSimulationContext): bool
     }
   }
   return false;
+}
+
+function isLineAheadOfSensors(
+  pose: Pose2D,
+  direction: 'forward' | 'backward',
+  context: LineupSimulationContext,
+  segment: LineSegmentCm
+): boolean {
+  const sensors = context.lineSensors ?? [];
+  if (!sensors.length) return false;
+
+  const selected = selectLineupSensors(sensors);
+  const sensorsToCheck = selected ? [selected.left, selected.right] : sensors;
+  const heading = direction === 'backward' ? normalizeAngle(pose.theta + Math.PI) : pose.theta;
+  const dirX = Math.cos(heading);
+  const dirY = Math.sin(heading);
+
+  for (const sensor of sensorsToCheck) {
+    const forwardFromRc = sensor.forwardCm - context.rotationCenterForwardCm;
+    const strafeFromRc = sensor.strafeCm - context.rotationCenterStrafeCm;
+    const sensorPose = applyLocalDelta(pose, forwardFromRc, strafeFromRc, 0);
+    const lineInfo = findClosestLineSegment([segment], sensorPose.x, sensorPose.y);
+    if (!lineInfo) continue;
+    const dx = lineInfo.closestX - sensorPose.x;
+    const dy = lineInfo.closestY - sensorPose.y;
+    const aheadDistance = dx * dirX + dy * dirY;
+    if (aheadDistance >= 0) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function selectLineupSensors(lineSensors: LineSensor[]): { left: LineSensor; right: LineSensor } | null {
+  if (lineSensors.length < 2) return null;
+  const sorted = [...lineSensors].sort((a, b) => a.strafeCm - b.strafeCm);
+  const right = sorted[0];
+  const left = sorted[sorted.length - 1];
+  if (!left || !right || left === right) return null;
+  return { left, right };
 }
 
 function simulateCommandsWithLineups(

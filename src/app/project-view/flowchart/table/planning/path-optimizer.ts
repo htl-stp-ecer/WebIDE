@@ -1,6 +1,6 @@
 import { MissionStep } from '../../../../entities/MissionStep';
 import { Waypoint } from './models';
-import { Pose2D, applyLocalDelta, forwardMove, normalizeAngle } from '../models';
+import { Pose2D, applyLocalDelta, forwardMove, normalizeAngle, type LineSensor } from '../models';
 import { LineSegmentCm } from '../services';
 import { SensorConfig } from '../models';
 import {
@@ -102,7 +102,8 @@ export function optimizeWaypointsToSteps(
                 if (traveled + 0.25 < totalDistance) {
                 const lineInfo = findClosestLineSegment(lineSegments, hitPose.x, hitPose.y);
                 const linePerpScore = lineInfo ? linePerpendicularScore(currentPose.theta, lineInfo.angle) : 0;
-                const canAlignToLine = !lineInfo || linePerpScore >= perpThreshold;
+                const lineAhead = lineInfo ? isLineAheadOfSensors(currentPose, segmentContext, lineInfo.segment) : true;
+                const canAlignToLine = (!lineInfo || linePerpScore >= perpThreshold) && lineAhead;
 
                 if (canLineup && canAlignToLine) {
                   steps.push(createLineupStep('forward', 'black'));
@@ -140,7 +141,8 @@ export function optimizeWaypointsToSteps(
       if (canLineup && lineupContext && isAnySensorOnBlack(currentPose, lineupContext)) {
         const lineInfo = findClosestLineSegment(lineSegments, currentPose.x, currentPose.y);
         const linePerpScore = lineInfo ? linePerpendicularScore(currentPose.theta, lineInfo.angle) : 0;
-        if (!lineInfo || linePerpScore >= perpThreshold) {
+        const lineAhead = lineInfo ? isLineAheadOfSensors(currentPose, lineupContext, lineInfo.segment) : true;
+        if (!lineInfo || (linePerpScore >= perpThreshold && lineAhead)) {
           steps.push(createLineupStep('forward', 'black'));
           const lineupPoses = simulateForwardLineupOnBlack(currentPose, lineupContext);
           if (lineupPoses.length) {
@@ -236,4 +238,43 @@ function isAnySensorOnBlack(pose: Pose2D, context: LineupSimulationContext): boo
     }
   }
   return false;
+}
+
+function isLineAheadOfSensors(
+  pose: Pose2D,
+  context: LineupSimulationContext,
+  segment: LineSegmentCm
+): boolean {
+  const sensors = context.lineSensors ?? [];
+  if (!sensors.length) return false;
+
+  const selected = selectLineupSensors(sensors);
+  const sensorsToCheck = selected ? [selected.left, selected.right] : sensors;
+  const dirX = Math.cos(pose.theta);
+  const dirY = Math.sin(pose.theta);
+
+  for (const sensor of sensorsToCheck) {
+    const forwardFromRc = sensor.forwardCm - context.rotationCenterForwardCm;
+    const strafeFromRc = sensor.strafeCm - context.rotationCenterStrafeCm;
+    const sensorPose = applyLocalDelta(pose, forwardFromRc, strafeFromRc, 0);
+    const lineInfo = findClosestLineSegment([segment], sensorPose.x, sensorPose.y);
+    if (!lineInfo) continue;
+    const dx = lineInfo.closestX - sensorPose.x;
+    const dy = lineInfo.closestY - sensorPose.y;
+    const aheadDistance = dx * dirX + dy * dirY;
+    if (aheadDistance >= 0) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function selectLineupSensors(lineSensors: LineSensor[]): { left: LineSensor; right: LineSensor } | null {
+  if (lineSensors.length < 2) return null;
+  const sorted = [...lineSensors].sort((a, b) => a.strafeCm - b.strafeCm);
+  const right = sorted[0];
+  const left = sorted[sorted.length - 1];
+  if (!left || !right || left === right) return null;
+  return { left, right };
 }
