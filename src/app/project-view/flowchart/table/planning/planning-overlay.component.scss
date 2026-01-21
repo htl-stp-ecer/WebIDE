@@ -3,14 +3,38 @@
   position: absolute;
   inset: 0;
   pointer-events: auto;
-  background: var(--p-surface-ground, #1b1b2b);
-  --planner-badge-bg: var(--p-surface-100, #f1f5f9);
-  --planner-badge-fg: var(--p-text-muted-color, #64748b);
+  --planner-surface-ground: var(--p-surface-ground, #f8fafc);
+  --planner-surface-section: var(--p-surface-section, #ffffff);
+  --planner-surface-overlay: var(--p-surface-overlay, #ffffff);
+  --planner-surface-100: var(--p-surface-100, #f1f5f9);
+  --planner-surface-200: var(--p-surface-200, #e2e8f0);
+  --planner-surface-hover: var(--p-surface-hover, #f1f5f9);
+  --planner-content-border: var(--p-content-border-color, #e2e8f0);
+  --planner-text-color: var(--p-text-color, #0f172a);
+  --planner-text-muted: var(--p-text-muted-color, #64748b);
+  --planner-primary: var(--p-primary-color, #3b82f6);
+  --planner-primary-contrast: var(--p-primary-contrast-color, #ffffff);
+  --planner-primary-soft: var(--planner-primary);
+  --planner-badge-bg: var(--planner-surface-100);
+  --planner-badge-fg: var(--planner-text-muted);
   --planner-badge-border: transparent;
+  background: var(--planner-surface-ground);
 }
 
 :host-context(.dark),
 :host-context(.p-dark) {
+  --planner-surface-ground: var(--p-surface-ground, #1b1b2b);
+  --planner-surface-section: var(--p-surface-card, #252536);
+  --planner-surface-overlay: var(--p-surface-card, rgba(30, 41, 59, 0.9));
+  --planner-surface-100: var(--p-surface-100, rgba(255, 255, 255, 0.05));
+  --planner-surface-200: var(--p-surface-200, rgba(255, 255, 255, 0.1));
+  --planner-surface-hover: var(--p-surface-hover, rgba(255, 255, 255, 0.08));
+  --planner-content-border: var(--p-surface-border, rgba(255, 255, 255, 0.12));
+  --planner-text-color: var(--p-text-color, #e2e8f0);
+  --planner-text-muted: var(--p-text-muted-color, #94a3b8);
+  --planner-primary: var(--p-primary-color, #60a5fa);
+  --planner-primary-contrast: var(--p-primary-contrast-color, #ffffff);
+  --planner-primary-soft: var(--p-primary-300, #93c5fd);
   --planner-badge-bg: rgba(255, 255, 255, 0.08);
   --planner-badge-fg: var(--p-text-muted-color, #94a3b8);
   --planner-badge-border: rgba(255, 255, 255, 0.12);
@@ -32,8 +56,8 @@
   justify-content: space-between;
   height: 48px;
   padding: 0 12px;
-  background: var(--p-surface-card, #252536);
-  border-bottom: 1px solid var(--p-surface-border, rgba(255, 255, 255, 0.1));
+  background: var(--planner-surface-section);
+  border-bottom: 1px solid var(--planner-content-border);
   flex-shrink: 0;
 }
 
@@ -63,13 +87,13 @@
   font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.05em;
-  color: var(--p-text-color, #e2e8f0);
+  color: var(--planner-text-color);
 }
 
 .topbar-divider {
   width: 1px;
   height: 20px;
-  background: var(--p-surface-border, rgba(255, 255, 255, 0.15));
+  background: var(--planner-content-border);
   margin: 0 4px;
 }
 
@@ -109,13 +133,13 @@
   flex: 1;
   display: flex;
   overflow: hidden;
-  background: transparent;
+  background: var(--planner-surface-ground);
 }
 
 .planning-canvas-container {
   flex: 1;
   position: relative;
-  background: transparent;
+  background: var(--planner-surface-ground);
   pointer-events: none;
 }
 
@@ -134,11 +158,11 @@
   left: 50%;
   transform: translateX(-50%);
   padding: 10px 20px;
-  background: var(--p-surface-card, rgba(30, 41, 59, 0.9));
-  border: 1px solid var(--p-surface-border, rgba(148, 163, 184, 0.2));
+  background: var(--planner-surface-overlay);
+  border: 1px solid var(--planner-content-border);
   border-radius: 8px;
   font-size: 13px;
-  color: var(--p-text-muted-color, #94a3b8);
+  color: var(--planner-text-muted);
   white-space: nowrap;
   pointer-events: none;
   backdrop-filter: blur(8px);
@@ -147,8 +171,8 @@
 // ===== Right Sidebar =====
 .planning-sidebar {
   width: 280px;
-  background: var(--p-surface-card, #252536);
-  border-left: 1px solid var(--p-surface-border, rgba(255, 255, 255, 0.1));
+  background: var(--planner-surface-section);
+  border-left: 1px solid var(--planner-content-border);
   display: flex;
   flex-direction: column;
   position: relative;
@@ -170,17 +194,17 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--p-surface-card, #252536);
-  border: 1px solid var(--p-surface-border, rgba(255, 255, 255, 0.1));
+  background: var(--planner-surface-section);
+  border: 1px solid var(--planner-content-border);
   border-radius: 6px;
-  color: var(--p-text-muted-color, #94a3b8);
+  color: var(--planner-text-muted);
   cursor: pointer;
   z-index: 10;
   transition: all 0.15s ease;
 
   &:hover {
-    background: var(--p-surface-hover, #333348);
-    color: var(--p-text-color, #e2e8f0);
+    background: var(--planner-surface-hover);
+    color: var(--planner-text-color);
   }
 
   i {
@@ -189,7 +213,7 @@
 }
 
 .sidebar-section {
-  border-bottom: 1px solid var(--p-surface-border, rgba(255, 255, 255, 0.08));
+  border-bottom: 1px solid var(--planner-content-border);
   flex-shrink: 0;
 }
 
@@ -201,13 +225,13 @@
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.05em;
-  color: var(--p-text-muted-color, #64748b);
+  color: var(--planner-text-muted);
   cursor: pointer;
   user-select: none;
   transition: background 0.12s ease;
 
   &:hover {
-    background: var(--p-surface-hover, rgba(255, 255, 255, 0.05));
+    background: var(--planner-surface-hover);
   }
 
   i {
@@ -218,7 +242,7 @@
   .step-count {
     font-weight: 400;
     margin-left: 4px;
-    color: var(--p-text-muted-color, #94a3b8);
+    color: var(--planner-text-muted);
   }
 }
 
@@ -240,7 +264,7 @@
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.05em;
-  color: var(--p-text-muted-color, #64748b);
+  color: var(--planner-text-muted);
   margin-bottom: 8px;
 }
 
@@ -258,16 +282,17 @@
     justify-content: center;
     padding: 6px 8px;
     font-size: 11px;
-    background: var(--p-surface-100, rgba(255, 255, 255, 0.05));
-    border-color: var(--p-surface-border, rgba(255, 255, 255, 0.1));
+    background: var(--planner-surface-100);
+    border-color: var(--planner-content-border);
 
     &:not(.p-togglebutton-checked):hover {
-      background: var(--p-surface-hover, rgba(255, 255, 255, 0.1));
+      background: var(--planner-surface-hover);
     }
 
     &.p-togglebutton-checked {
-      background: var(--p-primary-color, #3b82f6);
-      border-color: var(--p-primary-color, #3b82f6);
+      background: var(--planner-primary);
+      border-color: var(--planner-primary);
+      color: var(--planner-primary-contrast);
     }
 
     .p-button-label {
@@ -286,7 +311,7 @@
   flex: 1;
 
   .p-slider {
-    background: var(--p-surface-200, rgba(255, 255, 255, 0.1));
+    background: var(--planner-surface-200);
   }
 }
 
@@ -294,7 +319,7 @@
   font-family: 'SF Mono', 'Menlo', 'Monaco', monospace;
   font-size: 11px;
   min-width: 28px;
-  color: var(--p-primary-color, #60a5fa);
+  color: var(--planner-primary);
 }
 
 // ===== Steps Section =====
@@ -325,17 +350,17 @@
   gap: 6px;
   padding: 6px 0;
   font-size: 11px;
-  color: var(--p-text-color, #e2e8f0);
+  color: var(--planner-text-color);
 
   .step-number {
     font-family: 'SF Mono', 'Menlo', 'Monaco', monospace;
-    color: var(--p-text-muted-color, #64748b);
+    color: var(--planner-text-muted);
     min-width: 20px;
   }
 
   i {
     font-size: 11px;
-    color: var(--p-text-muted-color, #94a3b8);
+    color: var(--planner-text-muted);
     width: 16px;
     text-align: center;
   }
@@ -343,7 +368,7 @@
   .step-text {
     font-family: 'SF Mono', 'Menlo', 'Monaco', monospace;
     font-size: 10px;
-    color: var(--p-primary-300, #93c5fd);
+    color: var(--planner-primary-soft);
     flex: 1;
   }
 
@@ -356,28 +381,28 @@
 .steps-summary {
   padding-top: 8px;
   margin-top: 8px;
-  border-top: 1px solid var(--p-surface-border, rgba(255, 255, 255, 0.08));
+  border-top: 1px solid var(--planner-content-border);
   font-size: 11px;
-  color: var(--p-text-muted-color, #64748b);
+  color: var(--planner-text-muted);
 }
 
 .steps-empty {
   padding: 16px;
   text-align: center;
   font-size: 12px;
-  color: var(--p-text-muted-color, #64748b);
+  color: var(--planner-text-muted);
   font-style: italic;
 }
 
 // ===== Action Buttons =====
 .sidebar-actions {
   padding: 16px;
-  border-top: 1px solid var(--p-surface-border, rgba(255, 255, 255, 0.08));
+  border-top: 1px solid var(--planner-content-border);
   display: flex;
   gap: 10px;
   margin-top: auto;
   flex-shrink: 0;
-  background: var(--p-surface-card, #252536);
+  background: var(--planner-surface-section);
 }
 
 :host ::ng-deep .action-btn {

@@ -46,6 +46,8 @@ interface AStarWorkerResponse {
   steps: MissionStep[];
 }
 
+const TURN_CLEARANCE_CM = 1;
+
 const ctx: DedicatedWorkerGlobalScope = self as DedicatedWorkerGlobalScope;
 
 ctx.addEventListener('message', (event: MessageEvent<AStarWorkerRequest>) => {
@@ -135,6 +137,7 @@ function validateCommands(
   request: AStarWorkerRequest
 ): Pose2D | null {
   let pose = startPose;
+  const rotationConfig = inflateRobotConfig(request.robotConfig, TURN_CLEARANCE_CM);
   for (const command of commands) {
     const fn = command.function_name;
     const arg = (command.arguments[0]?.value as number) ?? 0;
@@ -143,12 +146,17 @@ function validateCommands(
     if (!isRobotInBounds(nextPose, request.mapConfig, request.robotConfig)) return null;
 
     const isTurn = fn === 'turn_cw' || fn === 'turn_ccw' || fn === 'tank_turn_cw' || fn === 'tank_turn_ccw';
+    const isDrive =
+      fn === 'drive_forward' ||
+      fn === 'drive_backward' ||
+      fn === 'strafe_left' ||
+      fn === 'strafe_right';
     if (isTurn) {
       const angleSteps = Math.max(6, Math.ceil(Math.abs(arg) / 5));
-      if (checkRotationCollision(pose, nextPose, request.robotConfig, request.walls, angleSteps)) {
+      if (checkRotationCollision(pose, nextPose, rotationConfig, request.walls, angleSteps)) {
         return null;
       }
-    } else if (fn === 'drive_forward' || fn === 'drive_backward') {
+    } else if (isDrive) {
       const steps = Math.max(5, Math.ceil(Math.abs(arg) / 2));
       const startCollides = checkRobotCollision(pose, request.robotConfig, request.walls);
       const blocked = startCollides
@@ -594,6 +602,15 @@ function checkPathCollisionExcludingStart(
   }
 
   return false;
+}
+
+function inflateRobotConfig(robotConfig: RobotConfig, clearanceCm: number): RobotConfig {
+  if (clearanceCm <= 0) return robotConfig;
+  return {
+    ...robotConfig,
+    widthCm: robotConfig.widthCm + clearanceCm * 2,
+    lengthCm: robotConfig.lengthCm + clearanceCm * 2,
+  };
 }
 
 function checkRotationCollision(

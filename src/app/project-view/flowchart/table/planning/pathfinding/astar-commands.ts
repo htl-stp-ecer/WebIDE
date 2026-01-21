@@ -25,6 +25,8 @@ export const DEFAULT_ASTAR_CONFIG: AStarConfig = {
   maxIterations: 50000,
 };
 
+const TURN_CLEARANCE_CM = 1;
+
 // --- Command Generation ---
 
 function createDriveStep(distanceCm: number): MissionStep {
@@ -58,6 +60,16 @@ function createTurnStep(angleDeg: number): MissionStep {
   };
 }
 
+function createStrafeStep(direction: 'left' | 'right', distanceCm: number): MissionStep {
+  return {
+    step_type: '',
+    function_name: direction === 'left' ? 'strafe_left' : 'strafe_right',
+    arguments: [{ name: 'cm', value: distanceCm, type: 'float' }],
+    position: { x: 0, y: 0 },
+    children: [],
+  };
+}
+
 /** Available commands for A* exploration */
 const AVAILABLE_COMMANDS: MissionStep[] = [
   // Drive commands (smaller steps help in tight spaces)
@@ -69,6 +81,13 @@ const AVAILABLE_COMMANDS: MissionStep[] = [
   createReverseStep(5),
   createReverseStep(10),
   createReverseStep(20),
+  // Strafe commands
+  createStrafeStep('left', 2),
+  createStrafeStep('left', 5),
+  createStrafeStep('left', 10),
+  createStrafeStep('right', 2),
+  createStrafeStep('right', 5),
+  createStrafeStep('right', 10),
   // Turn commands (clockwise)
   createTurnStep(-5),
   createTurnStep(-15),
@@ -125,6 +144,15 @@ function checkRotationCollision(
     }
   }
   return false;
+}
+
+function inflateRobotConfig(robotConfig: RobotConfig, clearanceCm: number): RobotConfig {
+  if (clearanceCm <= 0) return robotConfig;
+  return {
+    ...robotConfig,
+    widthCm: robotConfig.widthCm + clearanceCm * 2,
+    lengthCm: robotConfig.lengthCm + clearanceCm * 2,
+  };
 }
 
 // --- A* Node ---
@@ -225,7 +253,12 @@ function calculateCost(command: MissionStep): number {
   const fn = command.function_name;
   const arg = (command.arguments[0]?.value as number) ?? 0;
 
-  if (fn === 'drive_forward' || fn === 'drive_backward') {
+  if (
+    fn === 'drive_forward' ||
+    fn === 'drive_backward' ||
+    fn === 'strafe_left' ||
+    fn === 'strafe_right'
+  ) {
     // Cost proportional to distance (0.1 per cm)
     return arg * 0.1;
   }
@@ -303,6 +336,8 @@ export function findPath(
     mapConfig: { widthCm: mapConfig.widthCm, heightCm: mapConfig.heightCm },
   });
 
+  const rotationConfig = inflateRobotConfig(robotConfig, TURN_CLEARANCE_CM);
+
   // Check if already at goal
   if (isAtGoal(startPose, goal, config.goalToleranceCm)) {
     console.log('[A*] Already at goal');
@@ -351,7 +386,7 @@ export function findPath(
       if (!isRobotInBounds(newPose, mapConfig, robotConfig)) continue;
       if (isTurn) {
         const angleSteps = Math.max(6, Math.ceil(Math.abs(arg) / 5));
-        if (checkRotationCollision(current.pose, newPose, robotConfig, walls, angleSteps)) continue;
+        if (checkRotationCollision(current.pose, newPose, rotationConfig, walls, angleSteps)) continue;
       } else {
         const startCollides = checkRobotCollision(current.pose, robotConfig, walls);
         const blocked = startCollides
@@ -409,6 +444,20 @@ export function optimizePath(result: FindPathResult): FindPathResult {
 
     // Try to merge consecutive same commands
     if (fn === 'drive_forward' || fn === 'drive_backward') {
+      let totalDistance = (current.arguments[0]?.value as number) ?? 0;
+      let j = i + 1;
+
+      while (j < result.commands.length && result.commands[j].function_name === fn) {
+        totalDistance += (result.commands[j].arguments[0]?.value as number) ?? 0;
+        j++;
+      }
+
+      optimized.push({
+        ...current,
+        arguments: [{ name: 'cm', value: totalDistance, type: 'float' }],
+      });
+      i = j;
+    } else if (fn === 'strafe_left' || fn === 'strafe_right') {
       let totalDistance = (current.arguments[0]?.value as number) ?? 0;
       let j = i + 1;
 
