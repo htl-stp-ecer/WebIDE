@@ -210,7 +210,7 @@ export class PlanningModeService {
     worker.postMessage({
       id: requestId,
       startPose: start,
-      waypoints: wps.map(wp => ({ x: wp.x, y: wp.y })),
+      waypoints: wps.map(wp => ({ x: wp.x, y: wp.y, lineup: !!wp.lineup, lineupLineIndex: wp.lineupLineIndex })),
       walls,
       robotConfig,
       mapConfig,
@@ -270,7 +270,7 @@ export class PlanningModeService {
   ): MissionStep[] {
     // Include robot start position as first waypoint for path calculation
     const fullPath: Waypoint[] = [
-      { id: 'start', x: start.x, y: start.y },
+      { id: 'start', x: start.x, y: start.y, lineup: false, lineupLineIndex: undefined },
       ...wps,
     ];
 
@@ -473,8 +473,8 @@ export class PlanningModeService {
   }
 
   /** Add a waypoint at the given position */
-  addWaypoint(x: number, y: number): void {
-    const wp = createWaypoint(x, y);
+  addWaypoint(x: number, y: number, lineup = false, lineupLineIndex?: number): void {
+    const wp = createWaypoint(x, y, lineup, lineupLineIndex);
     this._waypoints.update(wps => [...wps, wp]);
     this._selectedIndex.set(this._waypoints().length - 1);
   }
@@ -493,9 +493,26 @@ export class PlanningModeService {
   }
 
   /** Move waypoint at index to new position */
-  moveWaypoint(index: number, x: number, y: number): void {
+  moveWaypoint(index: number, x: number, y: number, lineup?: boolean, lineupLineIndex?: number): void {
     this._waypoints.update(wps =>
-      wps.map((wp, i) => (i === index ? { ...wp, x, y } : wp))
+      wps.map((wp, i) => {
+        if (i !== index) return wp;
+        const nextLineup = lineup ?? wp.lineup;
+        return {
+          ...wp,
+          x,
+          y,
+          lineup: nextLineup,
+          lineupLineIndex: nextLineup ? (lineupLineIndex ?? wp.lineupLineIndex) : undefined,
+        };
+      })
+    );
+  }
+
+  /** Clear lineup flags from all waypoints */
+  clearWaypointLineups(): void {
+    this._waypoints.update(wps =>
+      wps.map(wp => (wp.lineup ? { ...wp, lineup: false, lineupLineIndex: undefined } : wp))
     );
   }
 

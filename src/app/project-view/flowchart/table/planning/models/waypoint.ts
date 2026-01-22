@@ -9,6 +9,10 @@ export interface Waypoint {
   x: number;
   /** Y position in centimeters (0 = bottom edge) */
   y: number;
+  /** Whether this waypoint should end with a lineup */
+  lineup?: boolean;
+  /** Line segment index to align to when lineup is enabled */
+  lineupLineIndex?: number;
 }
 
 let waypointCounter = 0;
@@ -16,10 +20,12 @@ let waypointCounter = 0;
 /**
  * Create a new waypoint with a unique ID.
  */
-export function createWaypoint(x: number, y: number): Waypoint {
+export function createWaypoint(x: number, y: number, lineup = false, lineupLineIndex?: number): Waypoint {
   return {
     id: `wp-${++waypointCounter}-${Date.now()}`,
     x,
     y,
+    lineup,
+    lineupLineIndex,
   };
 }

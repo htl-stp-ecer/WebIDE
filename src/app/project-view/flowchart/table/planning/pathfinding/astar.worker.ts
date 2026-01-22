@@ -1,16 +1,13 @@
 /// <reference lib="webworker" />
 
 import { MissionStep } from '../../../../../entities/MissionStep';
-import { Pose2D, applyLocalDelta, normalizeAngle, type LineSensor } from '../../models';
+import { Pose2D, normalizeAngle, type LineSensor } from '../../models';
 import { MapConfig, RobotConfig, type LineSegmentCm } from '../../services';
 import { WallSegment, checkPathCollision, checkRobotCollision, isRobotInBounds } from '../../physics';
 import { findPath, optimizePath, type AStarConfig } from './astar-commands';
 import { simulateCommand, simulateCommands } from './pose-simulator';
 import {
-  closestLineNormalAngle,
   findClosestLineSegment,
-  linePerpendicularScore,
-  lineupPerpThreshold,
   lineupProximityCm,
 } from '../line-utils';
 import {
@@ -27,7 +24,7 @@ import { buildAdStarGrid, findAdStarPath } from './adstar-grid';
 interface AStarWorkerRequest {
   id: number;
   startPose: Pose2D;
-  waypoints: { x: number; y: number }[];
+  waypoints: { x: number; y: number; lineup?: boolean; lineupLineIndex?: number }[];
   walls: WallSegment[];
   robotConfig: RobotConfig;
   mapConfig: MapConfig;
@@ -70,12 +67,21 @@ function generateSteps(request: AStarWorkerRequest): MissionStep[] {
   let grid = null as ReturnType<typeof buildAdStarGrid> | null;
 
   for (const waypoint of request.waypoints) {
+    const segmentStartPose = currentPose;
     const direct = generateDirectSteps(currentPose, waypoint);
     const directPose = validateCommands(currentPose, direct.steps, request);
     if (directPose) {
       const lineAware = generateLineAwareDirectSteps(currentPose, waypoint, request);
       steps.push(...lineAware.steps);
       currentPose = lineAware.finalPose;
+      currentPose = appendLineupForWaypoint(
+        steps,
+        lineAware.steps,
+        segmentStartPose,
+        currentPose,
+        waypoint,
+        request
+      );
       continue;
     }
 
@@ -91,24 +97,159 @@ function generateSteps(request: AStarWorkerRequest): MissionStep[] {
     if (adStarResult) {
       steps.push(...adStarResult.steps);
       currentPose = adStarResult.finalPose;
+      currentPose = appendLineupForWaypoint(
+        steps,
+        adStarResult.steps,
+        segmentStartPose,
+        currentPose,
+        waypoint,
+        request
+      );
       continue;
     }
 
     const result = findValidatedAStarPath(currentPose, waypoint, request);
     if (result) {
-      const adjusted = applyLineAdjustments(result.commands, currentPose, result.finalPose, request);
-      steps.push(...adjusted.commands);
-      currentPose = adjusted.finalPose;
+      steps.push(...result.commands);
+      currentPose = result.finalPose;
+      currentPose = appendLineupForWaypoint(
+        steps,
+        result.commands,
+        segmentStartPose,
+        currentPose,
+        waypoint,
+        request
+      );
       continue;
     }
 
     const fallback = generateDirectSteps(currentPose, waypoint);
-    const adjustedFallback = applyLineAdjustments(fallback.steps, currentPose, fallback.finalPose, request);
-    steps.push(...adjustedFallback.commands);
-    currentPose = adjustedFallback.finalPose;
+    steps.push(...fallback.steps);
+    currentPose = fallback.finalPose;
+    currentPose = appendLineupForWaypoint(
+      steps,
+      fallback.steps,
+      segmentStartPose,
+      currentPose,
+      waypoint,
+      request
+    );
   }
 
   return steps;
+}
+
+function appendLineupForWaypoint(
+  steps: MissionStep[],
+  segmentSteps: MissionStep[],
+  segmentStartPose: Pose2D,
+  currentPose: Pose2D,
+  waypoint: { lineup?: boolean; lineupLineIndex?: number },
+  request: AStarWorkerRequest
+): Pose2D {
+  if (!waypoint.lineup) return currentPose;
+  if (segmentSteps.some(step => step.function_name.includes('lineup'))) return currentPose;
+
+  const lastDrive = getLastDriveInfo(segmentSteps);
+  let lineupStartPose = currentPose;
+  let direction: 'forward' | 'backward' = 'forward';
+  if (lastDrive) {
+    const baseIndex = steps.length - segmentSteps.length;
+    steps.splice(baseIndex + lastDrive.index);
+
+    lineupStartPose = simulateCommands(segmentStartPose, segmentSteps.slice(0, lastDrive.index));
+    direction = lastDrive.direction;
+
+    const approachOffset = getLineupApproachOffset(request, direction);
+    let trimmedDistance = Math.max(0, Math.round(lastDrive.distanceCm - approachOffset));
+
+    const lineSegments = request.lineSegments ?? [];
+    const blockingDistance = typeof waypoint.lineupLineIndex === 'number'
+      ? findLastBlockingDistanceOnSegment(
+        lineupStartPose,
+        simulateCommand(lineupStartPose, segmentSteps[lastDrive.index]),
+        lineSegments,
+        waypoint.lineupLineIndex
+      )
+      : null;
+    if (blockingDistance !== null) {
+      trimmedDistance = Math.max(trimmedDistance, Math.round(blockingDistance + 1));
+      const maxBeforeTarget = Math.max(0, Math.round(lastDrive.distanceCm - 0.5));
+      trimmedDistance = Math.min(trimmedDistance, maxBeforeTarget);
+    }
+
+    if (trimmedDistance > 0) {
+      const trimmedStep = cloneDriveStep(segmentSteps[lastDrive.index], trimmedDistance);
+      steps.push(trimmedStep);
+      lineupStartPose = simulateCommand(lineupStartPose, trimmedStep);
+    }
+  }
+
+  steps.push(createLineupStep(direction, 'black'));
+
+  const lineSegments = request.lineSegments ?? [];
+  const detectDistance = getLineDetectDistance(request);
+  const targetLine = typeof waypoint.lineupLineIndex === 'number'
+    ? lineSegments[waypoint.lineupLineIndex]
+    : null;
+  const lineupContext = targetLine
+    ? buildLineupContextForLine(request, targetLine, detectDistance)
+    : buildLineupContext(request, lineSegments, detectDistance);
+  if (!lineupContext) return lineupStartPose;
+
+  const lineupPoses =
+    direction === 'backward'
+      ? simulateBackwardLineupOnBlack(lineupStartPose, lineupContext)
+      : simulateForwardLineupOnBlack(lineupStartPose, lineupContext);
+  if (lineupPoses.length) {
+    return lineupPoses[lineupPoses.length - 1];
+  }
+
+  return lineupStartPose;
+}
+
+function getLastDriveInfo(
+  steps: MissionStep[]
+): { index: number; direction: 'forward' | 'backward'; distanceCm: number } | null {
+  for (let i = steps.length - 1; i >= 0; i -= 1) {
+    const fn = steps[i].function_name;
+    if (fn === 'drive_backward' || fn === 'drive_forward') {
+      const distance = (steps[i].arguments[0]?.value as number) ?? 0;
+      return { index: i, direction: fn === 'drive_backward' ? 'backward' : 'forward', distanceCm: distance };
+    }
+  }
+  return null;
+}
+
+function cloneDriveStep(step: MissionStep, distanceCm: number): MissionStep {
+  return {
+    ...step,
+    arguments: [{ name: 'cm', value: distanceCm, type: 'float' }],
+  };
+}
+
+function getLineupApproachOffset(
+  request: AStarWorkerRequest,
+  direction: 'forward' | 'backward'
+): number {
+  const sensors = request.lineSensors ?? [];
+  if (!sensors.length) return 2;
+
+  const rotationCenterForward = request.rotationCenterForwardCm ?? 0;
+  let maxForward = Number.NEGATIVE_INFINITY;
+  let minForward = Number.POSITIVE_INFINITY;
+
+  for (const sensor of sensors) {
+    const forwardFromRc = sensor.forwardCm - rotationCenterForward;
+    if (forwardFromRc > maxForward) maxForward = forwardFromRc;
+    if (forwardFromRc < minForward) minForward = forwardFromRc;
+  }
+
+  const offset = direction === 'backward'
+    ? Math.max(0, -minForward)
+    : Math.max(0, maxForward);
+
+  return Math.max(2, offset + 1);
 }
 
 function findValidatedAStarPath(
@@ -297,77 +438,6 @@ function createDriveStep(distanceCm: number): MissionStep {
   };
 }
 
-function applyLineAdjustments(
-  commands: MissionStep[],
-  startPose: Pose2D,
-  finalPose: Pose2D,
-  request: AStarWorkerRequest
-): { commands: MissionStep[]; finalPose: Pose2D } {
-  const lineSegments = request.lineSegments ?? [];
-  const sensorCount = request.lineSensorCount ?? 0;
-  if (!lineSegments.length || sensorCount < 1) {
-    return { commands, finalPose };
-  }
-
-  const lineupThreshold = request.lineupThreshold ?? 0.5;
-  const lineProximity = lineupProximityCm(lineupThreshold);
-  const perpThreshold = lineupPerpThreshold(lineupThreshold);
-  const lineupContext = buildLineupContext(request, lineSegments, getLineDetectDistance(request));
-  if (!lineupContext) {
-    return { commands, finalPose };
-  }
-
-  const driveContext = findLastDriveContext(commands, startPose);
-  if (!driveContext) {
-    return { commands, finalPose };
-  }
-
-  const lineInfo = findClosestLineSegment(lineSegments, driveContext.endPose.x, driveContext.endPose.y);
-  if (!lineInfo || lineInfo.distance > lineProximity) {
-    return { commands, finalPose };
-  }
-
-  const perpScore = linePerpendicularScore(driveContext.endPose.theta, lineInfo.angle);
-  if (perpScore < perpThreshold) {
-    return { commands, finalPose };
-  }
-
-  const direction = driveContext.command.function_name === 'drive_backward' ? 'backward' : 'forward';
-  const lineIsAhead = isLineAheadOfSensors(
-    driveContext.endPose,
-    direction,
-    lineupContext,
-    lineInfo.segment
-  );
-  if (!lineIsAhead) {
-    return { commands, finalPose };
-  }
-
-  const updated = [...commands];
-  let lineupAdded = false;
-  const startOnLine = isAnySensorOnLine(driveContext.startPose, lineupContext);
-  const canLineup = sensorCount >= 2;
-  if (
-    !canLineup &&
-    sensorCount >= 1 &&
-    driveContext.command.function_name === 'drive_forward' &&
-    !startOnLine
-  ) {
-    updated[driveContext.index] = createDriveUntilStep('black');
-  }
-
-  if (canLineup) {
-    updated.push(createLineupStep(direction, 'black'));
-    lineupAdded = true;
-  }
-
-  const simulatedPose = simulateCommandsWithLineups(updated, startPose, lineupContext);
-  const adjustedPose = lineupAdded
-    ? { ...simulatedPose, theta: closestLineNormalAngle(simulatedPose.theta, lineInfo.angle) }
-    : simulatedPose;
-  return { commands: updated, finalPose: adjustedPose };
-}
-
 function buildOptimizationContextForRequest(
   request: AStarWorkerRequest,
   lineSegments: LineSegmentCm[],
@@ -394,38 +464,6 @@ function getAdStarNodeSize(request: AStarWorkerRequest): number {
   return Math.max(2, Math.round(base));
 }
 
-function findLastDriveContext(
-  commands: MissionStep[],
-  startPose: Pose2D
-): { index: number; command: MissionStep; startPose: Pose2D; endPose: Pose2D } | null {
-  let pose = startPose;
-  let lastIndex = -1;
-  let lastCommand: MissionStep | null = null;
-  let lastStartPose = startPose;
-  let lastEndPose = startPose;
-
-  for (let i = 0; i < commands.length; i++) {
-    const command = commands[i];
-    const fn = command.function_name;
-    const isDrive = fn === 'drive_forward' || fn === 'drive_backward';
-    if (isDrive) {
-      lastIndex = i;
-      lastCommand = command;
-      lastStartPose = pose;
-    }
-    pose = simulateCommand(pose, command);
-    if (isDrive) {
-      lastEndPose = pose;
-    }
-  }
-
-  if (lastIndex < 0 || !lastCommand) {
-    return null;
-  }
-
-  return { index: lastIndex, command: lastCommand, startPose: lastStartPose, endPose: lastEndPose };
-}
-
 function buildLineupContext(
   request: AStarWorkerRequest,
   lineSegments: LineSegmentCm[],
@@ -443,6 +481,23 @@ function buildLineupContext(
   };
 }
 
+function buildLineupContextForLine(
+  request: AStarWorkerRequest,
+  line: LineSegmentCm,
+  detectDistanceCm: number
+): LineupSimulationContext | null {
+  const sensors = request.lineSensors ?? [];
+  if (!sensors.length) return null;
+
+  return {
+    isOnBlackLine: (x, y) => isPointOnLineSegment(x, y, line, detectDistanceCm),
+    lineSensors: sensors,
+    rotationCenterForwardCm: request.rotationCenterForwardCm ?? 0,
+    rotationCenterStrafeCm: request.rotationCenterStrafeCm ?? 0,
+    maxDistanceCm: Math.max(request.mapConfig.widthCm, request.mapConfig.heightCm),
+  };
+}
+
 function isPointOnLine(
   x: number,
   y: number,
@@ -453,57 +508,77 @@ function isPointOnLine(
   return !!info && info.distance <= detectDistanceCm;
 }
 
-function isAnySensorOnLine(pose: Pose2D, context: LineupSimulationContext): boolean {
-  for (const sensor of context.lineSensors) {
-    const forwardFromRc = sensor.forwardCm - context.rotationCenterForwardCm;
-    const strafeFromRc = sensor.strafeCm - context.rotationCenterStrafeCm;
-    const sensorPose = applyLocalDelta(pose, forwardFromRc, strafeFromRc, 0);
-    if (context.isOnBlackLine(sensorPose.x, sensorPose.y)) {
-      return true;
-    }
-  }
-  return false;
-}
-
-function isLineAheadOfSensors(
-  pose: Pose2D,
-  direction: 'forward' | 'backward',
-  context: LineupSimulationContext,
-  segment: LineSegmentCm
+function isPointOnLineSegment(
+  x: number,
+  y: number,
+  line: LineSegmentCm,
+  detectDistanceCm: number
 ): boolean {
-  const sensors = context.lineSensors ?? [];
-  if (!sensors.length) return false;
+  const info = findClosestLineSegment([line], x, y);
+  return !!info && info.distance <= detectDistanceCm;
+}
 
-  const selected = selectLineupSensors(sensors);
-  const sensorsToCheck = selected ? [selected.left, selected.right] : sensors;
-  const heading = direction === 'backward' ? normalizeAngle(pose.theta + Math.PI) : pose.theta;
-  const dirX = Math.cos(heading);
-  const dirY = Math.sin(heading);
+function findLastBlockingDistanceOnSegment(
+  startPose: Pose2D,
+  endPose: Pose2D,
+  lineSegments: LineSegmentCm[],
+  targetLineIndex: number
+): number | null {
+  const dx = endPose.x - startPose.x;
+  const dy = endPose.y - startPose.y;
+  const segmentLength = Math.sqrt(dx * dx + dy * dy);
+  if (segmentLength === 0) return null;
 
-  for (const sensor of sensorsToCheck) {
-    const forwardFromRc = sensor.forwardCm - context.rotationCenterForwardCm;
-    const strafeFromRc = sensor.strafeCm - context.rotationCenterStrafeCm;
-    const sensorPose = applyLocalDelta(pose, forwardFromRc, strafeFromRc, 0);
-    const lineInfo = findClosestLineSegment([segment], sensorPose.x, sensorPose.y);
-    if (!lineInfo) continue;
-    const dx = lineInfo.closestX - sensorPose.x;
-    const dy = lineInfo.closestY - sensorPose.y;
-    const aheadDistance = dx * dirX + dy * dirY;
-    if (aheadDistance >= 0) {
-      return true;
+  let lastDistance: number | null = null;
+  for (let i = 0; i < lineSegments.length; i++) {
+    if (i === targetLineIndex) continue;
+    const line = lineSegments[i];
+    const dist = segmentIntersectionDistance(
+      startPose.x,
+      startPose.y,
+      endPose.x,
+      endPose.y,
+      line.startX,
+      line.startY,
+      line.endX,
+      line.endY
+    );
+    if (dist === null) continue;
+    if (dist > 0 && dist < segmentLength) {
+      if (lastDistance === null || dist > lastDistance) {
+        lastDistance = dist;
+      }
     }
   }
 
-  return false;
+  return lastDistance;
 }
 
-function selectLineupSensors(lineSensors: LineSensor[]): { left: LineSensor; right: LineSensor } | null {
-  if (lineSensors.length < 2) return null;
-  const sorted = [...lineSensors].sort((a, b) => a.strafeCm - b.strafeCm);
-  const right = sorted[0];
-  const left = sorted[sorted.length - 1];
-  if (!left || !right || left === right) return null;
-  return { left, right };
+function segmentIntersectionDistance(
+  p0x: number,
+  p0y: number,
+  p1x: number,
+  p1y: number,
+  p2x: number,
+  p2y: number,
+  p3x: number,
+  p3y: number
+): number | null {
+  const rX = p1x - p0x;
+  const rY = p1y - p0y;
+  const sX = p3x - p2x;
+  const sY = p3y - p2y;
+  const rxs = rX * sY - rY * sX;
+  if (rxs === 0) return null;
+
+  const qpx = p2x - p0x;
+  const qpy = p2y - p0y;
+  const t = (qpx * sY - qpy * sX) / rxs;
+  const u = (qpx * rY - qpy * rX) / rxs;
+  if (t < 0 || t > 1 || u < 0 || u > 1) return null;
+
+  const segmentLength = Math.sqrt(rX * rX + rY * rY);
+  return t * segmentLength;
 }
 
 function simulateCommandsWithLineups(
@@ -561,16 +636,6 @@ function simulateCommandsWithLineups(
   }
 
   return pose;
-}
-
-function createDriveUntilStep(color: 'black' | 'white'): MissionStep {
-  return {
-    step_type: '',
-    function_name: color === 'black' ? 'drive_until_black' : 'drive_until_white',
-    arguments: [],
-    position: { x: 0, y: 0 },
-    children: [],
-  };
 }
 
 function createLineupStep(direction: 'forward' | 'backward', color: 'black' | 'white'): MissionStep {
