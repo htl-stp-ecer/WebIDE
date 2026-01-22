@@ -54,6 +54,7 @@ const STORAGE_KEYS = {
   snapGrid: 'planning-snap-grid',
   snapAngles: 'planning-snap-angles',
   snapLines: 'planning-snap-lines',
+  allowStrafe: 'planning-allow-strafe',
 } as const;
 
 @Component({
@@ -96,11 +97,13 @@ export class PlanningOverlayComponent implements OnInit, AfterViewInit, OnDestro
   readonly snapGrid = signal(localStorage.getItem(STORAGE_KEYS.snapGrid) === 'true');
   readonly snapAngles = signal(localStorage.getItem(STORAGE_KEYS.snapAngles) === 'true');
   readonly snapLines = signal(localStorage.getItem(STORAGE_KEYS.snapLines) === 'true');
+  readonly allowStrafe = signal(localStorage.getItem(STORAGE_KEYS.allowStrafe) !== 'false');
 
   // PrimeNG component bindings
   snapGridValue = localStorage.getItem(STORAGE_KEYS.snapGrid) === 'true';
   snapAnglesValue = localStorage.getItem(STORAGE_KEYS.snapAngles) === 'true';
   snapLinesValue = localStorage.getItem(STORAGE_KEYS.snapLines) === 'true';
+  allowStrafeValue = localStorage.getItem(STORAGE_KEYS.allowStrafe) !== 'false';
 
   // Active snap feedback (for visual indicators)
   private activeAngleSnap = signal<{ fromX: number; fromY: number; angle: number } | null>(null);
@@ -127,6 +130,7 @@ export class PlanningOverlayComponent implements OnInit, AfterViewInit, OnDestro
 
   ngOnInit(): void {
     this.loadStoredMap();
+    this.planningService.setAllowStrafe(this.allowStrafe());
   }
 
   ngAfterViewInit(): void {
@@ -1091,6 +1095,14 @@ export class PlanningOverlayComponent implements OnInit, AfterViewInit, OnDestro
     const value = event.checked ?? false;
     this.snapLines.set(value);
     localStorage.setItem(STORAGE_KEYS.snapLines, String(value));
+  }
+
+  onAllowStrafeChange(event: { checked?: boolean }): void {
+    const value = event.checked ?? false;
+    this.allowStrafe.set(value);
+    this.allowStrafeValue = value;
+    localStorage.setItem(STORAGE_KEYS.allowStrafe, String(value));
+    this.planningService.setAllowStrafe(value);
   }
 
   // --- Undo/Redo ---

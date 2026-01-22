@@ -123,21 +123,36 @@
                         tooltipPosition="top"
                         styleClass="snap-toggle">
                       </p-toggleButton>
-                      <p-toggleButton
-                        [(ngModel)]="snapLinesValue"
-                        onLabel="Lines"
-                        offLabel="Lines"
-                        (onChange)="onSnapLinesChange($event)"
-                        pTooltip="Snap to lines (L)"
-                        tooltipPosition="top"
-                        styleClass="snap-toggle">
-                      </p-toggleButton>
-                    </div>
-                  </div>
-
+                  <p-toggleButton
+                    [(ngModel)]="snapLinesValue"
+                    onLabel="Lines"
+                    offLabel="Lines"
+                    (onChange)="onSnapLinesChange($event)"
+                    pTooltip="Snap to lines (L)"
+                    tooltipPosition="top"
+                    styleClass="snap-toggle">
+                  </p-toggleButton>
                 </div>
-              }
+              </div>
+
+              <div class="settings-group">
+                <label class="settings-label">MOVEMENT</label>
+                <div class="snap-toggles">
+                  <p-toggleButton
+                    [(ngModel)]="allowStrafeValue"
+                    onLabel="Strafe"
+                    offLabel="Strafe"
+                    (onChange)="onAllowStrafeChange($event)"
+                    pTooltip="Allow strafe steps in pathfinding"
+                    tooltipPosition="top"
+                    styleClass="snap-toggle">
+                  </p-toggleButton>
+                </div>
+              </div>
+
             </div>
+          }
+        </div>
 
             <!-- Generated Steps Section -->
             <div class="sidebar-section steps-section">

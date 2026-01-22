@@ -138,6 +138,23 @@
                 </div>
               </div>
 
+              <div class="settings-group">
+                <label class="settings-label">MOVEMENT</label>
+                <div class="snap-toggles">
+                  <p-toggleButton
+                    [(ngModel)]="allowStrafeValue"
+                    onLabel="Strafe"
+                    offLabel="Strafe"
+                    onIcon="pi pi-arrows-h"
+                    offIcon="pi pi-arrows-h"
+                    (onChange)="onAllowStrafeChange($event)"
+                    pTooltip="Allow strafe steps in pathfinding"
+                    tooltipPosition="top"
+                    styleClass="snap-toggle">
+                  </p-toggleButton>
+                </div>
+              </div>
+
             </div>
           }
         </div>

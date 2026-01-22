@@ -100,6 +100,11 @@ const AVAILABLE_COMMANDS: MissionStep[] = [
   createTurnStep(90),
 ];
 
+const STRAFE_COMMANDS = new Set(['strafe_left', 'strafe_right']);
+const AVAILABLE_COMMANDS_NO_STRAFE = AVAILABLE_COMMANDS.filter(
+  command => !STRAFE_COMMANDS.has(command.function_name)
+);
+
 function checkPathCollisionExcludingStart(
   startPose: Pose2D,
   endPose: Pose2D,
@@ -326,14 +331,18 @@ export function findPath(
   walls: WallSegment[],
   robotConfig: RobotConfig,
   mapConfig: MapConfig,
-  config: AStarConfig = DEFAULT_ASTAR_CONFIG
+  config: AStarConfig = DEFAULT_ASTAR_CONFIG,
+  options?: { allowStrafe?: boolean }
 ): FindPathResult | null {
+  const allowStrafe = options?.allowStrafe ?? true;
+  const availableCommands = allowStrafe ? AVAILABLE_COMMANDS : AVAILABLE_COMMANDS_NO_STRAFE;
   console.log('[A*] findPath called:', {
     startPose,
     goal,
     wallCount: walls.length,
     robotConfig,
     mapConfig: { widthCm: mapConfig.widthCm, heightCm: mapConfig.heightCm },
+    allowStrafe,
   });
 
   const rotationConfig = inflateRobotConfig(robotConfig, TURN_CLEARANCE_CM);
@@ -376,7 +385,7 @@ export function findPath(
     visited.add(stateKey);
 
     // Explore all available commands
-    for (const command of AVAILABLE_COMMANDS) {
+    for (const command of availableCommands) {
       const newPose = simulateCommand(current.pose, command);
       const fn = command.function_name;
       const arg = (command.arguments[0]?.value as number) ?? 0;

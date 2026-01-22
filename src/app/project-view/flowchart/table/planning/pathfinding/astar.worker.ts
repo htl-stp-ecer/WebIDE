@@ -39,6 +39,7 @@ interface AStarWorkerRequest {
   lineSensors?: LineSensor[];
   rotationCenterForwardCm?: number;
   rotationCenterStrafeCm?: number;
+  allowStrafe?: boolean;
 }
 
 interface AStarWorkerResponse {
@@ -120,7 +121,15 @@ function findValidatedAStarPath(
     : [request.config];
 
   for (const config of configs) {
-    const result = findPath(startPose, goal, request.walls, request.robotConfig, request.mapConfig, config);
+    const result = findPath(
+      startPose,
+      goal,
+      request.walls,
+      request.robotConfig,
+      request.mapConfig,
+      config,
+      { allowStrafe: request.allowStrafe ?? true }
+    );
     if (!result) continue;
     const optimized = optimizePath(result);
     const validated = validateCommands(startPose, optimized.commands, request);

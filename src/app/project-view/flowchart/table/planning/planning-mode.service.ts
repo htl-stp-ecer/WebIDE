@@ -45,6 +45,7 @@ export class PlanningModeService {
   private readonly _startPose = signal<{ x: number; y: number; theta: number }>({ x: 0, y: 0, theta: 0 });
   private readonly _lineupThreshold = signal<number>(0.5);
   private readonly _useAStarPathfinding = signal<boolean>(true);
+  private readonly _allowStrafe = signal<boolean>(true);
   private readonly _generatedSteps = signal<MissionStep[]>([]);
   private readonly _isGenerating = signal<boolean>(false);
   private generationId = 0;
@@ -62,6 +63,7 @@ export class PlanningModeService {
   readonly startPose = this._startPose.asReadonly();
   readonly lineupThreshold = this._lineupThreshold.asReadonly();
   readonly useAStarPathfinding = this._useAStarPathfinding.asReadonly();
+  readonly allowStrafe = this._allowStrafe.asReadonly();
   readonly generatedSteps = this._generatedSteps.asReadonly();
   readonly isGenerating = this._isGenerating.asReadonly();
 
@@ -71,6 +73,7 @@ export class PlanningModeService {
       const start = this._startPose();
       const threshold = this._lineupThreshold();
       const useAStar = this._useAStarPathfinding();
+      const allowStrafe = this._allowStrafe();
       const wallSegments = this.mapService.wallSegmentsCm();
       const lineSegments = this.mapService.lineSegmentsCm();
       const mapConfig = this.mapService.config();
@@ -95,6 +98,7 @@ export class PlanningModeService {
         start,
         threshold,
         useAStar,
+        allowStrafe,
         wallSegments,
         lineSegments,
         sensorConfig.lineSensors.length,
@@ -109,6 +113,7 @@ export class PlanningModeService {
     start: { x: number; y: number; theta: number },
     threshold: number,
     useAStar: boolean,
+    allowStrafe: boolean,
     wallSegments: WallSegmentCm[],
     lineSegments: LineSegmentCm[],
     lineSensorCount: number,
@@ -126,6 +131,7 @@ export class PlanningModeService {
         start,
         threshold,
         useAStar,
+        allowStrafe,
         wallSegments,
         lineSegments,
         lineSensorCount,
@@ -157,6 +163,7 @@ export class PlanningModeService {
     start: { x: number; y: number; theta: number },
     threshold: number,
     useAStar: boolean,
+    allowStrafe: boolean,
     wallSegments: WallSegmentCm[],
     lineSegments: LineSegmentCm[],
     lineSensorCount: number,
@@ -215,6 +222,7 @@ export class PlanningModeService {
       lineSensors: this.vizService.sensorConfig().lineSensors,
       rotationCenterForwardCm: this.vizService.robotConfig().rotationCenterForwardCm,
       rotationCenterStrafeCm: this.vizService.robotConfig().rotationCenterStrafeCm,
+      allowStrafe,
     });
   }
 
@@ -452,6 +460,16 @@ export class PlanningModeService {
   /** Toggle A* pathfinding on/off */
   toggleAStarPathfinding(): void {
     this._useAStarPathfinding.update(v => !v);
+  }
+
+  /** Enable or disable strafe commands in pathfinding */
+  setAllowStrafe(enabled: boolean): void {
+    this._allowStrafe.set(enabled);
+  }
+
+  /** Toggle strafe commands on/off */
+  toggleAllowStrafe(): void {
+    this._allowStrafe.update(v => !v);
   }
 
   /** Add a waypoint at the given position */
