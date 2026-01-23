@@ -1,7 +1,7 @@
 /// <reference lib="webworker" />
 
 import { MissionStep } from '../../../../../entities/MissionStep';
-import { Pose2D, normalizeAngle, type LineSensor } from '../../models';
+import { Pose2D, applyLocalDelta, forwardMove, normalizeAngle, type LineSensor } from '../../models';
 import { MapConfig, RobotConfig, type LineSegmentCm } from '../../services';
 import { WallSegment, checkPathCollision, checkRobotCollision, isRobotInBounds } from '../../physics';
 import { findPath, optimizePath, type AStarConfig } from './astar-commands';
@@ -164,18 +164,61 @@ function appendLineupForWaypoint(
     let trimmedDistance = Math.max(0, Math.round(lastDrive.distanceCm - approachOffset));
 
     const lineSegments = request.lineSegments ?? [];
+    const segmentEndPose = simulateCommand(lineupStartPose, segmentSteps[lastDrive.index]);
     const blockingDistance = typeof waypoint.lineupLineIndex === 'number'
       ? findLastBlockingDistanceOnSegment(
         lineupStartPose,
-        simulateCommand(lineupStartPose, segmentSteps[lastDrive.index]),
+        segmentEndPose,
         lineSegments,
         waypoint.lineupLineIndex
       )
       : null;
     if (blockingDistance !== null) {
       trimmedDistance = Math.max(trimmedDistance, Math.round(blockingDistance + 1));
-      const maxBeforeTarget = Math.max(0, Math.round(lastDrive.distanceCm - 0.5));
-      trimmedDistance = Math.min(trimmedDistance, maxBeforeTarget);
+    }
+
+    const targetLine = typeof waypoint.lineupLineIndex === 'number'
+      ? lineSegments[waypoint.lineupLineIndex]
+      : null;
+    const targetDistance = targetLine
+      ? segmentIntersectionDistance(
+        lineupStartPose.x,
+        lineupStartPose.y,
+        segmentEndPose.x,
+        segmentEndPose.y,
+        targetLine.startX,
+        targetLine.startY,
+        targetLine.endX,
+        targetLine.endY
+      ) ?? lastDrive.distanceCm
+      : lastDrive.distanceCm;
+    const maxBeforeTarget = Math.max(0, Math.round(targetDistance - 0.5));
+    trimmedDistance = Math.min(trimmedDistance, maxBeforeTarget);
+
+    const detectDistance = getLineDetectDistance(request);
+    const lineupContext = targetLine
+      ? buildLineupContextForLine(request, targetLine, detectDistance)
+      : buildLineupContext(request, lineSegments, detectDistance);
+
+    const contactDistance = lineupContext
+      ? findFirstLineContactDistance(lineupStartPose, targetDistance, direction, lineupContext)
+      : null;
+    if (contactDistance !== null) {
+      trimmedDistance = Math.min(trimmedDistance, Math.max(0, Math.round(contactDistance - 1)));
+    }
+
+    if (trimmedDistance > 0 && lineupContext) {
+      let adjusted = trimmedDistance;
+      let guard = 0;
+      while (adjusted > 0 && guard < 300) {
+        const pose = simulateCommand(lineupStartPose, cloneDriveStep(segmentSteps[lastDrive.index], adjusted));
+        if (!isAnySensorOnLine(pose, lineupContext)) {
+          break;
+        }
+        adjusted = Math.max(0, adjusted - 1);
+        guard += 1;
+      }
+      trimmedDistance = adjusted;
     }
 
     if (trimmedDistance > 0) {
@@ -187,14 +230,15 @@ function appendLineupForWaypoint(
 
   steps.push(createLineupStep(direction, 'black'));
 
-  const lineSegments = request.lineSegments ?? [];
-  const detectDistance = getLineDetectDistance(request);
-  const targetLine = typeof waypoint.lineupLineIndex === 'number'
-    ? lineSegments[waypoint.lineupLineIndex]
+  const finalLineSegments = request.lineSegments ?? [];
+  const finalDetectDistance = getLineDetectDistance(request);
+  const finalTargetLine = typeof waypoint.lineupLineIndex === 'number'
+    ? finalLineSegments[waypoint.lineupLineIndex]
     : null;
-  const lineupContext = targetLine
-    ? buildLineupContextForLine(request, targetLine, detectDistance)
-    : buildLineupContext(request, lineSegments, detectDistance);
+  const finalLineupContext = finalTargetLine
+    ? buildLineupContextForLine(request, finalTargetLine, finalDetectDistance)
+    : buildLineupContext(request, finalLineSegments, finalDetectDistance);
+  const lineupContext = finalLineupContext;
   if (!lineupContext) return lineupStartPose;
 
   const lineupPoses =
@@ -236,20 +280,17 @@ function getLineupApproachOffset(
   if (!sensors.length) return 2;
 
   const rotationCenterForward = request.rotationCenterForwardCm ?? 0;
-  let maxForward = Number.NEGATIVE_INFINITY;
-  let minForward = Number.POSITIVE_INFINITY;
+  let maxProjection = Number.NEGATIVE_INFINITY;
+  const sign = direction === 'forward' ? 1 : -1;
 
   for (const sensor of sensors) {
     const forwardFromRc = sensor.forwardCm - rotationCenterForward;
-    if (forwardFromRc > maxForward) maxForward = forwardFromRc;
-    if (forwardFromRc < minForward) minForward = forwardFromRc;
+    const projection = forwardFromRc * sign;
+    if (projection > maxProjection) maxProjection = projection;
   }
 
-  const offset = direction === 'backward'
-    ? Math.max(0, -minForward)
-    : Math.max(0, maxForward);
-
-  return Math.max(2, offset + 1);
+  const offset = Math.max(0, maxProjection);
+  return Math.max(3, offset + 2);
 }
 
 function findValidatedAStarPath(
@@ -516,6 +557,35 @@ function isPointOnLineSegment(
 ): boolean {
   const info = findClosestLineSegment([line], x, y);
   return !!info && info.distance <= detectDistanceCm;
+}
+
+function isAnySensorOnLine(pose: Pose2D, context: LineupSimulationContext): boolean {
+  for (const sensor of context.lineSensors) {
+    const forwardFromRc = sensor.forwardCm - context.rotationCenterForwardCm;
+    const strafeFromRc = sensor.strafeCm - context.rotationCenterStrafeCm;
+    const sensorPose = applyLocalDelta(pose, forwardFromRc, strafeFromRc, 0);
+    if (context.isOnBlackLine(sensorPose.x, sensorPose.y)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function findFirstLineContactDistance(
+  startPose: Pose2D,
+  maxDistanceCm: number,
+  direction: 'forward' | 'backward',
+  context: LineupSimulationContext
+): number | null {
+  const step = 1;
+  for (let distance = 0; distance <= maxDistanceCm; distance += step) {
+    const signedDistance = direction === 'backward' ? -distance : distance;
+    const pose = forwardMove(startPose, signedDistance);
+    if (isAnySensorOnLine(pose, context)) {
+      return distance;
+    }
+  }
+  return null;
 }
 
 function findLastBlockingDistanceOnSegment(

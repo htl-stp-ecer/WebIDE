@@ -1,6 +1,6 @@
 import { MissionStep } from '../../../../entities/MissionStep';
 import { Waypoint } from './models';
-import { Pose2D, forwardMove, normalizeAngle } from '../models';
+import { Pose2D, applyLocalDelta, forwardMove, normalizeAngle } from '../models';
 import { LineSegmentCm } from '../services';
 import { SensorConfig } from '../models';
 import { lineupProximityCm } from './line-utils';
@@ -87,6 +87,21 @@ export function optimizeWaypointsToSteps(
           context.rotationCenterForwardCm ?? 0,
           'forward'
         );
+        const targetLine = typeof to.lineupLineIndex === 'number'
+          ? lineSegments[to.lineupLineIndex]
+          : null;
+        const targetDistance = targetLine
+          ? segmentIntersectionDistance(
+            currentPose.x,
+            currentPose.y,
+            to.x,
+            to.y,
+            targetLine.startX,
+            targetLine.startY,
+            targetLine.endX,
+            targetLine.endY
+          ) ?? totalDistance
+          : totalDistance;
         const blockingDistance = findLastBlockingLineDistance(
           currentPose.x,
           currentPose.y,
@@ -95,23 +110,29 @@ export function optimizeWaypointsToSteps(
           lineSegments,
           typeof to.lineupLineIndex === 'number' ? to.lineupLineIndex : null
         );
-        let approachDistance = Math.max(0, totalDistance - approachOffset);
+        let approachDistance = Math.max(0, targetDistance - approachOffset);
         if (blockingDistance !== null) {
           approachDistance = Math.max(approachDistance, blockingDistance + 1);
         }
-        approachDistance = Math.min(approachDistance, Math.max(0, totalDistance - 0.5));
+        approachDistance = Math.min(approachDistance, Math.max(0, targetDistance - 0.5));
+
+        const activeContext = targetLine
+          ? buildLineupContextForLine(context, targetLine, detectDistanceCm)
+          : lineupContext;
+        const contactDistance = activeContext
+          ? findFirstLineContactDistance(currentPose, targetDistance, activeContext)
+          : null;
+        if (contactDistance !== null) {
+          approachDistance = Math.min(approachDistance, Math.max(0, contactDistance - 1));
+        }
+        approachDistance = backoffApproachDistance(currentPose, approachDistance, activeContext);
+
         const roundedDistance = Math.round(approachDistance);
         if (roundedDistance > 0) {
           steps.push(createDriveStep(roundedDistance));
           currentPose = forwardMove(currentPose, roundedDistance);
         }
 
-        const targetLine = typeof to.lineupLineIndex === 'number'
-          ? lineSegments[to.lineupLineIndex]
-          : null;
-        const activeContext = targetLine
-          ? buildLineupContextForLine(context, targetLine, detectDistanceCm)
-          : lineupContext;
         steps.push(createLineupStep('forward', 'black'));
         if (activeContext) {
           const lineupPoses = simulateForwardLineupOnBlack(currentPose, activeContext);
@@ -250,6 +271,52 @@ function closestPointOnSegment(
   return { x: x1 + t * dx, y: y1 + t * dy };
 }
 
+function backoffApproachDistance(
+  startPose: Pose2D,
+  distanceCm: number,
+  context: LineupSimulationContext | null
+): number {
+  if (!context || distanceCm <= 0) return distanceCm;
+  let adjusted = distanceCm;
+  let guard = 0;
+  while (adjusted > 0 && guard < 300) {
+    const pose = forwardMove(startPose, adjusted);
+    if (!isAnySensorOnLine(pose, context)) {
+      break;
+    }
+    adjusted = Math.max(0, adjusted - 1);
+    guard += 1;
+  }
+  return adjusted;
+}
+
+function findFirstLineContactDistance(
+  startPose: Pose2D,
+  maxDistanceCm: number,
+  context: LineupSimulationContext
+): number | null {
+  const step = 1;
+  for (let distance = 0; distance <= maxDistanceCm; distance += step) {
+    const pose = forwardMove(startPose, distance);
+    if (isAnySensorOnLine(pose, context)) {
+      return distance;
+    }
+  }
+  return null;
+}
+
+function isAnySensorOnLine(pose: Pose2D, context: LineupSimulationContext): boolean {
+  for (const sensor of context.lineSensors) {
+    const forwardFromRc = sensor.forwardCm - context.rotationCenterForwardCm;
+    const strafeFromRc = sensor.strafeCm - context.rotationCenterStrafeCm;
+    const sensorPose = applyLocalDelta(pose, forwardFromRc, strafeFromRc, 0);
+    if (context.isOnBlackLine(sensorPose.x, sensorPose.y)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function findLastBlockingLineDistance(
   startX: number,
   startY: number,
@@ -323,20 +390,17 @@ function getLineupApproachOffset(
   const sensors = sensorConfig?.lineSensors ?? [];
   if (!sensors.length) return 2;
 
-  let maxForward = Number.NEGATIVE_INFINITY;
-  let minForward = Number.POSITIVE_INFINITY;
+  let maxProjection = Number.NEGATIVE_INFINITY;
+  const sign = direction === 'forward' ? 1 : -1;
 
   for (const sensor of sensors) {
     const forwardFromRc = sensor.forwardCm - rotationCenterForwardCm;
-    if (forwardFromRc > maxForward) maxForward = forwardFromRc;
-    if (forwardFromRc < minForward) minForward = forwardFromRc;
+    const projection = forwardFromRc * sign;
+    if (projection > maxProjection) maxProjection = projection;
   }
 
-  const offset = direction === 'backward'
-    ? Math.max(0, -minForward)
-    : Math.max(0, maxForward);
-
-  return Math.max(2, offset + 1);
+  const offset = Math.max(0, maxProjection);
+  return Math.max(3, offset + 2);
 }
 
 // No line-snapping heuristics here; lineup steps are explicitly requested by waypoint flags.
