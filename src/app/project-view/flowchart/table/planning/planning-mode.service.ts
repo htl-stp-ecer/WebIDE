@@ -24,10 +24,11 @@ import {
   simulateBackwardLineupOnBlack,
   simulateBackwardLineupOnWhite,
   simulateDriveUntilColor,
+  simulateFollowLine,
   simulateForwardLineupOnBlack,
   simulateForwardLineupOnWhite,
 } from '../simulation-path';
-import { Pose2D } from '../models';
+import { Pose2D, forwardMove } from '../models';
 
 /**
  * Service for managing planning mode state.
@@ -330,6 +331,22 @@ export class PlanningModeService {
           if (drivePoses.length) {
             rawPoses.push(...drivePoses);
             currentPose = drivePoses[drivePoses.length - 1];
+          }
+        }
+        continue;
+      }
+
+      if (fn === 'follow_line') {
+        if (arg > 0) {
+          if (lineupContext) {
+            const followPoses = simulateFollowLine(currentPose, lineupContext, arg, false);
+            if (followPoses.length) {
+              rawPoses.push(...followPoses);
+              currentPose = followPoses[followPoses.length - 1];
+            }
+          } else {
+            currentPose = forwardMove(currentPose, arg);
+            rawPoses.push({ ...currentPose });
           }
         }
         continue;

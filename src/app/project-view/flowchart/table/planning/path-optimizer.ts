@@ -6,6 +6,7 @@ import { SensorConfig } from '../models';
 import { lineupProximityCm } from './line-utils';
 import {
   LineupSimulationContext,
+  simulateFollowLine,
   simulateForwardLineupOnBlack,
 } from '../simulation-path';
 
@@ -62,7 +63,8 @@ export function optimizeWaypointsToSteps(
       const totalDistance = Math.sqrt(dx * dx + dy * dy);
 
       const shouldLineup = !!to.lineup;
-      if (totalDistance < 0.1 && !shouldLineup) {
+      const shouldFollowLine = shouldFollowLineSegment(waypoints[i], to);
+      if (totalDistance < 0.1 && !shouldLineup && !shouldFollowLine) {
         break;
       }
 
@@ -79,6 +81,31 @@ export function optimizeWaypointsToSteps(
           ...currentPose,
           theta: normalizeAngle(currentPose.theta + roundedAngle * Math.PI / 180),
         };
+      }
+
+      if (shouldFollowLine) {
+        const lineIndex = waypoints[i].lineupLineIndex;
+        const targetLine = typeof lineIndex === 'number'
+          ? lineSegments[lineIndex]
+          : null;
+        const activeContext = targetLine
+          ? buildLineupContextForLine(context, targetLine, detectDistanceCm)
+          : lineupContext;
+        const roundedDistance = Math.round(totalDistance);
+        if (roundedDistance > 0) {
+          steps.push(createFollowLineStep(roundedDistance));
+          if (activeContext) {
+            const followPoses = simulateFollowLine(currentPose, activeContext, roundedDistance, false);
+            if (followPoses.length) {
+              currentPose = followPoses[followPoses.length - 1];
+            } else {
+              currentPose = forwardMove(currentPose, roundedDistance);
+            }
+          } else {
+            currentPose = forwardMove(currentPose, roundedDistance);
+          }
+        }
+        break;
       }
 
       if (shouldLineup) {
@@ -187,6 +214,16 @@ function createDriveStep(distanceCm: number): MissionStep {
   };
 }
 
+function createFollowLineStep(distanceCm: number): MissionStep {
+  return {
+    step_type: '',
+    function_name: 'follow_line',
+    arguments: [{ name: 'cm', value: distanceCm, type: 'float' }],
+    position: { x: 0, y: 0 },
+    children: [],
+  };
+}
+
 function createLineupStep(direction: 'forward' | 'backward', color: 'black' | 'white'): MissionStep {
   let functionName = 'forward_lineup_on_black';
   if (direction === 'forward' && color === 'black') functionName = 'forward_lineup_on_black';
@@ -214,6 +251,14 @@ function buildLineupContext(context: OptimizationContext, maxDistanceCm?: number
     rotationCenterStrafeCm: context.rotationCenterStrafeCm ?? 0,
     maxDistanceCm: maxDistanceCm ?? context.maxLineupDistanceCm,
   };
+}
+
+function shouldFollowLineSegment(from: Waypoint, to: Waypoint): boolean {
+  if (!from.lineup || !to.lineup) return false;
+  if (typeof from.lineupLineIndex !== 'number' || typeof to.lineupLineIndex !== 'number') {
+    return false;
+  }
+  return from.lineupLineIndex === to.lineupLineIndex;
 }
 
 function buildLineupContextForLine(

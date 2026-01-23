@@ -478,7 +478,7 @@ export function simulateDriveUntilColor(
   return path;
 }
 
-function simulateFollowLine(
+export function simulateFollowLine(
   startPose: Pose2D,
   context: LineupSimulationContext,
   distanceCm: number,

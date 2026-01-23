@@ -1088,6 +1088,9 @@ export class PlanningOverlayComponent implements OnInit, AfterViewInit, OnDestro
     if (fn === 'drive_until_black' || fn === 'drive_until_white') {
       return 'pi pi-arrow-up';
     }
+    if (fn === 'follow_line') {
+      return 'pi pi-sliders-h';
+    }
     if (fn.includes('lineup')) {
       return 'pi pi-align-center';
     }

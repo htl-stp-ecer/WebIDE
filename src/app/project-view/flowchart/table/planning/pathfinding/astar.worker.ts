@@ -15,6 +15,7 @@ import {
   simulateBackwardLineupOnBlack,
   simulateBackwardLineupOnWhite,
   simulateDriveUntilColor,
+  simulateFollowLine,
   simulateForwardLineupOnBlack,
   simulateForwardLineupOnWhite,
 } from '../../simulation-path';
@@ -65,8 +66,18 @@ function generateSteps(request: AStarWorkerRequest): MissionStep[] {
   let currentPose = request.startPose;
   const steps: MissionStep[] = [];
   let grid = null as ReturnType<typeof buildAdStarGrid> | null;
+  let previousWaypoint: AStarWorkerRequest['waypoints'][number] | null = null;
 
   for (const waypoint of request.waypoints) {
+    if (previousWaypoint && shouldFollowLineSegment(previousWaypoint, waypoint)) {
+      const lineIndex = previousWaypoint.lineupLineIndex as number;
+      const followResult = generateFollowLineSteps(currentPose, waypoint, lineIndex, request);
+      steps.push(...followResult.steps);
+      currentPose = followResult.finalPose;
+      previousWaypoint = waypoint;
+      continue;
+    }
+
     const segmentStartPose = currentPose;
     const direct = generateDirectSteps(currentPose, waypoint);
     const directPose = validateCommands(currentPose, direct.steps, request);
@@ -82,6 +93,7 @@ function generateSteps(request: AStarWorkerRequest): MissionStep[] {
         waypoint,
         request
       );
+      previousWaypoint = waypoint;
       continue;
     }
 
@@ -105,6 +117,7 @@ function generateSteps(request: AStarWorkerRequest): MissionStep[] {
         waypoint,
         request
       );
+      previousWaypoint = waypoint;
       continue;
     }
 
@@ -120,6 +133,7 @@ function generateSteps(request: AStarWorkerRequest): MissionStep[] {
         waypoint,
         request
       );
+      previousWaypoint = waypoint;
       continue;
     }
 
@@ -134,6 +148,7 @@ function generateSteps(request: AStarWorkerRequest): MissionStep[] {
       waypoint,
       request
     );
+    previousWaypoint = waypoint;
   }
 
   return steps;
@@ -420,6 +435,59 @@ function generateLineAwareDirectSteps(
   return { steps, finalPose };
 }
 
+function generateFollowLineSteps(
+  startPose: Pose2D,
+  goal: { x: number; y: number },
+  lineIndex: number,
+  request: AStarWorkerRequest
+): { steps: MissionStep[]; finalPose: Pose2D } {
+  const dx = goal.x - startPose.x;
+  const dy = goal.y - startPose.y;
+  const distance = Math.sqrt(dx * dx + dy * dy);
+  if (distance < 0.1) {
+    return { steps: [], finalPose: startPose };
+  }
+
+  const targetHeading = Math.atan2(dy, dx);
+  const angleDiff = normalizeAngle(targetHeading - startPose.theta);
+  const angleDeg = angleDiff * (180 / Math.PI);
+  const steps: MissionStep[] = [];
+  let pose = startPose;
+
+  const roundedAngle = Math.round(angleDeg);
+  if (Math.abs(roundedAngle) >= 1) {
+    const turnStep = createTurnStep(roundedAngle);
+    steps.push(turnStep);
+    pose = simulateCommand(pose, turnStep);
+  }
+
+  const roundedDistance = Math.round(distance);
+  if (roundedDistance > 0) {
+    const followStep = createFollowLineStep(roundedDistance);
+    steps.push(followStep);
+
+    const lineSegments = request.lineSegments ?? [];
+    const detectDistance = getLineDetectDistance(request);
+    const targetLine = lineSegments[lineIndex];
+    const lineupContext = targetLine
+      ? buildLineupContextForLine(request, targetLine, detectDistance)
+      : buildLineupContext(request, lineSegments, detectDistance);
+
+    if (lineupContext) {
+      const followPoses = simulateFollowLine(pose, lineupContext, roundedDistance, false);
+      if (followPoses.length) {
+        pose = followPoses[followPoses.length - 1];
+      } else {
+        pose = forwardMove(pose, roundedDistance);
+      }
+    } else {
+      pose = forwardMove(pose, roundedDistance);
+    }
+  }
+
+  return { steps, finalPose: pose };
+}
+
 function generateAdStarSteps(
   startPose: Pose2D,
   goal: { x: number; y: number },
@@ -473,6 +541,16 @@ function createDriveStep(distanceCm: number): MissionStep {
   return {
     step_type: '',
     function_name: 'drive_forward',
+    arguments: [{ name: 'cm', value: distanceCm, type: 'float' }],
+    position: { x: 0, y: 0 },
+    children: [],
+  };
+}
+
+function createFollowLineStep(distanceCm: number): MissionStep {
+  return {
+    step_type: '',
+    function_name: 'follow_line',
     arguments: [{ name: 'cm', value: distanceCm, type: 'float' }],
     position: { x: 0, y: 0 },
     children: [],
@@ -701,6 +779,18 @@ function simulateCommandsWithLineups(
       }
       continue;
     }
+    if (fn === 'follow_line') {
+      const distance = (command.arguments[0]?.value as number) ?? 0;
+      if (distance > 0) {
+        const poses = simulateFollowLine(pose, context, distance, false);
+        if (poses.length) {
+          pose = poses[poses.length - 1];
+        } else {
+          pose = forwardMove(pose, distance);
+        }
+      }
+      continue;
+    }
 
     pose = simulateCommand(pose, command);
   }
@@ -722,6 +812,17 @@ function createLineupStep(direction: 'forward' | 'backward', color: 'black' | 'w
     position: { x: 0, y: 0 },
     children: [],
   };
+}
+
+function shouldFollowLineSegment(
+  from: { lineup?: boolean; lineupLineIndex?: number },
+  to: { lineup?: boolean; lineupLineIndex?: number }
+): boolean {
+  if (!from.lineup || !to.lineup) return false;
+  if (typeof from.lineupLineIndex !== 'number' || typeof to.lineupLineIndex !== 'number') {
+    return false;
+  }
+  return from.lineupLineIndex === to.lineupLineIndex;
 }
 
 function checkPathCollisionExcludingStart(
