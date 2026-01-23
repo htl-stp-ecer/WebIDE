@@ -236,6 +236,8 @@ function appendLineupForWaypoint(
       trimmedDistance = adjusted;
     }
 
+    trimmedDistance = Math.max(0, trimmedDistance - Math.ceil(detectDistance));
+
     if (trimmedDistance > 0) {
       const trimmedStep = cloneDriveStep(segmentSteps[lastDrive.index], trimmedDistance);
       steps.push(trimmedStep);
@@ -461,28 +463,36 @@ function generateFollowLineSteps(
     pose = simulateCommand(pose, turnStep);
   }
 
+  const lineSegments = request.lineSegments ?? [];
+  const detectDistance = getLineDetectDistance(request);
+  const stopOnIntersection = shouldStopOnIntersection(goal, lineSegments, lineIndex, detectDistance);
   const roundedDistance = Math.round(distance);
-  if (roundedDistance > 0) {
-    const followStep = createFollowLineStep(roundedDistance);
-    steps.push(followStep);
+  const maxDistance = Math.max(request.mapConfig.widthCm, request.mapConfig.heightCm);
+  if (!stopOnIntersection && roundedDistance <= 0) {
+    return { steps, finalPose: pose };
+  }
+  const followStep = createFollowLineStep(stopOnIntersection ? null : roundedDistance);
+  steps.push(followStep);
 
-    const lineSegments = request.lineSegments ?? [];
-    const detectDistance = getLineDetectDistance(request);
-    const targetLine = lineSegments[lineIndex];
-    const lineupContext = targetLine
-      ? buildLineupContextForLine(request, targetLine, detectDistance)
-      : buildLineupContext(request, lineSegments, detectDistance);
+  const targetLine = lineSegments[lineIndex];
+  const lineupContext = targetLine
+    ? buildLineupContextForLine(request, targetLine, detectDistance)
+    : buildLineupContext(request, lineSegments, detectDistance);
 
-    if (lineupContext) {
-      const followPoses = simulateFollowLine(pose, lineupContext, roundedDistance, false);
-      if (followPoses.length) {
-        pose = followPoses[followPoses.length - 1];
-      } else {
-        pose = forwardMove(pose, roundedDistance);
-      }
-    } else {
+  if (lineupContext) {
+    const followPoses = simulateFollowLine(
+      pose,
+      lineupContext,
+      stopOnIntersection ? maxDistance : roundedDistance,
+      stopOnIntersection
+    );
+    if (followPoses.length) {
+      pose = followPoses[followPoses.length - 1];
+    } else if (roundedDistance > 0) {
       pose = forwardMove(pose, roundedDistance);
     }
+  } else if (roundedDistance > 0) {
+    pose = forwardMove(pose, roundedDistance);
   }
 
   return { steps, finalPose: pose };
@@ -547,11 +557,11 @@ function createDriveStep(distanceCm: number): MissionStep {
   };
 }
 
-function createFollowLineStep(distanceCm: number): MissionStep {
+function createFollowLineStep(distanceCm: number | null): MissionStep {
   return {
     step_type: '',
     function_name: 'follow_line',
-    arguments: [{ name: 'cm', value: distanceCm, type: 'float' }],
+    arguments: distanceCm === null ? [] : [{ name: 'cm', value: distanceCm, type: 'float' }],
     position: { x: 0, y: 0 },
     children: [],
   };
@@ -781,11 +791,14 @@ function simulateCommandsWithLineups(
     }
     if (fn === 'follow_line') {
       const distance = (command.arguments[0]?.value as number) ?? 0;
-      if (distance > 0) {
-        const poses = simulateFollowLine(pose, context, distance, false);
+      const stopOnIntersection = distance <= 0;
+      const maxDistance = context.maxDistanceCm ?? Math.max(300, distance);
+      const targetDistance = stopOnIntersection ? maxDistance : distance;
+      if (targetDistance > 0) {
+        const poses = simulateFollowLine(pose, context, targetDistance, stopOnIntersection);
         if (poses.length) {
           pose = poses[poses.length - 1];
-        } else {
+        } else if (!stopOnIntersection) {
           pose = forwardMove(pose, distance);
         }
       }
@@ -823,6 +836,21 @@ function shouldFollowLineSegment(
     return false;
   }
   return from.lineupLineIndex === to.lineupLineIndex;
+}
+
+function shouldStopOnIntersection(
+  goal: { x: number; y: number },
+  lineSegments: LineSegmentCm[],
+  lineIndex: number,
+  detectDistanceCm: number
+): boolean {
+  for (let i = 0; i < lineSegments.length; i++) {
+    if (i === lineIndex) continue;
+    if (isPointOnLineSegment(goal.x, goal.y, lineSegments[i], detectDistanceCm)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function checkPathCollisionExcludingStart(

@@ -10,6 +10,8 @@ import {
   simulateForwardLineupOnBlack,
 } from '../simulation-path';
 
+const DEFAULT_FOLLOW_LINE_MAX_DISTANCE_CM = 300;
+
 // --- Interfaces ---
 
 export interface OptimizationContext {
@@ -85,6 +87,12 @@ export function optimizeWaypointsToSteps(
 
       if (shouldFollowLine) {
         const lineIndex = waypoints[i].lineupLineIndex;
+        const stopOnIntersection = shouldStopOnIntersection(
+          to,
+          lineSegments,
+          lineIndex,
+          detectDistanceCm
+        );
         const targetLine = typeof lineIndex === 'number'
           ? lineSegments[lineIndex]
           : null;
@@ -92,18 +100,25 @@ export function optimizeWaypointsToSteps(
           ? buildLineupContextForLine(context, targetLine, detectDistanceCm)
           : lineupContext;
         const roundedDistance = Math.round(totalDistance);
-        if (roundedDistance > 0) {
-          steps.push(createFollowLineStep(roundedDistance));
-          if (activeContext) {
-            const followPoses = simulateFollowLine(currentPose, activeContext, roundedDistance, false);
-            if (followPoses.length) {
-              currentPose = followPoses[followPoses.length - 1];
-            } else {
-              currentPose = forwardMove(currentPose, roundedDistance);
-            }
-          } else {
+        const maxDistance = activeContext?.maxDistanceCm ?? DEFAULT_FOLLOW_LINE_MAX_DISTANCE_CM;
+        if (!stopOnIntersection && roundedDistance <= 0) {
+          break;
+        }
+        steps.push(createFollowLineStep(stopOnIntersection ? null : roundedDistance));
+        if (activeContext) {
+          const followPoses = simulateFollowLine(
+            currentPose,
+            activeContext,
+            stopOnIntersection ? maxDistance : roundedDistance,
+            stopOnIntersection
+          );
+          if (followPoses.length) {
+            currentPose = followPoses[followPoses.length - 1];
+          } else if (roundedDistance > 0) {
             currentPose = forwardMove(currentPose, roundedDistance);
           }
+        } else if (roundedDistance > 0) {
+          currentPose = forwardMove(currentPose, roundedDistance);
         }
         break;
       }
@@ -153,6 +168,7 @@ export function optimizeWaypointsToSteps(
           approachDistance = Math.min(approachDistance, Math.max(0, contactDistance - 1));
         }
         approachDistance = backoffApproachDistance(currentPose, approachDistance, activeContext);
+        approachDistance = Math.max(0, approachDistance - detectDistanceCm);
 
         const roundedDistance = Math.round(approachDistance);
         if (roundedDistance > 0) {
@@ -214,11 +230,11 @@ function createDriveStep(distanceCm: number): MissionStep {
   };
 }
 
-function createFollowLineStep(distanceCm: number): MissionStep {
+function createFollowLineStep(distanceCm: number | null): MissionStep {
   return {
     step_type: '',
     function_name: 'follow_line',
-    arguments: [{ name: 'cm', value: distanceCm, type: 'float' }],
+    arguments: distanceCm === null ? [] : [{ name: 'cm', value: distanceCm, type: 'float' }],
     position: { x: 0, y: 0 },
     children: [],
   };
@@ -259,6 +275,22 @@ function shouldFollowLineSegment(from: Waypoint, to: Waypoint): boolean {
     return false;
   }
   return from.lineupLineIndex === to.lineupLineIndex;
+}
+
+function shouldStopOnIntersection(
+  waypoint: Waypoint,
+  lineSegments: LineSegmentCm[],
+  lineIndex: number | undefined,
+  detectDistanceCm: number
+): boolean {
+  if (typeof lineIndex !== 'number') return false;
+  for (let i = 0; i < lineSegments.length; i++) {
+    if (i === lineIndex) continue;
+    if (isPointOnLineSegment(waypoint.x, waypoint.y, lineSegments[i], detectDistanceCm)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function buildLineupContextForLine(

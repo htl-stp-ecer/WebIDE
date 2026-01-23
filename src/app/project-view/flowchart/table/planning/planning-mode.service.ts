@@ -30,6 +30,8 @@ import {
 } from '../simulation-path';
 import { Pose2D, forwardMove } from '../models';
 
+const DEFAULT_FOLLOW_LINE_MAX_DISTANCE_CM = 300;
+
 /**
  * Service for managing planning mode state.
  * Handles waypoints, step generation, and UI state.
@@ -337,14 +339,20 @@ export class PlanningModeService {
       }
 
       if (fn === 'follow_line') {
-        if (arg > 0) {
+        const stopOnIntersection = arg <= 0;
+        const maxDistance = lineupContext?.maxDistanceCm ?? DEFAULT_FOLLOW_LINE_MAX_DISTANCE_CM;
+        const targetDistance = stopOnIntersection ? maxDistance : arg;
+        if (targetDistance > 0) {
           if (lineupContext) {
-            const followPoses = simulateFollowLine(currentPose, lineupContext, arg, false);
+            const followPoses = simulateFollowLine(currentPose, lineupContext, targetDistance, stopOnIntersection);
             if (followPoses.length) {
               rawPoses.push(...followPoses);
               currentPose = followPoses[followPoses.length - 1];
+            } else if (!stopOnIntersection) {
+              currentPose = forwardMove(currentPose, arg);
+              rawPoses.push({ ...currentPose });
             }
-          } else {
+          } else if (!stopOnIntersection) {
             currentPose = forwardMove(currentPose, arg);
             rawPoses.push({ ...currentPose });
           }
