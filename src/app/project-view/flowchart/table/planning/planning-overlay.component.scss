@@ -134,6 +134,7 @@
   display: flex;
   overflow: hidden;
   background: var(--planner-surface-ground);
+  min-width: 0;
 }
 
 .planning-canvas-container {
@@ -141,6 +142,7 @@
   position: relative;
   background: var(--planner-surface-ground);
   pointer-events: none;
+  min-width: 0;
 }
 
 .planning-canvas {
