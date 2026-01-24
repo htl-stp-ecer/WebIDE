@@ -114,7 +114,7 @@ export class PlanningOverlayComponent implements OnInit, AfterViewInit, OnDestro
   private redoStack: { waypoints: { id: string; x: number; y: number; lineup?: boolean; lineupLineIndex?: number; lineSnapAction?: 'lineup' | 'follow' | 'drive' }[] }[] = [];
 
   // Line snap action menu
-  readonly lineSnapMenu = signal<{ x: number; y: number; lineIndex: number; screenX: number; screenY: number } | null>(null);
+  readonly lineSnapMenu = signal<{ x: number; y: number; lineIndex: number; screenX: number; screenY: number; waypointIndex?: number } | null>(null);
 
   private ctx!: CanvasRenderingContext2D;
   private animationFrameId: number | null = null;
@@ -1009,9 +1009,7 @@ export class PlanningOverlayComponent implements OnInit, AfterViewInit, OnDestro
       const snapped = this.applySnap(tablePos.x, tablePos.y, draggingIndex);
       const current = this.planningService.waypoints()[draggingIndex];
       const nextAction = snapped.lineSnapped ? (current?.lineSnapAction ?? 'lineup') : undefined;
-      const nextLineup = snapped.lineSnapped
-        ? (nextAction !== 'drive')
-        : false;
+      const nextLineup = snapped.lineSnapped;
       this.planningService.moveWaypoint(
         draggingIndex,
         snapped.x,
@@ -1035,12 +1033,46 @@ export class PlanningOverlayComponent implements OnInit, AfterViewInit, OnDestro
     this.clearSnapIndicators();
   }
 
+  onContextMenu(event: MouseEvent): void {
+    event.preventDefault();
+    const canvas = this.canvasRef.nativeElement;
+    const rect = canvas.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+    const hitIndex = this.hitTestWaypoint(x, y, rect.width, rect.height);
+    if (hitIndex === null) {
+      this.lineSnapMenu.set(null);
+      return;
+    }
+    const wp = this.planningService.waypoints()[hitIndex];
+    if (typeof wp.lineupLineIndex !== 'number') {
+      this.lineSnapMenu.set(null);
+      return;
+    }
+    this.planningService.selectWaypoint(hitIndex);
+    this.lineSnapMenu.set({
+      x: wp.x,
+      y: wp.y,
+      lineIndex: wp.lineupLineIndex,
+      screenX: event.clientX,
+      screenY: event.clientY,
+      waypointIndex: hitIndex,
+    });
+  }
+
   selectLineSnapAction(action: 'lineup' | 'follow' | 'drive'): void {
     const pending = this.lineSnapMenu();
     if (!pending) return;
     this.saveUndoState();
-    if (action === 'drive') {
-      this.planningService.addWaypoint(pending.x, pending.y, false, undefined, 'drive');
+    if (pending.waypointIndex !== undefined) {
+      this.planningService.moveWaypoint(
+        pending.waypointIndex,
+        pending.x,
+        pending.y,
+        true,
+        pending.lineIndex,
+        action
+      );
     } else {
       this.planningService.addWaypoint(pending.x, pending.y, true, pending.lineIndex, action);
     }
