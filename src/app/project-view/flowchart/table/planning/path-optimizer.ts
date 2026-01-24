@@ -64,8 +64,8 @@ export function optimizeWaypointsToSteps(
       const dy = to.y - currentPose.y;
       const totalDistance = Math.sqrt(dx * dx + dy * dy);
 
-      const shouldLineup = !!to.lineup;
-      const shouldFollowLine = shouldFollowLineSegment(waypoints[i], to);
+      const shouldLineup = !!to.lineup && to.lineSnapAction !== 'follow' && to.lineSnapAction !== 'drive';
+      const shouldFollowLine = shouldFollowLineSegment(to);
       if (totalDistance < 0.1 && !shouldLineup && !shouldFollowLine) {
         break;
       }
@@ -86,7 +86,7 @@ export function optimizeWaypointsToSteps(
       }
 
       if (shouldFollowLine) {
-        const lineIndex = waypoints[i].lineupLineIndex;
+        const lineIndex = to.lineupLineIndex;
         const stopOnIntersection = shouldStopOnIntersection(
           to,
           lineSegments,
@@ -269,12 +269,10 @@ function buildLineupContext(context: OptimizationContext, maxDistanceCm?: number
   };
 }
 
-function shouldFollowLineSegment(from: Waypoint, to: Waypoint): boolean {
-  if (!from.lineup || !to.lineup) return false;
-  if (typeof from.lineupLineIndex !== 'number' || typeof to.lineupLineIndex !== 'number') {
-    return false;
-  }
-  return from.lineupLineIndex === to.lineupLineIndex;
+function shouldFollowLineSegment(to: Waypoint): boolean {
+  if (!to.lineup) return false;
+  if (to.lineSnapAction !== 'follow') return false;
+  return typeof to.lineupLineIndex === 'number';
 }
 
 function shouldStopOnIntersection(

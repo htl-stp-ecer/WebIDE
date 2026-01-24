@@ -213,4 +213,18 @@
       }
     </div>
   </div>
+
+  @if (lineSnapMenu()) {
+    <div
+      class="line-snap-menu"
+      [style.left.px]="lineSnapMenu()!.screenX"
+      [style.top.px]="lineSnapMenu()!.screenY"
+      (pointerdown)="$event.stopPropagation()">
+      <div class="line-snap-title">Line Snap Action</div>
+      <button class="line-snap-btn" (click)="selectLineSnapAction('lineup')">Lineup</button>
+      <button class="line-snap-btn" (click)="selectLineSnapAction('follow')">Line Follow</button>
+      <button class="line-snap-btn" (click)="selectLineSnapAction('drive')">Normal Drive</button>
+      <button class="line-snap-btn secondary" (click)="cancelLineSnapAction()">Cancel</button>
+    </div>
+  }
 </div>

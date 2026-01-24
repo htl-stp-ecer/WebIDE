@@ -213,7 +213,13 @@ export class PlanningModeService {
     worker.postMessage({
       id: requestId,
       startPose: start,
-      waypoints: wps.map(wp => ({ x: wp.x, y: wp.y, lineup: !!wp.lineup, lineupLineIndex: wp.lineupLineIndex })),
+      waypoints: wps.map(wp => ({
+        x: wp.x,
+        y: wp.y,
+        lineup: !!wp.lineup,
+        lineupLineIndex: wp.lineupLineIndex,
+        lineSnapAction: wp.lineSnapAction,
+      })),
       walls,
       robotConfig,
       mapConfig,
@@ -273,7 +279,7 @@ export class PlanningModeService {
   ): MissionStep[] {
     // Include robot start position as first waypoint for path calculation
     const fullPath: Waypoint[] = [
-      { id: 'start', x: start.x, y: start.y, lineup: false, lineupLineIndex: undefined },
+      { id: 'start', x: start.x, y: start.y, lineup: false, lineupLineIndex: undefined, lineSnapAction: undefined },
       ...wps,
     ];
 
@@ -498,8 +504,14 @@ export class PlanningModeService {
   }
 
   /** Add a waypoint at the given position */
-  addWaypoint(x: number, y: number, lineup = false, lineupLineIndex?: number): void {
-    const wp = createWaypoint(x, y, lineup, lineupLineIndex);
+  addWaypoint(
+    x: number,
+    y: number,
+    lineup = false,
+    lineupLineIndex?: number,
+    lineSnapAction?: 'lineup' | 'follow' | 'drive'
+  ): void {
+    const wp = createWaypoint(x, y, lineup, lineupLineIndex, lineSnapAction);
     this._waypoints.update(wps => [...wps, wp]);
     this._selectedIndex.set(this._waypoints().length - 1);
   }
@@ -518,17 +530,26 @@ export class PlanningModeService {
   }
 
   /** Move waypoint at index to new position */
-  moveWaypoint(index: number, x: number, y: number, lineup?: boolean, lineupLineIndex?: number): void {
+  moveWaypoint(
+    index: number,
+    x: number,
+    y: number,
+    lineup?: boolean,
+    lineupLineIndex?: number,
+    lineSnapAction?: 'lineup' | 'follow' | 'drive'
+  ): void {
     this._waypoints.update(wps =>
       wps.map((wp, i) => {
         if (i !== index) return wp;
         const nextLineup = lineup ?? wp.lineup;
+        const nextLineSnapAction = nextLineup ? (lineSnapAction ?? wp.lineSnapAction) : undefined;
         return {
           ...wp,
           x,
           y,
           lineup: nextLineup,
           lineupLineIndex: nextLineup ? (lineupLineIndex ?? wp.lineupLineIndex) : undefined,
+          lineSnapAction: nextLineSnapAction,
         };
       })
     );
@@ -537,7 +558,7 @@ export class PlanningModeService {
   /** Clear lineup flags from all waypoints */
   clearWaypointLineups(): void {
     this._waypoints.update(wps =>
-      wps.map(wp => (wp.lineup ? { ...wp, lineup: false, lineupLineIndex: undefined } : wp))
+      wps.map(wp => (wp.lineup ? { ...wp, lineup: false, lineupLineIndex: undefined, lineSnapAction: undefined } : wp))
     );
   }
 

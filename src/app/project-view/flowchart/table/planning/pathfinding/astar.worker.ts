@@ -25,7 +25,7 @@ import { buildAdStarGrid, findAdStarPath } from './adstar-grid';
 interface AStarWorkerRequest {
   id: number;
   startPose: Pose2D;
-  waypoints: { x: number; y: number; lineup?: boolean; lineupLineIndex?: number }[];
+  waypoints: { x: number; y: number; lineup?: boolean; lineupLineIndex?: number; lineSnapAction?: 'lineup' | 'follow' | 'drive' }[];
   walls: WallSegment[];
   robotConfig: RobotConfig;
   mapConfig: MapConfig;
@@ -66,15 +66,13 @@ function generateSteps(request: AStarWorkerRequest): MissionStep[] {
   let currentPose = request.startPose;
   const steps: MissionStep[] = [];
   let grid = null as ReturnType<typeof buildAdStarGrid> | null;
-  let previousWaypoint: AStarWorkerRequest['waypoints'][number] | null = null;
 
   for (const waypoint of request.waypoints) {
-    if (previousWaypoint && shouldFollowLineSegment(previousWaypoint, waypoint)) {
-      const lineIndex = previousWaypoint.lineupLineIndex as number;
+    if (shouldFollowLineTarget(waypoint)) {
+      const lineIndex = waypoint.lineupLineIndex as number;
       const followResult = generateFollowLineSteps(currentPose, waypoint, lineIndex, request);
       steps.push(...followResult.steps);
       currentPose = followResult.finalPose;
-      previousWaypoint = waypoint;
       continue;
     }
 
@@ -93,7 +91,6 @@ function generateSteps(request: AStarWorkerRequest): MissionStep[] {
         waypoint,
         request
       );
-      previousWaypoint = waypoint;
       continue;
     }
 
@@ -117,7 +114,6 @@ function generateSteps(request: AStarWorkerRequest): MissionStep[] {
         waypoint,
         request
       );
-      previousWaypoint = waypoint;
       continue;
     }
 
@@ -133,7 +129,6 @@ function generateSteps(request: AStarWorkerRequest): MissionStep[] {
         waypoint,
         request
       );
-      previousWaypoint = waypoint;
       continue;
     }
 
@@ -148,7 +143,6 @@ function generateSteps(request: AStarWorkerRequest): MissionStep[] {
       waypoint,
       request
     );
-    previousWaypoint = waypoint;
   }
 
   return steps;
@@ -159,10 +153,12 @@ function appendLineupForWaypoint(
   segmentSteps: MissionStep[],
   segmentStartPose: Pose2D,
   currentPose: Pose2D,
-  waypoint: { lineup?: boolean; lineupLineIndex?: number },
+  waypoint: { lineup?: boolean; lineupLineIndex?: number; lineSnapAction?: 'lineup' | 'follow' | 'drive' },
   request: AStarWorkerRequest
 ): Pose2D {
-  if (!waypoint.lineup) return currentPose;
+  if (!waypoint.lineup || waypoint.lineSnapAction === 'follow' || waypoint.lineSnapAction === 'drive') {
+    return currentPose;
+  }
   if (segmentSteps.some(step => step.function_name.includes('lineup'))) return currentPose;
 
   const lastDrive = getLastDriveInfo(segmentSteps);
@@ -827,15 +823,12 @@ function createLineupStep(direction: 'forward' | 'backward', color: 'black' | 'w
   };
 }
 
-function shouldFollowLineSegment(
-  from: { lineup?: boolean; lineupLineIndex?: number },
-  to: { lineup?: boolean; lineupLineIndex?: number }
+function shouldFollowLineTarget(
+  waypoint: { lineup?: boolean; lineupLineIndex?: number; lineSnapAction?: 'lineup' | 'follow' | 'drive' }
 ): boolean {
-  if (!from.lineup || !to.lineup) return false;
-  if (typeof from.lineupLineIndex !== 'number' || typeof to.lineupLineIndex !== 'number') {
-    return false;
-  }
-  return from.lineupLineIndex === to.lineupLineIndex;
+  if (!waypoint.lineup) return false;
+  if (waypoint.lineSnapAction !== 'follow') return false;
+  return typeof waypoint.lineupLineIndex === 'number';
 }
 
 function shouldStopOnIntersection(
