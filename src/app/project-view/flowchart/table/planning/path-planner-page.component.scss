@@ -314,6 +314,10 @@
   min-width: 0;
 }
 
+.snap-toggles + .snap-toggles {
+  margin-top: 6px;
+}
+
 // PrimeNG toggle button customization
 :host ::ng-deep .snap-toggle {
   flex: 1 1 0;
