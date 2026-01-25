@@ -4,15 +4,15 @@
     <div class="topbar-left">
       <p-button
         icon="pi pi-arrow-left"
-        label="Back"
+        [label]="'FLOWCHART.PLANNER_BACK' | translate"
         [text]="true"
         severity="secondary"
         (onClick)="onCancel()"
-        pTooltip="Back to Editor"
+        [pTooltip]="'FLOWCHART.PLANNER_BACK_TOOLTIP' | translate"
         tooltipPosition="bottom">
       </p-button>
       <span class="topbar-divider"></span>
-      <span class="topbar-title">PATH PLANNER</span>
+      <span class="topbar-title">{{ 'FLOWCHART.PLANNER_TITLE' | translate }}</span>
     </div>
 
     <div class="topbar-center">
@@ -22,7 +22,7 @@
         severity="secondary"
         [disabled]="!canUndo()"
         (onClick)="onUndo()"
-        pTooltip="Undo (Ctrl+Z)"
+        [pTooltip]="'FLOWCHART.PLANNER_UNDO_TOOLTIP' | translate"
         tooltipPosition="bottom">
       </p-button>
       <p-button
@@ -31,32 +31,33 @@
         severity="secondary"
         [disabled]="!canRedo()"
         (onClick)="onRedo()"
-        pTooltip="Redo (Ctrl+Shift+Z)"
+        [pTooltip]="'FLOWCHART.PLANNER_REDO_TOOLTIP' | translate"
         tooltipPosition="bottom"
         styleClass="redo-btn">
       </p-button>
       <span class="topbar-divider"></span>
       <p-button
         icon="pi pi-trash"
-        label="Clear"
+        [label]="'COMMON.CLEAR' | translate"
         [text]="true"
         severity="secondary"
         [disabled]="!planningService.waypoints().length"
         (onClick)="onClear()"
-        pTooltip="Clear All Waypoints"
+        [pTooltip]="'FLOWCHART.PLANNER_CLEAR_TOOLTIP' | translate"
         tooltipPosition="bottom">
       </p-button>
     </div>
 
     <div class="topbar-right">
       @if (planningService.isGenerating()) {
-        <span class="planner-loading" pTooltip="Generating path">
+        <span class="planner-loading" [pTooltip]="'FLOWCHART.PLANNER_GENERATING' | translate">
           <i class="pi pi-spin pi-spinner"></i>
         </span>
       }
       @if (planningService.waypoints().length) {
         <span class="waypoint-count">
-          {{ planningService.waypoints().length }} waypoint{{ planningService.waypoints().length !== 1 ? 's' : '' }}
+          {{ planningService.waypoints().length }}
+          {{ planningService.waypoints().length === 1 ? ('FLOWCHART.PLANNER_WAYPOINT_SINGULAR' | translate) : ('FLOWCHART.PLANNER_WAYPOINT_PLURAL' | translate) }}
         </span>
       }
     </div>
@@ -79,14 +80,17 @@
 
       @if (!planningService.waypoints().length) {
         <div class="planning-hint">
-          Click on the map to add waypoints. Drag to move, double-click to delete.
+          {{ 'FLOWCHART.PLANNER_HINT' | translate }}
         </div>
       }
     </div>
 
     <!-- Right Side Panel -->
     <div class="planning-sidebar" [class.collapsed]="sidebarCollapsed()">
-      <button class="sidebar-toggle" (click)="toggleSidebar()" [pTooltip]="sidebarCollapsed() ? 'Expand panel' : 'Collapse panel'">
+      <button
+        class="sidebar-toggle"
+        (click)="toggleSidebar()"
+        [pTooltip]="sidebarCollapsed() ? ('FLOWCHART.PLANNER_SIDEBAR_EXPAND' | translate) : ('FLOWCHART.PLANNER_SIDEBAR_COLLAPSE' | translate)">
         <i [class]="sidebarCollapsed() ? 'pi pi-chevron-left' : 'pi pi-chevron-right'"></i>
       </button>
 
@@ -94,23 +98,23 @@
         <!-- Settings Section -->
         <div class="sidebar-section">
           <div class="section-header" (click)="toggleSettingsSection()">
-            <span>SETTINGS</span>
+            <span>{{ 'FLOWCHART.PLANNER_SETTINGS' | translate }}</span>
             <i [class]="settingsExpanded() ? 'pi pi-chevron-up' : 'pi pi-chevron-down'"></i>
           </div>
           @if (settingsExpanded()) {
             <div class="section-content">
               <!-- Snap Controls -->
               <div class="settings-group">
-                <label class="settings-label">SNAPPING</label>
+                <label class="settings-label">{{ 'FLOWCHART.PLANNER_SNAPPING' | translate }}</label>
                 <div class="snap-toggles">
                   <p-toggleButton
                     [(ngModel)]="snapGridValue"
-                    onLabel="Grid"
-                    offLabel="Grid"
+                    [onLabel]="'FLOWCHART.PLANNER_GRID' | translate"
+                    [offLabel]="'FLOWCHART.PLANNER_GRID' | translate"
                     onIcon="pi pi-th-large"
                     offIcon="pi pi-th-large"
                     (onChange)="onSnapGridChange($event)"
-                    pTooltip="Snap to grid (G)"
+                    [pTooltip]="'FLOWCHART.PLANNER_SNAP_GRID_TOOLTIP' | translate"
                     tooltipPosition="top"
                     styleClass="snap-toggle">
                   </p-toggleButton>
@@ -121,7 +125,7 @@
                     onIcon="pi pi-sliders-h"
                     offIcon="pi pi-sliders-h"
                     (onChange)="onSnapAnglesChange($event)"
-                    pTooltip="Snap to angles (A)"
+                    [pTooltip]="'FLOWCHART.PLANNER_SNAP_ANGLES_TOOLTIP' | translate"
                     tooltipPosition="top"
                     styleClass="snap-toggle">
                   </p-toggleButton>
@@ -129,12 +133,12 @@
                 <div class="snap-toggles">
                   <p-toggleButton
                     [(ngModel)]="snapLinesValue"
-                    onLabel="Lines"
-                    offLabel="Lines"
+                    [onLabel]="'FLOWCHART.PLANNER_LINES' | translate"
+                    [offLabel]="'FLOWCHART.PLANNER_LINES' | translate"
                     onIcon="pi pi-minus"
                     offIcon="pi pi-minus"
                     (onChange)="onSnapLinesChange($event)"
-                    pTooltip="Snap to lines (L)"
+                    [pTooltip]="'FLOWCHART.PLANNER_SNAP_LINES_TOOLTIP' | translate"
                     tooltipPosition="top"
                     styleClass="snap-toggle">
                   </p-toggleButton>
@@ -142,16 +146,16 @@
               </div>
 
               <div class="settings-group">
-                <label class="settings-label">MOVEMENT</label>
+                <label class="settings-label">{{ 'FLOWCHART.PLANNER_MOVEMENT' | translate }}</label>
                 <div class="snap-toggles">
                   <p-toggleButton
                     [(ngModel)]="allowStrafeValue"
-                    onLabel="Strafe"
-                    offLabel="Strafe"
+                    [onLabel]="'FLOWCHART.PLANNER_STRAFE' | translate"
+                    [offLabel]="'FLOWCHART.PLANNER_STRAFE' | translate"
                     onIcon="pi pi-arrows-h"
                     offIcon="pi pi-arrows-h"
                     (onChange)="onAllowStrafeChange($event)"
-                    pTooltip="Allow strafe steps in pathfinding"
+                    [pTooltip]="'FLOWCHART.PLANNER_ALLOW_STRAFE_TOOLTIP' | translate"
                     tooltipPosition="top"
                     styleClass="snap-toggle">
                   </p-toggleButton>
@@ -165,7 +169,7 @@
         <!-- Generated Steps Section -->
         <div class="sidebar-section steps-section">
           <div class="section-header" (click)="toggleStepsSection()">
-            <span>GENERATED STEPS <span class="step-count">({{ planningService.generatedSteps().length }})</span></span>
+            <span>{{ 'FLOWCHART.GENERATED_STEPS' | translate }} <span class="step-count">({{ planningService.generatedSteps().length }})</span></span>
             <i [class]="stepsExpanded() ? 'pi pi-chevron-up' : 'pi pi-chevron-down'"></i>
           </div>
           @if (stepsExpanded()) {
@@ -178,17 +182,17 @@
                       <i [class]="getStepIcon(step)"></i>
                       <span class="step-text">{{ formatStep(step) }}</span>
                       @if (step.function_name.includes('lineup')) {
-                        <span class="step-badge" pTooltip="Lineup optimization">⚡</span>
+                        <span class="step-badge" [pTooltip]="'FLOWCHART.PLANNER_LINEUP_BADGE' | translate">⚡</span>
                       }
                     </div>
                   }
                 </div>
                 <div class="steps-summary">
-                  Total: {{ planningService.generatedSteps().length }} steps
+                  {{ 'FLOWCHART.PLANNER_TOTAL_STEPS' | translate:{ count: planningService.generatedSteps().length } }}
                 </div>
               } @else {
                 <div class="steps-empty">
-                  Add waypoints to generate steps
+                  {{ 'FLOWCHART.PLANNER_STEPS_EMPTY' | translate }}
                 </div>
               }
             </div>
@@ -198,14 +202,14 @@
         <!-- Action Buttons -->
         <div class="sidebar-actions">
           <p-button
-            label="Cancel"
+            [label]="'COMMON.CANCEL' | translate"
             severity="secondary"
             [outlined]="true"
             (onClick)="onCancel()"
             styleClass="action-btn">
           </p-button>
           <p-button
-            label="Apply Path"
+            [label]="'FLOWCHART.PLANNER_APPLY_PATH' | translate"
             icon="pi pi-check"
             severity="success"
             [disabled]="!planningService.canAddSteps()"
@@ -223,11 +227,11 @@
       [style.left.px]="lineSnapMenu()!.screenX"
       [style.top.px]="lineSnapMenu()!.screenY"
       (pointerdown)="$event.stopPropagation()">
-      <div class="line-snap-title">Line Snap Action</div>
-      <button class="line-snap-btn" (click)="selectLineSnapAction('lineup')">Lineup</button>
-      <button class="line-snap-btn" (click)="selectLineSnapAction('follow')">Line Follow</button>
-      <button class="line-snap-btn" (click)="selectLineSnapAction('drive')">Normal Drive</button>
-      <button class="line-snap-btn secondary" (click)="cancelLineSnapAction()">Cancel</button>
+      <div class="line-snap-title">{{ 'FLOWCHART.PLANNER_LINE_SNAP_TITLE' | translate }}</div>
+      <button class="line-snap-btn" (click)="selectLineSnapAction('lineup')">{{ 'FLOWCHART.PLANNER_LINEUP' | translate }}</button>
+      <button class="line-snap-btn" (click)="selectLineSnapAction('follow')">{{ 'FLOWCHART.PLANNER_LINE_FOLLOW' | translate }}</button>
+      <button class="line-snap-btn" (click)="selectLineSnapAction('drive')">{{ 'FLOWCHART.PLANNER_NORMAL_DRIVE' | translate }}</button>
+      <button class="line-snap-btn secondary" (click)="cancelLineSnapAction()">{{ 'COMMON.CANCEL' | translate }}</button>
     </div>
   }
 </div>
