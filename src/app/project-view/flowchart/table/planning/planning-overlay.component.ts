@@ -493,6 +493,17 @@ export class PlanningOverlayComponent implements OnInit, AfterViewInit, OnDestro
     this.ctx.arc(0, 0, 3, 0, Math.PI * 2);
     this.ctx.fill();
 
+    const sensorConfig = this.vizService.sensorConfig();
+    for (const sensor of sensorConfig.lineSensors) {
+      const sensorX = bodyCenterX + sensor.forwardCm * scaleX;
+      const sensorY = bodyCenterY - sensor.strafeCm * scaleY;
+
+      this.ctx.fillStyle = 'rgba(249, 115, 22, 0.7)';
+      this.ctx.beginPath();
+      this.ctx.arc(sensorX, sensorY, 3, 0, Math.PI * 2);
+      this.ctx.fill();
+    }
+
     this.ctx.restore();
   }
 
