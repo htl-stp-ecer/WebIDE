@@ -10,10 +10,10 @@
         {{ip}}
       </span>
       <span class="ml-5">
-        @if (deviceInfo?.battery_voltage_v !== undefined || deviceInfo?.battery_percent !== undefined) {
+        @if (deviceInfo?.battery_voltage_v != null || deviceInfo?.battery_percent != null) {
           {{ 'COMMON.ONLINE' | translate }}
           <span class="inline-block w-3 h-3 bg-green-500 rounded-full ml-1 align-middle mb-1"></span>
-          @if (deviceInfo?.battery_voltage_v !== undefined) {
+          @if (deviceInfo?.battery_voltage_v != null) {
             <span class="text-sm text-gray-400 ml-2">
               {{ deviceInfo!.battery_voltage_v | number:'1.2-2' }} V
             </span>

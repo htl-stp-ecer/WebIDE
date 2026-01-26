@@ -56,10 +56,10 @@
 
             <p class="text-base text-gray-400 flex items-center">
               {{ 'COMMON.STATUS' | translate }}
-              @if (connection.battery_voltage_v !== undefined || connection.battery_percent !== undefined) {
+              @if (connection.battery_voltage_v != null || connection.battery_percent != null) {
                 <span class="flex items-center ml-2">
                   {{ 'COMMON.ONLINE' | translate }}
-                  @if (connection.battery_voltage_v !== undefined) {
+                  @if (connection.battery_voltage_v != null) {
                     <span class="text-sm text-gray-400 ml-2">
                       {{ connection.battery_voltage_v | number:'1.2-2' }} V
                     </span>
