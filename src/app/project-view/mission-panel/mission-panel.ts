@@ -66,6 +66,13 @@ export class MissionPanel implements OnInit {
     this.getMissions();
   }
 
+  clearSelection(): void {
+    const selection = window.getSelection();
+    if (selection && selection.type !== 'None') {
+      selection.removeAllRanges();
+    }
+  }
+
   backToProjects() {
     const ipParam = this.route.snapshot.paramMap.get('ip');
     const decodedIp = decodeRouteIp(ipParam);
