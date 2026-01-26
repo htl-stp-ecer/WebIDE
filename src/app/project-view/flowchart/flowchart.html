@@ -228,6 +228,7 @@
     @if (runManager.stepTimings().length && isToggleEnabled('timestamps')) {
       <app-timing-panel
         class="floating-panel"
+        data-panel-key="timing"
         [style.transform]="panelTransform('timing')"
         (pointerdown)="startPanelDrag($event, 'timing')"
         [timings]="runManager.stepTimings()"
@@ -238,6 +239,7 @@
 
     <app-table-visualization-panel
       class="floating-panel visualization-panel"
+      data-panel-key="unity"
       [style.transform]="panelTransform('unity')"
       (pointerdown)="startPanelDrag($event, 'unity')"
       [visible]="isToggleEnabled('tableVisualization')"

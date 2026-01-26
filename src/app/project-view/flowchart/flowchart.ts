@@ -1,4 +1,4 @@
-import { AfterViewChecked, Component, ElementRef, OnDestroy, OnInit, QueryList, Signal, ViewChild, ViewChildren, effect, signal, viewChild } from '@angular/core';
+import { AfterViewChecked, AfterViewInit, Component, ElementRef, OnDestroy, OnInit, QueryList, Signal, ViewChild, ViewChildren, effect, signal, viewChild } from '@angular/core';
 import { EFMarkerType, FCanvasComponent, FFlowComponent, FFlowModule } from '@foblex/flow';
 import { ContextMenu, ContextMenuModule } from 'primeng/contextmenu';
 import { CheckboxModule } from 'primeng/checkbox';
@@ -77,7 +77,7 @@ const DEFAULT_PANEL_OFFSETS: Record<FloatingPanelKey, PanelOffset> = {
   providers: [FlowHistory],
   standalone: true,
 })
-export class Flowchart implements AfterViewChecked, OnDestroy, OnInit {
+export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, OnInit {
   readonly isDarkMode = signal<boolean>(readDarkMode());
   readonly nodes = signal<FlowNode[]>([]);
   readonly connections = signal<Connection[]>([]);
@@ -136,6 +136,8 @@ export class Flowchart implements AfterViewChecked, OnDestroy, OnInit {
   private loadingDeviceInfo = false;
   private projectSimulationCache: ProjectSimulationData | null = null;
   private robotSettingsWasOpen = false;
+  private panelResizeObserver?: ResizeObserver;
+  private pendingPanelClamp = false;
 
   constructor(
     readonly missionState: MissionStateService,
@@ -187,6 +189,14 @@ export class Flowchart implements AfterViewChecked, OnDestroy, OnInit {
     handleAfterViewChecked(this);
   }
 
+  ngAfterViewInit(): void {
+    const surface = this.flowSurfaceRef?.nativeElement;
+    if (!surface || typeof ResizeObserver === 'undefined') return;
+    this.panelResizeObserver = new ResizeObserver(() => this.schedulePanelClamp());
+    this.panelResizeObserver.observe(surface);
+    this.schedulePanelClamp();
+  }
+
   ngOnDestroy(): void {
     this.actions.stopRun();
     this.stopPanelDrag();
@@ -200,6 +210,7 @@ export class Flowchart implements AfterViewChecked, OnDestroy, OnInit {
     if (this.saveStatusTimeout) {
       clearTimeout(this.saveStatusTimeout);
     }
+    this.panelResizeObserver?.disconnect();
   }
 
   setSaveStatus(status: 'idle' | 'saving' | 'saved'): void {
@@ -561,6 +572,48 @@ export class Flowchart implements AfterViewChecked, OnDestroy, OnInit {
       max = tmp;
     }
     return Math.min(Math.max(value, min), max);
+  }
+
+  private schedulePanelClamp(): void {
+    if (this.pendingPanelClamp) return;
+    this.pendingPanelClamp = true;
+    requestAnimationFrame(() => {
+      this.pendingPanelClamp = false;
+      this.clampPanelsToSurface();
+    });
+  }
+
+  private clampPanelsToSurface(): void {
+    const surface = this.flowSurfaceRef?.nativeElement;
+    if (!surface) return;
+    const surfaceRect = surface.getBoundingClientRect();
+    const offsets = this.panelOffsets();
+    let changed = false;
+    const next: Record<FloatingPanelKey, PanelOffset> = { ...offsets };
+    (Object.keys(offsets) as FloatingPanelKey[]).forEach(key => {
+      const panelEl = surface.querySelector<HTMLElement>(`[data-panel-key="${key}"]`);
+      if (!panelEl || panelEl.classList.contains('is-hidden')) return;
+      const rect = panelEl.getBoundingClientRect();
+      let dx = 0;
+      let dy = 0;
+      if (rect.left < surfaceRect.left) {
+        dx = surfaceRect.left - rect.left;
+      } else if (rect.right > surfaceRect.right) {
+        dx = surfaceRect.right - rect.right;
+      }
+      if (rect.top < surfaceRect.top) {
+        dy = surfaceRect.top - rect.top;
+      } else if (rect.bottom > surfaceRect.bottom) {
+        dy = surfaceRect.bottom - rect.bottom;
+      }
+      if (dx || dy) {
+        next[key] = { x: offsets[key].x + dx, y: offsets[key].y + dy };
+        changed = true;
+      }
+    });
+    if (changed) {
+      this.panelOffsets.set(next);
+    }
   }
 
   private groupDefinitionsByType(definitions: TypeDefinition[]): DefinitionGroups {
