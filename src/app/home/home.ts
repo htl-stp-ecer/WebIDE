@@ -50,8 +50,11 @@ export class Home implements OnInit, OnDestroy {
     if (connections) {
       try {
         this.previousConnections = JSON.parse(connections) as ConnectionInfo[];
-        // initialize battery_voltage_v to undefined (offline)
-        this.previousConnections.forEach(conn => conn.battery_voltage_v = undefined);
+        // initialize battery fields to undefined (offline)
+        this.previousConnections.forEach(conn => {
+          conn.battery_voltage_v = undefined;
+          conn.battery_percent = undefined;
+        });
       } catch (e) {
         console.error('Error parsing previousConnections from localStorage', e);
         this.previousConnections = [];
@@ -71,9 +74,10 @@ export class Home implements OnInit, OnDestroy {
 
   private updateDeviceInfos() {
     for (const conn of this.previousConnections) {
-      this.httpService.getDeviceInfo(conn.ip).subscribe({
+        this.httpService.getDeviceInfo(conn.ip).subscribe({
         next: res => {
           conn.battery_voltage_v = res.battery_voltage_v;
+          conn.battery_percent = res.battery_percent;
           conn.hostname = res.hostname;
           if (this.corsConfirmIp === conn.ip) {
             this.corsConfirmIp = undefined;
@@ -83,6 +87,7 @@ export class Home implements OnInit, OnDestroy {
         },
         error: err => {
           conn.battery_voltage_v = undefined;
+          conn.battery_percent = undefined;
           console.error(`Failed to fetch device info for ${conn.ip}`, err);
         }
       });
@@ -108,6 +113,7 @@ export class Home implements OnInit, OnDestroy {
         if (existing) {
           existing.hostname = res.hostname;
           existing.battery_voltage_v = res.battery_voltage_v;
+          existing.battery_percent = res.battery_percent;
         } else {
           this.previousConnections.push(res);
         }

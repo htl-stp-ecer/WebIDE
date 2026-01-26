@@ -20,6 +20,7 @@ interface ConnectionInfo {
   hostname: string;
   ip: string;
   battery_voltage_v?: number;
+  battery_percent?: number;
   width_cm?: number;
   length_cm?: number;
   sensors?: DeviceSensorInfo[];

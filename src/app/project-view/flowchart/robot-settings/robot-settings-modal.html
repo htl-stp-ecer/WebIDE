@@ -42,18 +42,18 @@
         <button
           type="button"
           class="sidebar-nav-item"
-          [class.active]="activeTab() === 'start'"
-          (click)="activeTab.set('start')">
-          <i class="pi pi-flag"></i>
-          <span>{{ 'ROBOT_SETTINGS.START_TAB' | translate }}</span>
-        </button>
-        <button
-          type="button"
-          class="sidebar-nav-item"
           [class.active]="activeTab() === 'map'"
           (click)="activeTab.set('map')">
           <i class="pi pi-th-large"></i>
           <span>{{ 'ROBOT_SETTINGS.MAP_TAB' | translate }}</span>
+        </button>
+        <button
+          type="button"
+          class="sidebar-nav-item"
+          [class.active]="activeTab() === 'start'"
+          (click)="activeTab.set('start')">
+          <i class="pi pi-flag"></i>
+          <span>{{ 'ROBOT_SETTINGS.START_TAB' | translate }}</span>
         </button>
       </nav>
     </aside>
