@@ -175,8 +175,6 @@ export function rebuildFromMission(flow: Flowchart, mission: Mission): void {
 }
 
 export function handleNodeMoved(flow: Flowchart, nodeId: string, pos: { x: number; y: number }): void {
-  const selected = flow.selectedNodeIds();
-  const multiStart = flow.multiDragStartPositions;
   const applyPositions = (id: string, nextPos: { x: number; y: number }) => {
     const updatePositions = (nodes: FlowNode[], isMission: boolean) => {
       const node = nodes.find(n => n.id === id);
@@ -196,29 +194,9 @@ export function handleNodeMoved(flow: Flowchart, nodeId: string, pos: { x: numbe
     return touchedMission || touchedAdHoc || touchedMerged;
   };
 
-  if (multiStart && selected.size > 1 && selected.has(nodeId)) {
-    const anchor = multiStart.get(nodeId);
-    if (!anchor) {
-      return;
-    }
-    const dx = pos.x - anchor.x;
-    const dy = pos.y - anchor.y;
-    let touched = false;
-    for (const id of selected) {
-      const origin = multiStart.get(id);
-      if (!origin) continue;
-      if (applyPositions(id, { x: origin.x + dx, y: origin.y + dy })) {
-        touched = true;
-      }
-    }
-    if (touched) {
-      flow.historyManager.recordHistory('move-node');
-    }
-    return;
-  }
-
   if (applyPositions(nodeId, pos)) {
     flow.historyManager.recordHistory('move-node');
+    flow.syncSelectionGroup();
   }
 }
 

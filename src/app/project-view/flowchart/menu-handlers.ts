@@ -93,6 +93,7 @@ export function handleNodeContextMenu(flow: Flowchart, event: MouseEvent, nodeId
   flow.contextMenu.selectNode(nodeId, { clientX: event.clientX, clientY: event.clientY });
   if (!flow.selectedNodeIds().has(nodeId)) {
     flow.selectedNodeIds.set(new Set([nodeId]));
+    flow.syncSelectionGroup();
   }
   const deleteLabel = flow.translate.instant('COMMON.DELETE');
   const removeFromGroupLabel = translateLabel(flow, 'FLOWCHART.REMOVE_FROM_GROUP', 'Remove from Group');

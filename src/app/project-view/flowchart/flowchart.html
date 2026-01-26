@@ -161,6 +161,21 @@
           </div>
         }
 
+        @if (selectionGroup(); as selection) {
+          <div
+            fGroup
+            [fGroupId]="selection.id"
+            [fGroupPosition]="selection.position"
+            [fGroupSize]="selection.size"
+            [fGroupDraggingDisabled]="false"
+            fIncludePadding
+            class="group-node selection-group"
+            [attr.data-group-id]="selection.id"
+            (fGroupPositionChange)="onSelectionGroupPositionChanged($event)">
+            <div class="selection-drag-handle" fDragHandle></div>
+          </div>
+        }
+
         <div fNode [fNodeId]="'start-node'" [fNodePosition]="actions.startNodePosition()" class="node" [attr.data-node-id]="'start-node'" #nodeElement>
           <div class="node-title">{{'FLOWCHART.START_NODE'|translate}}</div>
           <div fNodeOutput [fOutputConnectableSide]="actions.isVertical() ? 'bottom' : 'right'" [fOutputId]="'start-node-output'" [fOutputMultiple]="true" class="port" [class.port-bottom]="actions.isVertical()" [class.port-right]="!actions.isVertical()"></div>
@@ -183,6 +198,7 @@
             fDragHandle
             [fNodeId]="node.id"
             [fNodePosition]="node.position"
+            [fNodeParentId]="getSelectionParentId(node.id)"
             class="node"
             [class.node-completed]="actions.isNodeCompleted(node.id)"
             [class.node-selected]="isNodeSelected(node.id)"

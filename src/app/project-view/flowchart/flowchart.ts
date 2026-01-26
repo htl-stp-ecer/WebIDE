@@ -108,6 +108,8 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
   readonly panelOffsets = signal<Record<FloatingPanelKey, PanelOffset>>({ ...DEFAULT_PANEL_OFFSETS });
   readonly selectedNodeIds = signal<Set<string>>(new Set());
   readonly selectionRect = signal<{ x: number; y: number; width: number; height: number } | null>(null);
+  readonly selectionGroup = signal<FlowGroup | null>(null);
+  readonly selectionGroupId = '__selection__';
   readonly contextMenuOnPointerUp = true;
   readonly timingViewMode = signal<TimingViewMode>('list');
   readonly simulateRuns = signal<boolean>(true);
@@ -554,18 +556,21 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
     if (this.selectedNodeIds().size) {
       this.selectedNodeIds.set(new Set());
     }
+    this.selectionGroup.set(null);
   }
 
   onNodePointerDown(event: PointerEvent, nodeId: string): void {
     if (!event.isPrimary || event.button !== 0) return;
     const current = this.selectedNodeIds();
-    if (!current.has(nodeId)) {
+    if (current.size > 1) {
       this.selectedNodeIds.set(new Set([nodeId]));
-      this.stopMultiDrag();
+      this.selectionGroup.set(null);
       return;
     }
-    if (current.size > 1) {
-      this.startMultiDrag();
+    if (!current.has(nodeId)) {
+      this.selectedNodeIds.set(new Set([nodeId]));
+      this.selectionGroup.set(null);
+      return;
     }
   }
 
@@ -853,6 +858,16 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
     }
     const groupEl = target?.closest<HTMLElement>('.group-node');
     const groupId = groupEl?.getAttribute('data-group-id');
+    if (groupId === this.selectionGroupId) {
+      const deleteLabel = this.translate.instant('COMMON.DELETE');
+      this.contextMenu.setItems([{
+        label: deleteLabel,
+        icon: 'pi pi-trash',
+        command: () => this.actions.deleteNode(),
+      }]);
+      this.cm.show(this.buildContextEvent(clientX, clientY));
+      return;
+    }
     if (groupId) {
       this.contextMenu.selectGroup(groupId, { clientX, clientY });
       this.contextMenu.setItems(this.contextMenu.groupItems);
@@ -938,19 +953,85 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
       }
     });
     this.selectedNodeIds.set(selected);
+    this.syncSelectionGroup();
   }
 
-  private startMultiDrag(): void {
+  syncSelectionGroup(): void {
     const selected = this.selectedNodeIds();
-    if (selected.size < 2) return;
-    const positions = new Map<string, { x: number; y: number }>();
-    this.nodes().forEach(node => {
-      if (selected.has(node.id)) {
-        positions.set(node.id, { x: node.position.x, y: node.position.y });
-      }
+    if (selected.size < 2) {
+      this.selectionGroup.set(null);
+      return;
+    }
+    const fallbackSize = { width: 240, height: 80 };
+    let minX = Number.POSITIVE_INFINITY;
+    let minY = Number.POSITIVE_INFINITY;
+    let maxX = Number.NEGATIVE_INFINITY;
+    let maxY = Number.NEGATIVE_INFINITY;
+    const nodes = this.nodes();
+    selected.forEach(id => {
+      if (id === 'start-node') return;
+      const node = nodes.find(n => n.id === id);
+      if (!node) return;
+      const size = this.getNodeSize(id, fallbackSize);
+      minX = Math.min(minX, node.position.x);
+      minY = Math.min(minY, node.position.y);
+      maxX = Math.max(maxX, node.position.x + size.width);
+      maxY = Math.max(maxY, node.position.y + size.height);
     });
-    this.multiDragStartPositions = positions;
-    window.addEventListener('pointerup', this.multiDragPointerUpBound);
+    if (!Number.isFinite(minX) || !Number.isFinite(minY) || !Number.isFinite(maxX) || !Number.isFinite(maxY)) {
+      this.selectionGroup.set(null);
+      return;
+    }
+    const padding = 12;
+    const group: FlowGroup = {
+      id: this.selectionGroupId,
+      title: 'Selection',
+      position: { x: minX - padding, y: minY - padding },
+      size: { width: (maxX - minX) + padding * 2, height: (maxY - minY) + padding * 2 },
+      collapsed: false,
+      nodeIds: Array.from(selected),
+      stepPaths: [],
+      expandedSize: null,
+    };
+    this.selectionGroup.set(group);
+  }
+
+  getSelectionParentId(nodeId: string): string | null {
+    if (nodeId === 'start-node') {
+      return null;
+    }
+    const group = this.selectionGroup();
+    if (!group) {
+      return null;
+    }
+    return this.selectedNodeIds().has(nodeId) ? group.id : null;
+  }
+
+  private getNodeSize(nodeId: string, fallback: { width: number; height: number }): { width: number; height: number } {
+    const els = this.nodeEls?.toArray?.() ?? [];
+    for (const ref of els) {
+      const el = ref?.nativeElement;
+      if (!el) continue;
+      if (el.dataset['nodeId'] === nodeId) {
+        return { width: el.offsetWidth || fallback.width, height: el.offsetHeight || fallback.height };
+      }
+    }
+    return fallback;
+  }
+
+  onSelectionGroupPositionChanged(pos: { x: number; y: number }): void {
+    const group = this.selectionGroup();
+    if (!group) return;
+    if (!Number.isFinite(pos.x) || !Number.isFinite(pos.y)) {
+      return;
+    }
+    if (Math.abs(pos.x - group.position.x) < 0.5 && Math.abs(pos.y - group.position.y) < 0.5) {
+      return;
+    }
+    this.selectionGroup.set({
+      ...group,
+      position: { x: pos.x, y: pos.y },
+    });
   }
 
   private stopMultiDrag(): void {
