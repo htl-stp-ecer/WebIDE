@@ -99,7 +99,13 @@
     </div>
   </div>
 
-  <div class="flow-surface" [class.hidden]="planningService.isActive()" #flowSurface (contextmenu)="actions.onCanvasContextMenu($event)">
+  <div
+    class="flow-surface"
+    [class.hidden]="planningService.isActive()"
+    #flowSurface
+    (pointerdown)="onSurfacePointerDown($event)"
+    (pointerup)="onSurfacePointerUp($event)"
+    (contextmenu)="onCanvasContextMenu($event)">
     @if (typeDefinitionsLoading()) {
       <div class="flow-loading-overlay">
         <div class="flow-loading-content">
@@ -172,7 +178,19 @@
         }
 
         @for (node of actions.visibleNodes(); track node.id) {
-          <div fNode fDragHandle [fNodeId]="node.id" [fNodePosition]="node.position" class="node" [class.node-completed]="actions.isNodeCompleted(node.id)" [attr.data-node-id]="node.id" (contextmenu)="actions.onRightClick($event, node.id)" (fNodePositionChange)="actions.onNodeMoved(node.id, $event)" #nodeElement>
+          <div
+            fNode
+            fDragHandle
+            [fNodeId]="node.id"
+            [fNodePosition]="node.position"
+            class="node"
+            [class.node-completed]="actions.isNodeCompleted(node.id)"
+            [class.node-selected]="isNodeSelected(node.id)"
+            [attr.data-node-id]="node.id"
+            (pointerdown)="onNodePointerDown($event, node.id)"
+            (contextmenu)="actions.onRightClick($event, node.id)"
+            (fNodePositionChange)="actions.onNodeMoved(node.id, $event)"
+            #nodeElement>
             <div fNodeInput [fInputConnectableSide]="actions.isVertical() ? 'top' : 'left'" [fInputId]="node.id + '-input'" class="port" [class.port-top]="actions.isVertical()" [class.port-left]="!actions.isVertical()"></div>
             <div class="node-title">{{ node.text }}</div>
             @if (isToggleEnabled('timestamps') ? runManager.getNodeTiming(node.id) : null; as timing) {
@@ -224,6 +242,15 @@
         }
       </f-canvas>
     </f-flow>
+
+    @if (selectionRect(); as rect) {
+      <div
+        class="selection-rect"
+        [style.left.px]="rect.x"
+        [style.top.px]="rect.y"
+        [style.width.px]="rect.width"
+        [style.height.px]="rect.height"></div>
+    }
 
     @if (runManager.stepTimings().length && isToggleEnabled('timestamps')) {
       <app-timing-panel

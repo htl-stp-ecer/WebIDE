@@ -208,6 +208,16 @@ function syncMissionGroups(flow: Flowchart, groups: FlowGroup[]): void {
 }
 
 export function handleGroupRightClick(flow: Flowchart, event: MouseEvent, groupId: string): void {
+  if (flow.contextMenuOnPointerUp) {
+    event.preventDefault();
+    event.stopPropagation();
+    return;
+  }
+  if (flow.shouldSuppressContextMenu(event) || flow.consumeContextMenuSuppression()) {
+    event.preventDefault();
+    event.stopPropagation();
+    return;
+  }
   event.preventDefault();
   event.stopPropagation();
   flow.contextMenu.selectGroup(groupId, { clientX: event.clientX, clientY: event.clientY });

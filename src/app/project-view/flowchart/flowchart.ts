@@ -1,6 +1,7 @@
-import { AfterViewChecked, AfterViewInit, Component, ElementRef, OnDestroy, OnInit, QueryList, Signal, ViewChild, ViewChildren, effect, signal, viewChild } from '@angular/core';
+import { AfterViewChecked, AfterViewInit, Component, ElementRef, HostListener, OnDestroy, OnInit, QueryList, Signal, ViewChild, ViewChildren, effect, signal, viewChild } from '@angular/core';
 import { EFMarkerType, FCanvasComponent, FFlowComponent, FFlowModule } from '@foblex/flow';
 import { ContextMenu, ContextMenuModule } from 'primeng/contextmenu';
+import type { MenuItem } from 'primeng/api';
 import { CheckboxModule } from 'primeng/checkbox';
 import { FormsModule } from '@angular/forms';
 import { InputNumberModule } from 'primeng/inputnumber';
@@ -105,6 +106,9 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
     { key: 'tableVisualization', labelKey: 'FLOWCHART.VIEW_TOGGLE_TABLE_VIZ', icon: 'pi pi-map' },
   ];
   readonly panelOffsets = signal<Record<FloatingPanelKey, PanelOffset>>({ ...DEFAULT_PANEL_OFFSETS });
+  readonly selectedNodeIds = signal<Set<string>>(new Set());
+  readonly selectionRect = signal<{ x: number; y: number; width: number; height: number } | null>(null);
+  readonly contextMenuOnPointerUp = true;
   readonly timingViewMode = signal<TimingViewMode>('list');
   readonly simulateRuns = signal<boolean>(true);
   readonly robotSettingsVisible = signal<boolean>(false);
@@ -138,6 +142,17 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
   private robotSettingsWasOpen = false;
   private panelResizeObserver?: ResizeObserver;
   private pendingPanelClamp = false;
+  private selectionDrag:
+    | { startX: number; startY: number; surfaceRect: DOMRect; moved: boolean }
+    | null = null;
+  private suppressContextMenuOnce = false;
+  private suppressContextMenuTimeout?: ReturnType<typeof setTimeout>;
+  multiDragStartPositions: Map<string, { x: number; y: number }> | null = null;
+  private multiDragPointerUpBound = () => this.stopMultiDrag();
+  private rightDragState: { startX: number; startY: number; moved: boolean } | null = null;
+  private rightDragPointerMoveBound = (event: PointerEvent) => this.onRightPointerMove(event);
+  private rightDragPointerUpBound = () => this.onRightPointerUp();
+  private lastRightDown: { x: number; y: number } | null = null;
 
   constructor(
     readonly missionState: MissionStateService,
@@ -200,6 +215,7 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
   ngOnDestroy(): void {
     this.actions.stopRun();
     this.stopPanelDrag();
+    this.stopSelectionDrag();
     this.langChangeSub?.unsubscribe();
     this.themeObserver?.disconnect();
     this.typeDefinitionsSub?.unsubscribe();
@@ -211,6 +227,33 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
       clearTimeout(this.saveStatusTimeout);
     }
     this.panelResizeObserver?.disconnect();
+    this.stopMultiDrag();
+    if (this.suppressContextMenuTimeout) {
+      clearTimeout(this.suppressContextMenuTimeout);
+    }
+    this.stopRightDrag();
+  }
+
+  @HostListener('window:pointerdown', ['$event'])
+  onWindowPointerDown(event: PointerEvent): void {
+    if (event.button !== 2) return;
+    const surface = this.flowSurfaceRef?.nativeElement;
+    if (!surface || !surface.contains(event.target as Node)) return;
+    this.lastRightDown = { x: event.clientX, y: event.clientY };
+    this.startRightDrag(event);
+  }
+
+  onSurfacePointerUp(event: PointerEvent): void {
+    if (event.button !== 2 || !this.contextMenuOnPointerUp) return;
+    const start = this.lastRightDown;
+    this.lastRightDown = null;
+    if (!start) return;
+    const dx = event.clientX - start.x;
+    const dy = event.clientY - start.y;
+    if (Math.hypot(dx, dy) > 4) {
+      return;
+    }
+    this.showContextMenuForPoint(event.clientX, event.clientY);
   }
 
   setSaveStatus(status: 'idle' | 'saving' | 'saved'): void {
@@ -503,6 +546,73 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
     this.robotSettingsVisible.set(true);
   }
 
+  isNodeSelected(nodeId: string): boolean {
+    return this.selectedNodeIds().has(nodeId);
+  }
+
+  clearNodeSelection(): void {
+    if (this.selectedNodeIds().size) {
+      this.selectedNodeIds.set(new Set());
+    }
+  }
+
+  onNodePointerDown(event: PointerEvent, nodeId: string): void {
+    if (!event.isPrimary || event.button !== 0) return;
+    const current = this.selectedNodeIds();
+    if (!current.has(nodeId)) {
+      this.selectedNodeIds.set(new Set([nodeId]));
+      this.stopMultiDrag();
+      return;
+    }
+    if (current.size > 1) {
+      this.startMultiDrag();
+    }
+  }
+
+  onSurfacePointerDown(event: PointerEvent): void {
+    if (!event.isPrimary || event.button !== 2) return;
+    if (!this.flowSurfaceRef?.nativeElement) return;
+    this.stopSelectionDrag();
+    const surfaceRect = this.flowSurfaceRef.nativeElement.getBoundingClientRect();
+    this.selectionDrag = {
+      startX: event.clientX,
+      startY: event.clientY,
+      surfaceRect,
+      moved: false,
+    };
+    window.addEventListener('pointermove', this.onSelectionPointerMove);
+    window.addEventListener('pointerup', this.onSelectionPointerUp);
+  }
+
+  onCanvasContextMenu(event: MouseEvent): void {
+    if (this.contextMenuOnPointerUp) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+    if (this.shouldSuppressContextMenu(event) || this.consumeContextMenuSuppression()) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+    this.actions.onCanvasContextMenu(event);
+  }
+
+  consumeContextMenuSuppression(): boolean {
+    if (!this.suppressContextMenuOnce) return false;
+    this.suppressContextMenuOnce = false;
+    return true;
+  }
+
+  shouldSuppressContextMenu(event: MouseEvent): boolean {
+    const start = this.lastRightDown;
+    this.lastRightDown = null;
+    if (!start) return false;
+    const dx = event.clientX - start.x;
+    const dy = event.clientY - start.y;
+    return Math.hypot(dx, dy) > 4;
+  }
+
   panelTransform(key: FloatingPanelKey): string {
     const offset = this.panelOffsets()[key];
     return `translate3d(${offset.x}px, ${offset.y}px, 0)`;
@@ -614,6 +724,239 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
     if (changed) {
       this.panelOffsets.set(next);
     }
+  }
+
+  private onSelectionPointerMove = (event: PointerEvent): void => {
+    const drag = this.selectionDrag;
+    if (!drag) return;
+    const dx = event.clientX - drag.startX;
+    const dy = event.clientY - drag.startY;
+    if (!drag.moved && Math.hypot(dx, dy) < 4) {
+      return;
+    }
+    if (!drag.moved) {
+      drag.moved = true;
+      this.scheduleContextMenuSuppression();
+    }
+    const minX = Math.min(drag.startX, event.clientX);
+    const maxX = Math.max(drag.startX, event.clientX);
+    const minY = Math.min(drag.startY, event.clientY);
+    const maxY = Math.max(drag.startY, event.clientY);
+    this.selectionRect.set({
+      x: minX - drag.surfaceRect.left,
+      y: minY - drag.surfaceRect.top,
+      width: maxX - minX,
+      height: maxY - minY,
+    });
+    this.updateSelectedNodesFromRect(minX, minY, maxX, maxY);
+  };
+
+  private onSelectionPointerUp = (): void => {
+    if (!this.selectionDrag) return;
+    if (this.selectionDrag.moved) {
+      this.scheduleContextMenuSuppression();
+    }
+    this.selectionRect.set(null);
+    this.stopSelectionDrag();
+  };
+
+  private stopSelectionDrag(): void {
+    if (!this.selectionDrag) return;
+    this.selectionDrag = null;
+    window.removeEventListener('pointermove', this.onSelectionPointerMove);
+    window.removeEventListener('pointerup', this.onSelectionPointerUp);
+  }
+
+  private scheduleContextMenuSuppression(): void {
+    this.suppressContextMenuOnce = true;
+    if (this.suppressContextMenuTimeout) {
+      clearTimeout(this.suppressContextMenuTimeout);
+    }
+    this.suppressContextMenuTimeout = setTimeout(() => {
+      this.suppressContextMenuOnce = false;
+      this.suppressContextMenuTimeout = undefined;
+    }, 400);
+  }
+
+  private startRightDrag(event: PointerEvent): void {
+    this.stopRightDrag();
+    this.rightDragState = { startX: event.clientX, startY: event.clientY, moved: false };
+    window.addEventListener('pointermove', this.rightDragPointerMoveBound);
+    window.addEventListener('pointerup', this.rightDragPointerUpBound);
+    window.addEventListener('pointercancel', this.rightDragPointerUpBound);
+  }
+
+  private onRightPointerMove(event: PointerEvent): void {
+    const state = this.rightDragState;
+    if (!state) return;
+    if ((event.buttons & 2) !== 2) return;
+    if (state.moved) return;
+    const dx = event.clientX - state.startX;
+    const dy = event.clientY - state.startY;
+    if (Math.hypot(dx, dy) >= 4) {
+      state.moved = true;
+      this.scheduleContextMenuSuppression();
+    }
+  }
+
+  private onRightPointerUp(): void {
+    const state = this.rightDragState;
+    if (state?.moved) {
+      this.scheduleContextMenuSuppression();
+    }
+    this.stopRightDrag();
+  }
+
+  private stopRightDrag(): void {
+    if (!this.rightDragState) return;
+    this.rightDragState = null;
+    window.removeEventListener('pointermove', this.rightDragPointerMoveBound);
+    window.removeEventListener('pointerup', this.rightDragPointerUpBound);
+    window.removeEventListener('pointercancel', this.rightDragPointerUpBound);
+  }
+
+  private showContextMenuForPoint(clientX: number, clientY: number): void {
+    const target = document.elementFromPoint(clientX, clientY) as HTMLElement | null;
+    if (target?.closest('.comment-text')) {
+      return;
+    }
+    const commentEl = target?.closest<HTMLElement>('.comment-node');
+    const commentId = commentEl?.getAttribute('data-comment-id');
+    if (commentId) {
+      this.contextMenu.selectComment(commentId, { clientX, clientY });
+      this.contextMenu.setItems(this.contextMenu.commentItems);
+      this.cm.show(this.buildContextEvent(clientX, clientY));
+      return;
+    }
+    const nodeEl = target?.closest<HTMLElement>('.node[data-node-id]');
+    const nodeId = nodeEl?.getAttribute('data-node-id');
+    if (nodeId && nodeId !== 'start-node') {
+      if (!this.selectedNodeIds().has(nodeId)) {
+        this.selectedNodeIds.set(new Set([nodeId]));
+      }
+      this.contextMenu.selectNode(nodeId, { clientX, clientY });
+      const parentId = this.actions.getNodeParentId(nodeId);
+      const items: MenuItem[] = [];
+      if (parentId) {
+        const removeItem = this.contextMenu.nodeItems.find(item => item.label === this.translate.instant('FLOWCHART.REMOVE_FROM_GROUP'));
+        if (removeItem) items.push(removeItem);
+      }
+      const deleteLabel = this.translate.instant('COMMON.DELETE');
+      items.push({
+        label: deleteLabel,
+        icon: 'pi pi-trash',
+        command: () => this.actions.deleteNode(),
+      });
+      this.contextMenu.setItems(items);
+      this.cm.show(this.buildContextEvent(clientX, clientY));
+      return;
+    }
+    const groupEl = target?.closest<HTMLElement>('.group-node');
+    const groupId = groupEl?.getAttribute('data-group-id');
+    if (groupId) {
+      this.contextMenu.selectGroup(groupId, { clientX, clientY });
+      this.contextMenu.setItems(this.contextMenu.groupItems);
+      this.cm.show(this.buildContextEvent(clientX, clientY));
+      return;
+    }
+    const connectionId = this.findNearbyConnection(clientX, clientY);
+    if (connectionId) {
+      this.contextMenu.selectConnection(connectionId, { clientX, clientY });
+      const isMissionConnection = this.missionConnections().some(c => c.id === connectionId);
+      const connection = this.connections().find(c => c.id === connectionId);
+      const [addItem, removeItem] = this.contextMenu.connectionItems;
+      const menu: MenuItem[] = [];
+      if (addItem) {
+        menu.push({
+          ...addItem,
+          disabled: !isMissionConnection || !!connection?.hasBreakpoint,
+        });
+      }
+      if (removeItem) {
+        menu.push({
+          ...removeItem,
+          disabled: !isMissionConnection || !connection?.hasBreakpoint,
+        });
+      }
+      this.contextMenu.setItems(menu);
+      this.cm.show(this.buildContextEvent(clientX, clientY));
+      return;
+    }
+    this.contextMenu.eventPosition = { clientX, clientY };
+    this.contextMenu.setItems(this.contextMenu.canvasItems);
+    this.cm.show(this.buildContextEvent(clientX, clientY));
+  }
+
+  private findNearbyConnection(clientX: number, clientY: number): string | null {
+    const offsets = [
+      { dx: 0, dy: 0 },
+      { dx: 16, dy: 0 },
+      { dx: -16, dy: 0 },
+      { dx: 0, dy: 16 },
+      { dx: 0, dy: -16 },
+      { dx: 16, dy: 16 },
+      { dx: -16, dy: 16 },
+      { dx: 16, dy: -16 },
+      { dx: -16, dy: -16 },
+    ];
+    for (const offset of offsets) {
+      const candidate = document.elementFromPoint(clientX + offset.dx, clientY + offset.dy) as HTMLElement | null;
+      const connectionEl = candidate?.closest?.('f-connection[data-connection-id]');
+      if (connectionEl) {
+        const id = connectionEl.getAttribute('data-connection-id');
+        if (id) return id;
+      }
+    }
+    return null;
+  }
+
+  private buildContextEvent(clientX: number, clientY: number): MouseEvent {
+    return new MouseEvent('contextmenu', {
+      clientX,
+      clientY,
+      bubbles: true,
+      cancelable: true,
+    });
+  }
+
+  private updateSelectedNodesFromRect(minX: number, minY: number, maxX: number, maxY: number): void {
+    const surface = this.flowSurfaceRef?.nativeElement;
+    if (!surface) return;
+    const nodes = surface.querySelectorAll<HTMLElement>('.node[data-node-id]');
+    const selected = new Set<string>();
+    nodes.forEach(node => {
+      const id = node.getAttribute('data-node-id');
+      if (!id || id === 'start-node') return;
+      const rect = node.getBoundingClientRect();
+      const intersects =
+        rect.left <= maxX &&
+        rect.right >= minX &&
+        rect.top <= maxY &&
+        rect.bottom >= minY;
+      if (intersects) {
+        selected.add(id);
+      }
+    });
+    this.selectedNodeIds.set(selected);
+  }
+
+  private startMultiDrag(): void {
+    const selected = this.selectedNodeIds();
+    if (selected.size < 2) return;
+    const positions = new Map<string, { x: number; y: number }>();
+    this.nodes().forEach(node => {
+      if (selected.has(node.id)) {
+        positions.set(node.id, { x: node.position.x, y: node.position.y });
+      }
+    });
+    this.multiDragStartPositions = positions;
+    window.addEventListener('pointerup', this.multiDragPointerUpBound);
+  }
+
+  private stopMultiDrag(): void {
+    if (!this.multiDragStartPositions) return;
+    this.multiDragStartPositions = null;
+    window.removeEventListener('pointerup', this.multiDragPointerUpBound);
   }
 
   private groupDefinitionsByType(definitions: TypeDefinition[]): DefinitionGroups {

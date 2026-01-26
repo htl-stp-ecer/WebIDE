@@ -32,37 +32,56 @@ export function handleCreateNode(flow: Flowchart, event: FCreateNodeEvent): void
 }
 
 export function deleteNode(flow: Flowchart): void {
-  const nodeId = flow.contextMenu.selectedNodeId;
-  if (!nodeId) {
+  const selected = flow.selectedNodeIds();
+  const fallbackId = flow.contextMenu.selectedNodeId;
+  const ids = selected.size ? Array.from(selected) : (fallbackId ? [fallbackId] : []);
+  const targetIds = ids.filter(id => id && id !== 'start-node');
+  if (!targetIds.length) {
     return;
   }
 
   const mission = flow.missionState.currentMission();
-  const step = flow.lookups.nodeIdToStep.get(nodeId);
   let changed = false;
+  let missionChanged = false;
+  const toRemoveFromGroups: string[] = [];
 
-  if (step && mission) {
-    changed = removeMissionStep(mission, step);
-    if (changed) {
-      normalize(mission, 'parallel');
-      normalize(mission, 'seq');
-      rebuildFromMission(flow, mission);
+  if (mission) {
+    for (const id of targetIds) {
+      const step = flow.lookups.nodeIdToStep.get(id);
+      if (!step) continue;
+      const removed = removeMissionStep(mission, step);
+      if (removed) {
+        changed = true;
+        missionChanged = true;
+        toRemoveFromGroups.push(id);
+      }
     }
-  } else {
-    const before = flow.adHocNodes().length;
-    cleanupAdHocNode(flow, nodeId);
-    if (flow.adHocNodes().length !== before) {
-      recomputeMergedView(flow);
-      changed = true;
-    }
+  }
+
+  const beforeAdHoc = flow.adHocNodes().length;
+  targetIds.forEach(id => {
+    cleanupAdHocNode(flow, id);
+  });
+  if (flow.adHocNodes().length !== beforeAdHoc) {
+    changed = true;
+    toRemoveFromGroups.push(...targetIds);
   }
 
   if (!changed) {
     return;
   }
 
-  removeNodeFromGroups(flow, nodeId, false);
+  if (missionChanged) {
+    normalize(mission!, 'parallel');
+    normalize(mission!, 'seq');
+    rebuildFromMission(flow, mission!);
+  } else {
+    recomputeMergedView(flow);
+  }
+
+  toRemoveFromGroups.forEach(id => removeNodeFromGroups(flow, id, false));
   flow.contextMenu.selectedNodeId = '';
+  flow.clearNodeSelection();
   flow.layoutFlags.needsAdjust = true;
   flow.historyManager.recordHistory('delete-node');
 }

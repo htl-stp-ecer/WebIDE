@@ -19,6 +19,16 @@ function syncMissionComments(flow: Flowchart, comments: FlowComment[]): void {
 }
 
 export function handleCanvasContextMenu(flow: Flowchart, event: MouseEvent): void {
+  if (flow.contextMenuOnPointerUp) {
+    event.preventDefault();
+    event.stopPropagation();
+    return;
+  }
+  if (flow.shouldSuppressContextMenu(event) || flow.consumeContextMenuSuppression()) {
+    event.preventDefault();
+    event.stopPropagation();
+    return;
+  }
   if ((event.target as HTMLElement | null)?.closest('.node, .comment-node, .group-node')) {
     return;
   }
@@ -62,6 +72,16 @@ function findNearbyConnection(flow: Flowchart, event: MouseEvent): string | null
   return null;
 }
 export function handleCommentRightClick(flow: Flowchart, event: MouseEvent, commentId: string): void {
+  if (flow.contextMenuOnPointerUp) {
+    event.preventDefault();
+    event.stopPropagation();
+    return;
+  }
+  if (flow.shouldSuppressContextMenu(event) || flow.consumeContextMenuSuppression()) {
+    event.preventDefault();
+    event.stopPropagation();
+    return;
+  }
   const target = event.target as HTMLElement | null;
   if (target?.closest('.comment-text')) {
     event.stopPropagation();

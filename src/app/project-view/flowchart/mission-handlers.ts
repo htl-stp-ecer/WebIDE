@@ -175,33 +175,51 @@ export function rebuildFromMission(flow: Flowchart, mission: Mission): void {
 }
 
 export function handleNodeMoved(flow: Flowchart, nodeId: string, pos: { x: number; y: number }): void {
-  let touched = false;
-  let missionNodeMoved = false;
-
-  const updatePositions = (nodes: FlowNode[], isMission: boolean) => {
-    const node = nodes.find(n => n.id === nodeId);
-    if (!node) return;
-    node.position = { x: pos.x, y: pos.y };
-    touched = true;
-    if (isMission) missionNodeMoved = true;
+  const selected = flow.selectedNodeIds();
+  const multiStart = flow.multiDragStartPositions;
+  const applyPositions = (id: string, nextPos: { x: number; y: number }) => {
+    const updatePositions = (nodes: FlowNode[], isMission: boolean) => {
+      const node = nodes.find(n => n.id === id);
+      if (!node) return false;
+      node.position = { x: nextPos.x, y: nextPos.y };
+      if (isMission) {
+        const step = flow.lookups.nodeIdToStep.get(id);
+        if (step && !flow.useAutoLayout) {
+          step.position = { x: nextPos.x, y: nextPos.y };
+        }
+      }
+      return true;
+    };
+    const touchedMission = updatePositions(flow.missionNodes(), true);
+    const touchedAdHoc = updatePositions(flow.adHocNodes(), false);
+    const touchedMerged = updatePositions(flow.nodes(), false);
+    return touchedMission || touchedAdHoc || touchedMerged;
   };
 
-  updatePositions(flow.adHocNodes(), false);
-  updatePositions(flow.missionNodes(), true);
-  updatePositions(flow.nodes(), false);
-
-  if (!touched) {
+  if (multiStart && selected.size > 1 && selected.has(nodeId)) {
+    const anchor = multiStart.get(nodeId);
+    if (!anchor) {
+      return;
+    }
+    const dx = pos.x - anchor.x;
+    const dy = pos.y - anchor.y;
+    let touched = false;
+    for (const id of selected) {
+      const origin = multiStart.get(id);
+      if (!origin) continue;
+      if (applyPositions(id, { x: origin.x + dx, y: origin.y + dy })) {
+        touched = true;
+      }
+    }
+    if (touched) {
+      flow.historyManager.recordHistory('move-node');
+    }
     return;
   }
 
-  if (missionNodeMoved) {
-    const step = flow.lookups.nodeIdToStep.get(nodeId);
-    if (step && !flow.useAutoLayout) {
-      step.position = { x: pos.x, y: pos.y };
-    }
+  if (applyPositions(nodeId, pos)) {
+    flow.historyManager.recordHistory('move-node');
   }
-
-  flow.historyManager.recordHistory('move-node');
 }
 
 /**
