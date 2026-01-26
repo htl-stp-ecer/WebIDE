@@ -110,12 +110,52 @@ function refreshGroupStepPaths(flow: Flowchart, groups: FlowGroup[]): FlowGroup[
     const path = step ? flow.lookups.stepPaths.get(step) : undefined;
     return path && path.length ? path.join('.') : null;
   };
-  return groups.map(group => ({
-    ...group,
-    stepPaths: group.nodeIds
-      .map(id => getStepPath(id))
-      .filter((p): p is string => typeof p === 'string' && !!p),
-  }));
+  return groups.map(group => {
+    if (!group.nodeIds.length && group.stepPaths.length) {
+      return group;
+    }
+    return {
+      ...group,
+      stepPaths: group.nodeIds
+        .map(id => getStepPath(id))
+        .filter((p): p is string => typeof p === 'string' && !!p),
+    };
+  });
+}
+
+function hydrateGroupNodeIds(flow: Flowchart, groups: FlowGroup[], missionGroups?: MissionGroup[]): FlowGroup[] {
+  const missionLookup = new Map((missionGroups ?? []).map(group => [group.id, group]));
+  return groups.map(group => {
+    const fallbackPaths = missionLookup.get(group.id)?.step_paths ?? [];
+    const stepPaths = group.stepPaths.length ? group.stepPaths : fallbackPaths;
+    if (!stepPaths.length) {
+      return group;
+    }
+    const nodeIds = stepPaths
+      .map(pathKey => flow.lookups.pathToNodeId.get(pathKey))
+      .filter((id): id is string => typeof id === 'string' && !!id);
+    if (!nodeIds.length) {
+      return { ...group, stepPaths };
+    }
+    return { ...group, nodeIds, stepPaths };
+  });
+}
+
+function mergeGroupStepPaths(groups: FlowGroup[], fallback: FlowGroup[]): FlowGroup[] {
+  const fallbackMap = new Map(fallback.map(group => [group.id, group]));
+  return groups.map(group => {
+    if (group.stepPaths.length) {
+      return group;
+    }
+    const fallbackGroup = fallbackMap.get(group.id);
+    if (!fallbackGroup || !fallbackGroup.stepPaths.length) {
+      return group;
+    }
+    return {
+      ...group,
+      stepPaths: fallbackGroup.stepPaths,
+    };
+  });
 }
 
 export function computeStepPaths(flow: Flowchart, mission: Mission | null): void {
@@ -166,8 +206,11 @@ export function rebuildFromMission(flow: Flowchart, mission: Mission): void {
   flow.comments.set(flowComments);
   mission.comments = toMissionComments(flowComments);
   const existingGroups = flow.groups();
-  const loadedGroups = normalizeFlowGroups(existingGroups.length ? existingGroups : toFlowGroups(flow, mission.groups));
-  const refreshedGroups = refreshGroupStepPaths(flow, loadedGroups);
+  const missionGroups = toFlowGroups(flow, mission.groups);
+  const loadedGroups = normalizeFlowGroups(existingGroups.length ? existingGroups : missionGroups);
+  const mergedGroups = mergeGroupStepPaths(loadedGroups, missionGroups);
+  const hydratedGroups = hydrateGroupNodeIds(flow, mergedGroups, mission.groups);
+  const refreshedGroups = refreshGroupStepPaths(flow, hydratedGroups);
   flow.groups.set(refreshedGroups);
   mission.groups = toMissionGroups(refreshedGroups);
   recomputeMergedView(flow);
