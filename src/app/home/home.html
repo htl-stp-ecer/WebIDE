@@ -56,7 +56,12 @@
 
             <p class="text-base text-gray-400 flex items-center">
               {{ 'COMMON.STATUS' | translate }}
-              @if (connection.battery_voltage_v != null || connection.battery_percent != null) {
+              @if (isStatusLoading(connection)) {
+                <span class="flex items-center ml-2">
+                  {{ 'COMMON.LOADING' | translate }}
+                  <span class="w-3 h-3 bg-yellow-400 rounded-full ml-2 mt-1"></span>
+                </span>
+              } @else if (connection.battery_voltage_v != null || connection.battery_percent != null) {
                 <span class="flex items-center ml-2">
                   {{ 'COMMON.ONLINE' | translate }}
                   @if (connection.battery_voltage_v != null) {

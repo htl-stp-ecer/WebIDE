@@ -16,6 +16,7 @@ export const enTranslations = {
     CLEAR: 'Clear',
     ENABLED: 'Enabled',
     DISABLED: 'Disabled',
+    LOADING: 'Loading...',
   },
   NAVBAR: {
     BATTERY_PERCENT: '({{ value }}%)',
@@ -263,6 +264,7 @@ export const deTranslations = {
     CLEAR: 'Leeren',
     ENABLED: 'Aktiviert',
     DISABLED: 'Deaktiviert',
+    LOADING: 'Lädt...',
   },
   NAVBAR: {
     BATTERY_PERCENT: '({{ value }}%)',

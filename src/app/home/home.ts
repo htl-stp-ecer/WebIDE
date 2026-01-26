@@ -37,6 +37,7 @@ export class Home implements OnInit, OnDestroy {
   corsConfirmUrl?: string;
   corsConfirmSafeUrl?: SafeResourceUrl;
   corsConfirmIp?: string;
+  private statusLoading = new Map<string, boolean>();
   private refreshSub?: Subscription;
 
   constructor(
@@ -54,6 +55,7 @@ export class Home implements OnInit, OnDestroy {
         this.previousConnections.forEach(conn => {
           conn.battery_voltage_v = undefined;
           conn.battery_percent = undefined;
+          this.statusLoading.set(conn.ip, true);
         });
       } catch (e) {
         console.error('Error parsing previousConnections from localStorage', e);
@@ -72,13 +74,22 @@ export class Home implements OnInit, OnDestroy {
     this.refreshSub?.unsubscribe();
   }
 
+  isStatusLoading(connection: ConnectionInfo): boolean {
+    if (connection.battery_voltage_v != null || connection.battery_percent != null) {
+      return false;
+    }
+    return this.statusLoading.get(connection.ip) === true;
+  }
+
   private updateDeviceInfos() {
     for (const conn of this.previousConnections) {
+        this.statusLoading.set(conn.ip, true);
         this.httpService.getDeviceInfo(conn.ip).subscribe({
         next: res => {
           conn.battery_voltage_v = res.battery_voltage_v;
           conn.battery_percent = res.battery_percent;
           conn.hostname = res.hostname;
+          this.statusLoading.set(conn.ip, false);
           if (this.corsConfirmIp === conn.ip) {
             this.corsConfirmIp = undefined;
             this.corsConfirmUrl = undefined;
@@ -88,6 +99,7 @@ export class Home implements OnInit, OnDestroy {
         error: err => {
           conn.battery_voltage_v = undefined;
           conn.battery_percent = undefined;
+          this.statusLoading.set(conn.ip, false);
           console.error(`Failed to fetch device info for ${conn.ip}`, err);
         }
       });
@@ -104,6 +116,7 @@ export class Home implements OnInit, OnDestroy {
     }
 
     this.loading = true;
+    this.statusLoading.set(targetIp, true);
     this.httpService.getDeviceInfo(targetIp).subscribe({
       next: (res) => {
         this.loading = false;
@@ -119,6 +132,7 @@ export class Home implements OnInit, OnDestroy {
         }
 
         this.saveToLocalStorage();
+        this.statusLoading.set(targetIp, false);
         this.router.navigate(['/', encodeRouteIp(targetIp), 'projects']);
         this.corsConfirmUrl = undefined;
         this.corsConfirmSafeUrl = undefined;
@@ -126,6 +140,7 @@ export class Home implements OnInit, OnDestroy {
       },
       error: (err) => {
         this.loading = false;
+        this.statusLoading.set(targetIp, false);
         console.error(err);
         NotificationService.showError(
           this.translate.instant('HOME.CONNECT_ERROR'),

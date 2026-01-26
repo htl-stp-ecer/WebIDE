@@ -28,6 +28,7 @@ export class Navbar implements OnInit, OnDestroy {
   ip: string | null = null;
   isDarkMode = signal(false);
   deviceInfo: ConnectionInfo | undefined;
+  deviceInfoLoading = false;
 
   iconClass = computed(() => this.isDarkMode() ? 'pi pi-sun' : 'pi pi-moon');
 
@@ -80,6 +81,7 @@ export class Navbar implements OnInit, OnDestroy {
             this.http.setIp(newIp);
           }
           this.deviceInfo = undefined;
+          this.deviceInfoLoading = !!this.ip;
           this.restartPolling();
         }
       });
@@ -90,20 +92,38 @@ export class Navbar implements OnInit, OnDestroy {
     this.pollingSub = undefined;
 
     if (this.ip) {
+      if (!this.deviceInfo) {
+        this.deviceInfoLoading = true;
+      }
       this.pollingSub = interval(5000)
         .pipe(
           switchMap(() => this.http.getDeviceInfoDefault()),
           takeUntil(this.destroy$)
         )
         .subscribe({
-          next: info => this.deviceInfo = info,
-          error: err => console.error("Failed to fetch device info:", err)
+          next: info => {
+            this.deviceInfo = info;
+            this.deviceInfoLoading = false;
+          },
+          error: err => {
+            this.deviceInfoLoading = false;
+            console.error("Failed to fetch device info:", err);
+          }
         });
 
       //first polling
+      if (!this.deviceInfo) {
+        this.deviceInfoLoading = true;
+      }
       this.http.getDeviceInfoDefault().subscribe({
-        next: info => this.deviceInfo = info,
-        error: err => console.error("Failed to fetch device info:", err)
+        next: info => {
+          this.deviceInfo = info;
+          this.deviceInfoLoading = false;
+        },
+        error: err => {
+          this.deviceInfoLoading = false;
+          console.error("Failed to fetch device info:", err);
+        }
       });
     }
   }
