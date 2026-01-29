@@ -99,7 +99,13 @@
     </div>
   </div>
 
-  <div class="flow-surface" [class.hidden]="planningService.isActive()" #flowSurface (contextmenu)="actions.onCanvasContextMenu($event)">
+  <div
+    class="flow-surface"
+    [class.hidden]="planningService.isActive()"
+    #flowSurface
+    (pointerdown)="onSurfacePointerDown($event)"
+    (pointerup)="onSurfacePointerUp($event)"
+    (contextmenu)="onCanvasContextMenu($event)">
     @if (typeDefinitionsLoading()) {
       <div class="flow-loading-overlay">
         <div class="flow-loading-content">
@@ -155,6 +161,21 @@
           </div>
         }
 
+        @if (selectionGroup(); as selection) {
+          <div
+            fGroup
+            [fGroupId]="selection.id"
+            [fGroupPosition]="selection.position"
+            [fGroupSize]="selection.size"
+            [fGroupDraggingDisabled]="false"
+            fIncludePadding
+            class="group-node selection-group"
+            [attr.data-group-id]="selection.id"
+            (fGroupPositionChange)="onSelectionGroupPositionChanged($event)">
+            <div class="selection-drag-handle" fDragHandle></div>
+          </div>
+        }
+
         <div fNode [fNodeId]="'start-node'" [fNodePosition]="actions.startNodePosition()" class="node" [attr.data-node-id]="'start-node'" #nodeElement>
           <div class="node-title">{{'FLOWCHART.START_NODE'|translate}}</div>
           <div fNodeOutput [fOutputConnectableSide]="actions.isVertical() ? 'bottom' : 'right'" [fOutputId]="'start-node-output'" [fOutputMultiple]="true" class="port" [class.port-bottom]="actions.isVertical()" [class.port-right]="!actions.isVertical()"></div>
@@ -172,7 +193,20 @@
         }
 
         @for (node of actions.visibleNodes(); track node.id) {
-          <div fNode fDragHandle [fNodeId]="node.id" [fNodePosition]="node.position" class="node" [class.node-completed]="actions.isNodeCompleted(node.id)" [attr.data-node-id]="node.id" (contextmenu)="actions.onRightClick($event, node.id)" (fNodePositionChange)="actions.onNodeMoved(node.id, $event)" #nodeElement>
+          <div
+            fNode
+            fDragHandle
+            [fNodeId]="node.id"
+            [fNodePosition]="node.position"
+            [fNodeParentId]="getSelectionParentId(node.id)"
+            class="node"
+            [class.node-completed]="actions.isNodeCompleted(node.id)"
+            [class.node-selected]="isNodeSelected(node.id)"
+            [attr.data-node-id]="node.id"
+            (pointerdown)="onNodePointerDown($event, node.id)"
+            (contextmenu)="actions.onRightClick($event, node.id)"
+            (fNodePositionChange)="actions.onNodeMoved(node.id, $event)"
+            #nodeElement>
             <div fNodeInput [fInputConnectableSide]="actions.isVertical() ? 'top' : 'left'" [fInputId]="node.id + '-input'" class="port" [class.port-top]="actions.isVertical()" [class.port-left]="!actions.isVertical()"></div>
             <div class="node-title">{{ node.text }}</div>
             @if (isToggleEnabled('timestamps') ? runManager.getNodeTiming(node.id) : null; as timing) {
@@ -225,9 +259,19 @@
       </f-canvas>
     </f-flow>
 
+    @if (selectionRect(); as rect) {
+      <div
+        class="selection-rect"
+        [style.left.px]="rect.x"
+        [style.top.px]="rect.y"
+        [style.width.px]="rect.width"
+        [style.height.px]="rect.height"></div>
+    }
+
     @if (runManager.stepTimings().length && isToggleEnabled('timestamps')) {
       <app-timing-panel
         class="floating-panel"
+        data-panel-key="timing"
         [style.transform]="panelTransform('timing')"
         (pointerdown)="startPanelDrag($event, 'timing')"
         [timings]="runManager.stepTimings()"
@@ -238,6 +282,7 @@
 
     <app-table-visualization-panel
       class="floating-panel visualization-panel"
+      data-panel-key="unity"
       [style.transform]="panelTransform('unity')"
       (pointerdown)="startPanelDrag($event, 'unity')"
       [visible]="isToggleEnabled('tableVisualization')"

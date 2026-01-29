@@ -118,6 +118,10 @@ export function formatStepForPreview(step: MissionStep): string {
   }
   if (fn === 'drive_until_black') return 'drive_until(black)';
   if (fn === 'drive_until_white') return 'drive_until(white)';
+  if (fn === 'follow_line') {
+    if (!arg) return 'follow_line';
+    return `follow_line(${arg.value}cm)`;
+  }
 
   if (!arg) return fn;
 

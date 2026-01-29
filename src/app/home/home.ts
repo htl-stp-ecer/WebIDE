@@ -10,7 +10,7 @@ import { MessageService } from 'primeng/api';
 import { ProgressSpinner } from 'primeng/progressspinner';
 import { Router } from '@angular/router';
 import { NotificationService } from '../services/NotificationService';
-import { interval, Subscription } from 'rxjs';
+import { interval, Subscription, timeout } from 'rxjs';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { encodeRouteIp } from '../services/route-ip-serializer';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
@@ -37,7 +37,9 @@ export class Home implements OnInit, OnDestroy {
   corsConfirmUrl?: string;
   corsConfirmSafeUrl?: SafeResourceUrl;
   corsConfirmIp?: string;
+  private statusLoading = new Map<string, boolean>();
   private refreshSub?: Subscription;
+  private readonly deviceInfoTimeoutMs = 4000;
 
   constructor(
     private httpService: HttpService,
@@ -50,8 +52,12 @@ export class Home implements OnInit, OnDestroy {
     if (connections) {
       try {
         this.previousConnections = JSON.parse(connections) as ConnectionInfo[];
-        // initialize battery_voltage_v to undefined (offline)
-        this.previousConnections.forEach(conn => conn.battery_voltage_v = undefined);
+        // initialize battery fields to undefined (offline)
+        this.previousConnections.forEach(conn => {
+          conn.battery_voltage_v = undefined;
+          conn.battery_percent = undefined;
+          this.statusLoading.set(conn.ip, true);
+        });
       } catch (e) {
         console.error('Error parsing previousConnections from localStorage', e);
         this.previousConnections = [];
@@ -69,23 +75,37 @@ export class Home implements OnInit, OnDestroy {
     this.refreshSub?.unsubscribe();
   }
 
+  isStatusLoading(connection: ConnectionInfo): boolean {
+    if (connection.battery_voltage_v != null || connection.battery_percent != null) {
+      return false;
+    }
+    return this.statusLoading.get(connection.ip) === true;
+  }
+
   private updateDeviceInfos() {
     for (const conn of this.previousConnections) {
-      this.httpService.getDeviceInfo(conn.ip).subscribe({
-        next: res => {
-          conn.battery_voltage_v = res.battery_voltage_v;
-          conn.hostname = res.hostname;
-          if (this.corsConfirmIp === conn.ip) {
-            this.corsConfirmIp = undefined;
-            this.corsConfirmUrl = undefined;
-            this.corsConfirmSafeUrl = undefined;
+      this.statusLoading.set(conn.ip, true);
+      this.httpService.getDeviceInfo(conn.ip)
+        .pipe(timeout(this.deviceInfoTimeoutMs))
+        .subscribe({
+          next: res => {
+            conn.battery_voltage_v = res.battery_voltage_v;
+            conn.battery_percent = res.battery_percent;
+            conn.hostname = res.hostname;
+            this.statusLoading.set(conn.ip, false);
+            if (this.corsConfirmIp === conn.ip) {
+              this.corsConfirmIp = undefined;
+              this.corsConfirmUrl = undefined;
+              this.corsConfirmSafeUrl = undefined;
+            }
+          },
+          error: err => {
+            conn.battery_voltage_v = undefined;
+            conn.battery_percent = undefined;
+            this.statusLoading.set(conn.ip, false);
+            console.error(`Failed to fetch device info for ${conn.ip}`, err);
           }
-        },
-        error: err => {
-          conn.battery_voltage_v = undefined;
-          console.error(`Failed to fetch device info for ${conn.ip}`, err);
-        }
-      });
+        });
     }
   }
 
@@ -99,39 +119,59 @@ export class Home implements OnInit, OnDestroy {
     }
 
     this.loading = true;
-    this.httpService.getDeviceInfo(targetIp).subscribe({
-      next: (res) => {
-        this.loading = false;
-        const existing = this.previousConnections.find(c => c.ip === targetIp);
-        res.ip = targetIp;
+    this.statusLoading.set(targetIp, true);
+    this.httpService.getDeviceInfo(targetIp)
+      .pipe(timeout(this.deviceInfoTimeoutMs))
+      .subscribe({
+        next: (res) => {
+          this.loading = false;
+          const existing = this.previousConnections.find(c => c.ip === targetIp);
+          res.ip = targetIp;
 
-        if (existing) {
-          existing.hostname = res.hostname;
-          existing.battery_voltage_v = res.battery_voltage_v;
-        } else {
-          this.previousConnections.push(res);
-        }
+          if (existing) {
+            existing.hostname = res.hostname;
+            existing.battery_voltage_v = res.battery_voltage_v;
+            existing.battery_percent = res.battery_percent;
+          } else {
+            this.previousConnections.push(res);
+          }
 
-        this.saveToLocalStorage();
-        this.router.navigate(['/', encodeRouteIp(targetIp), 'projects']);
-        this.corsConfirmUrl = undefined;
-        this.corsConfirmSafeUrl = undefined;
-        this.corsConfirmIp = undefined;
-      },
-      error: (err) => {
-        this.loading = false;
-        console.error(err);
-        NotificationService.showError(
-          this.translate.instant('HOME.CONNECT_ERROR'),
-          this.translate.instant('COMMON.ERROR')
-        );
-        if (this.isCorsLikeError(err)) {
-          this.corsConfirmIp = targetIp;
-          this.corsConfirmUrl = this.buildConfirmUrl(targetIp);
-          this.corsConfirmSafeUrl = this.sanitizer.bypassSecurityTrustResourceUrl(this.corsConfirmUrl);
+          this.saveToLocalStorage();
+          this.statusLoading.set(targetIp, false);
+          this.router.navigate(['/', encodeRouteIp(targetIp), 'projects']);
+          this.corsConfirmUrl = undefined;
+          this.corsConfirmSafeUrl = undefined;
+          this.corsConfirmIp = undefined;
+        },
+        error: (err) => {
+          this.loading = false;
+          this.statusLoading.set(targetIp, false);
+          console.error(err);
+          const existing = this.previousConnections.find(c => c.ip === targetIp);
+          if (existing) {
+            existing.battery_voltage_v = undefined;
+            existing.battery_percent = undefined;
+            existing.hostname = existing.hostname ?? '';
+          } else {
+            this.previousConnections.push({
+              ip: targetIp,
+              hostname: '',
+              battery_voltage_v: undefined,
+              battery_percent: undefined,
+            });
+          }
+          this.saveToLocalStorage();
+          NotificationService.showError(
+            this.translate.instant('HOME.CONNECT_ERROR'),
+            this.translate.instant('COMMON.ERROR')
+          );
+          if (this.isCorsLikeError(err)) {
+            this.corsConfirmIp = targetIp;
+            this.corsConfirmUrl = this.buildConfirmUrl(targetIp);
+            this.corsConfirmSafeUrl = this.sanitizer.bypassSecurityTrustResourceUrl(this.corsConfirmUrl);
+          }
         }
-      }
-    });
+      });
   }
 
   removeConnection(ip: string) {

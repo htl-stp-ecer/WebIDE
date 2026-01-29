@@ -110,12 +110,52 @@ function refreshGroupStepPaths(flow: Flowchart, groups: FlowGroup[]): FlowGroup[
     const path = step ? flow.lookups.stepPaths.get(step) : undefined;
     return path && path.length ? path.join('.') : null;
   };
-  return groups.map(group => ({
-    ...group,
-    stepPaths: group.nodeIds
-      .map(id => getStepPath(id))
-      .filter((p): p is string => typeof p === 'string' && !!p),
-  }));
+  return groups.map(group => {
+    if (!group.nodeIds.length && group.stepPaths.length) {
+      return group;
+    }
+    return {
+      ...group,
+      stepPaths: group.nodeIds
+        .map(id => getStepPath(id))
+        .filter((p): p is string => typeof p === 'string' && !!p),
+    };
+  });
+}
+
+function hydrateGroupNodeIds(flow: Flowchart, groups: FlowGroup[], missionGroups?: MissionGroup[]): FlowGroup[] {
+  const missionLookup = new Map((missionGroups ?? []).map(group => [group.id, group]));
+  return groups.map(group => {
+    const fallbackPaths = missionLookup.get(group.id)?.step_paths ?? [];
+    const stepPaths = group.stepPaths.length ? group.stepPaths : fallbackPaths;
+    if (!stepPaths.length) {
+      return group;
+    }
+    const nodeIds = stepPaths
+      .map(pathKey => flow.lookups.pathToNodeId.get(pathKey))
+      .filter((id): id is string => typeof id === 'string' && !!id);
+    if (!nodeIds.length) {
+      return { ...group, stepPaths };
+    }
+    return { ...group, nodeIds, stepPaths };
+  });
+}
+
+function mergeGroupStepPaths(groups: FlowGroup[], fallback: FlowGroup[]): FlowGroup[] {
+  const fallbackMap = new Map(fallback.map(group => [group.id, group]));
+  return groups.map(group => {
+    if (group.stepPaths.length) {
+      return group;
+    }
+    const fallbackGroup = fallbackMap.get(group.id);
+    if (!fallbackGroup || !fallbackGroup.stepPaths.length) {
+      return group;
+    }
+    return {
+      ...group,
+      stepPaths: fallbackGroup.stepPaths,
+    };
+  });
 }
 
 export function computeStepPaths(flow: Flowchart, mission: Mission | null): void {
@@ -166,8 +206,11 @@ export function rebuildFromMission(flow: Flowchart, mission: Mission): void {
   flow.comments.set(flowComments);
   mission.comments = toMissionComments(flowComments);
   const existingGroups = flow.groups();
-  const loadedGroups = normalizeFlowGroups(existingGroups.length ? existingGroups : toFlowGroups(flow, mission.groups));
-  const refreshedGroups = refreshGroupStepPaths(flow, loadedGroups);
+  const missionGroups = toFlowGroups(flow, mission.groups);
+  const loadedGroups = normalizeFlowGroups(existingGroups.length ? existingGroups : missionGroups);
+  const mergedGroups = mergeGroupStepPaths(loadedGroups, missionGroups);
+  const hydratedGroups = hydrateGroupNodeIds(flow, mergedGroups, mission.groups);
+  const refreshedGroups = refreshGroupStepPaths(flow, hydratedGroups);
   flow.groups.set(refreshedGroups);
   mission.groups = toMissionGroups(refreshedGroups);
   recomputeMergedView(flow);
@@ -175,33 +218,29 @@ export function rebuildFromMission(flow: Flowchart, mission: Mission): void {
 }
 
 export function handleNodeMoved(flow: Flowchart, nodeId: string, pos: { x: number; y: number }): void {
-  let touched = false;
-  let missionNodeMoved = false;
-
-  const updatePositions = (nodes: FlowNode[], isMission: boolean) => {
-    const node = nodes.find(n => n.id === nodeId);
-    if (!node) return;
-    node.position = { x: pos.x, y: pos.y };
-    touched = true;
-    if (isMission) missionNodeMoved = true;
+  const applyPositions = (id: string, nextPos: { x: number; y: number }) => {
+    const updatePositions = (nodes: FlowNode[], isMission: boolean) => {
+      const node = nodes.find(n => n.id === id);
+      if (!node) return false;
+      node.position = { x: nextPos.x, y: nextPos.y };
+      if (isMission) {
+        const step = flow.lookups.nodeIdToStep.get(id);
+        if (step && !flow.useAutoLayout) {
+          step.position = { x: nextPos.x, y: nextPos.y };
+        }
+      }
+      return true;
+    };
+    const touchedMission = updatePositions(flow.missionNodes(), true);
+    const touchedAdHoc = updatePositions(flow.adHocNodes(), false);
+    const touchedMerged = updatePositions(flow.nodes(), false);
+    return touchedMission || touchedAdHoc || touchedMerged;
   };
 
-  updatePositions(flow.adHocNodes(), false);
-  updatePositions(flow.missionNodes(), true);
-  updatePositions(flow.nodes(), false);
-
-  if (!touched) {
-    return;
+  if (applyPositions(nodeId, pos)) {
+    flow.historyManager.recordHistory('move-node');
+    flow.syncSelectionGroup();
   }
-
-  if (missionNodeMoved) {
-    const step = flow.lookups.nodeIdToStep.get(nodeId);
-    if (step && !flow.useAutoLayout) {
-      step.position = { x: pos.x, y: pos.y };
-    }
-  }
-
-  flow.historyManager.recordHistory('move-node');
 }
 
 /**

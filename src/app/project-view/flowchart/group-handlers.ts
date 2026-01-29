@@ -110,6 +110,38 @@ function getNodeStepPathKey(flow: Flowchart, nodeId: string): string | null {
   return null;
 }
 
+function fillGroupNodeIdsFromPaths(flow: Flowchart, group: FlowGroup): FlowGroup {
+  const current = normalizeNodeIds((group as any).nodeIds);
+  if (current.length) {
+    return group;
+  }
+  const stepPaths = Array.isArray((group as any).stepPaths) ? (group as any).stepPaths : [];
+  if (!stepPaths.length) {
+    return group;
+  }
+  const nodeIds = stepPaths
+    .map((pathKey: string) => flow.lookups.pathToNodeId.get(pathKey))
+    .filter((id: string | undefined): id is string => typeof id === 'string' && !!id);
+  if (!nodeIds.length) {
+    return group;
+  }
+  return { ...group, nodeIds, stepPaths };
+}
+
+function resolveGroupNodeIds(flow: Flowchart, group: FlowGroup): string[] {
+  const nodeIds = normalizeNodeIds((group as any).nodeIds);
+  if (nodeIds.length) {
+    return nodeIds;
+  }
+  const stepPaths = Array.isArray((group as any).stepPaths) ? (group as any).stepPaths : [];
+  if (!stepPaths.length) {
+    return [];
+  }
+  return stepPaths
+    .map((pathKey: string) => flow.lookups.pathToNodeId.get(pathKey))
+    .filter((id: string | undefined): id is string => typeof id === 'string' && !!id);
+}
+
 function getNodesUnderGroup(flow: Flowchart, group: FlowGroup, candidates: FlowNode[]): string[] {
   const groupSize = group.collapsed
     ? (group.expandedSize ?? group.size)
@@ -130,6 +162,38 @@ function getNodesUnderGroup(flow: Flowchart, group: FlowGroup, candidates: FlowN
     .map(node => node.id);
 }
 
+function fillGroupNodeIdsFromGeometry(flow: Flowchart, group: FlowGroup, candidates: FlowNode[]): FlowGroup {
+  const current = normalizeNodeIds((group as any).nodeIds);
+  if (current.length) {
+    return group;
+  }
+  const nodesUnderGroup = getNodesUnderGroup(flow, group, candidates);
+  if (!nodesUnderGroup.length) {
+    return group;
+  }
+  const stepPaths = nodesUnderGroup
+    .map(id => getNodeStepPathKey(flow, id))
+    .filter((p): p is string => typeof p === 'string' && !!p);
+  return { ...group, nodeIds: nodesUnderGroup, stepPaths };
+}
+
+function getGroupContentBottom(flow: Flowchart, nodes: FlowNode[], groupNodeIds: Set<string>): number | null {
+  if (!groupNodeIds.size) {
+    return null;
+  }
+  const sizeMap = buildNodeElementSizeMap(flow);
+  let contentBottom = Number.NEGATIVE_INFINITY;
+  for (const node of nodes) {
+    if (!groupNodeIds.has(node.id)) {
+      continue;
+    }
+    const size = sizeMap.get(node.id) ?? getNodeElementSize(flow, node.id);
+    const height = size.height || DEFAULT_NODE_SIZE.height;
+    contentBottom = Math.max(contentBottom, node.position.y + height);
+  }
+  return Number.isFinite(contentBottom) ? contentBottom : null;
+}
+
 function applyAutoAssignNodesToGroup(flow: Flowchart, groups: FlowGroup[], targetGroupId: string, strict = false): FlowGroup[] {
   const targetIndex = groups.findIndex(g => g.id === targetGroupId);
   if (targetIndex === -1) {
@@ -137,7 +201,7 @@ function applyAutoAssignNodesToGroup(flow: Flowchart, groups: FlowGroup[], targe
   }
 
   const target = groups[targetIndex]!;
-  const currentTargetNodeIds = normalizeNodeIds((target as any).nodeIds);
+  const currentTargetNodeIds = resolveGroupNodeIds(flow, target);
   const visibleNodes = getVisibleNodes(flow);
   const visibleNodeIds = new Set(visibleNodes.map(n => n.id));
   const candidates = flow.nodes().filter(node => visibleNodeIds.has(node.id) || currentTargetNodeIds.includes(node.id));
@@ -208,6 +272,16 @@ function syncMissionGroups(flow: Flowchart, groups: FlowGroup[]): void {
 }
 
 export function handleGroupRightClick(flow: Flowchart, event: MouseEvent, groupId: string): void {
+  if (flow.contextMenuOnPointerUp) {
+    event.preventDefault();
+    event.stopPropagation();
+    return;
+  }
+  if (flow.shouldSuppressContextMenu(event) || flow.consumeContextMenuSuppression()) {
+    event.preventDefault();
+    event.stopPropagation();
+    return;
+  }
   event.preventDefault();
   event.stopPropagation();
   flow.contextMenu.selectGroup(groupId, { clientX: event.clientX, clientY: event.clientY });
@@ -310,32 +384,32 @@ export function toggleGroupCollapsed(flow: Flowchart, groupId: string): void {
   let adHocNodes = adHocNodesBefore;
   let comments = commentsBefore;
 
+  const withPathNodes = fillGroupNodeIdsFromPaths(flow, groups[index]!);
+  const withGeometryNodes = fillGroupNodeIdsFromGeometry(flow, withPathNodes, flow.nodes());
+  if (withGeometryNodes !== groups[index]) {
+    groups[index] = withGeometryNodes;
+  }
   const groupBefore = groups[index]!;
   const isVertical = flow.orientation() === 'vertical';
-  const nodeIdsInGroup = new Set(normalizeNodeIds((groupBefore as any).nodeIds));
+  const nodeIdsInGroup = new Set(resolveGroupNodeIds(flow, groupBefore));
+  const contentBottom = isAutoLayout ? getGroupContentBottom(flow, nodes, nodeIdsInGroup) : null;
 
   const applyShift = (thresholdY: number, deltaY: number) => {
-    if (!isVertical || deltaY === 0) {
+    if (!isVertical || deltaY === 0 || isAutoLayout) {
       return;
     }
     const excludeNode = (node: FlowNode) => nodeIdsInGroup.has(node.id);
-    if (isAutoLayout) {
-      nodes = shiftIfBelow(nodes, thresholdY, deltaY, excludeNode);
-    } else {
-      missionNodes = shiftIfBelow(missionNodes, thresholdY, deltaY, excludeNode);
-      adHocNodes = shiftIfBelow(adHocNodes, thresholdY, deltaY, excludeNode);
-    }
+    missionNodes = shiftIfBelow(missionNodes, thresholdY, deltaY, excludeNode);
+    adHocNodes = shiftIfBelow(adHocNodes, thresholdY, deltaY, excludeNode);
     comments = shiftIfBelow(comments, thresholdY, deltaY);
     groups = shiftIfBelow(groups, thresholdY, deltaY, g => (g as any).id === groupId);
 
-    if (!isAutoLayout) {
-      const shiftedMissionIds = new Set(
-        missionNodes
-          .filter((n, i) => n.position.y !== missionNodesBefore[i]?.position.y)
-          .map(n => n.id),
-      );
-      updateMissionStepPositions(flow, shiftedMissionIds, deltaY);
-    }
+    const shiftedMissionIds = new Set(
+      missionNodes
+        .filter((n, i) => n.position.y !== missionNodesBefore[i]?.position.y)
+        .map(n => n.id),
+    );
+    updateMissionStepPositions(flow, shiftedMissionIds, deltaY);
   };
 
   const groupNow = () => groups.find(g => g.id === groupId);
@@ -344,8 +418,12 @@ export function toggleGroupCollapsed(flow: Flowchart, groupId: string): void {
     const g = groupNow() ?? groupBefore;
     const restoreSize = g.expandedSize ?? g.size;
     const collapseHeight = g.size.height;
-    const deltaY = restoreSize.height - collapseHeight;
-    const thresholdY = g.position.y + collapseHeight;
+    const deltaY = isAutoLayout && contentBottom !== null
+      ? (contentBottom - (g.position.y + collapseHeight))
+      : (restoreSize.height - collapseHeight);
+    const thresholdY = isAutoLayout && contentBottom !== null
+      ? contentBottom
+      : (g.position.y + collapseHeight);
 
     applyShift(thresholdY, deltaY);
 
@@ -356,8 +434,12 @@ export function toggleGroupCollapsed(flow: Flowchart, groupId: string): void {
   } else {
     const g = groupNow() ?? groupBefore;
     const expandedSize = g.expandedSize ?? g.size;
-    const deltaY = expandedSize.height - COLLAPSED_GROUP_HEIGHT;
-    const thresholdY = g.position.y + expandedSize.height;
+    const deltaY = isAutoLayout && contentBottom !== null
+      ? (contentBottom - (g.position.y + COLLAPSED_GROUP_HEIGHT))
+      : (expandedSize.height - COLLAPSED_GROUP_HEIGHT);
+    const thresholdY = isAutoLayout && contentBottom !== null
+      ? contentBottom
+      : (g.position.y + expandedSize.height);
 
     applyShift(thresholdY, -deltaY);
 
@@ -379,6 +461,7 @@ export function toggleGroupCollapsed(flow: Flowchart, groupId: string): void {
   flow.groups.set(groups);
   if (isAutoLayout) {
     flow.nodes.set(nodes);
+    flow.layoutFlags.needsAdjust = true;
   } else {
     flow.missionNodes.set(missionNodes);
     flow.adHocNodes.set(adHocNodes);
@@ -460,12 +543,12 @@ export function getNodeParentGroupId(flow: Flowchart, node: FlowNode): string | 
   if (!node?.id) {
     return null;
   }
-  const group = flow.groups().find(g => normalizeNodeIds((g as any).nodeIds).includes(node.id));
+  const group = flow.groups().find(g => resolveGroupNodeIds(flow, g).includes(node.id));
   return group?.id ?? null;
 }
 
 export function isNodeHiddenByCollapsedGroup(flow: Flowchart, node: FlowNode): boolean {
-  const group = flow.groups().find(g => g.collapsed && normalizeNodeIds((g as any).nodeIds).includes(node.id));
+  const group = flow.groups().find(g => g.collapsed && resolveGroupNodeIds(flow, g).includes(node.id));
   return !!group;
 }
 
@@ -490,7 +573,7 @@ export function getVisibleConnections(flow: Flowchart): Connection[] {
 
   const collapsedGroups = flow.groups().filter(g => g.collapsed);
   for (const group of collapsedGroups) {
-    const groupNodeIds = new Set(normalizeNodeIds((group as any).nodeIds));
+    const groupNodeIds = new Set(resolveGroupNodeIds(flow, group));
     if (!groupNodeIds.size) {
       continue;
     }

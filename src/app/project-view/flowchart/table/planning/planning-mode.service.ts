@@ -24,10 +24,13 @@ import {
   simulateBackwardLineupOnBlack,
   simulateBackwardLineupOnWhite,
   simulateDriveUntilColor,
+  simulateFollowLine,
   simulateForwardLineupOnBlack,
   simulateForwardLineupOnWhite,
 } from '../simulation-path';
-import { Pose2D } from '../models';
+import { Pose2D, forwardMove } from '../models';
+
+const DEFAULT_FOLLOW_LINE_MAX_DISTANCE_CM = 300;
 
 /**
  * Service for managing planning mode state.
@@ -210,7 +213,13 @@ export class PlanningModeService {
     worker.postMessage({
       id: requestId,
       startPose: start,
-      waypoints: wps.map(wp => ({ x: wp.x, y: wp.y })),
+      waypoints: wps.map(wp => ({
+        x: wp.x,
+        y: wp.y,
+        lineup: !!wp.lineup,
+        lineupLineIndex: wp.lineupLineIndex,
+        lineSnapAction: wp.lineSnapAction,
+      })),
       walls,
       robotConfig,
       mapConfig,
@@ -270,7 +279,7 @@ export class PlanningModeService {
   ): MissionStep[] {
     // Include robot start position as first waypoint for path calculation
     const fullPath: Waypoint[] = [
-      { id: 'start', x: start.x, y: start.y },
+      { id: 'start', x: start.x, y: start.y, lineup: false, lineupLineIndex: undefined, lineSnapAction: undefined },
       ...wps,
     ];
 
@@ -330,6 +339,28 @@ export class PlanningModeService {
           if (drivePoses.length) {
             rawPoses.push(...drivePoses);
             currentPose = drivePoses[drivePoses.length - 1];
+          }
+        }
+        continue;
+      }
+
+      if (fn === 'follow_line') {
+        const stopOnIntersection = arg <= 0;
+        const maxDistance = lineupContext?.maxDistanceCm ?? DEFAULT_FOLLOW_LINE_MAX_DISTANCE_CM;
+        const targetDistance = stopOnIntersection ? maxDistance : arg;
+        if (targetDistance > 0) {
+          if (lineupContext) {
+            const followPoses = simulateFollowLine(currentPose, lineupContext, targetDistance, stopOnIntersection);
+            if (followPoses.length) {
+              rawPoses.push(...followPoses);
+              currentPose = followPoses[followPoses.length - 1];
+            } else if (!stopOnIntersection) {
+              currentPose = forwardMove(currentPose, arg);
+              rawPoses.push({ ...currentPose });
+            }
+          } else if (!stopOnIntersection) {
+            currentPose = forwardMove(currentPose, arg);
+            rawPoses.push({ ...currentPose });
           }
         }
         continue;
@@ -473,8 +504,14 @@ export class PlanningModeService {
   }
 
   /** Add a waypoint at the given position */
-  addWaypoint(x: number, y: number): void {
-    const wp = createWaypoint(x, y);
+  addWaypoint(
+    x: number,
+    y: number,
+    lineup = false,
+    lineupLineIndex?: number,
+    lineSnapAction?: 'lineup' | 'follow' | 'drive'
+  ): void {
+    const wp = createWaypoint(x, y, lineup, lineupLineIndex, lineSnapAction);
     this._waypoints.update(wps => [...wps, wp]);
     this._selectedIndex.set(this._waypoints().length - 1);
   }
@@ -493,9 +530,35 @@ export class PlanningModeService {
   }
 
   /** Move waypoint at index to new position */
-  moveWaypoint(index: number, x: number, y: number): void {
+  moveWaypoint(
+    index: number,
+    x: number,
+    y: number,
+    lineup?: boolean,
+    lineupLineIndex?: number,
+    lineSnapAction?: 'lineup' | 'follow' | 'drive'
+  ): void {
     this._waypoints.update(wps =>
-      wps.map((wp, i) => (i === index ? { ...wp, x, y } : wp))
+      wps.map((wp, i) => {
+        if (i !== index) return wp;
+        const nextLineup = lineup ?? wp.lineup;
+        const nextLineSnapAction = nextLineup ? (lineSnapAction ?? wp.lineSnapAction) : undefined;
+        return {
+          ...wp,
+          x,
+          y,
+          lineup: nextLineup,
+          lineupLineIndex: nextLineup ? (lineupLineIndex ?? wp.lineupLineIndex) : undefined,
+          lineSnapAction: nextLineSnapAction,
+        };
+      })
+    );
+  }
+
+  /** Clear lineup flags from all waypoints */
+  clearWaypointLineups(): void {
+    this._waypoints.update(wps =>
+      wps.map(wp => (wp.lineup ? { ...wp, lineup: false, lineupLineIndex: undefined, lineSnapAction: undefined } : wp))
     );
   }
 

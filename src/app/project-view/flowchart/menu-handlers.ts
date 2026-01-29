@@ -78,9 +78,23 @@ export function updateOrientationOptions(flow: Flowchart): void {
 }
 
 export function handleNodeContextMenu(flow: Flowchart, event: MouseEvent, nodeId: string): void {
+  if (flow.contextMenuOnPointerUp) {
+    event.preventDefault();
+    event.stopPropagation();
+    return;
+  }
+  if (flow.shouldSuppressContextMenu(event) || flow.consumeContextMenuSuppression()) {
+    event.preventDefault();
+    event.stopPropagation();
+    return;
+  }
   event.preventDefault();
   event.stopPropagation();
   flow.contextMenu.selectNode(nodeId, { clientX: event.clientX, clientY: event.clientY });
+  if (!flow.selectedNodeIds().has(nodeId)) {
+    flow.selectedNodeIds.set(new Set([nodeId]));
+    flow.syncSelectionGroup();
+  }
   const deleteLabel = flow.translate.instant('COMMON.DELETE');
   const removeFromGroupLabel = translateLabel(flow, 'FLOWCHART.REMOVE_FROM_GROUP', 'Remove from Group');
   const parentId = flow.actions.getNodeParentId(nodeId);
@@ -103,6 +117,16 @@ export function handleNodeContextMenu(flow: Flowchart, event: MouseEvent, nodeId
 
 export function handleConnectionContextMenu(flow: Flowchart, event: MouseEvent, connectionId: string): void {
   if (connectionId.startsWith('collapsed-')) {
+    return;
+  }
+  if (flow.contextMenuOnPointerUp) {
+    event.preventDefault();
+    event.stopPropagation();
+    return;
+  }
+  if (flow.shouldSuppressContextMenu(event) || flow.consumeContextMenuSuppression()) {
+    event.preventDefault();
+    event.stopPropagation();
     return;
   }
   event.preventDefault();

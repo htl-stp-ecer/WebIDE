@@ -110,8 +110,11 @@ export class PlanningOverlayComponent implements OnInit, AfterViewInit, OnDestro
   private activeLineSnap = signal<{ startX: number; startY: number; endX: number; endY: number } | null>(null);
 
   // Undo/Redo history
-  private undoStack: { waypoints: { id: string; x: number; y: number }[] }[] = [];
-  private redoStack: { waypoints: { id: string; x: number; y: number }[] }[] = [];
+  private undoStack: { waypoints: { id: string; x: number; y: number; lineup?: boolean; lineupLineIndex?: number; lineSnapAction?: 'lineup' | 'follow' | 'drive' }[] }[] = [];
+  private redoStack: { waypoints: { id: string; x: number; y: number; lineup?: boolean; lineupLineIndex?: number; lineSnapAction?: 'lineup' | 'follow' | 'drive' }[] }[] = [];
+
+  // Line snap action menu
+  readonly lineSnapMenu = signal<{ x: number; y: number; lineIndex: number; screenX: number; screenY: number; waypointIndex?: number } | null>(null);
 
   private ctx!: CanvasRenderingContext2D;
   private animationFrameId: number | null = null;
@@ -490,6 +493,17 @@ export class PlanningOverlayComponent implements OnInit, AfterViewInit, OnDestro
     this.ctx.arc(0, 0, 3, 0, Math.PI * 2);
     this.ctx.fill();
 
+    const sensorConfig = this.vizService.sensorConfig();
+    for (const sensor of sensorConfig.lineSensors) {
+      const sensorX = bodyCenterX + sensor.forwardCm * scaleX;
+      const sensorY = bodyCenterY - sensor.strafeCm * scaleY;
+
+      this.ctx.fillStyle = 'rgba(249, 115, 22, 0.7)';
+      this.ctx.beginPath();
+      this.ctx.arc(sensorX, sensorY, 3, 0, Math.PI * 2);
+      this.ctx.fill();
+    }
+
     this.ctx.restore();
   }
 
@@ -711,9 +725,15 @@ export class PlanningOverlayComponent implements OnInit, AfterViewInit, OnDestro
    * @param waypointIndex Index of waypoint being moved (to get previous point for angle snap)
    * @returns Snapped position
    */
-  private applySnap(x: number, y: number, waypointIndex: number): { x: number; y: number } {
+  private applySnap(
+    x: number,
+    y: number,
+    waypointIndex: number
+  ): { x: number; y: number; lineSnapped: boolean; lineIndex: number | null } {
     let snappedX = x;
     let snappedY = y;
+    let lineSnapped = false;
+    let lineIndex: number | null = null;
 
     // Clear previous snap indicators
     this.activeAngleSnap.set(null);
@@ -742,6 +762,8 @@ export class PlanningOverlayComponent implements OnInit, AfterViewInit, OnDestro
       if (lineResult) {
         snappedX = lineResult.x;
         snappedY = lineResult.y;
+        lineSnapped = true;
+        lineIndex = lineResult.lineIndex;
       }
     }
 
@@ -759,7 +781,14 @@ export class PlanningOverlayComponent implements OnInit, AfterViewInit, OnDestro
       snappedY = gridResult.y;
     }
 
-    return { x: snappedX, y: snappedY };
+    if (this.snapLines() && this.mapService.isOnBlackLine(snappedX, snappedY)) {
+      lineSnapped = true;
+      if (lineIndex === null) {
+        lineIndex = this.findNearestLineIndex(snappedX, snappedY);
+      }
+    }
+
+    return { x: snappedX, y: snappedY, lineSnapped, lineIndex };
   }
 
   /**
@@ -823,15 +852,17 @@ export class PlanningOverlayComponent implements OnInit, AfterViewInit, OnDestro
   /**
    * Snap to nearest black line if within threshold distance
    */
-  private applyLineSnap(x: number, y: number): { x: number; y: number } | null {
+  private applyLineSnap(x: number, y: number): { x: number; y: number; lineIndex: number } | null {
     const lines = this.mapService.lineSegmentsCm();
     if (lines.length === 0) return null;
 
     let nearestLine: typeof lines[0] | null = null;
     let nearestDist: number = SNAP_CONFIG.lineSnapDistance;
     let nearestPoint = { x, y };
+    let nearestIndex = -1;
 
-    for (const line of lines) {
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
       const closest = this.closestPointOnSegment(
         x, y,
         line.startX, line.startY,
@@ -847,6 +878,7 @@ export class PlanningOverlayComponent implements OnInit, AfterViewInit, OnDestro
         nearestDist = dist;
         nearestLine = line;
         nearestPoint = closest;
+        nearestIndex = i;
       }
     }
 
@@ -858,11 +890,39 @@ export class PlanningOverlayComponent implements OnInit, AfterViewInit, OnDestro
         endX: nearestLine.endX,
         endY: nearestLine.endY,
       });
-      return nearestPoint;
+      return { ...nearestPoint, lineIndex: nearestIndex };
     }
 
     return null;
   }
+
+  private findNearestLineIndex(x: number, y: number): number | null {
+    const lines = this.mapService.lineSegmentsCm();
+    if (lines.length === 0) return null;
+
+    let nearestIndex = 0;
+    let nearestDist = Number.POSITIVE_INFINITY;
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const closest = this.closestPointOnSegment(
+        x, y,
+        line.startX, line.startY,
+        line.endX, line.endY
+      );
+      const dist = Math.sqrt(
+        (x - closest.x) * (x - closest.x) +
+        (y - closest.y) * (y - closest.y)
+      );
+      if (dist < nearestDist) {
+        nearestDist = dist;
+        nearestIndex = i;
+      }
+    }
+
+    return nearestIndex;
+  }
+
 
   /**
    * Find the closest point on a line segment to a given point
@@ -902,6 +962,10 @@ export class PlanningOverlayComponent implements OnInit, AfterViewInit, OnDestro
 
   onPointerDown(event: PointerEvent): void {
     if (event.button !== 0) return;
+    if (this.lineSnapMenu()) {
+      this.lineSnapMenu.set(null);
+      return;
+    }
 
     const canvas = this.canvasRef.nativeElement;
     const rect = canvas.getBoundingClientRect();
@@ -921,10 +985,21 @@ export class PlanningOverlayComponent implements OnInit, AfterViewInit, OnDestro
     // Add new waypoint
     const tablePos = this.canvasToTable(x, y, rect.width, rect.height);
     if (tablePos) {
-      this.saveUndoState(); // Save state before adding
       // Apply snap constraints when adding new waypoint
       const waypoints = this.planningService.waypoints();
       const snapped = this.applySnap(tablePos.x, tablePos.y, waypoints.length);
+      if (snapped.lineSnapped && typeof snapped.lineIndex === 'number') {
+        this.lineSnapMenu.set({
+          x: snapped.x,
+          y: snapped.y,
+          lineIndex: snapped.lineIndex,
+          screenX: event.clientX,
+          screenY: event.clientY,
+        });
+        this.clearSnapIndicators();
+        return;
+      }
+      this.saveUndoState(); // Save state before adding
       this.planningService.addWaypoint(snapped.x, snapped.y);
       this.clearSnapIndicators(); // Clear immediately since not dragging
     }
@@ -943,7 +1018,17 @@ export class PlanningOverlayComponent implements OnInit, AfterViewInit, OnDestro
     if (tablePos) {
       // Apply snap constraints if any are enabled
       const snapped = this.applySnap(tablePos.x, tablePos.y, draggingIndex);
-      this.planningService.moveWaypoint(draggingIndex, snapped.x, snapped.y);
+      const current = this.planningService.waypoints()[draggingIndex];
+      const nextAction = snapped.lineSnapped ? (current?.lineSnapAction ?? 'lineup') : undefined;
+      const nextLineup = snapped.lineSnapped;
+      this.planningService.moveWaypoint(
+        draggingIndex,
+        snapped.x,
+        snapped.y,
+        nextLineup,
+        snapped.lineSnapped ? snapped.lineIndex ?? undefined : undefined,
+        nextAction
+      );
     }
   }
 
@@ -957,6 +1042,60 @@ export class PlanningOverlayComponent implements OnInit, AfterViewInit, OnDestro
   onPointerLeave(): void {
     this.planningService.stopDragging();
     this.clearSnapIndicators();
+  }
+
+  onContextMenu(event: MouseEvent): void {
+    event.preventDefault();
+    const canvas = this.canvasRef.nativeElement;
+    const rect = canvas.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+    const hitIndex = this.hitTestWaypoint(x, y, rect.width, rect.height);
+    if (hitIndex === null) {
+      this.lineSnapMenu.set(null);
+      return;
+    }
+    const wp = this.planningService.waypoints()[hitIndex];
+    if (typeof wp.lineupLineIndex !== 'number') {
+      this.lineSnapMenu.set(null);
+      return;
+    }
+    this.planningService.selectWaypoint(hitIndex);
+    this.lineSnapMenu.set({
+      x: wp.x,
+      y: wp.y,
+      lineIndex: wp.lineupLineIndex,
+      screenX: event.clientX,
+      screenY: event.clientY,
+      waypointIndex: hitIndex,
+    });
+  }
+
+  selectLineSnapAction(action: 'lineup' | 'follow' | 'drive'): void {
+    const pending = this.lineSnapMenu();
+    if (!pending) return;
+    this.saveUndoState();
+    if (pending.waypointIndex !== undefined) {
+      this.planningService.moveWaypoint(
+        pending.waypointIndex,
+        pending.x,
+        pending.y,
+        true,
+        pending.lineIndex,
+        action
+      );
+    } else {
+      this.planningService.addWaypoint(pending.x, pending.y, true, pending.lineIndex, action);
+    }
+    this.lineSnapMenu.set(null);
+  }
+
+  cancelLineSnapAction(): void {
+    this.lineSnapMenu.set(null);
+  }
+
+  canFollowLineSnap(_: number): boolean {
+    return true;
   }
 
   onDoubleClick(event: MouseEvent): void {
@@ -1031,6 +1170,9 @@ export class PlanningOverlayComponent implements OnInit, AfterViewInit, OnDestro
     if (fn === 'drive_until_black' || fn === 'drive_until_white') {
       return 'pi pi-arrow-up';
     }
+    if (fn === 'follow_line') {
+      return 'pi pi-sliders-h';
+    }
     if (fn.includes('lineup')) {
       return 'pi pi-align-center';
     }
@@ -1076,6 +1218,9 @@ export class PlanningOverlayComponent implements OnInit, AfterViewInit, OnDestro
     this.snapLines.set(newState);
     this.snapLinesValue = newState;
     localStorage.setItem(STORAGE_KEYS.snapLines, String(newState));
+    if (!newState) {
+      this.planningService.clearWaypointLineups();
+    }
   }
 
   // PrimeNG toggle button event handlers
@@ -1095,6 +1240,9 @@ export class PlanningOverlayComponent implements OnInit, AfterViewInit, OnDestro
     const value = event.checked ?? false;
     this.snapLines.set(value);
     localStorage.setItem(STORAGE_KEYS.snapLines, String(value));
+    if (!value) {
+      this.planningService.clearWaypointLineups();
+    }
   }
 
   onAllowStrafeChange(event: { checked?: boolean }): void {
@@ -1108,7 +1256,14 @@ export class PlanningOverlayComponent implements OnInit, AfterViewInit, OnDestro
   // --- Undo/Redo ---
 
   private saveUndoState(): void {
-    const waypoints = this.planningService.waypoints().map(wp => ({ id: wp.id, x: wp.x, y: wp.y }));
+    const waypoints = this.planningService.waypoints().map(wp => ({
+      id: wp.id,
+      x: wp.x,
+      y: wp.y,
+      lineup: wp.lineup,
+      lineupLineIndex: wp.lineupLineIndex,
+      lineSnapAction: wp.lineSnapAction,
+    }));
     this.undoStack.push({ waypoints });
     this.redoStack = []; // Clear redo stack on new action
     // Limit stack size
@@ -1127,7 +1282,14 @@ export class PlanningOverlayComponent implements OnInit, AfterViewInit, OnDestro
 
   onUndo(): void {
     if (!this.canUndo()) return;
-    const currentState = this.planningService.waypoints().map(wp => ({ id: wp.id, x: wp.x, y: wp.y }));
+    const currentState = this.planningService.waypoints().map(wp => ({
+      id: wp.id,
+      x: wp.x,
+      y: wp.y,
+      lineup: wp.lineup,
+      lineupLineIndex: wp.lineupLineIndex,
+      lineSnapAction: wp.lineSnapAction,
+    }));
     this.redoStack.push({ waypoints: currentState });
     const previousState = this.undoStack.pop()!;
     this.restoreWaypoints(previousState.waypoints);
@@ -1135,16 +1297,23 @@ export class PlanningOverlayComponent implements OnInit, AfterViewInit, OnDestro
 
   onRedo(): void {
     if (!this.canRedo()) return;
-    const currentState = this.planningService.waypoints().map(wp => ({ id: wp.id, x: wp.x, y: wp.y }));
+    const currentState = this.planningService.waypoints().map(wp => ({
+      id: wp.id,
+      x: wp.x,
+      y: wp.y,
+      lineup: wp.lineup,
+      lineupLineIndex: wp.lineupLineIndex,
+      lineSnapAction: wp.lineSnapAction,
+    }));
     this.undoStack.push({ waypoints: currentState });
     const nextState = this.redoStack.pop()!;
     this.restoreWaypoints(nextState.waypoints);
   }
 
-  private restoreWaypoints(waypoints: { id: string; x: number; y: number }[]): void {
+  private restoreWaypoints(waypoints: { id: string; x: number; y: number; lineup?: boolean; lineupLineIndex?: number; lineSnapAction?: 'lineup' | 'follow' | 'drive' }[]): void {
     this.planningService.clear();
     for (const wp of waypoints) {
-      this.planningService.addWaypoint(wp.x, wp.y);
+      this.planningService.addWaypoint(wp.x, wp.y, !!wp.lineup, wp.lineupLineIndex, wp.lineSnapAction);
     }
   }
 

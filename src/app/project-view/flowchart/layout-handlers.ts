@@ -103,11 +103,25 @@ function applyCollapsedGroupOffsets(flow: Flowchart, nodes: FlowNode[], heights:
     return nodes;
   }
 
+  const resolveGroupNodeIds = (group: { nodeIds: string[]; stepPaths: string[] }): string[] => {
+    const nodeIds = Array.isArray(group.nodeIds) ? group.nodeIds.filter(id => !!id) : [];
+    if (nodeIds.length) {
+      return nodeIds;
+    }
+    const stepPaths = Array.isArray(group.stepPaths) ? group.stepPaths.filter(path => !!path) : [];
+    if (!stepPaths.length) {
+      return [];
+    }
+    return stepPaths
+      .map((pathKey: string) => flow.lookups.pathToNodeId.get(pathKey))
+      .filter((id: string | undefined): id is string => typeof id === 'string' && !!id);
+  };
+
   const sortedGroups = collapsedGroups.slice().sort((a, b) => a.position.y - b.position.y);
   let updated = nodes;
 
   for (const group of sortedGroups) {
-    const groupNodeIds = new Set(group.nodeIds);
+    const groupNodeIds = new Set(resolveGroupNodeIds(group));
     if (!groupNodeIds.size) {
       continue;
     }

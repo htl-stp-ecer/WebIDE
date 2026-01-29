@@ -23,6 +23,15 @@
   overflow: hidden;
 }
 
+.selection-rect {
+  position: absolute;
+  border: 1px dashed rgba(59, 130, 246, 0.9);
+  background: rgba(59, 130, 246, 0.12);
+  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.15) inset;
+  pointer-events: none;
+  z-index: 8;
+}
+
 .flow-loading-overlay {
   position: absolute;
   inset: 0;

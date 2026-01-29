@@ -265,22 +265,6 @@ export class TableMapService {
     return avg >= GRAY_MIN && avg <= GRAY_MAX && maxDiff < 30;
   }
 
-  private isGrayBoundary(data: Uint8ClampedArray, x: number, y: number, width: number, height: number): boolean {
-    if (!this.isGray(data, x, y, width, height)) return false;
-
-    for (let dy = -1; dy <= 1; dy++) {
-      for (let dx = -1; dx <= 1; dx++) {
-        if (dx === 0 && dy === 0) continue;
-        const nx = x + dx;
-        const ny = y + dy;
-        if (nx < 0 || nx >= width || ny < 0 || ny >= height) return true;
-        if (!this.isGray(data, nx, ny, width, height)) return true;
-      }
-    }
-
-    return false;
-  }
-
   private extractBlackLines(imageData: ImageData, width: number, height: number): LineSegment[] {
     const segments: LineSegment[] = [];
     const visited = new Uint8Array(width * height);
@@ -410,32 +394,136 @@ export class TableMapService {
       }
     }
 
-    return filtered;
+    return this.mergeCollinearLineSegments(filtered);
   }
 
   private extractWallSegments(imageData: ImageData, width: number, height: number): WallSegment[] {
+    const data = imageData.data;
+    const wallMask = this.buildGrayMask(data, width, height);
+    const skeleton = this.thinMask(wallMask, width, height);
+    const segments = this.extractWallSegmentsFromMask(skeleton, width, height);
+
+    return this.mergeWallSegments(segments);
+  }
+
+  private buildGrayMask(data: Uint8ClampedArray, width: number, height: number): Uint8Array {
+    const mask = new Uint8Array(width * height);
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        if (this.isGray(data, x, y, width, height)) {
+          mask[y * width + x] = 1;
+        }
+      }
+    }
+    return mask;
+  }
+
+  private thinMask(mask: Uint8Array, width: number, height: number): Uint8Array {
+    const out = new Uint8Array(mask);
+    let changed = true;
+
+    const neighbors = (x: number, y: number) => {
+      const row = y * width;
+      return [
+        out[(y - 1) * width + x],     // p2
+        out[(y - 1) * width + x + 1], // p3
+        out[row + x + 1],             // p4
+        out[(y + 1) * width + x + 1], // p5
+        out[(y + 1) * width + x],     // p6
+        out[(y + 1) * width + x - 1], // p7
+        out[row + x - 1],             // p8
+        out[(y - 1) * width + x - 1], // p9
+      ];
+    };
+
+    const transitionCount = (ns: number[]) => {
+      let count = 0;
+      for (let i = 0; i < 8; i++) {
+        if (ns[i] === 0 && ns[(i + 1) % 8] === 1) count++;
+      }
+      return count;
+    };
+
+    while (changed) {
+      changed = false;
+      const toRemove: number[] = [];
+
+      for (let y = 1; y < height - 1; y++) {
+        for (let x = 1; x < width - 1; x++) {
+          const idx = y * width + x;
+          if (out[idx] === 0) continue;
+          const ns = neighbors(x, y);
+          const n = ns[0] + ns[1] + ns[2] + ns[3] + ns[4] + ns[5] + ns[6] + ns[7];
+          if (n < 2 || n > 6) continue;
+          if (transitionCount(ns) !== 1) continue;
+          if (ns[0] && ns[2] && ns[4]) continue;
+          if (ns[2] && ns[4] && ns[6]) continue;
+          toRemove.push(idx);
+        }
+      }
+
+      if (toRemove.length > 0) {
+        changed = true;
+        for (const idx of toRemove) out[idx] = 0;
+      }
+
+      toRemove.length = 0;
+
+      for (let y = 1; y < height - 1; y++) {
+        for (let x = 1; x < width - 1; x++) {
+          const idx = y * width + x;
+          if (out[idx] === 0) continue;
+          const ns = neighbors(x, y);
+          const n = ns[0] + ns[1] + ns[2] + ns[3] + ns[4] + ns[5] + ns[6] + ns[7];
+          if (n < 2 || n > 6) continue;
+          if (transitionCount(ns) !== 1) continue;
+          if (ns[0] && ns[2] && ns[6]) continue;
+          if (ns[0] && ns[4] && ns[6]) continue;
+          toRemove.push(idx);
+        }
+      }
+
+      if (toRemove.length > 0) {
+        changed = true;
+        for (const idx of toRemove) out[idx] = 0;
+      }
+    }
+
+    return out;
+  }
+
+  private extractWallSegmentsFromMask(mask: Uint8Array, width: number, height: number): WallSegment[] {
     const segments: WallSegment[] = [];
     const visited = new Uint8Array(width * height);
-    const data = imageData.data;
-
-    const directions = [
+    const cardinal = [
       { dx: 1, dy: 0 },
-      { dx: 1, dy: -1 },
       { dx: 0, dy: -1 },
-      { dx: -1, dy: -1 },
       { dx: -1, dy: 0 },
-      { dx: -1, dy: 1 },
       { dx: 0, dy: 1 },
+    ];
+    const diagonals = [
+      { dx: 1, dy: -1 },
+      { dx: -1, dy: -1 },
+      { dx: -1, dy: 1 },
       { dx: 1, dy: 1 },
     ];
 
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
-        if (!this.isGrayBoundary(data, x, y, width, height)) continue;
-        if (visited[y * width + x]) continue;
+        const idx = y * width + x;
+        if (!mask[idx]) continue;
+        if (visited[idx]) continue;
+
+        const hasCardinal =
+          (x > 0 && mask[idx - 1]) ||
+          (x < width - 1 && mask[idx + 1]) ||
+          (y > 0 && mask[idx - width]) ||
+          (y < height - 1 && mask[idx + width]);
+
+        const directions = hasCardinal ? cardinal : [...cardinal, ...diagonals];
 
         for (const dir of directions) {
-          const end = this.traceGrayDirection(data, x, y, dir.dx, dir.dy, width, height, visited);
+          const end = this.traceMaskDirection(mask, x, y, dir.dx, dir.dy, width, height, visited);
           if (end.x !== x || end.y !== y) {
             const length = Math.sqrt(Math.pow(end.x - x, 2) + Math.pow(end.y - y, 2));
             if (length >= 2) {
@@ -450,15 +538,15 @@ export class TableMapService {
             }
           }
         }
-        visited[y * width + x] = 1;
+        visited[idx] = 1;
       }
     }
 
-    return this.mergeWallSegments(segments);
+    return segments;
   }
 
-  private traceGrayDirection(
-    data: Uint8ClampedArray,
+  private traceMaskDirection(
+    mask: Uint8Array,
     startX: number,
     startY: number,
     dx: number,
@@ -469,7 +557,6 @@ export class TableMapService {
   ): { x: number; y: number } {
     let currentX = startX;
     let currentY = startY;
-    const isDiagonal = dx !== 0 && dy !== 0;
 
     while (true) {
       const nextX = currentX + dx;
@@ -480,39 +567,12 @@ export class TableMapService {
         nextX < width &&
         nextY >= 0 &&
         nextY < height &&
-        this.isGrayBoundary(data, nextX, nextY, width, height) &&
+        mask[nextY * width + nextX] &&
         !visited[nextY * width + nextX]
       ) {
         currentX = nextX;
         currentY = nextY;
         continue;
-      }
-
-      if (isDiagonal) {
-        const hx = currentX + dx;
-        const hy = currentY;
-        const vx = currentX;
-        const vy = currentY + dy;
-
-        if (
-          hx >= 0 && hx < width && hy >= 0 && hy < height &&
-          this.isGrayBoundary(data, hx, hy, width, height) &&
-          !visited[hy * width + hx]
-        ) {
-          currentX = hx;
-          currentY = hy;
-          continue;
-        }
-
-        if (
-          vx >= 0 && vx < width && vy >= 0 && vy < height &&
-          this.isGrayBoundary(data, vx, vy, width, height) &&
-          !visited[vy * width + vx]
-        ) {
-          currentX = vx;
-          currentY = vy;
-          continue;
-        }
       }
 
       break;
@@ -546,7 +606,10 @@ export class TableMapService {
       }
     }
 
-    return this.connectNearbyEndpoints(filtered);
+    const connected = this.connectNearbyEndpoints(filtered);
+    const merged = this.mergeCollinearWallSegments(connected, 1);
+    const snapped = this.snapWallEndpoints(merged, 1);
+    return this.mergeCollinearWallSegments(snapped, 1);
   }
 
   private connectNearbyEndpoints(segments: WallSegment[]): WallSegment[] {
@@ -604,5 +667,178 @@ export class TableMapService {
     }
 
     return result;
+  }
+
+  private mergeCollinearLineSegments(segments: LineSegment[]): LineSegment[] {
+    return this.mergeCollinearSegments(segments, 0, (startX, startY, endX, endY) => ({
+      startX,
+      startY,
+      endX,
+      endY,
+      isDiagonal: false,
+    }));
+  }
+
+  private mergeCollinearWallSegments(segments: WallSegment[], gap: number): WallSegment[] {
+    return this.mergeCollinearSegments(segments, gap, (startX, startY, endX, endY, source) => ({
+      startX,
+      startY,
+      endX,
+      endY,
+      thickness: Math.max(...source.map(seg => seg.thickness)),
+    }));
+  }
+
+  private snapWallEndpoints(segments: WallSegment[], gap: number): WallSegment[] {
+    const horizontals: Array<{ y: number; minX: number; maxX: number }> = [];
+    const verticals: Array<{ x: number; minY: number; maxY: number }> = [];
+
+    for (const seg of segments) {
+      if (seg.startY === seg.endY) {
+        const minX = Math.min(seg.startX, seg.endX);
+        const maxX = Math.max(seg.startX, seg.endX);
+        horizontals.push({ y: seg.startY, minX, maxX });
+      } else if (seg.startX === seg.endX) {
+        const minY = Math.min(seg.startY, seg.endY);
+        const maxY = Math.max(seg.startY, seg.endY);
+        verticals.push({ x: seg.startX, minY, maxY });
+      }
+    }
+
+    const snapXToVertical = (x: number, y: number): number => {
+      let best = x;
+      let bestDist = gap + 0.001;
+      for (const v of verticals) {
+        if (y < v.minY - gap || y > v.maxY + gap) continue;
+        const dist = Math.abs(v.x - x);
+        if (dist <= gap && dist < bestDist) {
+          bestDist = dist;
+          best = v.x;
+        }
+      }
+      return best;
+    };
+
+    const snapYToHorizontal = (x: number, y: number): number => {
+      let best = y;
+      let bestDist = gap + 0.001;
+      for (const h of horizontals) {
+        if (x < h.minX - gap || x > h.maxX + gap) continue;
+        const dist = Math.abs(h.y - y);
+        if (dist <= gap && dist < bestDist) {
+          bestDist = dist;
+          best = h.y;
+        }
+      }
+      return best;
+    };
+
+    return segments.map(seg => {
+      if (seg.startY === seg.endY) {
+        const y = seg.startY;
+        const startX = snapXToVertical(seg.startX, y);
+        const endX = snapXToVertical(seg.endX, y);
+        return { ...seg, startX, endX };
+      }
+      if (seg.startX === seg.endX) {
+        const x = seg.startX;
+        const startY = snapYToHorizontal(x, seg.startY);
+        const endY = snapYToHorizontal(x, seg.endY);
+        return { ...seg, startY, endY };
+      }
+      return seg;
+    });
+  }
+  private mergeCollinearSegments<T extends { startX: number; startY: number; endX: number; endY: number }>(
+    segments: T[],
+    gap: number,
+    build: (startX: number, startY: number, endX: number, endY: number, source: T[]) => T
+  ): T[] {
+    const horizontals = new Map<number, T[]>();
+    const verticals = new Map<number, T[]>();
+    const leftovers: T[] = [];
+
+    for (const seg of segments) {
+      const sx = seg.startX;
+      const sy = seg.startY;
+      const ex = seg.endX;
+      const ey = seg.endY;
+      if (sx === ex) {
+        const x = sx;
+        const list = verticals.get(x) ?? [];
+        list.push(seg);
+        verticals.set(x, list);
+      } else if (sy === ey) {
+        const y = sy;
+        const list = horizontals.get(y) ?? [];
+        list.push(seg);
+        horizontals.set(y, list);
+      } else {
+        leftovers.push(seg);
+      }
+    }
+
+    const merged: T[] = [...leftovers];
+
+    const mergeGroup = (
+      items: T[],
+      coord: number,
+      isHorizontal: boolean
+    ) => {
+      const sorted = items
+        .map(seg => {
+          const a = isHorizontal ? seg.startX : seg.startY;
+          const b = isHorizontal ? seg.endX : seg.endY;
+          return {
+            start: Math.min(a, b),
+            end: Math.max(a, b),
+            seg,
+          };
+        })
+        .sort((a, b) => a.start - b.start);
+
+      let current = sorted[0];
+      let sources = [current.seg];
+
+      for (let i = 1; i < sorted.length; i++) {
+        const next = sorted[i];
+        if (next.start <= current.end + gap) {
+          current = {
+            start: current.start,
+            end: Math.max(current.end, next.end),
+            seg: current.seg,
+          };
+          sources.push(next.seg);
+        } else {
+          if (isHorizontal) {
+            merged.push(build(current.start, coord, current.end, coord, sources));
+          } else {
+            merged.push(build(coord, current.start, coord, current.end, sources));
+          }
+          current = next;
+          sources = [next.seg];
+        }
+      }
+
+      if (current) {
+        if (isHorizontal) {
+          merged.push(build(current.start, coord, current.end, coord, sources));
+        } else {
+          merged.push(build(coord, current.start, coord, current.end, sources));
+        }
+      }
+    };
+
+    for (const [y, items] of horizontals.entries()) {
+      if (!items.length) continue;
+      mergeGroup(items, y, true);
+    }
+
+    for (const [x, items] of verticals.entries()) {
+      if (!items.length) continue;
+      mergeGroup(items, x, false);
+    }
+
+    return merged;
   }
 }

@@ -43,6 +43,7 @@ export class MissionPanel implements OnInit {
   missionsLoading = true;
   missionDetailLoading = false;
   private contextMission?: Mission;
+  private readonly missionStoragePrefix = 'webide:lastMission:';
 
   // Rename dialog state
   renameDialogVisible = false;
@@ -66,6 +67,41 @@ export class MissionPanel implements OnInit {
     this.getMissions();
   }
 
+  private missionStorageKey(): string | null {
+    return this.projectUUID ? `${this.missionStoragePrefix}${this.projectUUID}` : null;
+  }
+
+  private loadStoredMissionName(): string | null {
+    const key = this.missionStorageKey();
+    if (!key) return null;
+    try {
+      return localStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  }
+
+  private saveStoredMissionName(name: string | null): void {
+    const key = this.missionStorageKey();
+    if (!key) return;
+    try {
+      if (name) {
+        localStorage.setItem(key, name);
+      } else {
+        localStorage.removeItem(key);
+      }
+    } catch {
+      // ignore storage errors
+    }
+  }
+
+  clearSelection(): void {
+    const selection = window.getSelection();
+    if (selection && selection.type !== 'None') {
+      selection.removeAllRanges();
+    }
+  }
+
   backToProjects() {
     const ipParam = this.route.snapshot.paramMap.get('ip');
     const decodedIp = decodeRouteIp(ipParam);
@@ -85,10 +121,20 @@ export class MissionPanel implements OnInit {
         this.updateTimelineData();
         this.missionsLoading = false;
         if (result.length) {
-          this.getDetailedMission(result[0].name);
+          const storedName = this.loadStoredMissionName();
+          const storedMission = storedName ? result.find(m => m.name === storedName) : undefined;
+          if (storedMission) {
+            this.getDetailedMission(storedMission.name);
+          } else {
+            if (storedName) {
+              this.saveStoredMissionName(null);
+            }
+            this.getDetailedMission(result[0].name);
+          }
         } else {
           this.currentMission = undefined;
           this.missionState.setMission(null);
+          this.saveStoredMissionName(null);
         }
       },
       error: error => {
@@ -108,6 +154,7 @@ export class MissionPanel implements OnInit {
       next: result => {
         this.currentMission = result;
         this.missionState.setMission(result);
+        this.saveStoredMissionName(result.name ?? name);
         this.missionDetailLoading = false;
       }, error: error => {
         this.missionDetailLoading = false;
@@ -280,6 +327,7 @@ export class MissionPanel implements OnInit {
         if (this.currentMission?.name === oldName) {
           this.currentMission = { ...this.currentMission, name: newName } as Mission;
           this.missionState.setMission(this.currentMission);
+          this.saveStoredMissionName(newName);
         }
         this.getMissions();
         this.renameDialogVisible = false;
@@ -312,6 +360,9 @@ export class MissionPanel implements OnInit {
               this.translate.instant('MISSION.DELETE_SUCCESS'),
               this.translate.instant('COMMON.SUCCESS')
             );
+            if (this.loadStoredMissionName() === name) {
+              this.saveStoredMissionName(null);
+            }
             this.getMissions();
           },
           error: err => {

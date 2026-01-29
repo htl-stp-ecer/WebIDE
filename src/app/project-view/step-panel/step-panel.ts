@@ -47,6 +47,13 @@ export class StepPanel implements OnInit {
     });
   }
 
+  clearSelection(): void {
+    const selection = window.getSelection();
+    if (selection && selection.type !== 'None') {
+      selection.removeAllRanges();
+    }
+  }
+
   private groupSteps(steps: Step[]): void {
     const prefixCounts: Record<string, number> = {};
     const suffixCounts: Record<string, number> = {};
