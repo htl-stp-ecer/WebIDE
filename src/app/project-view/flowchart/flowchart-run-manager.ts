@@ -42,6 +42,18 @@ export interface StepTiming {
   source: 'synthetic' | 'measured';
 }
 
+type RunLogStream = 'stdout' | 'stderr' | 'system';
+
+export interface RunLogEntry {
+  id: number;
+  stream: RunLogStream;
+  line: string;
+  timestampMs: number;
+  runId: number;
+}
+
+const MAX_LOG_ENTRIES = 1500;
+
 export class FlowchartRunManager {
   private static readonly HISTORY_RUN_ID = -1;
 
@@ -57,10 +69,12 @@ export class FlowchartRunManager {
   private lastStepTimestampMs: number | null = null;
   private pathToNodeId: Map<string, string> = new Map();
   private accumulatedMs = 0;
+  private logSequence = 0;
 
   readonly stepTimings = signal<StepTiming[]>([]);
   readonly maxStepDurationMs = signal(0);
   readonly nodeTimings = signal<Map<string, StepTiming>>(new Map());
+  readonly logEntries = signal<RunLogEntry[]>([]);
 
   constructor(private readonly ctx: FlowchartRunContext) {}
 
@@ -129,6 +143,11 @@ export class FlowchartRunManager {
     this.tracker.reset();
   }
 
+  clearLogs(): void {
+    this.logEntries.set([]);
+    this.logSequence = 0;
+  }
+
   isNodeCompleted(nodeId: string): boolean {
     return this.tracker.isNodeCompleted(nodeId);
   }
@@ -156,6 +175,7 @@ export class FlowchartRunManager {
     switch (type) {
       case 'started':
         this.markRunStart(payload);
+        this.appendSystemLog(`Run started (pid ${String((payload as { pid?: unknown }).pid ?? '?')})`, payload);
         break;
       case 'open':
         this.ctx.isRunActive.set(true);
@@ -163,6 +183,12 @@ export class FlowchartRunManager {
           this.ctx.debugState.set('running');
           this.ctx.breakpointInfo.set(null);
         }
+        break;
+      case 'stdout':
+        this.appendLogLine('stdout', (payload as { line?: unknown }).line, payload);
+        break;
+      case 'stderr':
+        this.appendLogLine('stderr', (payload as { line?: unknown }).line, payload);
         break;
       case 'planned_steps':
         this.tracker.cachePlannedSteps(payload);
@@ -192,7 +218,17 @@ export class FlowchartRunManager {
         console.warn('[Flowchart] Step timing error', payload);
         break;
       case 'exit':
+        this.appendSystemLog(`Run exited with code ${String((payload as { returncode?: unknown }).returncode ?? '?')}`, payload);
+        this.ctx.isRunActive.set(false);
+        this.resetDebugState();
+        break;
       case 'error':
+        if (type === 'error') {
+          const message = (payload as { message?: unknown }).message;
+          if (message) {
+            this.appendLogLine('system', `Error: ${String(message)}`, payload);
+          }
+        }
         this.ctx.isRunActive.set(false);
         this.resetDebugState();
         break;
@@ -219,6 +255,51 @@ export class FlowchartRunManager {
     }
   }
 
+  private appendSystemLog(message: string, payload?: Record<string, unknown>): void {
+    this.appendLogLine('system', message, payload);
+  }
+
+  private appendLogLine(stream: RunLogStream, line: unknown, payload?: Record<string, unknown>): void {
+    const text = line === undefined || line === null ? '' : String(line);
+    const timestampMs = payload ? this.extractTimestampMs(payload) ?? Date.now() : Date.now();
+    const lines = text.split(/\r?\n/);
+    if (!lines.length) {
+      this.appendLogEntry(stream, '', timestampMs);
+      return;
+    }
+    for (const entry of lines) {
+      this.appendLogEntry(stream, entry, timestampMs);
+    }
+  }
+
+  private appendLogEntry(stream: RunLogStream, line: string, timestampMs: number): void {
+    const entry: RunLogEntry = {
+      id: ++this.logSequence,
+      stream,
+      line,
+      timestampMs,
+      runId: this.currentRunId,
+    };
+    this.logEntries.update(prev => {
+      const next = [...prev, entry];
+      if (next.length > MAX_LOG_ENTRIES) {
+        next.splice(0, next.length - MAX_LOG_ENTRIES);
+      }
+      return next;
+    });
+  }
+
+  private formatRunError(err: unknown): string {
+    if (!err) return 'Unknown error';
+    if (typeof err === 'string') return err;
+    if (err instanceof Error) return err.message || String(err);
+    try {
+      return JSON.stringify(err);
+    } catch {
+      return String(err);
+    }
+  }
+
   stopRun(): void {
     const hadSubscription = !!this.runSubscription;
     const wasActive = this.ctx.isRunActive();
@@ -228,6 +309,7 @@ export class FlowchartRunManager {
     this.runSubscription = null;
     this.ctx.isRunActive.set(false);
     this.resetDebugState();
+    this.appendSystemLog('Run stopped by user');
 
     const projectUUID = this.ctx.getProjectUUID();
     if (projectUUID) {
@@ -251,6 +333,7 @@ export class FlowchartRunManager {
     this.runSubscription = null;
 
     this.clearRunVisuals();
+    this.clearLogs();
     this.currentRunId += 1;
     this.awaitingRunStart = true;
     this.resetTimingData();
@@ -271,6 +354,7 @@ export class FlowchartRunManager {
       next: event => this.handleRunEvent(event),
       error: err => {
         console.error('Mission run failed', err);
+        this.appendSystemLog(`Mission run failed: ${this.formatRunError(err)}`);
         this.ctx.isRunActive.set(false);
         this.resetDebugState();
         this.runSubscription = null;

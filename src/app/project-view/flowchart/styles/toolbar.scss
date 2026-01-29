@@ -75,6 +75,13 @@
   font-size: 1rem;
 }
 
+.toggle-icon.terminal-icon {
+  width: 1rem;
+  height: 1rem;
+  display: inline-block;
+  vertical-align: middle;
+}
+
 :host-context(.dark) .toggle-chip,
 :host-context(.p-dark) .toggle-chip {
   background: rgba(35, 40, 48, 0.9);
