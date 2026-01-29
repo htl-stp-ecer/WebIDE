@@ -39,6 +39,7 @@ import { RobotSettingsModal } from './robot-settings/robot-settings-modal';
 import { TableMapService, TableVisualizationService } from './table/services';
 import { buildPlannedPathFromProjectSimulation } from './table/simulation-path';
 import { PlanningModeService, PlanningOverlayComponent } from './table/planning';
+import { RunLogPanel } from './logs/run-log-panel';
 
 interface DefinitionOption {
   label: string;
@@ -46,7 +47,7 @@ interface DefinitionOption {
 }
 
 type DefinitionGroups = Partial<Record<string, DefinitionOption[]>>;
-type FloatingPanelKey = 'timing' | 'unity' | 'table';
+type FloatingPanelKey = 'timing' | 'unity' | 'table' | 'logs';
 //
 interface PanelOffset {
   x: number;
@@ -63,16 +64,17 @@ interface PanelDragState {
   surfaceRect: DOMRect;
 }
 
-const DEFAULT_VIEW_TOGGLE_STATE: Record<string, boolean> = { timestamps: true, tableVisualization: false };
+const DEFAULT_VIEW_TOGGLE_STATE: Record<string, boolean> = { timestamps: true, tableVisualization: false, logs: true };
 const DEFAULT_PANEL_OFFSETS: Record<FloatingPanelKey, PanelOffset> = {
   timing: { x: 0, y: 0 },
   unity: { x: 0, y: 0 },
   table: { x: 0, y: 0 },
+  logs: { x: 0, y: 0 },
 };
 
 @Component({
   selector: 'app-flowchart',
-  imports: [FFlowComponent, FFlowModule, InputNumberModule, CheckboxModule, InputTextModule, ContextMenuModule, Tooltip, SelectButtonModule, FormsModule, TranslateModule, Select, DecimalPipe, ProgressSpinner, TableVisualizationPanel, PlanningOverlayComponent, TimingPanel, RobotSettingsModal],
+  imports: [FFlowComponent, FFlowModule, InputNumberModule, CheckboxModule, InputTextModule, ContextMenuModule, Tooltip, SelectButtonModule, FormsModule, TranslateModule, Select, DecimalPipe, ProgressSpinner, TableVisualizationPanel, PlanningOverlayComponent, TimingPanel, RobotSettingsModal, RunLogPanel],
   templateUrl: './flowchart.html',
   styleUrl: './flowchart.scss',
   providers: [FlowHistory],
@@ -104,6 +106,7 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
   readonly viewToggleOptions = [
     { key: 'timestamps', labelKey: 'FLOWCHART.VIEW_TOGGLE_TIMESTAMPS', icon: 'pi pi-clock' },
     { key: 'tableVisualization', labelKey: 'FLOWCHART.VIEW_TOGGLE_TABLE_VIZ', icon: 'pi pi-map' },
+    { key: 'logs', labelKey: 'FLOWCHART.VIEW_TOGGLE_LOGS', icon: 'pi pi-list' },
   ];
   readonly panelOffsets = signal<Record<FloatingPanelKey, PanelOffset>>({ ...DEFAULT_PANEL_OFFSETS });
   readonly selectedNodeIds = signal<Set<string>>(new Set());
@@ -115,6 +118,7 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
   readonly simulateRuns = signal<boolean>(true);
   readonly robotSettingsVisible = signal<boolean>(false);
   readonly saveStatus = signal<'idle' | 'saving' | 'saved'>('idle');
+  readonly logsFullscreen = signal<boolean>(false);
   private saveStatusTimeout?: ReturnType<typeof setTimeout>;
   actions!: FlowchartActions;
   readonly eMarkerType = EFMarkerType;
@@ -363,8 +367,15 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
     this.viewToggleState.update(prev => {
       const next = { ...prev, [key]: !prev[key] };
       persistViewToggleState(next);
+      if (key === 'logs' && !next['logs']) {
+        this.logsFullscreen.set(false);
+      }
       return next;
     });
+  }
+
+  setLogsFullscreen(value: boolean): void {
+    this.logsFullscreen.set(value);
   }
 
   setTimingViewMode(mode: TimingViewMode): void {
