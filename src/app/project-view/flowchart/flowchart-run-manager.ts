@@ -289,6 +289,17 @@ export class FlowchartRunManager {
     });
   }
 
+  private formatRunError(err: unknown): string {
+    if (!err) return 'Unknown error';
+    if (typeof err === 'string') return err;
+    if (err instanceof Error) return err.message || String(err);
+    try {
+      return JSON.stringify(err);
+    } catch {
+      return String(err);
+    }
+  }
+
   stopRun(): void {
     const hadSubscription = !!this.runSubscription;
     const wasActive = this.ctx.isRunActive();
@@ -343,7 +354,7 @@ export class FlowchartRunManager {
       next: event => this.handleRunEvent(event),
       error: err => {
         console.error('Mission run failed', err);
-        this.appendSystemLog('Mission run failed');
+        this.appendSystemLog(`Mission run failed: ${this.formatRunError(err)}`);
         this.ctx.isRunActive.set(false);
         this.resetDebugState();
         this.runSubscription = null;
