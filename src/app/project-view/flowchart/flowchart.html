@@ -287,14 +287,14 @@
         [style.height.px]="rect.height"></div>
     }
 
-    @if (runManager.stepTimings().length && isToggleEnabled('timestamps')) {
+    @if (runManager.getVisibleStepTimings().length && isToggleEnabled('timestamps')) {
       <app-timing-panel
         class="floating-panel"
         data-panel-key="timing"
         [style.transform]="panelTransform('timing')"
         (pointerdown)="startPanelDrag($event, 'timing')"
-        [timings]="runManager.stepTimings()"
-        [maxDurationMs]="runManager.maxStepDurationMs()"
+        [timings]="runManager.getVisibleStepTimings()"
+        [maxDurationMs]="runManager.getVisibleMaxDurationMs()"
         [viewMode]="timingViewMode()"
         (viewModeChange)="setTimingViewMode($event)"></app-timing-panel>
     }
