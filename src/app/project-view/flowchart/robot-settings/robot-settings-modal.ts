@@ -3,6 +3,7 @@ import {
   Component,
   ElementRef,
   EventEmitter,
+  HostListener,
   Input,
   OnChanges,
   OnInit,
@@ -19,8 +20,11 @@ import {InputText} from 'primeng/inputtext';
 import {TranslateModule, TranslateService} from '@ngx-translate/core';
 import {HttpService} from '../../../services/http-service';
 import {NotificationService} from '../../../services/NotificationService';
+import {KeybindingsService, StepKeybinding} from '../../../services/keybindings-service';
+import {StepsStateService} from '../../../services/steps-state-service';
 import {TypeDefinition} from '../../../entities/TypeDefinition';
 import {Subject} from 'rxjs';
+import {Step} from '../models';
 import {debounceTime} from 'rxjs/operators';
 import {TableEditorView} from '../table/table-editor-view';
 import {TableVisualizationPanel} from '../table/table-visualization-panel';
@@ -28,7 +32,7 @@ import {TableMapService, TableVisualizationService} from '../table/services';
 import {Pose2D, thetaToDegrees} from '../table/models';
 import {FlowOrientation} from '../models';
 
-type SettingsTab = 'project' | 'robot' | 'start' | 'map';
+type SettingsTab = 'project' | 'robot' | 'start' | 'map' | 'keybindings';
 type EditTarget = { type: 'sensor'; id: number } | { type: 'rotation' } | null;
 
 interface Guideline {
@@ -80,6 +84,11 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
   @Input() typeDefinitions: TypeDefinition[] = [];
   @Input() orientation: WritableSignal<FlowOrientation> | null = null;
   @Input() useAutoLayout = false;
+  @Input() set initialTab(tab: SettingsTab | null) {
+    if (tab) {
+      this.activeTab.set(tab);
+    }
+  }
   @Output() visibleChange = new EventEmitter<boolean>();
   @Output() orientationChange = new EventEmitter<FlowOrientation>();
   @Output() useAutoLayoutChange = new EventEmitter<boolean>();
@@ -131,7 +140,9 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
     private http: HttpService,
     private translate: TranslateService,
     private vizService: TableVisualizationService,
-    private mapService: TableMapService
+    private mapService: TableMapService,
+    public keybindingsService: KeybindingsService,
+    private stepsState: StepsStateService
   ) {
     // Debounce persistence during drag
     this.persistSubject.pipe(debounceTime(300)).subscribe(() => {
@@ -954,5 +965,113 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
 
   onAutoLayoutChange(value: boolean): void {
     this.useAutoLayoutChange.emit(value);
+  }
+
+  // Keybindings
+  readonly recordingFor = signal<Step | null>(null);
+  readonly recordedKey = signal<string | null>(null);
+  readonly keybindingsSubTab = signal<'recent' | 'all' | 'bindings'>('recent');
+  keybindingFilter = '';
+
+  get recentSteps() {
+    return this.keybindingsService.recentSteps();
+  }
+
+  get keybindings() {
+    return this.keybindingsService.stepKeybindings();
+  }
+
+  filteredStepsForKeybindings(): Step[] {
+    const steps = this.stepsState.currentSteps() ?? [];
+    if (!this.keybindingFilter.trim()) {
+      return steps;
+    }
+    const filter = this.keybindingFilter.toLowerCase();
+    return steps.filter(s => s.name.toLowerCase().includes(filter));
+  }
+
+  getKeybindingForStep(step: Step): string | null {
+    return this.keybindingsService.getKeybindingForStep(step);
+  }
+
+  formatKeybinding(keybind: string): string {
+    return this.keybindingsService.formatKeybinding(keybind);
+  }
+
+  startRecordingKeybinding(step: Step): void {
+    this.recordingFor.set(step);
+    this.recordedKey.set(null);
+  }
+
+  cancelRecording(): void {
+    this.recordingFor.set(null);
+    this.recordedKey.set(null);
+  }
+
+  @HostListener('window:keydown', ['$event'])
+  onKeyDownForRecording(event: KeyboardEvent): void {
+    if (!this.recordingFor()) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    // Ignore single modifier keys
+    if (['Control', 'Alt', 'Shift', 'Meta'].includes(event.key)) {
+      return;
+    }
+
+    // Escape cancels recording
+    if (event.key === 'Escape') {
+      this.cancelRecording();
+      return;
+    }
+
+    const keybind = this.keybindingsService.parseKeyEvent(event);
+
+    // Require at least one modifier for non-function keys
+    const hasModifier = event.ctrlKey || event.metaKey || event.altKey;
+    const isFunctionKey = event.key.startsWith('F') && event.key.length <= 3;
+
+    if (!hasModifier && !isFunctionKey) {
+      return;
+    }
+
+    this.recordedKey.set(keybind);
+  }
+
+  saveRecordedKeybinding(): void {
+    const step = this.recordingFor();
+    const keybind = this.recordedKey();
+    if (step && keybind) {
+      this.keybindingsService.setStepKeybinding(step, keybind);
+    }
+    this.cancelRecording();
+  }
+
+  removeKeybinding(step: Step): void {
+    this.keybindingsService.removeStepKeybinding(step);
+  }
+
+  removeKeybindingByBinding(binding: StepKeybinding): void {
+    const steps = this.stepsState.currentSteps() ?? [];
+    const step = steps.find(
+      s => s.name === binding.stepName &&
+           (s.import ?? null) === binding.stepImport &&
+           s.file === binding.stepFile
+    );
+    if (step) {
+      this.keybindingsService.removeStepKeybinding(step);
+    } else {
+      this.keybindingsService.setStepKeybinding({
+        name: binding.stepName,
+        import: binding.stepImport,
+        file: binding.stepFile,
+        arguments: []
+      }, '');
+    }
+  }
+
+  clearAllKeybindings(): void {
+    this.keybindingsService.clearAllKeybindings();
   }
 }

@@ -96,7 +96,13 @@ export function createFlowchartActions(flow: Flowchart): FlowchartActions {
     undo: () => handleUndo(flow),
     redo: () => handleRedo(flow),
     onNodeMoved: (id, pos) => handleNodeMoved(flow, id, pos),
-    onCreateNode: event => handleCreateNode(flow, event),
+    onCreateNode: event => {
+      handleCreateNode(flow, event);
+      const step = event.data as import('./models').Step | undefined;
+      if (step) {
+        flow.keybindingsService.trackStepUsage(step);
+      }
+    },
     addConnection: event => handleAddConnection(flow, event),
     onNodeIntersected: event => handleSplitConnection(flow, event),
     onConnectionRightClick: (event, connectionId) => handleConnectionContextMenu(flow, event, connectionId),

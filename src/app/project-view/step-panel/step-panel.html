@@ -1,4 +1,5 @@
 <div class="external-panel">
+  <app-step-search (filterChange)="onFilterChange($event)"></app-step-search>
   <div class="groups-scroll flex-1 min-h-0 flex flex-col gap-4 select-none" (pointerdown)="clearSelection()">
     @if (stepsLoading) {
       <!-- Loading Skeleton -->
@@ -14,8 +15,13 @@
           </div>
         </div>
       }
+    } @else if (filteredStepGroups.length === 0 && searchFilter) {
+      <div class="text-center text-gray-500 dark:text-gray-400 py-8">
+        <i class="pi pi-search text-2xl mb-2"></i>
+        <p>No steps match "{{ searchFilter }}"</p>
+      </div>
     } @else {
-      @for (group of stepGroups; track group.headline) {
+      @for (group of filteredStepGroups; track group.headline) {
         <div>
           <h3 class="text-lg font-semibold mb-1 capitalize">{{ group.headline }}</h3>
           <div class="flex flex-col gap-2">

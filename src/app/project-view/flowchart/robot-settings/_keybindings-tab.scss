@@ -1,0 +1,455 @@
+// Keybindings Tab Styles
+
+.tab-content-keybindings {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 0;
+  position: relative;
+}
+
+.keybindings-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 16px;
+  gap: 16px;
+}
+
+.keybindings-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  color: #1e40af;
+  font-size: 13px;
+
+  i {
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+}
+
+:host-context(.dark) .keybindings-hint,
+:host-context(.p-dark) .keybindings-hint {
+  background: rgba(59, 130, 246, 0.1);
+  border-color: rgba(59, 130, 246, 0.3);
+  color: #93c5fd;
+}
+
+.keybindings-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 8px;
+}
+
+:host-context(.dark) .keybindings-tabs,
+:host-context(.p-dark) .keybindings-tabs {
+  border-bottom-color: #334155;
+}
+
+.keybindings-tab {
+  padding: 6px 12px;
+  border: none;
+  background: transparent;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  &:hover {
+    background: #f1f5f9;
+    color: #334155;
+  }
+
+  &.active {
+    background: #3b82f6;
+    color: white;
+  }
+}
+
+:host-context(.dark) .keybindings-tab,
+:host-context(.p-dark) .keybindings-tab {
+  color: #94a3b8;
+
+  &:hover {
+    background: #1e293b;
+    color: #e2e8f0;
+  }
+
+  &.active {
+    background: #3b82f6;
+    color: white;
+  }
+}
+
+.keybindings-search {
+  input {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    font-size: 13px;
+    background: white;
+
+    &:focus {
+      outline: none;
+      border-color: #3b82f6;
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    }
+  }
+}
+
+:host-context(.dark) .keybindings-search input,
+:host-context(.p-dark) .keybindings-search input {
+  background: #1e293b;
+  border-color: #334155;
+  color: #e2e8f0;
+
+  &:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+  }
+}
+
+.keybindings-list {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.keybindings-section-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #64748b;
+  margin: 8px 0 4px;
+}
+
+:host-context(.dark) .keybindings-section-title,
+:host-context(.p-dark) .keybindings-section-title {
+  color: #94a3b8;
+}
+
+.keybindings-empty {
+  color: #94a3b8;
+  font-size: 13px;
+  font-style: italic;
+  text-align: center;
+  padding: 24px;
+}
+
+.keybinding-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  gap: 12px;
+}
+
+:host-context(.dark) .keybinding-item,
+:host-context(.p-dark) .keybinding-item {
+  background: #1e293b;
+  border-color: #334155;
+}
+
+.keybinding-item-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+
+.keybinding-step-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: #1e293b;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+:host-context(.dark) .keybinding-step-name,
+:host-context(.p-dark) .keybinding-step-name {
+  color: #e2e8f0;
+}
+
+.keybinding-usage {
+  font-size: 11px;
+  color: #94a3b8;
+  flex-shrink: 0;
+}
+
+.keybinding-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.keybinding-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  background: #dbeafe;
+  color: #1e40af;
+  border-radius: 4px;
+  font-size: 11px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-weight: 500;
+}
+
+.keybinding-badge-lg {
+  padding: 6px 12px;
+  font-size: 12px;
+  background: #3b82f6;
+  color: white;
+}
+
+:host-context(.dark) .keybinding-badge,
+:host-context(.p-dark) .keybinding-badge {
+  background: rgba(59, 130, 246, 0.2);
+  color: #93c5fd;
+}
+
+:host-context(.dark) .keybinding-badge-lg,
+:host-context(.p-dark) .keybinding-badge-lg {
+  background: #3b82f6;
+  color: white;
+}
+
+.keybinding-set-btn,
+.keybinding-remove-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  &:hover {
+    background: #e2e8f0;
+    color: #1e293b;
+  }
+
+  i {
+    font-size: 12px;
+  }
+}
+
+.keybinding-set-btn.recording {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.keybinding-remove-btn:hover {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+:host-context(.dark) .keybinding-set-btn,
+:host-context(.dark) .keybinding-remove-btn,
+:host-context(.p-dark) .keybinding-set-btn,
+:host-context(.p-dark) .keybinding-remove-btn {
+  color: #94a3b8;
+
+  &:hover {
+    background: #334155;
+    color: #e2e8f0;
+  }
+}
+
+:host-context(.dark) .keybinding-set-btn.recording,
+:host-context(.p-dark) .keybinding-set-btn.recording {
+  background: rgba(217, 119, 6, 0.2);
+  color: #fbbf24;
+}
+
+:host-context(.dark) .keybinding-remove-btn:hover,
+:host-context(.p-dark) .keybinding-remove-btn:hover {
+  background: rgba(220, 38, 38, 0.2);
+  color: #f87171;
+}
+
+.keybindings-footer {
+  padding-top: 12px;
+  border-top: 1px solid #e2e8f0;
+}
+
+:host-context(.dark) .keybindings-footer,
+:host-context(.p-dark) .keybindings-footer {
+  border-top-color: #334155;
+}
+
+.keybindings-clear-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #dc2626;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  &:hover {
+    background: #fee2e2;
+  }
+
+  i {
+    font-size: 12px;
+  }
+}
+
+:host-context(.dark) .keybindings-clear-btn,
+:host-context(.p-dark) .keybindings-clear-btn {
+  color: #f87171;
+
+  &:hover {
+    background: rgba(220, 38, 38, 0.15);
+  }
+}
+
+// Recording Overlay
+.keybinding-recording-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  backdrop-filter: blur(2px);
+}
+
+.keybinding-recording-content {
+  background: white;
+  padding: 32px 40px;
+  border-radius: 12px;
+  text-align: center;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+  max-width: 400px;
+}
+
+:host-context(.dark) .keybinding-recording-content,
+:host-context(.p-dark) .keybinding-recording-content {
+  background: #1e293b;
+}
+
+.keybinding-recording-title {
+  font-size: 14px;
+  color: #64748b;
+  margin-bottom: 8px;
+}
+
+:host-context(.dark) .keybinding-recording-title,
+:host-context(.p-dark) .keybinding-recording-title {
+  color: #94a3b8;
+}
+
+.keybinding-recording-step {
+  font-size: 20px;
+  font-weight: 600;
+  color: #1e293b;
+  margin-bottom: 16px;
+}
+
+:host-context(.dark) .keybinding-recording-step,
+:host-context(.p-dark) .keybinding-recording-step {
+  color: #f1f5f9;
+}
+
+.keybinding-recording-hint {
+  font-size: 13px;
+  color: #94a3b8;
+  margin-bottom: 20px;
+}
+
+.keybinding-recording-key {
+  font-size: 28px;
+  font-weight: 600;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  color: #3b82f6;
+  margin-bottom: 20px;
+}
+
+.keybinding-recording-waiting {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #94a3b8;
+  font-size: 14px;
+  margin-bottom: 16px;
+
+  i {
+    font-size: 16px;
+  }
+}
+
+.keybinding-recording-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+.keybinding-cancel-btn,
+.keybinding-save-btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.keybinding-cancel-btn {
+  background: #f1f5f9;
+  color: #64748b;
+
+  &:hover {
+    background: #e2e8f0;
+    color: #334155;
+  }
+}
+
+:host-context(.dark) .keybinding-cancel-btn,
+:host-context(.p-dark) .keybinding-cancel-btn {
+  background: #334155;
+  color: #94a3b8;
+
+  &:hover {
+    background: #475569;
+    color: #e2e8f0;
+  }
+}
+
+.keybinding-save-btn {
+  background: #3b82f6;
+  color: white;
+
+  &:hover {
+    background: #2563eb;
+  }
+}

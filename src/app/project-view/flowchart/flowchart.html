@@ -328,7 +328,9 @@
     [typeDefinitions]="typeDefinitions()"
     [orientation]="orientation"
     [useAutoLayout]="useAutoLayout"
+    [initialTab]="robotSettingsInitialTab()"
     (orientationChange)="actions.onOrientationChange($event)"
-    (useAutoLayoutChange)="useAutoLayout = $event">
+    (useAutoLayoutChange)="useAutoLayout = $event"
+    (visibleChange)="robotSettingsInitialTab.set(null)">
   </app-robot-settings-modal>
 </div>
