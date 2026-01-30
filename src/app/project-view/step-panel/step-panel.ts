@@ -4,6 +4,7 @@ import { HttpService } from '../../services/http-service';
 import { StepsStateService } from '../../services/steps-state-service';
 import { ActivatedRoute } from '@angular/router';
 import { Skeleton } from 'primeng/skeleton';
+import { StepSearchComponent } from './step-search/step-search';
 
 interface StepGroup {
   headline: string;
@@ -16,12 +17,15 @@ interface StepGroup {
   imports: [
     FExternalItemDirective,
     Skeleton,
+    StepSearchComponent,
   ],
   styleUrls: ['./step-panel.scss']
 })
 export class StepPanel implements OnInit {
   stepGroups: StepGroup[] = [];
+  filteredStepGroups: StepGroup[] = [];
   stepsLoading = true;
+  searchFilter = '';
 
   constructor(private http: HttpService, private stepStateService: StepsStateService, private route: ActivatedRoute) {}
 
@@ -52,6 +56,22 @@ export class StepPanel implements OnInit {
     if (selection && selection.type !== 'None') {
       selection.removeAllRanges();
     }
+  }
+
+  onFilterChange(filter: string): void {
+    this.searchFilter = filter.toLowerCase().trim();
+    if (!this.searchFilter) {
+      this.filteredStepGroups = this.stepGroups;
+      return;
+    }
+    this.filteredStepGroups = this.stepGroups
+      .map(group => ({
+        headline: group.headline,
+        steps: group.steps.filter(step =>
+          step.name.toLowerCase().includes(this.searchFilter)
+        ),
+      }))
+      .filter(group => group.steps.length > 0);
   }
 
   private groupSteps(steps: Step[]): void {
@@ -102,6 +122,7 @@ export class StepPanel implements OnInit {
         headline,
         steps: groupedSteps.sort((a, b) => a.name.localeCompare(b.name)),
       }));
+    this.filteredStepGroups = this.stepGroups;
   }
 
 }
