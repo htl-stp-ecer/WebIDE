@@ -160,6 +160,19 @@ export class FlowchartRunManager {
     return this.nodeTimings().get(nodeId);
   }
 
+  getVisibleStepTimings(): StepTiming[] {
+    const pathMap = this.pathToNodeId;
+    return this.stepTimings().filter(timing => !!timing.path && pathMap.has(timing.path));
+  }
+
+  getVisibleMaxDurationMs(): number {
+    let max = 0;
+    for (const timing of this.getVisibleStepTimings()) {
+      if (timing.durationMs > max) max = timing.durationMs;
+    }
+    return max;
+  }
+
   handleRunEvent(event: unknown): void {
     if (!event || typeof event !== 'object') return;
     if (this.paused) {
