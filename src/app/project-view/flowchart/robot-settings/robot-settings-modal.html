@@ -55,6 +55,14 @@
           <i class="pi pi-flag"></i>
           <span>{{ 'ROBOT_SETTINGS.START_TAB' | translate }}</span>
         </button>
+        <button
+          type="button"
+          class="sidebar-nav-item"
+          [class.active]="activeTab() === 'keybindings'"
+          (click)="activeTab.set('keybindings')">
+          <i class="pi pi-key"></i>
+          <span>Keybindings</span>
+        </button>
       </nav>
     </aside>
 
@@ -563,6 +571,167 @@
               (startPoseChange)="onStartPosePicked($event)">
             </app-table-visualization-panel>
           </div>
+        </div>
+      }
+
+      <!-- Keybindings Tab -->
+      @if (activeTab() === 'keybindings') {
+        <div class="tab-content tab-content-keybindings">
+          <div class="keybindings-container">
+            <!-- Hint about modifiers -->
+            <div class="keybindings-hint">
+              <i class="pi pi-info-circle"></i>
+              <span>Keybindings require a modifier key (Ctrl, Alt, or Cmd) or be a function key (F1-F12).</span>
+            </div>
+
+            <!-- Sub-tabs for keybindings -->
+            <div class="keybindings-tabs">
+              <button
+                type="button"
+                class="keybindings-tab"
+                [class.active]="keybindingsSubTab() === 'recent'"
+                (click)="keybindingsSubTab.set('recent'); keybindingFilter = ''">
+                Recent Steps ({{ recentSteps.length }})
+              </button>
+              <button
+                type="button"
+                class="keybindings-tab"
+                [class.active]="keybindingsSubTab() === 'all'"
+                (click)="keybindingsSubTab.set('all')">
+                All Steps
+              </button>
+              <button
+                type="button"
+                class="keybindings-tab"
+                [class.active]="keybindingsSubTab() === 'bindings'"
+                (click)="keybindingsSubTab.set('bindings'); keybindingFilter = ''">
+                Current Bindings ({{ keybindings.length }})
+              </button>
+            </div>
+
+            <!-- Search/Filter (only for All Steps tab) -->
+            @if (keybindingsSubTab() === 'all') {
+              <div class="keybindings-search">
+                <input
+                  type="text"
+                  [(ngModel)]="keybindingFilter"
+                  placeholder="Search steps..."
+                  pInputText
+                  class="w-full" />
+              </div>
+            }
+
+            <!-- Content -->
+            <div class="keybindings-list">
+              <!-- Recent Steps Tab -->
+              @if (keybindingsSubTab() === 'recent') {
+                @if (recentSteps.length === 0) {
+                  <p class="keybindings-empty">No recent steps yet. Use steps in the flowchart and they will appear here.</p>
+                } @else {
+                  @for (recent of recentSteps; track recent.step.name + recent.step.file) {
+                    <div class="keybinding-item">
+                      <div class="keybinding-item-info">
+                        <span class="keybinding-step-name">{{ recent.step.name }}</span>
+                        <span class="keybinding-usage">(used {{ recent.usageCount }}x)</span>
+                      </div>
+                      <div class="keybinding-item-actions">
+                        @if (getKeybindingForStep(recent.step); as kb) {
+                          <span class="keybinding-badge">{{ formatKeybinding(kb) }}</span>
+                          <button type="button" class="keybinding-remove-btn" (click)="removeKeybinding(recent.step)">
+                            <i class="pi pi-times"></i>
+                          </button>
+                        }
+                        <button
+                          type="button"
+                          class="keybinding-set-btn"
+                          [class.recording]="recordingFor() === recent.step"
+                          (click)="startRecordingKeybinding(recent.step)">
+                          <i [class]="recordingFor() === recent.step ? 'pi pi-spin pi-spinner' : 'pi pi-key'"></i>
+                        </button>
+                      </div>
+                    </div>
+                  }
+                }
+              }
+
+              <!-- All Steps Tab -->
+              @if (keybindingsSubTab() === 'all') {
+                @for (step of filteredStepsForKeybindings(); track step.name + step.file) {
+                  <div class="keybinding-item">
+                    <span class="keybinding-step-name">{{ step.name }}</span>
+                    <div class="keybinding-item-actions">
+                      @if (getKeybindingForStep(step); as kb) {
+                        <span class="keybinding-badge">{{ formatKeybinding(kb) }}</span>
+                        <button type="button" class="keybinding-remove-btn" (click)="removeKeybinding(step)">
+                          <i class="pi pi-times"></i>
+                        </button>
+                      }
+                      <button
+                        type="button"
+                        class="keybinding-set-btn"
+                        [class.recording]="recordingFor() === step"
+                        (click)="startRecordingKeybinding(step)">
+                        <i [class]="recordingFor() === step ? 'pi pi-spin pi-spinner' : 'pi pi-key'"></i>
+                      </button>
+                    </div>
+                  </div>
+                }
+              }
+
+              <!-- Current Bindings Tab -->
+              @if (keybindingsSubTab() === 'bindings') {
+                @if (keybindings.length === 0) {
+                  <p class="keybindings-empty">No keybindings configured yet.</p>
+                } @else {
+                  @for (binding of keybindings; track binding.keybind) {
+                    <div class="keybinding-item">
+                      <div class="keybinding-item-info">
+                        <span class="keybinding-badge keybinding-badge-lg">{{ formatKeybinding(binding.keybind) }}</span>
+                        <span class="keybinding-step-name">{{ binding.stepName }}</span>
+                      </div>
+                      <button type="button" class="keybinding-remove-btn" (click)="removeKeybindingByBinding(binding)">
+                        <i class="pi pi-trash"></i>
+                      </button>
+                    </div>
+                  }
+                }
+              }
+            </div>
+
+            <!-- Clear All Button -->
+            @if (keybindings.length > 0) {
+              <div class="keybindings-footer">
+                <button type="button" class="keybindings-clear-btn" (click)="clearAllKeybindings()">
+                  <i class="pi pi-trash"></i>
+                  Clear All Keybindings
+                </button>
+              </div>
+            }
+          </div>
+
+          <!-- Recording Overlay -->
+          @if (recordingFor()) {
+            <div class="keybinding-recording-overlay">
+              <div class="keybinding-recording-content">
+                <p class="keybinding-recording-title">Recording keybinding for:</p>
+                <p class="keybinding-recording-step">{{ recordingFor()?.name }}</p>
+                <p class="keybinding-recording-hint">Press a key combination (Ctrl/Alt/Cmd + Key or F1-F12)</p>
+                @if (recordedKey()) {
+                  <p class="keybinding-recording-key">{{ formatKeybinding(recordedKey()!) }}</p>
+                  <div class="keybinding-recording-actions">
+                    <button type="button" class="keybinding-cancel-btn" (click)="cancelRecording()">Cancel</button>
+                    <button type="button" class="keybinding-save-btn" (click)="saveRecordedKeybinding()">Save</button>
+                  </div>
+                } @else {
+                  <div class="keybinding-recording-waiting">
+                    <i class="pi pi-spin pi-spinner"></i>
+                    <span>Waiting for input...</span>
+                  </div>
+                  <button type="button" class="keybinding-cancel-btn" (click)="cancelRecording()">Cancel</button>
+                }
+              </div>
+            </div>
+          }
         </div>
       }
     </div>

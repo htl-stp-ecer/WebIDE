@@ -14,10 +14,11 @@ import { Subscription } from 'rxjs';
 import { MissionStateService } from '../../services/mission-sate-service';
 import { StepsStateService } from '../../services/steps-state-service';
 import { HttpService } from '../../services/http-service';
+import { KeybindingsService } from '../../services/keybindings-service';
 import { FlowHistory } from '../../entities/flow-history';
 import { Mission } from '../../entities/Mission';
 import { MissionSimulationData, ProjectSimulationData } from '../../entities/Simulation';
-import { Connection, FlowComment, FlowGroup, FlowNode, FlowOrientation } from './models';
+import { Connection, FlowComment, FlowGroup, FlowNode, FlowOrientation, Step, toVal } from './models';
 import { FlowchartHistoryManager } from './flowchart-history-manager';
 import { FlowchartRunManager } from './flowchart-run-manager';
 import { createHistoryManager, createRunManager } from './manager-factories';
@@ -40,6 +41,7 @@ import { TableMapService, TableVisualizationService } from './table/services';
 import { buildPlannedPathFromProjectSimulation } from './table/simulation-path';
 import { PlanningModeService, PlanningOverlayComponent } from './table/planning';
 import { RunLogPanel } from './logs/run-log-panel';
+import { generateGuid } from '@foblex/utils';
 
 interface DefinitionOption {
   label: string;
@@ -117,6 +119,7 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
   readonly timingViewMode = signal<TimingViewMode>('list');
   readonly simulateRuns = signal<boolean>(true);
   readonly robotSettingsVisible = signal<boolean>(false);
+  readonly robotSettingsInitialTab = signal<'project' | 'robot' | 'start' | 'map' | 'keybindings' | null>(null);
   readonly saveStatus = signal<'idle' | 'saving' | 'saved'>('idle');
   readonly logsFullscreen = signal<boolean>(false);
   private saveStatusTimeout?: ReturnType<typeof setTimeout>;
@@ -170,7 +173,8 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
     readonly translate: TranslateService,
     readonly tableViz: TableVisualizationService,
     readonly tableMap: TableMapService,
-    readonly planningService: PlanningModeService
+    readonly planningService: PlanningModeService,
+    readonly keybindingsService: KeybindingsService
   ) {
     this.historyManager = createHistoryManager(this);
     this.runManager = createRunManager(this);
@@ -248,6 +252,112 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
     if (!surface || !surface.contains(event.target as Node)) return;
     this.lastRightDown = { x: event.clientX, y: event.clientY };
     this.startRightDrag(event);
+  }
+
+  @HostListener('window:keydown', ['$event'])
+  onKeyDown(event: KeyboardEvent): void {
+    // Skip if inside input, textarea, or contenteditable
+    const target = event.target as HTMLElement;
+    if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+      return;
+    }
+
+    // Skip if planning mode is active
+    if (this.planningService.isActive()) {
+      return;
+    }
+
+    // Skip if settings modal is open
+    if (this.robotSettingsVisible()) {
+      return;
+    }
+
+    // Delete key - delete selected node(s)
+    if (event.key === 'Delete' || event.key === 'Backspace') {
+      if (this.selectedNodeIds().size > 0 || this.contextMenu.selectedNodeId) {
+        event.preventDefault();
+        this.actions.deleteNode();
+        return;
+      }
+    }
+
+    // Ctrl+Z - Undo
+    if ((event.ctrlKey || event.metaKey) && event.key === 'z' && !event.shiftKey) {
+      event.preventDefault();
+      this.actions.undo();
+      return;
+    }
+
+    // Ctrl+Shift+Z or Ctrl+Y - Redo
+    if ((event.ctrlKey || event.metaKey) && (event.key === 'Z' || event.key === 'y')) {
+      event.preventDefault();
+      this.actions.redo();
+      return;
+    }
+
+    // Ctrl+S - Save
+    if ((event.ctrlKey || event.metaKey) && event.key === 's') {
+      event.preventDefault();
+      this.actions.onSave();
+      return;
+    }
+
+    // Ctrl+K - Open settings with keybindings tab
+    if ((event.ctrlKey || event.metaKey) && event.key === 'k') {
+      event.preventDefault();
+      this.openKeybindingsSettings();
+      return;
+    }
+
+    // Check for custom step keybindings
+    const keybind = this.keybindingsService.parseKeyEvent(event);
+    const stepBinding = this.keybindingsService.getStepForKeybinding(keybind);
+    if (stepBinding) {
+      const steps = this.stepsState.currentSteps();
+      const step = steps?.find(
+        s => s.name === stepBinding.stepName &&
+             (s.import ?? null) === stepBinding.stepImport &&
+             s.file === stepBinding.stepFile
+      );
+      if (step) {
+        event.preventDefault();
+        this.createNodeFromStep(step);
+        return;
+      }
+    }
+  }
+
+  createNodeFromStep(step: Step): void {
+    const args: Record<string, boolean | string | number | null> = {};
+    step?.arguments?.forEach(arg => {
+      args[arg.name] = toVal(arg.type, arg.default ?? '');
+    });
+
+    // Get canvas center for node placement
+    const canvas = this.fCanvas();
+    const position = canvas
+      ? { x: -canvas.transform.position.x + 200, y: -canvas.transform.position.y + 200 }
+      : { x: 200, y: 200 };
+
+    this.adHocNodes.set([
+      ...this.adHocNodes(),
+      {
+        id: generateGuid(),
+        text: step?.name ?? this.translate.instant('FLOWCHART.NEW_NODE'),
+        position,
+        step,
+        args,
+      },
+    ]);
+    recomputeMergedView(this);
+    this.layoutFlags.needsAdjust = true;
+    this.historyManager.recordHistory('create-node');
+    this.keybindingsService.trackStepUsage(step);
+  }
+
+  openKeybindingsSettings(): void {
+    this.robotSettingsInitialTab.set('keybindings');
+    this.robotSettingsVisible.set(true);
   }
 
   onSurfacePointerUp(event: PointerEvent): void {

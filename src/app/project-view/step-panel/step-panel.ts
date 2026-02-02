@@ -6,6 +6,7 @@ import { ActivatedRoute } from '@angular/router';
 import { Skeleton } from 'primeng/skeleton';
 import { Subscription } from 'rxjs';
 import { NgClass } from '@angular/common';
+import { StepSearchComponent } from './step-search/step-search';
 
 interface StepGroup {
   headline: string;
@@ -20,12 +21,17 @@ interface StepGroup {
     FExternalItemDirective,
     Skeleton,
     NgClass,
+    StepSearchComponent,
+    NgClass,
+    StepSearchComponent,
   ],
   styleUrls: ['./step-panel.scss']
 })
 export class StepPanel implements OnInit, OnDestroy {
   stepGroups: StepGroup[] = [];
+  filteredStepGroups: StepGroup[] = [];
   stepsLoading = true;
+  searchFilter = '';
 
   /** Track collapsed state by group headline */
   private collapsedState = signal<Record<string, boolean>>({});
@@ -87,6 +93,20 @@ export class StepPanel implements OnInit, OnDestroy {
     const state = { ...this.collapsedState() };
     state[group.headline] = group.collapsed;
     this.collapsedState.set(state);
+  onFilterChange(filter: string): void {
+    this.searchFilter = filter.toLowerCase().trim();
+    if (!this.searchFilter) {
+      this.filteredStepGroups = this.stepGroups;
+      return;
+    }
+    this.filteredStepGroups = this.stepGroups
+      .map(group => ({
+        headline: group.headline,
+        steps: group.steps.filter(step =>
+          step.name.toLowerCase().includes(this.searchFilter)
+        ),
+      }))
+      .filter(group => group.steps.length > 0);
   }
 
   private groupSteps(steps: Step[]): void {
@@ -124,5 +144,6 @@ export class StepPanel implements OnInit, OnDestroy {
         steps: groupedSteps.sort((a, b) => a.name.localeCompare(b.name)),
         collapsed: savedState[headline] ?? false,
       }));
+    this.onFilterChange(this.searchFilter);
   }
 }
