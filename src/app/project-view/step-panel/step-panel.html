@@ -1,11 +1,11 @@
 <div class="external-panel">
-  <div class="groups-scroll flex-1 min-h-0 flex flex-col gap-4 select-none" (pointerdown)="clearSelection()">
+  <div class="groups-scroll flex-1 min-h-0 flex flex-col gap-2 select-none" (pointerdown)="clearSelection()">
     @if (stepsLoading) {
       <!-- Loading Skeleton -->
       @for (groupIndex of [1, 2, 3]; track groupIndex) {
         <div>
           <p-skeleton width="40%" height="1.25rem" styleClass="mb-2"></p-skeleton>
-          <div class="flex flex-col gap-2">
+          <div class="flex flex-col gap-1">
             @for (stepIndex of [1, 2, 3]; track stepIndex) {
               <div class="p-2 rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
                 <p-skeleton width="80%" height="1rem"></p-skeleton>
@@ -16,23 +16,35 @@
       }
     } @else {
       @for (group of stepGroups; track group.headline) {
-        <div>
-          <h3 class="text-lg font-semibold mb-1 capitalize">{{ group.headline }}</h3>
-          <div class="flex flex-col gap-2">
-            @for (step of group.steps; track step.name + ':' + step.import + ':' + step.file + ':' + $index) {
-              <div
-                class="external-item p-2 rounded border border-gray-300 dark:border-gray-700
-                           bg-white dark:bg-gray-800 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700
-                           select-none"
-                fExternalItem
-                [fData]="step"
-                [fPreviewMatchSize]="true"
-                (pointerdown)="clearSelection()"
-              >
-                {{ step.name }}
-              </div>
-            }
-          </div>
+        <div class="step-group">
+          <button
+            type="button"
+            class="group-header"
+            (click)="toggleGroup(group)"
+          >
+            <span class="collapse-icon" [ngClass]="{'collapsed': group.collapsed}">
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
+                <path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+              </svg>
+            </span>
+            <span class="group-title">{{ group.headline }}</span>
+            <span class="step-count">{{ group.steps.length }}</span>
+          </button>
+          @if (!group.collapsed) {
+            <div class="group-content">
+              @for (step of group.steps; track step.name + ':' + step.import + ':' + step.file + ':' + $index) {
+                <div
+                  class="step-item"
+                  fExternalItem
+                  [fData]="step"
+                  [fPreviewMatchSize]="true"
+                  (pointerdown)="clearSelection()"
+                >
+                  {{ step.name }}
+                </div>
+              }
+            </div>
+          }
         </div>
       }
     }

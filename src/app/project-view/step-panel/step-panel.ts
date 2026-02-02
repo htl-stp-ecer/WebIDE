@@ -1,13 +1,16 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, OnDestroy, signal } from '@angular/core';
 import { FExternalItemDirective } from '@foblex/flow';
 import { HttpService } from '../../services/http-service';
 import { StepsStateService } from '../../services/steps-state-service';
 import { ActivatedRoute } from '@angular/router';
 import { Skeleton } from 'primeng/skeleton';
+import { Subscription } from 'rxjs';
+import { NgClass } from '@angular/common';
 
 interface StepGroup {
   headline: string;
   steps: Step[];
+  collapsed: boolean;
 }
 
 @Component({
@@ -16,24 +19,48 @@ interface StepGroup {
   imports: [
     FExternalItemDirective,
     Skeleton,
+    NgClass,
   ],
   styleUrls: ['./step-panel.scss']
 })
-export class StepPanel implements OnInit {
+export class StepPanel implements OnInit, OnDestroy {
   stepGroups: StepGroup[] = [];
   stepsLoading = true;
 
-  constructor(private http: HttpService, private stepStateService: StepsStateService, private route: ActivatedRoute) {}
+  /** Track collapsed state by group headline */
+  private collapsedState = signal<Record<string, boolean>>({});
+
+  private refreshSub?: Subscription;
+  private projectUUID: string | null = null;
+
+  constructor(
+    private http: HttpService,
+    private stepStateService: StepsStateService,
+    private route: ActivatedRoute
+  ) {}
 
   ngOnInit(): void {
-    const projectUUID = this.route.snapshot.paramMap.get('uuid');
-    if (!projectUUID) {
+    this.projectUUID = this.route.snapshot.paramMap.get('uuid');
+    this.loadSteps();
+
+    // Listen for refresh events from settings modal
+    this.refreshSub = this.stepStateService.refresh$.subscribe(() => {
+      this.loadSteps();
+    });
+  }
+
+  ngOnDestroy(): void {
+    this.refreshSub?.unsubscribe();
+  }
+
+  private loadSteps(): void {
+    if (!this.projectUUID) {
       this.stepGroups = [];
       this.stepsLoading = false;
       return;
     }
     this.stepsLoading = true;
-    this.http.getAllSteps(projectUUID).subscribe({
+    this.http.getAllSteps(this.projectUUID).subscribe({
       next: steps => {
         this.stepStateService.setSteps(steps);
         this.groupSteps(steps);
@@ -54,54 +81,48 @@ export class StepPanel implements OnInit {
     }
   }
 
+  toggleGroup(group: StepGroup): void {
+    group.collapsed = !group.collapsed;
+    // Persist collapsed state
+    const state = { ...this.collapsedState() };
+    state[group.headline] = group.collapsed;
+    this.collapsedState.set(state);
+  }
+
   private groupSteps(steps: Step[]): void {
-    const prefixCounts: Record<string, number> = {};
-    const suffixCounts: Record<string, number> = {};
-
-    // 1) Build frequency maps for prefixes and suffixes
-    for (const step of steps) {
-      const parts = step.name.split('_');
-      if (parts.length > 1) {
-        const pref = parts[0];
-        const suff = parts[parts.length - 1];
-        prefixCounts[pref] = (prefixCounts[pref] ?? 0) + 1;
-        suffixCounts[suff] = (suffixCounts[suff] ?? 0) + 1;
-      }
-    }
-
-    // 2) Assign each step to the best dynamic key
     const groups: Record<string, Step[]> = {};
+    const UNGROUPED_KEY = 'Other';
+
     for (const step of steps) {
-      const parts = step.name.split('_');
+      // Use tags as primary grouping mechanism
+      const tags = step.tags?.filter(tag => typeof tag === 'string' && tag.trim() !== '') ?? [];
 
       let key: string;
-      if (parts.length > 1) {
-        const pref = parts[0];
-        const suff = parts[parts.length - 1];
-        const prefCount = prefixCounts[pref] ?? 0;
-        const suffCount = suffixCounts[suff] ?? 0;
-
-        if (suffCount > 1 && suffCount >= prefCount) {
-          key = suff;           // e.g., *_servo → "servo"
-        } else if (prefCount > 1) {
-          key = pref;           // e.g., strafe_* → "strafe"
-        } else {
-          key = step.name;      // no real family — keep its own group
-        }
+      if (tags.length > 0) {
+        // Use first tag as group key
+        key = tags[0];
       } else {
-        key = step.name;        // single word → its own group
+        // No tags - put in "Other" group
+        key = UNGROUPED_KEY;
       }
 
       (groups[key] ??= []).push(step);
     }
 
-    // 3) Normalize output (optional: sort headlines and steps)
+    // Restore collapsed state and sort
+    const savedState = this.collapsedState();
+
     this.stepGroups = Object.entries(groups)
-      .sort(([a], [b]) => a.localeCompare(b))
+      .sort(([a], [b]) => {
+        // "Other" always goes last
+        if (a === UNGROUPED_KEY) return 1;
+        if (b === UNGROUPED_KEY) return -1;
+        return a.localeCompare(b);
+      })
       .map(([headline, groupedSteps]) => ({
         headline,
         steps: groupedSteps.sort((a, b) => a.name.localeCompare(b.name)),
+        collapsed: savedState[headline] ?? false,
       }));
   }
-
 }

@@ -16,9 +16,11 @@ import {FormsModule} from '@angular/forms';
 import {NgClass, NgStyle} from '@angular/common';
 import {Dialog} from 'primeng/dialog';
 import {InputText} from 'primeng/inputtext';
+import { Button } from 'primeng/button';
 import {TranslateModule, TranslateService} from '@ngx-translate/core';
 import {HttpService} from '../../../services/http-service';
 import {NotificationService} from '../../../services/NotificationService';
+import {StepsStateService} from '../../../services/steps-state-service';
 import {TypeDefinition} from '../../../entities/TypeDefinition';
 import {Subject} from 'rxjs';
 import {debounceTime} from 'rxjs/operators';
@@ -53,6 +55,13 @@ interface DragDistances {
   symmetricY: boolean; // top === bottom
 }
 
+interface StepIndexStatus {
+  status: string;
+  count?: number;
+  last_indexed_at?: string;
+  error?: string;
+}
+
 interface Sensor {
   id: number;
   name: string;
@@ -70,7 +79,7 @@ interface CenterPoint {
 @Component({
   selector: 'app-robot-settings-modal',
   standalone: true,
-  imports: [FormsModule, NgClass, NgStyle, Dialog, InputText, TranslateModule, TableEditorView, TableVisualizationPanel],
+  imports: [FormsModule, NgClass, NgStyle, Dialog, InputText, Button, TranslateModule, TableEditorView, TableVisualizationPanel],
   templateUrl: './robot-settings-modal.html',
   styleUrl: './robot-settings-modal.scss'
 })
@@ -92,6 +101,10 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
 
   connectionInfo: ConnectionInfo | undefined;
   loading = true;
+  stepIndexStatus?: StepIndexStatus;
+  stepIndexLoading = false;
+  stepIndexRefreshing = false;
+  private stepIndexPoll?: ReturnType<typeof setTimeout>;
 
   // Dimensions - separate edit states
   tempWidth = '';
@@ -131,7 +144,8 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
     private http: HttpService,
     private translate: TranslateService,
     private vizService: TableVisualizationService,
-    private mapService: TableMapService
+    private mapService: TableMapService,
+    private stepsStateService: StepsStateService
   ) {
     // Debounce persistence during drag
     this.persistSubject.pipe(debounceTime(300)).subscribe(() => {
@@ -147,6 +161,7 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
 
   ngOnInit() {
     this.loadDeviceInfo();
+    this.loadStepIndexStatus();
   }
 
   ngOnChanges(changes: SimpleChanges) {
@@ -155,6 +170,7 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
     }
     if (changes['visible'] && changes['visible'].currentValue) {
       this.loadDeviceInfo();
+      this.loadStepIndexStatus();
     }
   }
 
@@ -189,6 +205,82 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
         this.loading = false;
       }
     });
+  }
+
+  private loadStepIndexStatus() {
+    if (this.stepIndexPoll) {
+      clearTimeout(this.stepIndexPoll);
+      this.stepIndexPoll = undefined;
+    }
+    this.stepIndexLoading = true;
+    const wasIndexing = this.stepIndexStatus?.status === 'indexing';
+    this.http.getStepIndexStatus().subscribe({
+      next: status => {
+        this.stepIndexStatus = status;
+        this.stepIndexLoading = false;
+        if (status.status === 'indexing') {
+          this.stepIndexPoll = setTimeout(() => this.loadStepIndexStatus(), 2000);
+        } else if (wasIndexing && status.status === 'ready') {
+          // Indexing just finished - trigger step panel refresh
+          this.stepsStateService.triggerRefresh();
+        }
+      },
+      error: () => {
+        this.stepIndexLoading = false;
+      }
+    });
+  }
+
+  refreshStepIndex(forceClear: boolean = false) {
+    this.stepIndexRefreshing = true;
+    // Mark current status as indexing so the polling logic knows to trigger refresh when done
+    if (this.stepIndexStatus) {
+      this.stepIndexStatus = { ...this.stepIndexStatus, status: 'indexing' };
+    }
+    this.http.refreshStepIndex(forceClear).subscribe({
+      next: status => {
+        this.stepIndexStatus = status;
+        this.stepIndexRefreshing = false;
+        if (status.status === 'indexing') {
+          this.loadStepIndexStatus();
+        } else if (status.status === 'ready') {
+          // Indexing completed immediately (rare but possible)
+          this.stepsStateService.triggerRefresh();
+        }
+      },
+      error: () => {
+        this.stepIndexRefreshing = false;
+      }
+    });
+  }
+
+  clearStepIndexCache() {
+    this.stepIndexRefreshing = true;
+    this.http.clearStepIndex().subscribe({
+      next: status => {
+        this.stepIndexStatus = status;
+        this.stepIndexRefreshing = false;
+        // Trigger refresh to show empty state in step panel
+        this.stepsStateService.triggerRefresh();
+      },
+      error: () => {
+        this.stepIndexRefreshing = false;
+      }
+    });
+  }
+
+  getStepIndexStatusLabel() {
+    if (!this.stepIndexStatus) return this.translate.instant('STEP_INDEX.STATUS_UNKNOWN');
+    switch (this.stepIndexStatus.status) {
+      case 'indexing':
+        return this.translate.instant('STEP_INDEX.STATUS_INDEXING');
+      case 'ready':
+        return this.translate.instant('STEP_INDEX.STATUS_READY');
+      case 'error':
+        return this.translate.instant('STEP_INDEX.STATUS_ERROR');
+      default:
+        return this.translate.instant('STEP_INDEX.STATUS_EMPTY');
+    }
   }
 
   closeModal() {

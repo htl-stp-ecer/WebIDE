@@ -4,11 +4,10 @@ import { Button } from "primeng/button";
 import { Select } from "primeng/select";
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { FormsModule } from '@angular/forms';
-import {ActivatedRoute, Router, NavigationEnd, RouterLink, RouterLinkActive} from '@angular/router';
-import { filter, Subscription, interval, switchMap, takeUntil, Subject } from 'rxjs';
+import { RouterLink, RouterLinkActive } from '@angular/router';
+import { Subscription, interval, switchMap, takeUntil, Subject } from 'rxjs';
 import { HttpService } from '../services/http-service';
 import { enTranslations, deTranslations } from '../i18n/translations';
-import { decodeRouteIp } from '../services/route-ip-serializer';
 
 @Component({
   selector: 'app-navbar',
@@ -25,7 +24,7 @@ import { decodeRouteIp } from '../services/route-ip-serializer';
   styleUrl: './navbar.scss'
 })
 export class Navbar implements OnInit, OnDestroy {
-  ip: string | null = null;
+  deviceBase: string | null = null;
   isDarkMode = signal(false);
   deviceInfo: ConnectionInfo | undefined;
   deviceInfoLoading = false;
@@ -38,14 +37,12 @@ export class Navbar implements OnInit, OnDestroy {
   ];
   selectedLanguage = 'en';
 
-  private sub?: Subscription;
+  private deviceBaseSub?: Subscription;
   private pollingSub?: Subscription;
   private destroy$ = new Subject<void>();
 
   constructor(
     private translate: TranslateService,
-    private route: ActivatedRoute,
-    private router: Router,
     private http: HttpService
   ) {
     translate.setTranslation('en', enTranslations, true);
@@ -64,34 +61,22 @@ export class Navbar implements OnInit, OnDestroy {
   }
 
   ngOnInit() {
-    this.sub = this.router.events
-      .pipe(filter(event => event instanceof NavigationEnd))
-      .subscribe(() => {
-        let route = this.route;
-        while (route.firstChild) {
-          route = route.firstChild;
-        }
-
-        const newIpRaw = route.snapshot.paramMap.get('ip');
-        const newIp = decodeRouteIp(newIpRaw);
-
-        if (newIp !== this.ip) {
-          this.ip = newIp;
-          if (newIp) {
-            this.http.setIp(newIp);
-          }
-          this.deviceInfo = undefined;
-          this.deviceInfoLoading = !!this.ip;
-          this.restartPolling();
-        }
-      });
+    this.deviceBaseSub = this.http.deviceBase$.subscribe(base => {
+      const nextBase = base || null;
+      if (nextBase !== this.deviceBase) {
+        this.deviceBase = nextBase;
+        this.deviceInfo = undefined;
+        this.deviceInfoLoading = !!this.deviceBase;
+        this.restartPolling();
+      }
+    });
   }
 
   private restartPolling() {
     this.pollingSub?.unsubscribe();
     this.pollingSub = undefined;
 
-    if (this.ip) {
+    if (this.deviceBase) {
       if (!this.deviceInfo) {
         this.deviceInfoLoading = true;
       }
@@ -129,7 +114,7 @@ export class Navbar implements OnInit, OnDestroy {
   }
 
   ngOnDestroy() {
-    this.sub?.unsubscribe();
+    this.deviceBaseSub?.unsubscribe();
     this.pollingSub?.unsubscribe();
     this.destroy$.next();
     this.destroy$.complete();

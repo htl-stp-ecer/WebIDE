@@ -3,11 +3,11 @@
     <div class="navbar-title">R A C C O O N</div>
   </a>
 
-  @if (ip) {
+  @if (deviceBase) {
     <div class="text-base dark:text-gray-200 text-gray-800">
       {{ deviceInfo?.hostname || ('COMMON.UNNAMED_DEVICE' | translate) }}
       <span class="text-sm text-gray-400">
-        {{ip}}
+        {{ deviceBase }}
       </span>
       <span class="ml-5">
         @if (deviceInfoLoading) {

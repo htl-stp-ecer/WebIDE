@@ -4,7 +4,6 @@ import {Flowchart} from './flowchart/flowchart';
 import {StepPanel} from './step-panel/step-panel';
 import { ActivatedRoute } from '@angular/router';
 import { HttpService } from '../services/http-service';
-import { decodeRouteIp } from '../services/route-ip-serializer';
 
 type ResizeSide = 'left' | 'right';
 
@@ -52,11 +51,26 @@ export class ProjectView implements OnDestroy {
     private route: ActivatedRoute,
     private http: HttpService,
   ) {
-    const ipParam = this.route.snapshot.paramMap.get('ip');
-    const decodedIp = decodeRouteIp(ipParam);
-    if (decodedIp) {
-      this.http.setIp(decodedIp);
+    const projectUUID = this.route.snapshot.paramMap.get('uuid');
+    if (!projectUUID) {
+      this.http.clearDeviceBase();
+      return;
     }
+
+    this.http.getProject(projectUUID).subscribe({
+      next: project => {
+        const connection = project.connection;
+        if (connection?.pi_address) {
+          const base = connection.pi_port ? `${connection.pi_address}:${connection.pi_port}` : connection.pi_address;
+          this.http.setDeviceBase(base);
+        } else {
+          this.http.clearDeviceBase();
+        }
+      },
+      error: () => {
+        this.http.clearDeviceBase();
+      }
+    });
   }
 
   private loadCollapsedState(side: 'left' | 'right'): boolean {

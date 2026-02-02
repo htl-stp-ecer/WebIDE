@@ -1,12 +1,10 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
-import { DecimalPipe } from '@angular/common';
 import { InputGroup } from 'primeng/inputgroup';
 import { InputText } from 'primeng/inputtext';
 import { Button } from 'primeng/button';
 import { FormsModule } from '@angular/forms';
 import { Card } from 'primeng/card';
 import { HttpService } from '../services/http-service';
-import { MessageService } from 'primeng/api';
 import { ProgressSpinner } from 'primeng/progressspinner';
 import { Router } from '@angular/router';
 import { NotificationService } from '../services/NotificationService';
@@ -25,7 +23,6 @@ import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
     Card,
     ProgressSpinner,
     TranslateModule,
-    DecimalPipe,
   ],
   templateUrl: './home.html',
   styleUrl: './home.scss'
@@ -34,6 +31,8 @@ export class Home implements OnInit, OnDestroy {
   ip: string = "";
   previousConnections: ConnectionInfo[] = [];
   loading: boolean = false;
+  localProjectsCount = 0;
+  localProjectsLoading = true;
   corsConfirmUrl?: string;
   corsConfirmSafeUrl?: SafeResourceUrl;
   corsConfirmIp?: string;
@@ -43,7 +42,6 @@ export class Home implements OnInit, OnDestroy {
 
   constructor(
     private httpService: HttpService,
-    private messageService: MessageService,
     private router: Router,
     private translate: TranslateService,
     private sanitizer: DomSanitizer
@@ -66,6 +64,8 @@ export class Home implements OnInit, OnDestroy {
   }
 
   ngOnInit() {
+    this.httpService.clearDeviceBase();
+    this.loadLocalProjects();
     this.updateDeviceInfos();
 
     this.refreshSub = interval(5000).subscribe(() => this.updateDeviceInfos());
@@ -109,6 +109,20 @@ export class Home implements OnInit, OnDestroy {
     }
   }
 
+  private loadLocalProjects() {
+    this.localProjectsLoading = true;
+    this.httpService.getAllProjects().subscribe({
+      next: projects => {
+        this.localProjectsCount = projects.length;
+        this.localProjectsLoading = false;
+      },
+      error: () => {
+        this.localProjectsCount = 0;
+        this.localProjectsLoading = false;
+      }
+    });
+  }
+
   tryConnecting(ip: string) {
     this.corsConfirmUrl = undefined;
     this.corsConfirmSafeUrl = undefined;
@@ -138,7 +152,8 @@ export class Home implements OnInit, OnDestroy {
 
           this.saveToLocalStorage();
           this.statusLoading.set(targetIp, false);
-          this.router.navigate(['/', encodeRouteIp(targetIp), 'projects']);
+          this.httpService.setDeviceBase(targetIp);
+          this.router.navigate(['/device', encodeRouteIp(targetIp), 'projects']);
           this.corsConfirmUrl = undefined;
           this.corsConfirmSafeUrl = undefined;
           this.corsConfirmIp = undefined;
@@ -182,6 +197,10 @@ export class Home implements OnInit, OnDestroy {
       this.corsConfirmSafeUrl = undefined;
     }
     this.saveToLocalStorage();
+  }
+
+  openLocalProjects() {
+    this.router.navigate(['/projects']);
   }
 
   saveToLocalStorage() {

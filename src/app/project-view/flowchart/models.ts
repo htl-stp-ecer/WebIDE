@@ -57,6 +57,7 @@ export interface Step {
   file?: string;
   optional?: boolean;
   arguments: StepArgDef[];
+  tags?: string[];
 }
 
 export const lc = (s?: string | null) => (s ?? '').toLowerCase();

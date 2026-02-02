@@ -18,7 +18,6 @@ import { ContextMenu } from 'primeng/contextmenu';
 import {ConfirmDialog} from 'primeng/confirmdialog';
 import { Dialog } from 'primeng/dialog';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { decodeRouteIp, encodeRouteIp } from '../../services/route-ip-serializer';
 import { Skeleton } from 'primeng/skeleton';
 
 @Component({
@@ -103,14 +102,7 @@ export class MissionPanel implements OnInit {
   }
 
   backToProjects() {
-    const ipParam = this.route.snapshot.paramMap.get('ip');
-    const decodedIp = decodeRouteIp(ipParam);
-    if (!decodedIp) {
-      this.router.navigate(['/']);
-      return;
-    }
-
-    this.router.navigate(['/', encodeRouteIp(decodedIp), 'projects']);
+    this.router.navigate(['/projects']);
   }
 
   getMissions(): void {

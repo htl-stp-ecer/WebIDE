@@ -12,49 +12,34 @@
           (onClick)="backToProjects()">
         </p-button>
 
-        <!-- Device Name - Inline Editable -->
-        @if (loading) {
-          <p-skeleton width="10rem" height="1.75rem"></p-skeleton>
-        } @else if (!editingName) {
-          <button class="group flex items-center gap-2 py-1 px-2 -ml-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors" (click)="enableEdit()">
-            <h1 class="text-xl font-semibold text-slate-900 dark:text-white">
-              {{ connectionInfo?.hostname }}
-            </h1>
-            <i class="pi pi-pencil text-sm text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity"></i>
-          </button>
-        } @else {
-          <div class="flex items-center gap-2">
-            <input
-              [(ngModel)]="tempName"
-              pInputText
-              class="text-xl font-semibold w-56"
-              (keydown.enter)="finishEdit()"
-              (keydown.escape)="disableEdit()"/>
-            <p-button icon="pi pi-check" size="small" severity="success" [rounded]="true" (onClick)="finishEdit()"></p-button>
-            <p-button icon="pi pi-times" size="small" severity="secondary" [rounded]="true" (onClick)="disableEdit()"></p-button>
-          </div>
-        }
+        <div>
+          <h1 class="text-xl font-semibold text-slate-900 dark:text-white">
+            {{ 'LOCAL_PROJECTS.HEADING' | translate }}
+          </h1>
+          <p class="text-sm text-slate-500 dark:text-slate-400">
+            {{ 'LOCAL_PROJECTS.SUBHEADING' | translate }}
+          </p>
+        </div>
       </div>
     </div>
   </div>
 
   <!-- Projects Section -->
   <div class="max-w-5xl mx-auto px-6 py-8">
-    <div class="flex items-center justify-between mb-6">
+    <div class="flex items-center justify-between mb-3">
       <h2 class="text-lg font-semibold text-slate-900 dark:text-white">
-        {{ 'DEVICE_PROJECTS.HEADING' | translate }}
+        {{ 'PROJECT_MENU.PROJECTS_HEADING' | translate }}
       </h2>
-      <p class="text-sm text-slate-500 dark:text-slate-400">
-        {{ 'DEVICE_PROJECTS.SUBHEADING' | translate }}
-      </p>
     </div>
+    <p class="text-sm text-slate-500 dark:text-slate-400 mb-6">
+      {{ 'LOCAL_PROJECTS.CREATE_HINT' | translate }}
+    </p>
 
     <!-- Projects Grid -->
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
 
-      <!-- Loading Skeletons -->
       @if (projectsLoading) {
-        @for (i of [1, 2]; track i) {
+        @for (skeleton of [1, 2, 3]; track skeleton) {
           <div class="h-40 p-5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
             <p-skeleton width="60%" height="1.25rem" styleClass="mb-3"></p-skeleton>
             <p-skeleton width="40%" height="0.875rem"></p-skeleton>
@@ -65,7 +50,8 @@
       <!-- Project Cards -->
       @for (project of projects; track project.uuid) {
         <div
-          class="group relative h-40 p-5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-600 hover:shadow-lg hover:shadow-slate-200/50 dark:hover:shadow-slate-900/50 transition-all duration-200">
+          class="group relative h-40 p-5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-600 hover:shadow-lg hover:shadow-slate-200/50 dark:hover:shadow-slate-900/50 transition-all duration-200 cursor-pointer"
+          (click)="redirectToProject(project.uuid)">
 
           <!-- Project Info -->
           <div class="flex flex-col h-full">
@@ -76,12 +62,18 @@
               <p class="text-xs font-mono text-slate-400" [title]="project.uuid">
                 {{ project.uuid | slice:0:8 }}
               </p>
+              <p class="text-xs text-slate-500 dark:text-slate-400 mt-2">
+                {{ 'LOCAL_PROJECTS.PI_ADDRESS_LABEL' | translate }}:
+                <span class="font-mono">{{ formatPiAddress(project) }}</span>
+              </p>
             </div>
 
+            <!-- Footer with arrow -->
             <div class="flex items-center justify-between mt-auto pt-3">
               <span class="text-xs text-slate-400">
-                {{ 'DEVICE_PROJECTS.READ_ONLY' | translate }}
+                {{ 'PROJECT_MENU.CLICK_TO_OPEN' | translate }}
               </span>
+              <i class="pi pi-arrow-right text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-300 group-hover:translate-x-1 transition-all"></i>
             </div>
           </div>
 
@@ -103,8 +95,8 @@
         <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
           <i class="pi pi-folder-open text-2xl text-slate-400"></i>
         </div>
-        <h3 class="text-lg font-medium text-slate-900 dark:text-white mb-1">{{ 'DEVICE_PROJECTS.NO_PROJECTS' | translate }}</h3>
-        <p class="text-sm text-slate-500 dark:text-slate-400">{{ 'DEVICE_PROJECTS.NO_PROJECTS_HINT' | translate }}</p>
+        <h3 class="text-lg font-medium text-slate-900 dark:text-white mb-1">{{ 'PROJECT_MENU.NO_PROJECTS' | translate }}</h3>
+        <p class="text-sm text-slate-500 dark:text-slate-400">{{ 'PROJECT_MENU.CREATE_FIRST_PROJECT' | translate }}</p>
       </div>
     }
   </div>

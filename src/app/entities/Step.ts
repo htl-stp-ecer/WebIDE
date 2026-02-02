@@ -1,6 +1,7 @@
 interface Step {
   name: string;
   import: string;
+  tags?: string[];
 
   arguments: {
     name: string;

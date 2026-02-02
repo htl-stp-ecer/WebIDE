@@ -12,6 +12,10 @@ export class PortInterceptor implements HttpInterceptor {
   intercept(req: HttpRequest<any>, next: HttpHandler): Observable<HttpEvent<any>> {
     let url = req.url;
 
+    if (url.startsWith('/') || url.startsWith('./') || url.startsWith('../')) {
+      return next.handle(req);
+    }
+
     if (!/^https?:\/\//i.test(url)) {
       url = 'http://' + url;
     }

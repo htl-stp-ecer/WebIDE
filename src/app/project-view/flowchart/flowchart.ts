@@ -144,6 +144,7 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
   private activePanelDrag: PanelDragState | null = null;
   private deviceInfo: ConnectionInfo | null = null;
   private loadingDeviceInfo = false;
+  private libstpIndexTriggered = false;
   private projectSimulationCache: ProjectSimulationData | null = null;
   private robotSettingsWasOpen = false;
   private panelResizeObserver?: ResizeObserver;
@@ -502,6 +503,7 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
         next: info => {
           this.deviceInfo = info;
           this.loadingDeviceInfo = false;
+          this.refreshDeviceStepIndexCache();
           this.applyDeviceVisualizationInfo(info);
         },
         error: () => {
@@ -510,6 +512,47 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
       });
     } catch {
       this.loadingDeviceInfo = false;
+    }
+  }
+
+  private refreshDeviceStepIndexCache() {
+    if (this.libstpIndexTriggered) {
+      return;
+    }
+    this.libstpIndexTriggered = true;
+    this.http.getDeviceSteps().subscribe({
+      next: steps => {
+        this.http.importStepIndex(steps).subscribe({
+          next: () => {
+            this.refreshLocalSteps();
+            this.libstpIndexTriggered = false;
+          },
+          error: () => {
+            this.libstpIndexTriggered = false;
+          },
+        });
+      },
+      error: () => {
+        this.libstpIndexTriggered = false;
+      },
+    });
+  }
+
+  private refreshLocalSteps(): void {
+    const projectUUID = this.projectUUID;
+    if (!projectUUID) return;
+    try {
+      this.stepsSub?.unsubscribe();
+      this.stepsSub = this.http.getAllSteps(projectUUID).subscribe({
+        next: steps => {
+          this.stepsState.setSteps(steps);
+        },
+        error: () => {
+          this.stepsState.setSteps([]);
+        },
+      });
+    } catch {
+      this.stepsState.setSteps([]);
     }
   }
 

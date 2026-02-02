@@ -1,100 +1,116 @@
-<div class="flex flex-col items-center justify-center text-2xl mt-20">
-  <p class="mb-4">
-    {{ 'HOME.CONNECT_TO_DEVICE' | translate }}
-  </p>
-
-  <div class="relative w-1/4">
-    <p-inputgroup class="flex-1">
-      <input [(ngModel)]="ip" pInputText [placeholder]="'HOME.IP_PLACEHOLDER' | translate">
-      <p-button [label]="'HOME.CONNECT_BUTTON' | translate" (onClick)="tryConnecting(ip)" [disabled]="loading"></p-button>
-    </p-inputgroup>
-
-    @if (loading) {
-      <p-progressSpinner
-        style="width: 35px; height: 35px; position: absolute; right: -50px; top: 50%; transform: translateY(-50%);">
-      </p-progressSpinner>
-    }
-  </div>
-
-  <p class="mt-6 text-center">
-    {{ 'HOME.DEVICE_INSTRUCTIONS_LINE1' | translate }} <br>
-    {{ 'HOME.DEVICE_INSTRUCTIONS_LINE2' | translate }}
-  </p>
-</div>
-
-@if (corsConfirmUrl) {
-  <div class="mt-12 w-full flex justify-center px-4">
-    <div class="w-full md:w-4/5 lg:w-3/4 bg-yellow-50 border border-yellow-200 rounded-xl p-4 shadow-sm">
-      <div class="flex items-center justify-between mb-3">
-        <div class="text-lg font-semibold text-yellow-800">
-          Browser blocked the device request. Confirm access below.
+<div class="min-h-[calc(100vh-64px)] bg-slate-50 dark:bg-slate-950">
+  <div class="max-w-5xl mx-auto px-6 py-10 space-y-10">
+    <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6">
+      <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+        <div>
+          <h2 class="text-2xl font-semibold text-slate-900 dark:text-white">
+            {{ 'HOME.LOCAL_PROJECTS_HEADING' | translate }}
+          </h2>
+          <p class="text-sm text-slate-500 dark:text-slate-400 mt-2">
+            {{ 'HOME.LOCAL_PROJECTS_SUBHEADING' | translate }}
+          </p>
+          <p class="text-xs text-slate-400 mt-3">
+            @if (localProjectsLoading) {
+              {{ 'COMMON.LOADING' | translate }}
+            } @else {
+              {{ 'HOME.LOCAL_PROJECTS_COUNT' | translate:{ count: localProjectsCount } }}
+            }
+          </p>
         </div>
-        <span class="text-sm text-gray-600">{{ corsConfirmIp }}</span>
+        <p-button
+          [label]="'HOME.OPEN_LOCAL_PROJECTS' | translate"
+          (onClick)="openLocalProjects()">
+        </p-button>
       </div>
-      <a [href]="corsConfirmUrl" target="_blank" rel="noopener noreferrer" class="text-blue-500 hover:text-blue-700 underline">
-        {{ corsConfirmUrl }}
-      </a>
     </div>
-  </div>
-}
 
-<div class="mt-40 text-xl ml-20 mr-20">
-  {{ 'HOME.PREVIOUS_CONNECTIONS' | translate }}
+    <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6">
+      <div class="flex flex-col items-center text-center">
+        <h3 class="text-xl font-semibold text-slate-900 dark:text-white mb-3">
+          {{ 'HOME.CONNECT_TO_DEVICE' | translate }}
+        </h3>
 
-  @if (previousConnections.length == 0) {
-    <div class="text-xl text-center mt-20 text-gray-400">{{ 'HOME.NO_PREVIOUS_CONNECTIONS' | translate }}</div>
-  }
+        <div class="relative w-full max-w-md">
+          <p-inputgroup class="flex-1">
+            <input [(ngModel)]="ip" pInputText [placeholder]="'HOME.IP_PLACEHOLDER' | translate">
+            <p-button [label]="'HOME.CONNECT_BUTTON' | translate" (onClick)="tryConnecting(ip)" [disabled]="loading"></p-button>
+          </p-inputgroup>
 
-  <div class="mt-10 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-    @for (connection of previousConnections; track connection.ip) {
-      <p-card class="shadow-lg rounded-2xl border border-gray-200
-         hover:shadow-xl hover:scale-105 hover:bg-gray-50
-         transition-all duration-300 cursor-pointer" (click)="tryConnecting(connection.ip)">
-        <div class="flex items-center justify-between">
-          <div>
-            <div class="text-lg font-semibold">{{ connection.hostname || ('COMMON.UNNAMED_DEVICE' | translate) }} <span class="text-sm text-gray-500 ml-5">{{ connection.ip }}</span></div>
+          @if (loading) {
+            <p-progressSpinner
+              style="width: 35px; height: 35px; position: absolute; right: -50px; top: 50%; transform: translateY(-50%);">
+            </p-progressSpinner>
+          }
+        </div>
 
-            <p class="text-base text-gray-400 flex items-center">
-              {{ 'COMMON.STATUS' | translate }}
-              @if (isStatusLoading(connection)) {
-                <span class="flex items-center ml-2">
-                  {{ 'COMMON.LOADING' | translate }}
-                  <span class="w-3 h-3 bg-yellow-400 rounded-full ml-2 mt-1"></span>
-                </span>
-              } @else if (connection.battery_voltage_v != null || connection.battery_percent != null) {
-                <span class="flex items-center ml-2">
-                  {{ 'COMMON.ONLINE' | translate }}
-                  @if (connection.battery_voltage_v != null) {
-                    <span class="text-sm text-gray-400 ml-2">
-                      {{ connection.battery_voltage_v | number:'1.2-2' }} V
+        <p class="mt-6 text-sm text-slate-500 dark:text-slate-400">
+          {{ 'HOME.DEVICE_INSTRUCTIONS_LINE1' | translate }} <br>
+          {{ 'HOME.DEVICE_INSTRUCTIONS_LINE2' | translate }}
+        </p>
+      </div>
+
+      @if (corsConfirmUrl && corsConfirmSafeUrl) {
+        <div class="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+          <h4 class="font-semibold text-yellow-800">{{ 'HOME.CORS_WARNING_TITLE' | translate }}</h4>
+          <p class="text-sm text-yellow-700 mt-1">
+            {{ 'HOME.CORS_WARNING_TEXT' | translate }}
+          </p>
+          <iframe
+            [src]="corsConfirmSafeUrl"
+            class="mt-4 w-full h-24 rounded-md border border-yellow-200 bg-white">
+          </iframe>
+        </div>
+      }
+    </div>
+
+    <div>
+      <h4 class="text-sm font-semibold text-slate-500 dark:text-slate-400 mb-3">{{ 'HOME.PREVIOUS_CONNECTIONS' | translate }}</h4>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        @if (previousConnections.length == 0) {
+          <p class="text-sm text-slate-400">{{ 'HOME.NO_PREVIOUS_CONNECTIONS' | translate }}</p>
+        }
+
+        @for (connection of previousConnections; track connection.ip) {
+          <p-card class="cursor-pointer" (click)="tryConnecting(connection.ip)">
+            <div class="flex justify-between items-center">
+              <div>
+                <p class="text-lg font-semibold">
+                  {{ connection.hostname || ('COMMON.UNNAMED_DEVICE' | translate) }}
+                  <span class="text-sm text-gray-500">({{ connection.ip }})</span>
+                </p>
+                <p class="text-sm text-gray-400">
+                  {{ 'COMMON.STATUS' | translate }}
+                  @if (isStatusLoading(connection)) {
+                    <span class="flex items-center ml-2">
+                      {{ 'COMMON.LOADING' | translate }}
+                      <span class="w-3 h-3 bg-gray-400 rounded-full ml-2 mt-1"></span>
+                    </span>
+                  } @else if (connection.battery_voltage_v != null || connection.battery_percent != null) {
+                    <span class="flex items-center ml-2">
+                      {{ 'COMMON.ONLINE' | translate }}
+                      <span class="w-3 h-3 bg-green-500 rounded-full ml-2 mt-1"></span>
                     </span>
                   } @else {
-                    <span class="text-sm text-gray-400 ml-2">
-                      {{ connection.battery_percent | number:'1.0-1' }} %
+                    <span class="flex items-center ml-2">
+                      {{ 'COMMON.OFFLINE' | translate }}
+                      <span class="w-3 h-3 bg-red-500 rounded-full ml-2 mt-1"></span>
                     </span>
                   }
-                  <span class="w-3 h-3 bg-green-500 rounded-full ml-2 mt-1"></span>
-                </span>
-              } @else {
-                <span class="flex items-center ml-2">
-                  {{ 'COMMON.OFFLINE' | translate }}
-                  <span class="w-3 h-3 bg-red-500 rounded-full ml-2 mt-1"></span>
-                </span>
-              }
-            </p>
+                </p>
+              </div>
 
-          </div>
-
-          <div class="flex items-center space-x-3">
-            <button
-              class="text-red-500 hover:text-red-700 cursor-pointer"
-              (click)="removeConnection(connection.ip); $event.stopPropagation()"
-              [attr.aria-label]="'HOME.DELETE_CONNECTION' | translate">
-              <i class="pi pi-trash text-lg"></i>
-            </button>
-          </div>
-        </div>
-      </p-card>
-    }
+              <div class="flex items-center space-x-3">
+                <button
+                  class="text-red-500 hover:text-red-700 cursor-pointer"
+                  (click)="removeConnection(connection.ip); $event.stopPropagation()"
+                  [attr.aria-label]="'HOME.DELETE_CONNECTION' | translate">
+                  <i class="pi pi-trash text-lg"></i>
+                </button>
+              </div>
+            </div>
+          </p-card>
+        }
+      </div>
+    </div>
   </div>
 </div>

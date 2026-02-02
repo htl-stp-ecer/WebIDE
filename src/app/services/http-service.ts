@@ -15,12 +15,12 @@ interface RunMissionOptions {
   providedIn: 'root'
 })
 export class HttpService {
-  private ipSubject = new BehaviorSubject<string>('');
-  ip$ = this.ipSubject.asObservable();
+  private deviceBaseSubject = new BehaviorSubject<string>('');
+  deviceBase$ = this.deviceBaseSubject.asObservable();
 
   constructor(private http: HttpClient) {}
 
-  setIp(ip: string) {
+  setDeviceBase(ip: string) {
     // Normalize incoming IP/base so both HttpClient and WebSocket use the same origin
     // - Ensure scheme
     // - Default to port 8000 if none provided (to match PortInterceptor behavior)
@@ -34,17 +34,33 @@ export class HttpService {
         u.port = '8000';
       }
       // Keep only origin (scheme://host:port)
-      this.ipSubject.next(u.origin);
+      this.deviceBaseSubject.next(u.origin);
     } catch {
       // Fallback to previous behavior if parsing fails
-      this.ipSubject.next(base);
+      this.deviceBaseSubject.next(base);
     }
   }
 
-  private get ip() {
-    const ip = this.ipSubject.getValue();
-    if (!ip) throw new Error('IP not set!');
-    return ip;
+  setIp(ip: string) {
+    this.setDeviceBase(ip);
+  }
+
+  clearDeviceBase() {
+    this.deviceBaseSubject.next('');
+  }
+
+  private get deviceBase() {
+    return this.deviceBaseSubject.getValue();
+  }
+
+  private localApi(path: string) {
+    return `/api/v1${path}`;
+  }
+
+  private deviceApi(path: string) {
+    const base = this.deviceBase;
+    if (!base) throw new Error('Device base not set!');
+    return `${base}${path}`;
   }
 
   getDeviceInfo(ip: string) {
@@ -52,94 +68,146 @@ export class HttpService {
   }
 
   getDeviceInfoDefault() {
-    return this.getDeviceInfo(this.ip);
+    return this.http.get<ConnectionInfo>(this.deviceApi('/api/v1/device/info'));
   }
 
   changeHostname(newName: string) {
-    return this.http.put<ConnectionInfo>(`${this.ip}/api/v1/device/hostname`, { hostname: newName });
+    return this.http.put<ConnectionInfo>(this.deviceApi('/api/v1/device/hostname'), { hostname: newName });
   }
 
   updateDeviceDimensions(widthCm: number, lengthCm: number) {
-    return this.http.put<ConnectionInfo>(`${this.ip}/api/v1/device/dimensions`, {
+    return this.http.put<ConnectionInfo>(this.deviceApi('/api/v1/device/dimensions'), {
       width_cm: widthCm,
       length_cm: lengthCm,
     });
   }
 
   updateDeviceSensors(sensors: DeviceSensorInfo[]) {
-    return this.http.put<ConnectionInfo>(`${this.ip}/api/v1/device/sensors`, {
+    return this.http.put<ConnectionInfo>(this.deviceApi('/api/v1/device/sensors'), {
       sensors,
     });
   }
 
   updateDeviceRotationCenter(rotationCenter?: DeviceCenterPoint) {
-    return this.http.put<ConnectionInfo>(`${this.ip}/api/v1/device/rotation-center`, {
+    return this.http.put<ConnectionInfo>(this.deviceApi('/api/v1/device/rotation-center'), {
       rotation_center: rotationCenter,
     });
   }
 
   updateDeviceStartPose(startPose: { x_cm: number; y_cm: number; theta_deg: number }) {
-    return this.http.put<ConnectionInfo>(`${this.ip}/api/v1/device/start-pose`, {
+    return this.http.put<ConnectionInfo>(this.deviceApi('/api/v1/device/start-pose'), {
       start_pose: startPose,
     });
   }
 
   getAllProjects() {
-    return this.http.get<Project[]>(`${this.ip}/api/v1/projects`);
+    return this.http.get<Project[]>(this.localApi('/projects'));
+  }
+
+  getProject(uuid: string) {
+    return this.http.get<Project>(this.localApi(`/projects/${uuid}`));
+  }
+
+  getDeviceProjects() {
+    return this.http.get<Project[]>(this.deviceApi('/api/v1/projects'));
+  }
+
+  deleteDeviceProject(uuid: string) {
+    return this.http.delete(this.deviceApi(`/api/v1/projects/${uuid}`));
+  }
+
+  getDeviceSteps() {
+    return this.http.get<Step[]>(this.deviceApi('/api/v1/steps'));
   }
 
   deleteProject(uuid: string) {
-    return this.http.delete(`${this.ip}/api/v1/projects/${uuid}`);
+    return this.http.delete(this.localApi(`/projects/${uuid}`));
   }
 
   createProject(newProject: string) {
-    return this.http.post<Project>(`${this.ip}/api/v1/projects`, { name: newProject });
+    return this.http.post<Project>(this.localApi('/projects'), { name: newProject });
   }
 
   getAllSteps(uuid: string) {
-    return this.http.get<Step[]>(`${this.ip}/api/v1/steps/?project_uuid=${uuid}`);
+    return this.http.get<Step[]>(this.localApi(`/steps/?project_uuid=${uuid}`));
+  }
+
+  getStepIndexStatus() {
+    return this.http.get<{ status: string; count?: number; last_indexed_at?: string; error?: string }>(
+      this.localApi('/steps/index/status')
+    );
+  }
+
+  refreshStepIndex(forceClear: boolean = false) {
+    const deviceUrl = this.deviceBase;
+    if (!deviceUrl) {
+      throw new Error('Device not connected - cannot refresh step index');
+    }
+    const params = new URLSearchParams();
+    params.set('device_url', deviceUrl);
+    if (forceClear) {
+      params.set('force_clear', '1');
+    }
+    return this.http.post<{ status: string; count?: number; last_indexed_at?: string; error?: string }>(
+      this.localApi(`/steps/index/refresh?${params.toString()}`),
+      {}
+    );
+  }
+
+  clearStepIndex() {
+    return this.http.post<{ status: string; count?: number; last_indexed_at?: string; error?: string }>(
+      this.localApi('/steps/index/clear'),
+      {}
+    );
+  }
+
+  importStepIndex(steps: Step[]) {
+    return this.http.post<{ status: string; count?: number; last_indexed_at?: string; error?: string }>(
+      this.localApi('/steps/index/import'),
+      { steps }
+    );
   }
 
   getTypeDefinitions(projectUUID: string) {
-    return this.http.get<TypeDefinition[]>(`${this.ip}/api/v1/type-definitions/${projectUUID}`);
+    return this.http.get<TypeDefinition[]>(this.localApi(`/type-definitions/${projectUUID}`));
   }
 
   getMissionSimulationData(projectUUID: string, missionName: string) {
     const encoded = encodeURIComponent(missionName);
-    return this.http.get<MissionSimulationData>(`${this.ip}/api/v1/missions/${projectUUID}/simulation/${encoded}`);
+    return this.http.get<MissionSimulationData>(this.localApi(`/missions/${projectUUID}/simulation/${encoded}`));
   }
 
   getProjectSimulationData(projectUUID: string) {
-    return this.http.get<ProjectSimulationData>(`${this.ip}/api/v1/missions/${projectUUID}/simulation`);
+    return this.http.get<ProjectSimulationData>(this.localApi(`/missions/${projectUUID}/simulation`));
   }
 
   getAllMissions(projectUUID: string) {
-    return this.http.get<Mission[]>(`${this.ip}/api/v1/missions/${projectUUID}`);
+    return this.http.get<Mission[]>(this.localApi(`/missions/${projectUUID}`));
   }
 
   createMission(projectUUID: string, name: string) {
-    return this.http.post(`${this.ip}/api/v1/missions/${projectUUID}`, {
+    return this.http.post(this.localApi(`/missions/${projectUUID}`), {
       name: name
     });
   }
 
   updateMissionOrder(projectUUID: string, mission: Mission) {
-    return this.http.put(`${this.ip}/api/v1/missions/${projectUUID}/order`, {
+    return this.http.put(this.localApi(`/missions/${projectUUID}/order`), {
       mission_name: mission.name,
       order: mission.order,
     });
   }
 
   getDetailedMission(projectUUID: string, name: string) {
-    return this.http.get<Mission>(`${this.ip}/api/v1/missions/${projectUUID}/detailed/${name}`);
+    return this.http.get<Mission>(this.localApi(`/missions/${projectUUID}/detailed/${name}`));
   }
 
   deleteMission(projectUUID: string, name: string) {
-    return this.http.delete(`${this.ip}/api/v1/missions/${projectUUID}/mission/${name}`)
+    return this.http.delete(this.localApi(`/missions/${projectUUID}/mission/${name}`))
   }
 
   renameMission(projectUUID: string, oldName: string, newName: string) {
-    return this.http.put(`${this.ip}/api/v1/missions/${projectUUID}/rename`, {
+    return this.http.put(this.localApi(`/missions/${projectUUID}/rename`), {
       old_name: oldName,
       new_name: newName
     })
@@ -176,7 +244,7 @@ export class HttpService {
       params.push('debug=1');
     }
     const query = params.length ? `?${params.join('&')}` : '';
-    const httpUrl = `${this.ip}/api/v1/missions/${projectUUID}/run/${name}${query}`;
+    const httpUrl = `${window.location.origin}${this.localApi(`/missions/${projectUUID}/run/${name}${query}`)}`;
     const wsUrl = this.toWebSocketUrl(httpUrl);
 
     return new Observable<WebSocketResponse>((observer) => {
@@ -222,21 +290,21 @@ export class HttpService {
   }
 
   stopMission(projectUUID: string): Observable<any> {
-    return this.http.post(`${this.ip}/api/v1/missions/${projectUUID}/stop`, {});
+    return this.http.post(this.localApi(`/missions/${projectUUID}/stop`), {});
   }
 
   saveMission(projectUUID: string, mission: Mission) {
-    return this.http.put(`${this.ip}/api/v1/missions/${projectUUID}/update`, mission);
+    return this.http.put(this.localApi(`/missions/${projectUUID}/update`), mission);
   }
 
   // Table Map API
   saveTableMap(base64Image: string) {
-    return this.http.put<{ success: boolean }>(`${this.ip}/api/v1/device/table-map`, {
+    return this.http.put<{ success: boolean }>(this.deviceApi('/api/v1/device/table-map'), {
       image: base64Image,
     });
   }
 
   getTableMap() {
-    return this.http.get<{ image: string | null }>(`${this.ip}/api/v1/device/table-map`);
+    return this.http.get<{ image: string | null }>(this.deviceApi('/api/v1/device/table-map'));
   }
 }

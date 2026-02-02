@@ -108,6 +108,47 @@
                 <span class="toggle-text">{{ useAutoLayout ? ('COMMON.ENABLED' | translate) : ('COMMON.DISABLED' | translate) }}</span>
               </label>
             </div>
+
+            <div class="setting-card">
+              <div class="setting-card-header">
+                <i class="pi pi-database"></i>
+                <span>{{ 'STEP_INDEX.TITLE' | translate }}</span>
+              </div>
+              <p class="setting-card-desc">{{ 'STEP_INDEX.DESCRIPTION' | translate }}</p>
+
+              <div class="text-sm text-slate-500 dark:text-slate-400">
+                @if (stepIndexLoading) {
+                  {{ 'COMMON.LOADING' | translate }}
+                } @else {
+                  <div>{{ getStepIndexStatusLabel() }}</div>
+                  @if (stepIndexStatus?.count != null) {
+                    <div>{{ 'STEP_INDEX.COUNT' | translate:{ count: stepIndexStatus?.count } }}</div>
+                  }
+                  @if (stepIndexStatus?.last_indexed_at) {
+                    <div>{{ 'STEP_INDEX.LAST_INDEXED' | translate:{ value: stepIndexStatus?.last_indexed_at } }}</div>
+                  }
+                  @if (stepIndexStatus?.error) {
+                    <div class="text-red-500">{{ stepIndexStatus?.error }}</div>
+                  }
+                }
+              </div>
+
+              <div class="flex flex-wrap gap-2 mt-4">
+                <p-button
+                  [label]="'STEP_INDEX.REFRESH' | translate"
+                  size="small"
+                  [disabled]="stepIndexRefreshing || stepIndexStatus?.status === 'indexing'"
+                  (onClick)="refreshStepIndex(false)">
+                </p-button>
+                <p-button
+                  [label]="'STEP_INDEX.CLEAR' | translate"
+                  size="small"
+                  severity="secondary"
+                  [disabled]="stepIndexRefreshing || stepIndexStatus?.status === 'indexing'"
+                  (onClick)="clearStepIndexCache()">
+                </p-button>
+              </div>
+            </div>
           </div>
         </div>
       }
