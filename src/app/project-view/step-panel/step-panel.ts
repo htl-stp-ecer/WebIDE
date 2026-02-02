@@ -22,8 +22,6 @@ interface StepGroup {
     Skeleton,
     NgClass,
     StepSearchComponent,
-    NgClass,
-    StepSearchComponent,
   ],
   styleUrls: ['./step-panel.scss']
 })
@@ -93,6 +91,8 @@ export class StepPanel implements OnInit, OnDestroy {
     const state = { ...this.collapsedState() };
     state[group.headline] = group.collapsed;
     this.collapsedState.set(state);
+  }
+
   onFilterChange(filter: string): void {
     this.searchFilter = filter.toLowerCase().trim();
     if (!this.searchFilter) {
@@ -102,6 +102,7 @@ export class StepPanel implements OnInit, OnDestroy {
     this.filteredStepGroups = this.stepGroups
       .map(group => ({
         headline: group.headline,
+        collapsed: group.collapsed,
         steps: group.steps.filter(step =>
           step.name.toLowerCase().includes(this.searchFilter)
         ),
