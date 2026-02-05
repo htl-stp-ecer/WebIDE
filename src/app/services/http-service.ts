@@ -100,6 +100,50 @@ export class HttpService {
     });
   }
 
+  // Local device API (for projects without Pi connection)
+  getLocalDeviceInfo(projectUuid: string) {
+    return this.http.get<ConnectionInfo>(this.localApi(`/device/${projectUuid}/info`));
+  }
+
+  updateLocalDeviceDimensions(projectUuid: string, widthCm: number, lengthCm: number) {
+    return this.http.put<ConnectionInfo>(this.localApi(`/device/${projectUuid}/dimensions`), {
+      width_cm: widthCm,
+      length_cm: lengthCm,
+    });
+  }
+
+  updateLocalDeviceSensors(projectUuid: string, sensors: DeviceSensorInfo[]) {
+    return this.http.put<ConnectionInfo>(this.localApi(`/device/${projectUuid}/sensors`), {
+      sensors,
+    });
+  }
+
+  updateLocalDeviceRotationCenter(projectUuid: string, rotationCenter?: DeviceCenterPoint) {
+    return this.http.put<ConnectionInfo>(this.localApi(`/device/${projectUuid}/rotation-center`), {
+      rotation_center: rotationCenter,
+    });
+  }
+
+  updateLocalDeviceStartPose(projectUuid: string, startPose: { x_cm: number; y_cm: number; theta_deg: number }) {
+    return this.http.put<ConnectionInfo>(this.localApi(`/device/${projectUuid}/start-pose`), {
+      start_pose: startPose,
+    });
+  }
+
+  updateLocalDeviceKinematics(projectUuid: string, kinematics: { track_width_m?: number; wheelbase_m?: number; wheel_radius_m?: number }) {
+    return this.http.put<ConnectionInfo>(this.localApi(`/device/${projectUuid}/kinematics`), kinematics);
+  }
+
+  getLocalTableMap(projectUuid: string) {
+    return this.http.get<{ image: string | null }>(this.localApi(`/device/${projectUuid}/table-map`));
+  }
+
+  saveLocalTableMap(projectUuid: string, base64Image: string) {
+    return this.http.put<{ success: boolean }>(this.localApi(`/device/${projectUuid}/table-map`), {
+      image: base64Image,
+    });
+  }
+
   getAllProjects() {
     return this.http.get<Project[]>(this.localApi('/projects'));
   }

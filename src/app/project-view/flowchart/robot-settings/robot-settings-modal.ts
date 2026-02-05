@@ -79,6 +79,12 @@ interface CenterPoint {
   y_pct: number;
 }
 
+interface WheelPosition {
+  name: string;
+  x_pct: number;
+  y_pct: number;
+}
+
 @Component({
   selector: 'app-robot-settings-modal',
   standalone: true,
@@ -106,9 +112,13 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
   @ViewChild('robotBody') robotBodyRef!: ElementRef<HTMLDivElement>;
   @ViewChild('widthInput') widthInputRef?: ElementRef<HTMLInputElement>;
   @ViewChild('lengthInput') lengthInputRef?: ElementRef<HTMLInputElement>;
+  @ViewChild('trackWidthInput') trackWidthInputRef?: ElementRef<HTMLInputElement>;
+  @ViewChild('wheelbaseInput') wheelbaseInputRef?: ElementRef<HTMLInputElement>;
+  @ViewChild('wheelRadiusInput') wheelRadiusInputRef?: ElementRef<HTMLInputElement>;
 
   connectionInfo: ConnectionInfo | undefined;
   loading = true;
+  savingRobotConfig = false;
   stepIndexStatus?: StepIndexStatus;
   stepIndexLoading = false;
   stepIndexRefreshing = false;
@@ -119,7 +129,7 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
   tempLength = '';
   editingWidth = false;
   editingLength = false;
-  private pendingFocus: 'width' | 'length' | null = null;
+  private pendingFocus: 'width' | 'length' | 'trackWidth' | 'wheelbase' | 'wheelRadius' | null = null;
 
   // Sensors
   sensors: Sensor[] = [];
@@ -128,6 +138,20 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
 
   // Center points (geometric is always 50%, 50% - the robot's center)
   rotationCenter: CenterPoint | null = null;
+
+  // Kinematics info (editable)
+  driveType: string | null = null;
+  trackWidthM: number | null = null;
+  wheelbaseM: number | null = null;
+  wheelRadiusM: number | null = null;
+
+  // Kinematics edit states
+  tempTrackWidth = '';
+  tempWheelbase = '';
+  tempWheelRadius = '';
+  editingTrackWidth = false;
+  editingWheelbase = false;
+  editingWheelRadius = false;
 
   // Edit target (sensor or center)
   editTarget: EditTarget = null;
@@ -192,28 +216,84 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
       this.lengthInputRef.nativeElement.focus();
       this.lengthInputRef.nativeElement.select();
       this.pendingFocus = null;
+    } else if (this.pendingFocus === 'trackWidth' && this.trackWidthInputRef) {
+      this.trackWidthInputRef.nativeElement.focus();
+      this.trackWidthInputRef.nativeElement.select();
+      this.pendingFocus = null;
+    } else if (this.pendingFocus === 'wheelbase' && this.wheelbaseInputRef) {
+      this.wheelbaseInputRef.nativeElement.focus();
+      this.wheelbaseInputRef.nativeElement.select();
+      this.pendingFocus = null;
+    } else if (this.pendingFocus === 'wheelRadius' && this.wheelRadiusInputRef) {
+      this.wheelRadiusInputRef.nativeElement.focus();
+      this.wheelRadiusInputRef.nativeElement.select();
+      this.pendingFocus = null;
     }
   }
 
   private loadDeviceInfo() {
     this.loading = true;
-    this.http.getDeviceInfoDefault().subscribe({
-      next: info => {
-        this.connectionInfo = info;
-        this.tempWidth = this.toDimensionString(info.width_cm);
-        this.tempLength = this.toDimensionString(info.length_cm);
-        this.deviceSensors = info.sensors ?? [];
-        this.rotationCenter = info.rotation_center ?? null;
-        this.syncTableVisualizationDimensions(info);
-        this.syncTableVisualizationRotationCenter(info, info.rotation_center ?? null);
-        this.syncTableVisualizationStartPose(info);
-        this.syncSensorsFromDefinitions();
-        this.loading = false;
-      },
-      error: () => {
-        this.loading = false;
-      }
-    });
+
+    // Use local API directly (no Pi connection needed)
+    if (this.projectUuid) {
+      this.http.getLocalDeviceInfo(this.projectUuid).subscribe({
+        next: info => this.handleDeviceInfoLoaded(info),
+        error: () => {
+          this.loading = false;
+          this.syncSensorsFromDefinitions();
+        }
+      });
+    } else {
+      this.loading = false;
+      this.syncSensorsFromDefinitions();
+    }
+  }
+
+  private handleDeviceInfoLoaded(info: ConnectionInfo) {
+    this.connectionInfo = info;
+    this.tempWidth = this.toDimensionString(info.width_cm);
+    this.tempLength = this.toDimensionString(info.length_cm);
+    this.deviceSensors = info.sensors ?? [];
+    // Kinematics info
+    this.driveType = info.drive_type ?? null;
+    this.trackWidthM = info.track_width_m ?? null;
+    this.wheelbaseM = info.wheelbase_m ?? null;
+    this.wheelRadiusM = info.wheel_radius_m ?? null;
+    // Convert rotation center from API cm to display pct
+    this.rotationCenter = this.apiRotationCenterToDisplay(info);
+    this.syncTableVisualizationDimensions(info);
+    this.syncTableVisualizationRotationCenter(info, this.rotationCenter);
+    this.syncTableVisualizationStartPose(info);
+    this.syncSensorsFromDefinitions();
+    this.loading = false;
+  }
+
+  /**
+   * Convert rotation center from API format (cm from lower-left) to display format (pct from upper-left).
+   */
+  private apiRotationCenterToDisplay(info: ConnectionInfo): CenterPoint | null {
+    const rc = info.rotation_center;
+    if (!rc) return null;
+    const width = info.width_cm;
+    const length = info.length_cm;
+    if (!width || !length || width <= 0 || length <= 0) return null;
+    return {
+      x_pct: (rc.x_cm / width) * 100,
+      y_pct: (1 - rc.y_cm / length) * 100
+    };
+  }
+
+  /**
+   * Convert rotation center from display format (pct) to API format (cm from lower-left).
+   */
+  private displayRotationCenterToApi(): DeviceCenterPoint | undefined {
+    if (!this.rotationCenter) return undefined;
+    const dims = this.getDisplayDimensions();
+    if (!dims) return undefined;
+    return {
+      x_cm: (this.rotationCenter.x_pct / 100) * dims.width,
+      y_cm: (1 - this.rotationCenter.y_pct / 100) * dims.length
+    };
   }
 
   private loadStepIndexStatus() {
@@ -354,24 +434,94 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
       this.editingLength = false;
     }
 
-    this.http.updateDeviceDimensions(newWidth, newLength).subscribe({
-      next: info => {
-        this.connectionInfo = info;
-        this.tempWidth = this.toDimensionString(info.width_cm);
-        this.tempLength = this.toDimensionString(info.length_cm);
-        this.syncTableVisualizationDimensions(info);
-        this.syncTableVisualizationRotationCenter(info, this.rotationCenter);
-        // Clamp centers and sensors to new bounds (they stay in percentage, so no action needed)
-        // But clearances might need clamping if they exceed new dimensions
-        this.clampClearancesToDimensions();
-      },
-      error: () => {
-        NotificationService.showError(
-          this.translate.instant('ROBOT_SETTINGS.SAVE_ERROR'),
-          this.translate.instant('COMMON.ERROR')
-        );
-      }
+    // Use local API directly
+    if (this.projectUuid) {
+      this.http.updateLocalDeviceDimensions(this.projectUuid, newWidth, newLength).subscribe({
+        next: info => this.handleDimensionsSaved(info),
+        error: () => this.showSaveError()
+      });
+    } else {
+      this.showSaveError();
+    }
+  }
+
+  private handleDimensionsSaved(info: ConnectionInfo) {
+    this.connectionInfo = info;
+    this.tempWidth = this.toDimensionString(info.width_cm);
+    this.tempLength = this.toDimensionString(info.length_cm);
+    this.syncTableVisualizationDimensions(info);
+    this.syncTableVisualizationRotationCenter(info, this.rotationCenter);
+    this.clampClearancesToDimensions();
+  }
+
+  private showSaveError() {
+    NotificationService.showError(
+      this.translate.instant('ROBOT_SETTINGS.SAVE_ERROR'),
+      this.translate.instant('COMMON.ERROR')
+    );
+  }
+
+  /**
+   * Save all robot physical configuration (dimensions, sensors, rotation center) at once.
+   */
+  saveRobotConfig() {
+    if (!this.projectUuid) {
+      this.showSaveError();
+      return;
+    }
+
+    this.savingRobotConfig = true;
+
+    const dims = this.getDisplayDimensions();
+    const width = dims?.width ?? 0;
+    const length = dims?.length ?? 0;
+
+    // Build sensors payload - convert from display pct to API cm
+    const sensorsPayload: DeviceSensorInfo[] = this.sensors.map(s => {
+      const { x_cm, y_cm } = this.displayPctToCm(s.x_pct, s.y_pct);
+      return {
+        name: s.name,
+        x_cm,
+        y_cm,
+        clearance_cm: s.clearance_cm
+      };
     });
+
+    // Save dimensions first, then sensors, then rotation center
+    const saveDimensions = () => {
+      if (width > 0 && length > 0) {
+        return this.http.updateLocalDeviceDimensions(this.projectUuid!, width, length).toPromise();
+      }
+      return Promise.resolve(null);
+    };
+
+    const saveSensors = () => {
+      return this.http.updateLocalDeviceSensors(this.projectUuid!, sensorsPayload).toPromise();
+    };
+
+    const saveRotationCenter = () => {
+      // Convert from display pct to API cm
+      const apiRotationCenter = this.displayRotationCenterToApi();
+      return this.http.updateLocalDeviceRotationCenter(this.projectUuid!, apiRotationCenter).toPromise();
+    };
+
+    saveDimensions()
+      .then(() => saveSensors())
+      .then(() => saveRotationCenter())
+      .then((info) => {
+        this.savingRobotConfig = false;
+        if (info) {
+          this.connectionInfo = info;
+        }
+        NotificationService.showSuccess(
+          this.translate.instant('ROBOT_SETTINGS.SAVE_SUCCESS'),
+          this.translate.instant('COMMON.SUCCESS')
+        );
+      })
+      .catch(() => {
+        this.savingRobotConfig = false;
+        this.showSaveError();
+      });
   }
 
   private clampClearancesToDimensions() {
@@ -444,6 +594,29 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
     this.vizService.setStartPose(pose.x_cm, pose.y_cm, pose.theta_deg);
   }
 
+  // Coordinate conversion: API stores cm from lower-left, display uses pct from upper-left
+  private cmToDisplayPct(x_cm: number | undefined, y_cm: number | undefined): { x_pct?: number; y_pct?: number } {
+    const dims = this.getDisplayDimensions();
+    if (!dims || x_cm === undefined || y_cm === undefined) {
+      return { x_pct: undefined, y_pct: undefined };
+    }
+    return {
+      x_pct: (x_cm / dims.width) * 100,
+      y_pct: (1 - y_cm / dims.length) * 100  // Flip Y: API has 0=back, display has 0=front
+    };
+  }
+
+  private displayPctToCm(x_pct: number | undefined, y_pct: number | undefined): { x_cm?: number; y_cm?: number } {
+    const dims = this.getDisplayDimensions();
+    if (!dims || x_pct === undefined || y_pct === undefined) {
+      return { x_cm: undefined, y_cm: undefined };
+    }
+    return {
+      x_cm: (x_pct / 100) * dims.width,
+      y_cm: (1 - y_pct / 100) * dims.length  // Flip Y: display has 0=front, API has 0=back
+    };
+  }
+
   // Sensors
   private syncSensorsFromDefinitions() {
     const irSensorDefs = this.typeDefinitions.filter(d => d.type === 'IRSensor');
@@ -451,12 +624,14 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
 
     this.sensors = irSensorDefs.map((def, index) => {
       const stored = sensorLookup.get(def.name);
+      // Convert from API cm to display pct
+      const { x_pct, y_pct } = this.cmToDisplayPct(stored?.x_cm, stored?.y_cm);
       return {
         id: index + 1,
         name: def.name,
         color: this.sensorPalette[index % this.sensorPalette.length],
-        x_pct: stored?.x_pct,
-        y_pct: stored?.y_pct,
+        x_pct,
+        y_pct,
         clearance_cm: stored?.clearance_cm
       };
     });
@@ -834,41 +1009,65 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
   }
 
   private persistSensorsToServer() {
-    const payload: DeviceSensorInfo[] = this.sensors.map(s => ({
-      name: s.name,
-      x_pct: s.x_pct,
-      y_pct: s.y_pct,
-      clearance_cm: s.clearance_cm
-    }));
-
-    this.http.updateDeviceSensors(payload).subscribe({
-      next: info => {
-        this.connectionInfo = info;
-        this.deviceSensors = info.sensors ?? [];
-      },
-      error: () => {
-        NotificationService.showError(
-          this.translate.instant('ROBOT_SETTINGS.SENSOR_SAVE_ERROR'),
-          this.translate.instant('COMMON.ERROR')
-        );
-      }
+    // Convert from display pct to API cm
+    const payload: DeviceSensorInfo[] = this.sensors.map(s => {
+      const { x_cm, y_cm } = this.displayPctToCm(s.x_pct, s.y_pct);
+      return {
+        name: s.name,
+        x_cm,
+        y_cm,
+        clearance_cm: s.clearance_cm
+      };
     });
+
+    // Use local API directly
+    if (this.projectUuid) {
+      this.http.updateLocalDeviceSensors(this.projectUuid, payload).subscribe({
+        next: info => this.handleSensorsSaved(info),
+        error: () => this.showSensorSaveError()
+      });
+    } else {
+      this.showSensorSaveError();
+    }
+  }
+
+  private handleSensorsSaved(info: ConnectionInfo) {
+    this.connectionInfo = info;
+    this.deviceSensors = info.sensors ?? [];
+  }
+
+  private showSensorSaveError() {
+    NotificationService.showError(
+      this.translate.instant('ROBOT_SETTINGS.SENSOR_SAVE_ERROR'),
+      this.translate.instant('COMMON.ERROR')
+    );
   }
 
   private persistCentersToServer() {
-    this.http.updateDeviceRotationCenter(this.rotationCenter ?? undefined).subscribe({
-      next: info => {
-        this.connectionInfo = info;
-        this.rotationCenter = info.rotation_center ?? null;
-        this.syncTableVisualizationRotationCenter(info, this.rotationCenter);
-      },
-      error: () => {
-        NotificationService.showError(
-          this.translate.instant('ROBOT_SETTINGS.CENTER_SAVE_ERROR'),
-          this.translate.instant('COMMON.ERROR')
-        );
-      }
-    });
+    // Use local API directly - convert from display pct to API cm
+    if (this.projectUuid) {
+      const apiRotationCenter = this.displayRotationCenterToApi();
+      this.http.updateLocalDeviceRotationCenter(this.projectUuid, apiRotationCenter).subscribe({
+        next: info => this.handleCentersSaved(info),
+        error: () => this.showCenterSaveError()
+      });
+    } else {
+      this.showCenterSaveError();
+    }
+  }
+
+  private handleCentersSaved(info: ConnectionInfo) {
+    this.connectionInfo = info;
+    // Convert from API cm to display pct
+    this.rotationCenter = this.apiRotationCenterToDisplay(info);
+    this.syncTableVisualizationRotationCenter(info, this.rotationCenter);
+  }
+
+  private showCenterSaveError() {
+    NotificationService.showError(
+      this.translate.instant('ROBOT_SETTINGS.CENTER_SAVE_ERROR'),
+      this.translate.instant('COMMON.ERROR')
+    );
   }
 
   // Robot preview - scale factor leaves room for measurement markings
@@ -892,6 +1091,247 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
   get robotLengthLabel(): string {
     const dims = this.getDisplayDimensions();
     return `${this.formatDimension(dims?.length)} cm`;
+  }
+
+  /**
+   * Calculate wheel positions based on kinematics configuration.
+   * Wheels are positioned relative to the rotation center (not geometric center).
+   * Returns positions as percentages for visualization.
+   */
+  get wheelPositions(): WheelPosition[] {
+    const dims = this.getDisplayDimensions();
+    if (!dims || !this.driveType || this.trackWidthM === null) {
+      return [];
+    }
+
+    const trackWidthCm = this.trackWidthM * 100;
+    const wheelbaseCm = (this.wheelbaseM ?? 0) * 100;
+
+    // Use rotation center as origin, default to geometric center (50%, 50%)
+    const centerXpct = this.rotationCenter?.x_pct ?? 50;
+    const centerYpct = this.rotationCenter?.y_pct ?? 50;
+
+    // Convert cm offsets to percentages relative to rotation center
+    const strafe2pct = (strafeCm: number) => centerXpct - (strafeCm / dims.width) * 100;
+    const forward2pct = (forwardCm: number) => centerYpct - (forwardCm / dims.length) * 100;
+
+    const positions: WheelPosition[] = [];
+    const driveTypeLower = this.driveType.toLowerCase();
+
+    if (driveTypeLower === 'mecanum') {
+      if (wheelbaseCm <= 0) return [];
+
+      const forwardOffset = wheelbaseCm / 2;
+      const strafeOffset = trackWidthCm / 2;
+
+      positions.push(
+        { name: 'FL', x_pct: strafe2pct(strafeOffset), y_pct: forward2pct(forwardOffset) },
+        { name: 'FR', x_pct: strafe2pct(-strafeOffset), y_pct: forward2pct(forwardOffset) },
+        { name: 'BL', x_pct: strafe2pct(strafeOffset), y_pct: forward2pct(-forwardOffset) },
+        { name: 'BR', x_pct: strafe2pct(-strafeOffset), y_pct: forward2pct(-forwardOffset) }
+      );
+    } else if (['differential', 'tank', 'two_wheel'].includes(driveTypeLower)) {
+      const strafeOffset = trackWidthCm / 2;
+
+      positions.push(
+        { name: 'L', x_pct: strafe2pct(strafeOffset), y_pct: centerYpct },
+        { name: 'R', x_pct: strafe2pct(-strafeOffset), y_pct: centerYpct }
+      );
+    }
+
+    return positions;
+  }
+
+  /**
+   * Get display-friendly drive type label.
+   */
+  get driveTypeLabel(): string {
+    if (!this.driveType) return '';
+    const type = this.driveType.toLowerCase();
+    const labels: Record<string, string> = {
+      'mecanum': 'Mecanum',
+      'differential': 'Differential',
+      'tank': 'Tank',
+      'two_wheel': 'Two-Wheel'
+    };
+    return labels[type] ?? this.driveType;
+  }
+
+  /**
+   * Check if current drive type is mecanum.
+   */
+  get isMecanumDrive(): boolean {
+    return this.driveType?.toLowerCase() === 'mecanum';
+  }
+
+  /**
+   * Get track width display in cm.
+   */
+  get trackWidthCm(): number | null {
+    return this.trackWidthM !== null ? this.roundToTwo(this.trackWidthM * 100) : null;
+  }
+
+  /**
+   * Get wheelbase display in cm.
+   */
+  get wheelbaseCm(): number | null {
+    return this.wheelbaseM !== null ? this.roundToTwo(this.wheelbaseM * 100) : null;
+  }
+
+  /**
+   * Get wheel radius display in cm.
+   */
+  get wheelRadiusCm(): number | null {
+    return this.wheelRadiusM !== null ? this.roundToTwo(this.wheelRadiusM * 100) : null;
+  }
+
+  // Track width editing
+  startEditTrackWidth() {
+    this.tempTrackWidth = this.trackWidthCm?.toString() ?? '';
+    this.editingTrackWidth = true;
+    this.pendingFocus = 'trackWidth';
+  }
+
+  cancelTrackWidthEdit() {
+    this.editingTrackWidth = false;
+    this.tempTrackWidth = this.trackWidthCm?.toString() ?? '';
+  }
+
+  onTrackWidthBlur() {
+    setTimeout(() => {
+      if (this.editingTrackWidth) {
+        this.saveTrackWidth();
+      }
+    }, 100);
+  }
+
+  saveTrackWidth() {
+    const newValueCm = this.parseDimension(this.tempTrackWidth);
+    if (newValueCm === undefined || newValueCm <= 0) {
+      this.cancelTrackWidthEdit();
+      return;
+    }
+    this.editingTrackWidth = false;
+    this.trackWidthM = newValueCm / 100;
+    // Persist to YAML via local API
+    this.persistKinematicsToServer();
+  }
+
+  // Wheelbase editing
+  startEditWheelbase() {
+    this.tempWheelbase = this.wheelbaseCm?.toString() ?? '';
+    this.editingWheelbase = true;
+    this.pendingFocus = 'wheelbase';
+  }
+
+  cancelWheelbaseEdit() {
+    this.editingWheelbase = false;
+    this.tempWheelbase = this.wheelbaseCm?.toString() ?? '';
+  }
+
+  onWheelbaseBlur() {
+    setTimeout(() => {
+      if (this.editingWheelbase) {
+        this.saveWheelbase();
+      }
+    }, 100);
+  }
+
+  saveWheelbase() {
+    const newValueCm = this.parseDimension(this.tempWheelbase);
+    if (newValueCm === undefined || newValueCm <= 0) {
+      this.cancelWheelbaseEdit();
+      return;
+    }
+    this.editingWheelbase = false;
+    this.wheelbaseM = newValueCm / 100;
+    this.persistKinematicsToServer();
+  }
+
+  // Wheel radius editing
+  startEditWheelRadius() {
+    this.tempWheelRadius = this.wheelRadiusCm?.toString() ?? '';
+    this.editingWheelRadius = true;
+    this.pendingFocus = 'wheelRadius';
+  }
+
+  cancelWheelRadiusEdit() {
+    this.editingWheelRadius = false;
+    this.tempWheelRadius = this.wheelRadiusCm?.toString() ?? '';
+  }
+
+  onWheelRadiusBlur() {
+    setTimeout(() => {
+      if (this.editingWheelRadius) {
+        this.saveWheelRadius();
+      }
+    }, 100);
+  }
+
+  saveWheelRadius() {
+    const newValueCm = this.parseDimension(this.tempWheelRadius);
+    if (newValueCm === undefined || newValueCm <= 0) {
+      this.cancelWheelRadiusEdit();
+      return;
+    }
+    this.editingWheelRadius = false;
+    this.wheelRadiusM = newValueCm / 100;
+    this.persistKinematicsToServer();
+  }
+
+  private persistKinematicsToServer() {
+    if (!this.projectUuid) return;
+    this.http.updateLocalDeviceKinematics(this.projectUuid, {
+      track_width_m: this.trackWidthM ?? undefined,
+      wheelbase_m: this.wheelbaseM ?? undefined,
+      wheel_radius_m: this.wheelRadiusM ?? undefined,
+    }).subscribe({
+      error: () => this.showSaveError()
+    });
+  }
+
+  getWheelMarkerStyle(wheel: WheelPosition): Record<string, string> {
+    const style: Record<string, string> = {
+      '--wheel-x': `${wheel.x_pct}%`,
+      '--wheel-y': `${wheel.y_pct}%`
+    };
+
+    // Size wheels based on radius if available
+    const dims = this.getDisplayDimensions();
+    if (dims && this.wheelRadiusM !== null) {
+      const wheelDiameterCm = this.wheelRadiusM * 2 * 100;
+      // Wheel height (diameter) as percentage of robot length
+      const heightPct = (wheelDiameterCm / dims.length) * 100;
+      // Wheel width is typically ~40% of diameter for standard wheels
+      const widthPct = (wheelDiameterCm * 0.4 / dims.width) * 100;
+      style['--wheel-height'] = `${heightPct}%`;
+      style['--wheel-width'] = `${widthPct}%`;
+    }
+
+    return style;
+  }
+
+  /**
+   * Get CSS class for wheel rectangle based on position.
+   */
+  getWheelRectClass(wheel: WheelPosition): string {
+    if (this.isMecanumDrive) {
+      // Mecanum wheels are all the same
+      return 'wheel-rect-mecanum';
+    }
+    // Differential wheels
+    return 'wheel-rect-diff';
+  }
+
+  /**
+   * Get CSS class for mecanum wheel roller line direction.
+   * FL and BR rollers go one way, FR and BL go the other.
+   */
+  getWheelRollerClass(wheel: WheelPosition): string {
+    if (wheel.name === 'FL' || wheel.name === 'BR') {
+      return 'wheel-roller-left';
+    }
+    return 'wheel-roller-right';
   }
 
   private getDisplayDimensions(): { width: number; length: number } | null {
@@ -1022,21 +1462,32 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
 
   private persistStartPoseToServer() {
     const pose = this.vizService.startPose();
-    this.http.updateDeviceStartPose({
+    const payload = {
       x_cm: pose.x,
       y_cm: pose.y,
       theta_deg: thetaToDegrees(pose.theta),
-    }).subscribe({
-      next: info => {
-        this.connectionInfo = info;
-      },
-      error: () => {
-        NotificationService.showError(
-          this.translate.instant('ROBOT_SETTINGS.START_POSE_SAVE_ERROR'),
-          this.translate.instant('COMMON.ERROR')
-        );
-      }
-    });
+    };
+
+    // Use local API directly
+    if (this.projectUuid) {
+      this.http.updateLocalDeviceStartPose(this.projectUuid, payload).subscribe({
+        next: info => this.handleStartPoseSaved(info),
+        error: () => this.showStartPoseSaveError()
+      });
+    } else {
+      this.showStartPoseSaveError();
+    }
+  }
+
+  private handleStartPoseSaved(info: ConnectionInfo) {
+    this.connectionInfo = info;
+  }
+
+  private showStartPoseSaveError() {
+    NotificationService.showError(
+      this.translate.instant('ROBOT_SETTINGS.START_POSE_SAVE_ERROR'),
+      this.translate.instant('COMMON.ERROR')
+    );
   }
 
   // Layout settings

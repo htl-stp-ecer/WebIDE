@@ -680,11 +680,10 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
       this.tableViz.setRobotDimensions(fallbackWidth, fallbackLength);
     }
 
+    // Rotation center is stored in cm from lower-left origin
     if (info.rotation_center && isPositiveNumber(width) && isPositiveNumber(length)) {
-      const xCm = (width * info.rotation_center.x_pct) / 100;
-      const yCm = length * (1 - info.rotation_center.y_pct / 100);
-      const forwardCm = yCm - length / 2;
-      const strafeCm = (width / 2) - xCm;
+      const forwardCm = info.rotation_center.y_cm - length / 2;
+      const strafeCm = (width / 2) - info.rotation_center.x_cm;
       this.tableViz.setRotationCenter(forwardCm, strafeCm);
     }
 
@@ -698,12 +697,11 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
 
     this.tableViz.clearSensors();
     if (!isPositiveNumber(width) || !isPositiveNumber(length)) return;
+    // Sensors are stored in cm from lower-left origin
     orderedSensors.forEach((sensor, index) => {
-      if (sensor.x_pct === undefined || sensor.y_pct === undefined) return;
-      const xCm = (width * sensor.x_pct) / 100;
-      const yCm = length * (1 - sensor.y_pct / 100);
-      const forwardCm = yCm - length / 2;
-      const strafeCm = (width / 2) - xCm;
+      if (sensor.x_cm === undefined || sensor.y_cm === undefined) return;
+      const forwardCm = sensor.y_cm - length / 2;
+      const strafeCm = (width / 2) - sensor.x_cm;
       this.tableViz.configureLineSensor(index, forwardCm, strafeCm);
     });
   }

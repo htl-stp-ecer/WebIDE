@@ -209,8 +209,10 @@
 
         <!-- Rotation Center Section -->
         <div class="p-4 border-t border-slate-200 dark:border-slate-700">
-          <h3 class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">
+          <h3 class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-1">
             {{ 'ROBOT_SETTINGS.ROTATION_CENTER' | translate }}
+            <i class="pi pi-info-circle text-[10px] opacity-50 cursor-help font-normal"
+               [title]="'ROBOT_SETTINGS.ROTATION_CENTER_HINT' | translate"></i>
           </h3>
           <button
             type="button"
@@ -235,6 +237,117 @@
             }
           </button>
         </div>
+
+        <!-- Drivetrain Info (editable) -->
+        @if (driveType) {
+          <div class="p-4 border-t border-slate-200 dark:border-slate-700">
+            <h3 class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">
+              {{ 'ROBOT_SETTINGS.DRIVETRAIN' | translate }}
+            </h3>
+            <div class="space-y-3 text-sm text-slate-600 dark:text-slate-300">
+              <div class="flex justify-between items-center">
+                <span class="text-slate-500 flex items-center gap-1">
+                  {{ 'ROBOT_SETTINGS.DRIVE_TYPE' | translate }}
+                  <i class="pi pi-info-circle text-[10px] opacity-50 cursor-help"
+                     [title]="'ROBOT_SETTINGS.DRIVE_TYPE_HINT' | translate"></i>
+                </span>
+                <span class="font-medium">{{ driveTypeLabel }}</span>
+              </div>
+              <!-- Track Width (editable) -->
+              <div class="flex justify-between items-center">
+                <span class="text-slate-500 flex items-center gap-1">
+                  {{ 'ROBOT_SETTINGS.TRACK_WIDTH' | translate }}
+                  <i class="pi pi-info-circle text-[10px] opacity-50 cursor-help"
+                     [title]="'ROBOT_SETTINGS.TRACK_WIDTH_HINT' | translate"></i>
+                </span>
+                @if (editingTrackWidth) {
+                  <div class="inline-edit-small">
+                    <input
+                      #trackWidthInput
+                      type="number"
+                      [(ngModel)]="tempTrackWidth"
+                      pInputText
+                      class="inline-dim-input-small"
+                      (keydown.enter)="saveTrackWidth()"
+                      (keydown.escape)="cancelTrackWidthEdit()"
+                      (blur)="onTrackWidthBlur()"/>
+                    <span class="inline-dim-unit-small">cm</span>
+                  </div>
+                } @else {
+                  <button
+                    type="button"
+                    class="inline-dim-label-small group"
+                    (click)="startEditTrackWidth()">
+                    <span class="font-mono">{{ trackWidthCm ?? '--' }} cm</span>
+                    <i class="pi pi-pencil text-[9px] opacity-0 group-hover:opacity-100 transition-opacity ml-1"></i>
+                  </button>
+                }
+              </div>
+              <!-- Wheelbase (editable, only for mecanum) -->
+              @if (isMecanumDrive) {
+                <div class="flex justify-between items-center">
+                  <span class="text-slate-500 flex items-center gap-1">
+                    {{ 'ROBOT_SETTINGS.WHEELBASE' | translate }}
+                    <i class="pi pi-info-circle text-[10px] opacity-50 cursor-help"
+                       [title]="'ROBOT_SETTINGS.WHEELBASE_HINT' | translate"></i>
+                  </span>
+                  @if (editingWheelbase) {
+                    <div class="inline-edit-small">
+                      <input
+                        #wheelbaseInput
+                        type="number"
+                        [(ngModel)]="tempWheelbase"
+                        pInputText
+                        class="inline-dim-input-small"
+                        (keydown.enter)="saveWheelbase()"
+                        (keydown.escape)="cancelWheelbaseEdit()"
+                        (blur)="onWheelbaseBlur()"/>
+                      <span class="inline-dim-unit-small">cm</span>
+                    </div>
+                  } @else {
+                    <button
+                      type="button"
+                      class="inline-dim-label-small group"
+                      (click)="startEditWheelbase()">
+                      <span class="font-mono">{{ wheelbaseCm ?? '--' }} cm</span>
+                      <i class="pi pi-pencil text-[9px] opacity-0 group-hover:opacity-100 transition-opacity ml-1"></i>
+                    </button>
+                  }
+                </div>
+              }
+              <!-- Wheel Radius (editable) -->
+              <div class="flex justify-between items-center">
+                <span class="text-slate-500 flex items-center gap-1">
+                  {{ 'ROBOT_SETTINGS.WHEEL_RADIUS' | translate }}
+                  <i class="pi pi-info-circle text-[10px] opacity-50 cursor-help"
+                     [title]="'ROBOT_SETTINGS.WHEEL_RADIUS_HINT' | translate"></i>
+                </span>
+                @if (editingWheelRadius) {
+                  <div class="inline-edit-small">
+                    <input
+                      #wheelRadiusInput
+                      type="number"
+                      [(ngModel)]="tempWheelRadius"
+                      pInputText
+                      class="inline-dim-input-small"
+                      (keydown.enter)="saveWheelRadius()"
+                      (keydown.escape)="cancelWheelRadiusEdit()"
+                      (blur)="onWheelRadiusBlur()"/>
+                    <span class="inline-dim-unit-small">cm</span>
+                  </div>
+                } @else {
+                  <button
+                    type="button"
+                    class="inline-dim-label-small group"
+                    (click)="startEditWheelRadius()">
+                    <span class="font-mono">{{ wheelRadiusCm ?? '--' }} cm</span>
+                    <i class="pi pi-pencil text-[9px] opacity-0 group-hover:opacity-100 transition-opacity ml-1"></i>
+                  </button>
+                }
+              </div>
+            </div>
+          </div>
+        }
 
         <!-- Position Panel -->
         @if (selectedSensorId !== null || isRotationSelected) {
@@ -462,6 +575,24 @@
                 }
               }
 
+              <!-- Wheel Markers -->
+              @for (wheel of wheelPositions; track wheel.name) {
+                <span
+                  class="wheel-marker"
+                  [ngClass]="{'wheel-marker-mecanum': isMecanumDrive, 'wheel-marker-diff': !isMecanumDrive}"
+                  [ngStyle]="getWheelMarkerStyle(wheel)">
+                  <span class="wheel-rect" [ngClass]="getWheelRectClass(wheel)"></span>
+                  @if (isMecanumDrive) {
+                    <span class="wheel-roller-line" [ngClass]="getWheelRollerClass(wheel)"></span>
+                  }
+                </span>
+              }
+
+              <!-- Axle Lines (differential only) -->
+              @if (wheelPositions.length === 2) {
+                <span class="axle-line axle-center"></span>
+              }
+
               <!-- Geometric Center Marker (fixed at center) -->
               <span class="center-marker center-marker-geometric center-marker-fixed">
                 <i class="pi pi-plus text-[8px]"></i>
@@ -506,13 +637,23 @@
           </div>
         </div>
 
-            <!-- Hint -->
-            @if (editTarget !== null) {
-              <div class="robot-hint">
-                <i class="pi pi-info-circle"></i>
-                {{ 'ROBOT_SETTINGS.DRAG_TO_PLACE' | translate }}
+            <!-- Hint and Save Button -->
+            <div class="robot-footer">
+              @if (editTarget !== null) {
+                <div class="robot-hint">
+                  <i class="pi pi-info-circle"></i>
+                  {{ 'ROBOT_SETTINGS.DRAG_TO_PLACE' | translate }}
+                </div>
+              }
+              <div class="robot-footer-actions">
+                <p-button
+                  [label]="'COMMON.SAVE' | translate"
+                  icon="pi pi-save"
+                  (onClick)="saveRobotConfig()"
+                  [loading]="savingRobotConfig">
+                </p-button>
               </div>
-            }
+            </div>
           </main>
         </div>
       }

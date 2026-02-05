@@ -1,13 +1,13 @@
 interface DeviceSensorInfo {
   name: string;
-  x_pct?: number;
-  y_pct?: number;
+  x_cm?: number;  // Distance from left edge
+  y_cm?: number;  // Distance from back edge (0=back, length=front)
   clearance_cm?: number;
 }
 
 interface DeviceCenterPoint {
-  x_pct: number;
-  y_pct: number;
+  x_cm: number;  // Distance from left edge
+  y_cm: number;  // Distance from back edge
 }
 
 interface DeviceStartPose {
@@ -26,4 +26,9 @@ interface ConnectionInfo {
   sensors?: DeviceSensorInfo[];
   rotation_center?: DeviceCenterPoint;
   start_pose?: DeviceStartPose;
+  // Kinematics info (editable, from robot.drive.kinematics)
+  drive_type?: string;
+  track_width_m?: number;
+  wheelbase_m?: number;
+  wheel_radius_m?: number;
 }
