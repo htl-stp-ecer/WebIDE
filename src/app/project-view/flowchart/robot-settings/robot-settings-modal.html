@@ -5,7 +5,7 @@
   [dismissableMask]="true"
   [draggable]="true"
   [resizable]="false"
-  [style]="{ width: '900px', maxWidth: '95vw' }"
+  [style]="{ width: '900px', maxWidth: '95vw', maxHeight: '90vh' }"
   [contentStyle]="{ padding: 0 }"
   styleClass="settings-dialog">
 
@@ -420,9 +420,14 @@
           <main class="robot-main">
         <!-- Robot Canvas -->
         <div class="flex-1 flex items-center justify-center p-6 robot-canvas-bg">
-          <div class="relative robot-frame"
+          <div #robotFrame
+               class="relative robot-frame select-none"
+               [ngClass]="{'cursor-crosshair': editTarget !== null}"
                [style.--robot-width]="robotScale.widthPct + '%'"
-               [style.--robot-height]="robotScale.heightPct + '%'">
+               [style.--robot-height]="robotScale.heightPct + '%'"
+               (mousedown)="onRobotMouseDown($event)"
+               (mousemove)="onRobotMouseMove($event)"
+               (mouseup)="onRobotMouseUp()">
 
             <!-- Measurement Lines -->
             <div class="robot-measure robot-measure-width" aria-hidden="true"></div>
@@ -538,10 +543,7 @@
               }"
               [style.width.%]="robotScale.widthPct"
               [style.height.%]="robotScale.heightPct"
-              (mousedown)="onRobotMouseDown($event)"
-              (mousemove)="onRobotMouseMove($event)"
-              (mouseup)="onRobotMouseUp()"
-              (mouseleave)="onRobotMouseUp()">
+>
 
               <!-- Guidelines (visible during drag) -->
               @if (showGuidelines) {

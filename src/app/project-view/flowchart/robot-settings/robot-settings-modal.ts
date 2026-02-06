@@ -110,6 +110,7 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
   readonly activeTab = signal<SettingsTab>('project');
 
   @ViewChild('robotBody') robotBodyRef!: ElementRef<HTMLDivElement>;
+  @ViewChild('robotFrame') robotFrameRef!: ElementRef<HTMLDivElement>;
   @ViewChild('widthInput') widthInputRef?: ElementRef<HTMLInputElement>;
   @ViewChild('lengthInput') lengthInputRef?: ElementRef<HTMLInputElement>;
   @ViewChild('trackWidthInput') trackWidthInputRef?: ElementRef<HTMLInputElement>;
@@ -720,11 +721,12 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
     if (!dims) return;
 
     const parsed = value === null ? undefined : Number(value);
+    // Allow values outside robot dimensions (sensors can be placed outside the body)
+    const cm = parsed === undefined || Number.isNaN(parsed) ? undefined : parsed;
     const maxCm = axis === 'x' ? dims.width : dims.length;
-    const clampedCm = parsed === undefined || Number.isNaN(parsed) ? undefined : Math.min(Math.max(parsed, 0), maxCm);
-    const percent = clampedCm === undefined || maxCm === 0
+    const percent = cm === undefined || maxCm === 0
       ? undefined
-      : axis === 'y' ? (1 - clampedCm / maxCm) * 100 : (clampedCm / maxCm) * 100;
+      : axis === 'y' ? (1 - cm / maxCm) * 100 : (cm / maxCm) * 100;
 
     this.sensors = this.sensors.map(sensor => {
       if (sensor.id !== this.selectedSensorId) return sensor;
@@ -753,16 +755,24 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
   }
 
   // Hit-testing threshold in percentage (how close click must be to select an element)
-  private readonly HIT_TEST_THRESHOLD = 8;
+  private readonly HIT_TEST_THRESHOLD = 12;
+
+  // Bound listeners for document-level drag tracking
+  private boundDocMouseMove = (e: MouseEvent) => this.onDocumentMouseMove(e);
+  private boundDocMouseUp = () => this.onDocumentMouseUp();
 
   // Mouse events for live drag placement
   onRobotMouseDown(event: MouseEvent) {
+    // Don't interfere with interactive elements (dimension labels, inputs)
+    const clickedEl = event.target as HTMLElement;
+    if (clickedEl.closest('button, input, .robot-measure-label')) return;
+
     event.preventDefault();
 
-    // Calculate click position as percentage
-    const target = event.currentTarget as HTMLElement | null;
-    if (!target) return;
-    const rect = target.getBoundingClientRect();
+    // Calculate click position as percentage relative to robot body
+    const bodyEl = this.robotBodyRef?.nativeElement;
+    if (!bodyEl) return;
+    const rect = bodyEl.getBoundingClientRect();
     if (rect.width === 0 || rect.height === 0) return;
 
     const clickX = ((event.clientX - rect.left) / rect.width) * 100;
@@ -780,6 +790,10 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
     this.isDragging = true;
     this.computeGuidelines();
     this.updateTargetPosition(event);
+
+    // Listen on document so drag continues when mouse leaves the robot area
+    document.addEventListener('mousemove', this.boundDocMouseMove);
+    document.addEventListener('mouseup', this.boundDocMouseUp);
   }
 
   /**
@@ -817,10 +831,26 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
     this.updateTargetPosition(event);
   }
 
+  private onDocumentMouseMove(event: MouseEvent) {
+    if (!this.isDragging || !this.editTarget) return;
+    event.preventDefault();
+    this.updateTargetPosition(event);
+  }
+
+  private onDocumentMouseUp() {
+    this.finishDrag();
+  }
+
   onRobotMouseUp() {
+    this.finishDrag();
+  }
+
+  private finishDrag() {
     if (this.isDragging) {
       this.isDragging = false;
       this.clearGuidelines();
+      document.removeEventListener('mousemove', this.boundDocMouseMove);
+      document.removeEventListener('mouseup', this.boundDocMouseUp);
       // Final persist on mouse up
       if (this.editTarget?.type === 'sensor') {
         this.persistSensorsToServer();
@@ -831,13 +861,15 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
   }
 
   private updateTargetPosition(event: MouseEvent) {
-    const target = event.currentTarget as HTMLElement | null;
-    if (!target) return;
-    const rect = target.getBoundingClientRect();
+    // Always calculate position relative to the robot body, even when mouse is outside it
+    const bodyEl = this.robotBodyRef?.nativeElement;
+    if (!bodyEl) return;
+    const rect = bodyEl.getBoundingClientRect();
     if (rect.width === 0 || rect.height === 0) return;
 
-    let x = Math.min(Math.max(((event.clientX - rect.left) / rect.width) * 100, 0), 100);
-    let y = Math.min(Math.max(((event.clientY - rect.top) / rect.height) * 100, 0), 100);
+    // Allow values outside 0-100% so sensors can be placed outside the robot body
+    let x = ((event.clientX - rect.left) / rect.width) * 100;
+    let y = ((event.clientY - rect.top) / rect.height) * 100;
 
     // Apply snapping
     const snapped = this.applySnapping(x, y);
@@ -1070,8 +1102,8 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
     );
   }
 
-  // Robot preview - scale factor leaves room for measurement markings
-  private readonly ROBOT_SCALE_FACTOR = 55;
+  // Robot preview - scale factor leaves room for measurement markings and out-of-body sensor placement
+  private readonly ROBOT_SCALE_FACTOR = 50;
 
   get robotScale() {
     const dims = this.getDisplayDimensions();

@@ -132,6 +132,7 @@
 
 .robot-body {
   background: rgba(15, 23, 42, 0.04);
+  overflow: visible;
 }
 
 .robot-body--active {
@@ -175,6 +176,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  // Allow interaction outside robot body for sensor placement
+  overflow: visible;
 }
 
 :host-context(.dark) .robot-frame,
@@ -355,8 +358,8 @@
   border-radius: 9999px;
   border: 2px solid white;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
-  left: clamp(calc(var(--dot-size) / 2), var(--sensor-x), calc(100% - (var(--dot-size) / 2)));
-  top: clamp(calc(var(--dot-size) / 2), var(--sensor-y), calc(100% - (var(--dot-size) / 2)));
+  left: var(--sensor-x);
+  top: var(--sensor-y);
   transform: translate(-50%, -50%);
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
@@ -411,8 +414,8 @@
   color: white;
   font-weight: bold;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
-  left: clamp(10px, var(--center-x), calc(100% - 10px));
-  top: clamp(10px, var(--center-y), calc(100% - 10px));
+  left: var(--center-x, 50%);
+  top: var(--center-y, 50%);
   transform: translate(-50%, -50%);
   transition: transform 0.15s ease, box-shadow 0.15s ease;
   pointer-events: none;
@@ -874,5 +877,130 @@
 :host-context(.dark) .axle-line,
 :host-context(.p-dark) .axle-line {
   background: rgba(148, 163, 184, 0.5);
+}
+
+// ============================================
+// Responsive: Small Screens
+// ============================================
+
+@media (max-width: 768px) {
+  .tab-content-robot {
+    flex-direction: column !important;
+  }
+
+  .robot-sidebar {
+    width: 100%;
+    max-height: 180px;
+    border-right: none;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    flex-direction: row;
+    overflow: hidden;
+  }
+
+  :host-context(.dark) .robot-sidebar,
+  :host-context(.p-dark) .robot-sidebar {
+    border-right-color: transparent;
+    border-bottom-color: rgba(255, 255, 255, 0.06);
+  }
+
+  // Sensor list becomes horizontal scrollable
+  .robot-sidebar > .p-4:first-child {
+    display: none; // Hide "Sensors" heading to save space
+  }
+
+  .robot-sidebar > .flex-1 {
+    flex: 1;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 8px;
+
+    .space-y-1 {
+      display: flex;
+      flex-direction: row;
+      gap: 6px;
+
+      > button {
+        flex-shrink: 0;
+        min-width: 120px;
+      }
+    }
+  }
+
+  // Rotation center section inline
+  .robot-sidebar > .p-4.border-t {
+    padding: 8px;
+    border-top: none;
+    border-left: 1px solid rgba(0, 0, 0, 0.06);
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+
+    h3 {
+      margin-bottom: 6px !important;
+    }
+  }
+
+  // Drivetrain section inline
+  .robot-sidebar > .p-4.border-t:nth-child(4) {
+    border-left: 1px solid rgba(0, 0, 0, 0.06);
+  }
+
+  // Position panel below sensor list
+  .robot-position-panel {
+    border-top: none !important;
+    border-left: 1px solid rgba(0, 0, 0, 0.06);
+    padding: 8px !important;
+    flex-shrink: 0;
+    min-width: 160px;
+  }
+
+  .robot-canvas-bg {
+    padding: 8px;
+  }
+
+  .robot-footer {
+    padding: 8px 12px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .robot-hint {
+    font-size: 12px;
+    padding: 8px;
+  }
+}
+
+@media (max-width: 480px) {
+  .robot-sidebar {
+    max-height: 140px;
+  }
+
+  .robot-sidebar > .flex-1 {
+    padding: 6px;
+
+    .space-y-1 > button {
+      min-width: 100px;
+      padding: 6px 8px !important;
+      font-size: 12px;
+    }
+  }
+
+  .robot-canvas-bg {
+    padding: 4px;
+  }
+
+  .robot-position-panel {
+    min-width: 140px;
+
+    .grid {
+      gap: 6px !important;
+    }
+  }
+
+  // Hide distance indicators on very small screens (not enough room)
+  .distance-indicator {
+    display: none;
+  }
 }
 

@@ -453,3 +453,71 @@
     background: #2563eb;
   }
 }
+
+// ============================================
+// Responsive: Small Screens
+// ============================================
+
+@media (max-width: 768px) {
+  .keybindings-container {
+    padding: 12px;
+    gap: 12px;
+  }
+
+  .keybindings-hint {
+    font-size: 12px;
+    padding: 8px 10px;
+  }
+
+  .keybindings-tabs {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    flex-wrap: nowrap;
+  }
+
+  .keybindings-tab {
+    font-size: 12px;
+    padding: 5px 10px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .keybinding-item {
+    padding: 8px 10px;
+    gap: 8px;
+  }
+
+  .keybinding-recording-content {
+    padding: 24px;
+    margin: 16px;
+  }
+
+  .keybinding-recording-step {
+    font-size: 16px;
+  }
+
+  .keybinding-recording-key {
+    font-size: 22px;
+  }
+}
+
+@media (max-width: 480px) {
+  .keybindings-container {
+    padding: 8px;
+    gap: 8px;
+  }
+
+  .keybinding-item {
+    padding: 6px 8px;
+    flex-wrap: wrap;
+  }
+
+  .keybinding-step-name {
+    font-size: 12px;
+  }
+
+  .keybinding-badge {
+    font-size: 10px;
+    padding: 3px 6px;
+  }
+}

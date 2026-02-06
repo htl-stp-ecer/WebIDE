@@ -183,3 +183,54 @@ input:checked + .toggle-slider {
 :host-context(.p-dark) .toggle-text {
   color: #94a3b8;
 }
+
+// ============================================
+// Responsive: Small Screens
+// ============================================
+
+@media (max-width: 768px) {
+  .tab-content-project {
+    padding: 16px;
+    overflow-y: auto;
+  }
+
+  .project-settings-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .setting-card {
+    padding: 14px;
+  }
+
+  .orientation-btn {
+    padding: 12px 10px;
+
+    i {
+      font-size: 18px;
+    }
+  }
+}
+
+@media (max-width: 480px) {
+  .tab-content-project {
+    padding: 12px;
+  }
+
+  .project-settings-grid {
+    gap: 10px;
+  }
+
+  .setting-card {
+    padding: 12px;
+  }
+
+  .setting-card-header {
+    font-size: 13px;
+  }
+
+  .setting-card-desc {
+    font-size: 12px;
+    margin-bottom: 12px;
+  }
+}

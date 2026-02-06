@@ -196,3 +196,76 @@
   flex-direction: column;
   min-height: 0;
 }
+
+// ============================================
+// Responsive: Small Screens
+// ============================================
+
+@media (max-width: 768px) {
+  .modal-layout {
+    flex-direction: column;
+    height: auto;
+    max-height: 85vh;
+  }
+
+  .modal-sidebar {
+    width: 100%;
+    flex-shrink: 0;
+    border-right: none;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  }
+
+  :host-context(.dark) .modal-sidebar,
+  :host-context(.p-dark) .modal-sidebar {
+    border-right-color: transparent;
+    border-bottom-color: rgba(255, 255, 255, 0.08);
+  }
+
+  .sidebar-nav {
+    flex-direction: row;
+    padding: 6px 8px;
+    gap: 2px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .sidebar-nav-item {
+    flex-shrink: 0;
+    padding: 8px 12px;
+    font-size: 12px;
+    gap: 6px;
+    white-space: nowrap;
+
+    i {
+      font-size: 13px;
+      width: auto;
+    }
+  }
+
+  .modal-content {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+  }
+}
+
+@media (max-width: 480px) {
+  .sidebar-nav-item {
+    padding: 6px 10px;
+    font-size: 11px;
+
+    // Hide label text, show icon only
+    span {
+      display: none;
+    }
+
+    i {
+      font-size: 16px;
+    }
+  }
+
+  .dialog-drag-header {
+    font-size: 13px;
+    gap: 8px;
+  }
+}

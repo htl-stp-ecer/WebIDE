@@ -98,3 +98,43 @@
     object-fit: contain;
   }
 }
+
+// ============================================
+// Responsive: Small Screens
+// ============================================
+
+@media (max-width: 768px) {
+  .start-controls {
+    padding: 12px 16px;
+  }
+
+  .start-fields-row {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .start-field {
+    min-width: calc(33% - 8px);
+  }
+
+  .start-hint {
+    margin-top: 8px;
+    font-size: 11px;
+  }
+}
+
+@media (max-width: 480px) {
+  .start-controls {
+    padding: 8px 12px;
+  }
+
+  .start-fields-row {
+    gap: 8px;
+  }
+
+  .start-field {
+    min-width: calc(50% - 4px);
+    flex: none;
+    width: calc(50% - 4px);
+  }
+}
