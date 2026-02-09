@@ -17,8 +17,20 @@ interface RunMissionOptions {
 export class HttpService {
   private deviceBaseSubject = new BehaviorSubject<string>('');
   deviceBase$ = this.deviceBaseSubject.asObservable();
+  private localBackendPort = '';
+  private localBase = '';
 
-  constructor(private http: HttpClient) {}
+  constructor(private http: HttpClient) {
+    const savedPort = localStorage.getItem('localBackendPort');
+    if (savedPort) {
+      this.setLocalBackendPortInternal(savedPort, false);
+    } else {
+      const defaultPort = this.defaultFrontendPort();
+      if (defaultPort) {
+        this.setLocalBackendPortInternal(defaultPort, false);
+      }
+    }
+  }
 
   setDeviceBase(ip: string) {
     // Normalize incoming IP/base so both HttpClient and WebSocket use the same origin
@@ -49,12 +61,82 @@ export class HttpService {
     this.deviceBaseSubject.next('');
   }
 
+  getLocalBackendPort() {
+    return this.localBackendPort;
+  }
+
+  setLocalBackendPort(port: string) {
+    const trimmed = (port || '').trim();
+    if (!trimmed) {
+      localStorage.removeItem('localBackendPort');
+      const defaultPort = this.defaultFrontendPort();
+      if (defaultPort) {
+        this.setLocalBackendPortInternal(defaultPort, false);
+      } else {
+        this.localBackendPort = '';
+        this.localBase = '';
+      }
+      return;
+    }
+
+    const portNum = Number(trimmed);
+    if (!Number.isInteger(portNum) || portNum <= 0 || portNum > 65535) {
+      return;
+    }
+
+    this.localBackendPort = String(portNum);
+    const baseUrl = new URL(window.location.origin);
+    baseUrl.port = this.localBackendPort;
+    this.localBase = `${baseUrl.protocol}//${baseUrl.host}`;
+    localStorage.setItem('localBackendPort', this.localBackendPort);
+  }
+
+  private setLocalBackendPortInternal(port: string, persist: boolean) {
+    const trimmed = (port || '').trim();
+    if (!trimmed) {
+      this.localBackendPort = '';
+      this.localBase = '';
+      if (persist) {
+        localStorage.removeItem('localBackendPort');
+      }
+      return;
+    }
+
+    const portNum = Number(trimmed);
+    if (!Number.isInteger(portNum) || portNum <= 0 || portNum > 65535) {
+      return;
+    }
+
+    this.localBackendPort = String(portNum);
+    const baseUrl = new URL(window.location.origin);
+    baseUrl.port = this.localBackendPort;
+    this.localBase = `${baseUrl.protocol}//${baseUrl.host}`;
+    if (persist) {
+      localStorage.setItem('localBackendPort', this.localBackendPort);
+    }
+  }
+
+  private defaultFrontendPort() {
+    return window.location.port || '';
+  }
+
   private get deviceBase() {
     return this.deviceBaseSubject.getValue();
   }
 
   private localApi(path: string) {
+    if (this.localBase) {
+      return `${this.localBase}/api/v1${path}`;
+    }
     return `/api/v1${path}`;
+  }
+
+  private localApiAbsolute(path: string) {
+    const url = this.localApi(path);
+    if (/^https?:\/\//i.test(url)) {
+      return url;
+    }
+    return `${window.location.origin}${url}`;
   }
 
   private deviceApi(path: string) {
@@ -288,7 +370,7 @@ export class HttpService {
       params.push('debug=1');
     }
     const query = params.length ? `?${params.join('&')}` : '';
-    const httpUrl = `${window.location.origin}${this.localApi(`/missions/${projectUUID}/run/${name}${query}`)}`;
+    const httpUrl = this.localApiAbsolute(`/missions/${projectUUID}/run/${name}${query}`);
     const wsUrl = this.toWebSocketUrl(httpUrl);
 
     return new Observable<WebSocketResponse>((observer) => {

@@ -86,6 +86,8 @@ export const enTranslations = {
     PI_ADDRESS_LABEL: 'Pi address',
     PI_ADDRESS_UNSET: 'Not set',
     CREATE_HINT: 'Create projects from the command line: `raccoon create project <name>` in the parent folder that will contain your project folders.',
+    BACKEND_PORT_LABEL: 'Backend port',
+    BACKEND_PORT_PLACEHOLDER: '8000',
   },
   DEVICE_PROJECTS: {
     HEADING: 'Projects on device',

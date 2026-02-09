@@ -26,10 +26,25 @@
 
   <!-- Projects Section -->
   <div class="max-w-5xl mx-auto px-6 py-8">
-    <div class="flex items-center justify-between mb-3">
+    <div class="flex items-center justify-between mb-3 gap-4">
       <h2 class="text-lg font-semibold text-slate-900 dark:text-white">
         {{ 'PROJECT_MENU.PROJECTS_HEADING' | translate }}
       </h2>
+      <div class="flex items-center gap-2">
+        <label for="local-backend-port" class="text-xs text-slate-500 dark:text-slate-400">
+          {{ 'LOCAL_PROJECTS.BACKEND_PORT_LABEL' | translate }}
+        </label>
+        <input
+          id="local-backend-port"
+          pInputText
+          inputmode="numeric"
+          pattern="[0-9]*"
+          class="w-24 text-sm"
+          [(ngModel)]="localBackendPort"
+          [placeholder]="'LOCAL_PROJECTS.BACKEND_PORT_PLACEHOLDER' | translate"
+          (keydown.enter)="applyLocalBackendPort()"
+          (blur)="applyLocalBackendPort()">
+      </div>
     </div>
     <p class="text-sm text-slate-500 dark:text-slate-400 mb-6">
       {{ 'LOCAL_PROJECTS.CREATE_HINT' | translate }}

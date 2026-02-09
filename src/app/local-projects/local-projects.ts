@@ -6,6 +6,8 @@ import { ConfirmationService } from 'primeng/api';
 import { SlicePipe } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { Skeleton } from 'primeng/skeleton';
+import { FormsModule } from '@angular/forms';
+import { InputText } from 'primeng/inputtext';
 
 import { HttpService } from '../services/http-service';
 import { NotificationService } from '../services/NotificationService';
@@ -13,7 +15,7 @@ import { NotificationService } from '../services/NotificationService';
 @Component({
   selector: 'app-local-projects',
   standalone: true,
-  imports: [Button, ConfirmDialog, TranslateModule, Skeleton, SlicePipe],
+  imports: [Button, ConfirmDialog, TranslateModule, Skeleton, SlicePipe, FormsModule, InputText],
   templateUrl: './local-projects.html',
   styleUrl: './local-projects.scss',
   providers: [ConfirmationService]
@@ -21,6 +23,7 @@ import { NotificationService } from '../services/NotificationService';
 export class LocalProjects implements OnInit {
   projectsLoading = true;
   projects: Project[] = [];
+  localBackendPort = '';
 
   constructor(
     private router: Router,
@@ -31,6 +34,7 @@ export class LocalProjects implements OnInit {
 
   ngOnInit() {
     this.http.clearDeviceBase();
+    this.localBackendPort = this.http.getLocalBackendPort();
     this.loadProjects();
   }
 
@@ -42,6 +46,7 @@ export class LocalProjects implements OnInit {
         this.projectsLoading = false;
       },
       error: () => {
+        this.projects = [];
         this.projectsLoading = false;
       }
     });
@@ -93,5 +98,14 @@ export class LocalProjects implements OnInit {
 
   backToProjects() {
     this.router.navigate(['/']);
+  }
+
+  applyLocalBackendPort() {
+    const before = this.http.getLocalBackendPort();
+    this.http.setLocalBackendPort(this.localBackendPort);
+    this.localBackendPort = this.http.getLocalBackendPort();
+    if (this.localBackendPort !== before) {
+      this.loadProjects();
+    }
   }
 }
