@@ -3,6 +3,7 @@
   @if (planningService.isActive()) {
     <div class="fullscreen-planning">
       <app-planning-overlay
+        [projectUuid]="projectUUID"
         (addSteps)="actions.addPlannedSteps($event)"
         (close)="planningService.deactivate()">
       </app-planning-overlay>
@@ -304,6 +305,7 @@
       data-panel-key="unity"
       [style.transform]="panelTransform('unity')"
       (pointerdown)="startPanelDrag($event, 'unity')"
+      [projectUuid]="projectUUID"
       [visible]="isToggleEnabled('tableVisualization')"
       [class.is-hidden]="!isToggleEnabled('tableVisualization')"
       (addPlannedSteps)="actions.addPlannedSteps($event)"></app-table-visualization-panel>

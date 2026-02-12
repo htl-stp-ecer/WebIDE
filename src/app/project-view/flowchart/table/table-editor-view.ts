@@ -8,6 +8,7 @@ import {
   signal,
   computed,
   inject,
+  input,
   output,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
@@ -40,6 +41,7 @@ export class TableEditorView implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('previewCanvas') previewCanvasRef!: ElementRef<HTMLCanvasElement>;
   @ViewChild('canvasContainer') containerRef!: ElementRef<HTMLDivElement>;
 
+  readonly projectUuid = input<string | null>(null);
   readonly mapExported = output<string>();
 
   // State signals
@@ -488,7 +490,7 @@ export class TableEditorView implements OnInit, AfterViewInit, OnDestroy {
     });
   }
 
-  // --- Load Map (save to device) ---
+  // --- Load Map (apply + persist) ---
 
   async loadMap(): Promise<void> {
     const canvas = this.canvasRef.nativeElement;
@@ -496,11 +498,25 @@ export class TableEditorView implements OnInit, AfterViewInit, OnDestroy {
     const base64 = dataUrl.split(',')[1];
 
     try {
-      // Save to backend
-      await this.http.saveTableMap(base64).toPromise();
-      // Also load into the map service
+      // Always load into map service first so the UI updates even if backend save fails.
       await this.mapService.loadMapFromBase64(base64);
       this.mapExported.emit(base64);
+    } catch (err) {
+      this.message.set(
+        this.translate.instant('FLOWCHART.TABLE_MESSAGE_FAILED', {
+          error: err instanceof Error ? err.message : String(err),
+        })
+      );
+      return;
+    }
+
+    try {
+      const projectUuid = this.projectUuid();
+      if (projectUuid) {
+        await this.http.saveLocalTableMap(projectUuid, base64).toPromise();
+      } else {
+        await this.http.saveTableMap(base64).toPromise();
+      }
       this.message.set(
         this.translate.instant('FLOWCHART.TABLE_MESSAGE_SAVED', {
           width: MAP_WIDTH,
@@ -519,16 +535,25 @@ export class TableEditorView implements OnInit, AfterViewInit, OnDestroy {
   // --- Load saved map from backend ---
 
   private loadSavedMap(): void {
-    this.http.getTableMap().subscribe({
-      next: (response) => {
-        if (response.image) {
-          this.loadImageToCanvas(response.image);
-        }
-      },
-      error: () => {
-        // Silently ignore if no saved map exists
-      },
-    });
+    const projectUuid = this.projectUuid();
+    try {
+      const request$ = projectUuid
+        ? this.http.getLocalTableMap(projectUuid)
+        : this.http.getTableMap();
+
+      request$.subscribe({
+        next: (response) => {
+          if (response.image) {
+            this.loadImageToCanvas(response.image);
+          }
+        },
+        error: () => {
+          // Silently ignore if no saved map exists
+        },
+      });
+    } catch {
+      // No device base configured in remote mode; silently skip.
+    }
   }
 
   private loadImageToCanvas(base64: string): void {

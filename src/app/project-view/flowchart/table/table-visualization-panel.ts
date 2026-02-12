@@ -41,6 +41,7 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
   @ViewChild('canvas') canvasRef!: ElementRef<HTMLCanvasElement>;
 
   readonly visible = input<boolean>(true);
+  readonly projectUuid = input<string | null>(null);
   readonly allowStartPoseEdit = input<boolean>(false);
   readonly showHeader = input<boolean>(true);
   readonly embedded = input<boolean>(false);
@@ -115,16 +116,25 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
   private loadStoredMap(): void {
     if (this.mapService.isLoaded()) return;
 
-    this.httpService.getTableMap().subscribe({
-      next: (response) => {
-        if (response.image) {
-          this.mapService.loadMapFromBase64(response.image);
-        }
-      },
-      error: (err) => {
-        console.warn('Failed to load stored table map:', err);
-      },
-    });
+    const projectUuid = this.projectUuid();
+    try {
+      const request$ = projectUuid
+        ? this.httpService.getLocalTableMap(projectUuid)
+        : this.httpService.getTableMap();
+
+      request$.subscribe({
+        next: (response) => {
+          if (response.image) {
+            this.mapService.loadMapFromBase64(response.image);
+          }
+        },
+        error: (err) => {
+          console.warn('Failed to load stored table map:', err);
+        },
+      });
+    } catch (err) {
+      console.warn('Failed to prepare table map request:', err);
+    }
   }
 
   ngOnDestroy(): void {

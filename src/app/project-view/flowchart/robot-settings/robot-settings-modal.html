@@ -663,7 +663,7 @@
       <!-- Map Editor Tab -->
       @if (activeTab() === 'map') {
         <div class="tab-content tab-content-map">
-          <app-table-editor-view></app-table-editor-view>
+          <app-table-editor-view [projectUuid]="projectUuid"></app-table-editor-view>
         </div>
       }
 
@@ -706,6 +706,7 @@
           <!-- Canvas fills remaining space -->
           <div class="start-canvas">
             <app-table-visualization-panel
+              [projectUuid]="projectUuid"
               [visible]="true"
               [showHeader]="false"
               [embedded]="true"

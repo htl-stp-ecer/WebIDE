@@ -87,6 +87,7 @@ export class PlanningOverlayComponent implements OnInit, AfterViewInit, OnDestro
   /** Parent canvas dimensions for coordinate conversion */
   readonly parentWidth = input<number>(0);
   readonly parentHeight = input<number>(0);
+  readonly projectUuid = input<string | null>(null);
 
   /** Emitted when steps should be added to mission */
   readonly addSteps = output<MissionStep[]>();
@@ -162,16 +163,25 @@ export class PlanningOverlayComponent implements OnInit, AfterViewInit, OnDestro
   private loadStoredMap(): void {
     if (this.mapService.isLoaded()) return;
 
-    this.httpService.getTableMap().subscribe({
-      next: (response) => {
-        if (response.image) {
-          this.mapService.loadMapFromBase64(response.image);
-        }
-      },
-      error: (err) => {
-        console.warn('Failed to load stored table map:', err);
-      },
-    });
+    const projectUuid = this.projectUuid();
+    try {
+      const request$ = projectUuid
+        ? this.httpService.getLocalTableMap(projectUuid)
+        : this.httpService.getTableMap();
+
+      request$.subscribe({
+        next: (response) => {
+          if (response.image) {
+            this.mapService.loadMapFromBase64(response.image);
+          }
+        },
+        error: (err) => {
+          console.warn('Failed to load stored table map:', err);
+        },
+      });
+    } catch (err) {
+      console.warn('Failed to prepare table map request:', err);
+    }
   }
 
   ngOnDestroy(): void {
