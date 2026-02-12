@@ -4,6 +4,14 @@ import { RobotConfig } from '../../services';
 import { MapConfig } from '../../services';
 import { WallSegment, checkPathCollision, checkRobotCollision, isRobotInBounds } from '../../physics';
 import { simulateCommand } from './pose-simulator';
+import {
+  FlowStepId,
+  isDriveOrStrafeStepId,
+  isDriveStepId,
+  isStrafeStepId,
+  isTurnStepId,
+  stepId,
+} from '../../step-id';
 
 // --- Configuration ---
 
@@ -31,8 +39,8 @@ const TURN_CLEARANCE_CM = 1;
 
 function createDriveStep(distanceCm: number): MissionStep {
   return {
-    step_type: '',
-    function_name: 'drive_forward',
+    step_type: FlowStepId.DriveForward,
+    function_name: FlowStepId.DriveForward,
     arguments: [{ name: 'cm', value: distanceCm, type: 'float' }],
     position: { x: 0, y: 0 },
     children: [],
@@ -41,8 +49,8 @@ function createDriveStep(distanceCm: number): MissionStep {
 
 function createReverseStep(distanceCm: number): MissionStep {
   return {
-    step_type: '',
-    function_name: 'drive_backward',
+    step_type: FlowStepId.DriveBackward,
+    function_name: FlowStepId.DriveBackward,
     arguments: [{ name: 'cm', value: distanceCm, type: 'float' }],
     position: { x: 0, y: 0 },
     children: [],
@@ -51,9 +59,10 @@ function createReverseStep(distanceCm: number): MissionStep {
 
 function createTurnStep(angleDeg: number): MissionStep {
   const isClockwise = angleDeg < 0;
+  const functionName = isClockwise ? FlowStepId.TurnCw : FlowStepId.TurnCcw;
   return {
-    step_type: '',
-    function_name: isClockwise ? 'turn_cw' : 'turn_ccw',
+    step_type: functionName,
+    function_name: functionName,
     arguments: [{ name: 'deg', value: Math.abs(angleDeg), type: 'float' }],
     position: { x: 0, y: 0 },
     children: [],
@@ -61,9 +70,10 @@ function createTurnStep(angleDeg: number): MissionStep {
 }
 
 function createStrafeStep(direction: 'left' | 'right', distanceCm: number): MissionStep {
+  const functionName = direction === 'left' ? FlowStepId.StrafeLeft : FlowStepId.StrafeRight;
   return {
-    step_type: '',
-    function_name: direction === 'left' ? 'strafe_left' : 'strafe_right',
+    step_type: functionName,
+    function_name: functionName,
     arguments: [{ name: 'cm', value: distanceCm, type: 'float' }],
     position: { x: 0, y: 0 },
     children: [],
@@ -100,9 +110,9 @@ const AVAILABLE_COMMANDS: MissionStep[] = [
   createTurnStep(90),
 ];
 
-const STRAFE_COMMANDS = new Set(['strafe_left', 'strafe_right']);
+const STRAFE_COMMANDS = new Set<string>([FlowStepId.StrafeLeft, FlowStepId.StrafeRight]);
 const AVAILABLE_COMMANDS_NO_STRAFE = AVAILABLE_COMMANDS.filter(
-  command => !STRAFE_COMMANDS.has(command.function_name)
+  command => !STRAFE_COMMANDS.has(stepId(command))
 );
 
 function checkPathCollisionExcludingStart(
@@ -255,19 +265,14 @@ function isAtGoal(pose: Pose2D, goal: { x: number; y: number }, toleranceCm: num
  * Calculate the cost of executing a command.
  */
 function calculateCost(command: MissionStep): number {
-  const fn = command.function_name;
+  const fn = stepId(command);
   const arg = (command.arguments[0]?.value as number) ?? 0;
 
-  if (
-    fn === 'drive_forward' ||
-    fn === 'drive_backward' ||
-    fn === 'strafe_left' ||
-    fn === 'strafe_right'
-  ) {
+  if (isDriveOrStrafeStepId(fn)) {
     // Cost proportional to distance (0.1 per cm)
     return arg * 0.1;
   }
-  if (fn.includes('turn')) {
+  if (isTurnStepId(fn)) {
     // Cost proportional to angle (0.02 per degree)
     // Turns are relatively cheap to encourage proper facing
     return arg * 0.02;
@@ -387,10 +392,10 @@ export function findPath(
     // Explore all available commands
     for (const command of availableCommands) {
       const newPose = simulateCommand(current.pose, command);
-      const fn = command.function_name;
+      const fn = stepId(command);
       const arg = (command.arguments[0]?.value as number) ?? 0;
       const steps = Math.max(5, Math.ceil(Math.abs(arg) / 2));
-      const isTurn = fn === 'turn_cw' || fn === 'turn_ccw' || fn === 'tank_turn_cw' || fn === 'tank_turn_ccw';
+      const isTurn = isTurnStepId(fn);
 
       if (!isRobotInBounds(newPose, mapConfig, robotConfig)) continue;
       if (isTurn) {
@@ -449,14 +454,14 @@ export function optimizePath(result: FindPathResult): FindPathResult {
 
   while (i < result.commands.length) {
     const current = result.commands[i];
-    const fn = current.function_name;
+    const fn = stepId(current);
 
     // Try to merge consecutive same commands
-    if (fn === 'drive_forward' || fn === 'drive_backward') {
+    if (isDriveStepId(fn)) {
       let totalDistance = (current.arguments[0]?.value as number) ?? 0;
       let j = i + 1;
 
-      while (j < result.commands.length && result.commands[j].function_name === fn) {
+      while (j < result.commands.length && stepId(result.commands[j]) === fn) {
         totalDistance += (result.commands[j].arguments[0]?.value as number) ?? 0;
         j++;
       }
@@ -466,11 +471,11 @@ export function optimizePath(result: FindPathResult): FindPathResult {
         arguments: [{ name: 'cm', value: totalDistance, type: 'float' }],
       });
       i = j;
-    } else if (fn === 'strafe_left' || fn === 'strafe_right') {
+    } else if (isStrafeStepId(fn)) {
       let totalDistance = (current.arguments[0]?.value as number) ?? 0;
       let j = i + 1;
 
-      while (j < result.commands.length && result.commands[j].function_name === fn) {
+      while (j < result.commands.length && stepId(result.commands[j]) === fn) {
         totalDistance += (result.commands[j].arguments[0]?.value as number) ?? 0;
         j++;
       }
@@ -480,12 +485,12 @@ export function optimizePath(result: FindPathResult): FindPathResult {
         arguments: [{ name: 'cm', value: totalDistance, type: 'float' }],
       });
       i = j;
-    } else if (fn === 'turn_cw' || fn === 'turn_ccw') {
+    } else if (isTurnStepId(fn)) {
       // Merge same-direction turns
       let totalAngle = (current.arguments[0]?.value as number) ?? 0;
       let j = i + 1;
 
-      while (j < result.commands.length && result.commands[j].function_name === fn) {
+      while (j < result.commands.length && stepId(result.commands[j]) === fn) {
         totalAngle += (result.commands[j].arguments[0]?.value as number) ?? 0;
         j++;
       }

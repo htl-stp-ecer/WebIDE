@@ -1,5 +1,19 @@
 import { MissionSimulationData, ProjectSimulationData, SimulationStepData } from '../../../entities/Simulation';
 import { LineSensor, Pose2D, applyLocalDelta, forwardMove, rotate } from './models';
+import {
+  FlowStepId,
+  driveUntilColorFromStepId,
+  isBackwardStepId,
+  isDriveStepId,
+  isFollowLineStepId,
+  isLineupStepId,
+  isRightStepId,
+  isStrafeStepId,
+  isStepId,
+  lineupColorFromStepId,
+  lineupDirectionFromStepId,
+  stepId,
+} from './step-id';
 
 const EPSILON = 1e-6;
 const LABEL_CM_PATTERN = /(?:^|[,(])\s*cm\s*=\s*([-+]?\d*\.?\d+)/i;
@@ -49,30 +63,24 @@ function parseDistanceCmFromLabel(label?: string): number | null {
 function normalizeStepDelta(step: SimulationStepData): { forwardCm: number; strafeCm: number } {
   const forwardCm = step.delta.forward * 100;
   const strafeCm = step.delta.strafe * 100;
-  const fn = (step.function_name || step.step_type || '').toLowerCase();
+  const fn = stepId(step);
   if (!fn) return { forwardCm, strafeCm };
 
   const labelDistance = parseDistanceCmFromLabel(step.label);
   if (labelDistance === null) return { forwardCm, strafeCm };
 
-  switch (fn) {
-    case 'drive_forward':
-      return { forwardCm: labelDistance, strafeCm };
-    case 'drive_backward':
-      return { forwardCm: -labelDistance, strafeCm };
-    case 'strafe_left':
-      return { forwardCm, strafeCm: -labelDistance };
-    case 'strafe_right':
-      return { forwardCm, strafeCm: labelDistance };
-    default:
-      return { forwardCm, strafeCm };
+  if (isDriveStepId(fn)) {
+    return { forwardCm: isBackwardStepId(fn) ? -labelDistance : labelDistance, strafeCm };
   }
+  if (isStrafeStepId(fn)) {
+    return { forwardCm, strafeCm: isRightStepId(fn) ? labelDistance : -labelDistance };
+  }
+
+  return { forwardCm, strafeCm };
 }
 
 function isParallelStep(step: SimulationStepData): boolean {
-  const fn = (step.function_name || '').toLowerCase();
-  const type = (step.step_type || '').toLowerCase();
-  return fn === 'parallel' || type === 'parallel';
+  return isStepId(stepId(step), FlowStepId.Parallel);
 }
 
 function flattenSimulationSteps(steps: SimulationStepData[]): SimulationStepData[] {
@@ -102,56 +110,36 @@ export function buildPlannedPathFromSimulation(
 
   const steps = flattenSimulationSteps(simulation.steps ?? []);
   for (const step of steps) {
-    const fn = (step.function_name || step.step_type || '').toLowerCase();
-    if (fn === 'forward_lineup_on_black') {
-      const lineupPoses = simulateForwardLineupOnBlack(current, options?.lineup);
+    const fn = stepId(step);
+    const lineupDirection = lineupDirectionFromStepId(fn);
+    const lineupColor = lineupColorFromStepId(fn);
+    if (lineupDirection && lineupColor && isLineupStepId(fn)) {
+      let lineupPoses: Pose2D[] = [];
+      if (lineupDirection === 'forward' && lineupColor === 'black') {
+        lineupPoses = simulateForwardLineupOnBlack(current, options?.lineup);
+      } else if (lineupDirection === 'forward' && lineupColor === 'white') {
+        lineupPoses = simulateForwardLineupOnWhite(current, options?.lineup);
+      } else if (lineupDirection === 'backward' && lineupColor === 'black') {
+        lineupPoses = simulateBackwardLineupOnBlack(current, options?.lineup);
+      } else if (lineupDirection === 'backward' && lineupColor === 'white') {
+        lineupPoses = simulateBackwardLineupOnWhite(current, options?.lineup);
+      }
       if (lineupPoses.length) {
         poses.push(...lineupPoses);
         current = lineupPoses[lineupPoses.length - 1];
       }
       continue;
     }
-    if (fn === 'forward_lineup_on_white') {
-      const lineupPoses = simulateForwardLineupOnWhite(current, options?.lineup);
-      if (lineupPoses.length) {
-        poses.push(...lineupPoses);
-        current = lineupPoses[lineupPoses.length - 1];
-      }
-      continue;
-    }
-    if (fn === 'backward_lineup_on_black') {
-      const lineupPoses = simulateBackwardLineupOnBlack(current, options?.lineup);
-      if (lineupPoses.length) {
-        poses.push(...lineupPoses);
-        current = lineupPoses[lineupPoses.length - 1];
-      }
-      continue;
-    }
-    if (fn === 'backward_lineup_on_white') {
-      const lineupPoses = simulateBackwardLineupOnWhite(current, options?.lineup);
-      if (lineupPoses.length) {
-        poses.push(...lineupPoses);
-        current = lineupPoses[lineupPoses.length - 1];
-      }
-      continue;
-    }
-    if (fn === 'drive_until_black') {
-      const drivePoses = simulateDriveUntilColor(current, options?.lineup, 'black');
+    const driveUntilColor = driveUntilColorFromStepId(fn);
+    if (driveUntilColor) {
+      const drivePoses = simulateDriveUntilColor(current, options?.lineup, driveUntilColor);
       if (drivePoses.length) {
         poses.push(...drivePoses);
         current = drivePoses[drivePoses.length - 1];
       }
       continue;
     }
-    if (fn === 'drive_until_white') {
-      const drivePoses = simulateDriveUntilColor(current, options?.lineup, 'white');
-      if (drivePoses.length) {
-        poses.push(...drivePoses);
-        current = drivePoses[drivePoses.length - 1];
-      }
-      continue;
-    }
-    if (fn === 'follow_line') {
+    if (isFollowLineStepId(fn)) {
       const targetCm = parseDistanceCmFromLabel(step.label) ?? (step.delta?.forward ?? 0) * 100;
       if (options?.lineup) {
         const stopOnIntersection = targetCm <= 0;

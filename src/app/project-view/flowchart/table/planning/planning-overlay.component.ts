@@ -20,6 +20,15 @@ import { ToggleButtonModule } from 'primeng/togglebutton';
 import { TooltipModule } from 'primeng/tooltip';
 import { PlanningModeService } from './planning-mode.service';
 import { formatStepForPreview } from './path-to-steps';
+import {
+  driveUntilColorFromStepId,
+  isBackwardStepId,
+  isDriveStep,
+  isFollowLineStep,
+  isLineupStep as isLineupMissionStep,
+  isTurnStep,
+  stepId,
+} from '../step-id';
 import { MissionStep } from '../../../../entities/MissionStep';
 import { TableMapService, TableVisualizationService } from '../services';
 import { HttpService } from '../../../../services/http-service';
@@ -1157,26 +1166,27 @@ export class PlanningOverlayComponent implements OnInit, AfterViewInit, OnDestro
   }
 
   getStepIcon(step: MissionStep): string {
-    const fn = step.function_name;
-    if (fn === 'turn_cw' || fn === 'turn_ccw' || fn === 'tank_turn_cw' || fn === 'tank_turn_ccw') {
+    const fn = stepId(step);
+    if (isTurnStep(step)) {
       return 'pi pi-sync';
     }
-    if (fn === 'drive_forward') {
+    if (isDriveStep(step)) {
+      return isBackwardStepId(fn) ? 'pi pi-arrow-down' : 'pi pi-arrow-up';
+    }
+    if (driveUntilColorFromStepId(fn)) {
       return 'pi pi-arrow-up';
     }
-    if (fn === 'drive_backward') {
-      return 'pi pi-arrow-down';
-    }
-    if (fn === 'drive_until_black' || fn === 'drive_until_white') {
-      return 'pi pi-arrow-up';
-    }
-    if (fn === 'follow_line') {
+    if (isFollowLineStep(step)) {
       return 'pi pi-sliders-h';
     }
-    if (fn.includes('lineup')) {
+    if (isLineupMissionStep(step)) {
       return 'pi pi-align-center';
     }
     return 'pi pi-circle';
+  }
+
+  isLineupStep(step: MissionStep): boolean {
+    return isLineupMissionStep(step);
   }
 
   // --- UI State Methods ---
