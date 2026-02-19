@@ -177,9 +177,10 @@ export class TableEditorView implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private renderGrid(): void {
-    if (!this.gridCanvasRef) return;
+    if (!this.gridCanvasRef || !this.containerRef || !this.canvasRef) return;
     const gridCanvas = this.gridCanvasRef.nativeElement;
     const container = this.containerRef.nativeElement;
+    const editorCanvas = this.canvasRef.nativeElement;
     const ctx = gridCanvas.getContext('2d')!;
 
     const dpr = window.devicePixelRatio || 1;
@@ -187,38 +188,43 @@ export class TableEditorView implements OnInit, AfterViewInit, OnDestroy {
     gridCanvas.height = container.clientHeight * dpr;
     gridCanvas.style.width = `${container.clientWidth}px`;
     gridCanvas.style.height = `${container.clientHeight}px`;
-    ctx.scale(dpr, dpr);
-
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, container.clientWidth, container.clientHeight);
 
     if (!this.showGrid()) return;
 
-    const z = this.zoom();
-    const offset = this.panOffset();
-
     // Only draw grid when zoomed in enough
-    if (z < 2) return;
+    if (this.zoom() < 2) return;
+
+    const containerRect = container.getBoundingClientRect();
+    const canvasRect = editorCanvas.getBoundingClientRect();
+    const left = canvasRect.left - containerRect.left;
+    const top = canvasRect.top - containerRect.top;
+    const width = canvasRect.width;
+    const height = canvasRect.height;
+    const cellWidth = width / MAP_WIDTH;
+    const cellHeight = height / MAP_HEIGHT;
 
     ctx.strokeStyle = 'rgba(100, 116, 139, 0.4)';
     ctx.lineWidth = 1;
 
     // Vertical lines
     for (let x = 0; x <= MAP_WIDTH; x++) {
-      const screenX = offset.x + x * z;
+      const screenX = left + x * cellWidth;
       if (screenX < 0 || screenX > container.clientWidth) continue;
       ctx.beginPath();
-      ctx.moveTo(screenX, Math.max(0, offset.y));
-      ctx.lineTo(screenX, Math.min(container.clientHeight, offset.y + MAP_HEIGHT * z));
+      ctx.moveTo(screenX, Math.max(0, top));
+      ctx.lineTo(screenX, Math.min(container.clientHeight, top + height));
       ctx.stroke();
     }
 
     // Horizontal lines
     for (let y = 0; y <= MAP_HEIGHT; y++) {
-      const screenY = offset.y + y * z;
+      const screenY = top + y * cellHeight;
       if (screenY < 0 || screenY > container.clientHeight) continue;
       ctx.beginPath();
-      ctx.moveTo(Math.max(0, offset.x), screenY);
-      ctx.lineTo(Math.min(container.clientWidth, offset.x + MAP_WIDTH * z), screenY);
+      ctx.moveTo(Math.max(0, left), screenY);
+      ctx.lineTo(Math.min(container.clientWidth, left + width), screenY);
       ctx.stroke();
     }
   }
@@ -353,16 +359,17 @@ export class TableEditorView implements OnInit, AfterViewInit, OnDestroy {
   // --- Coordinate Transform ---
 
   private getMapCoords(event: PointerEvent): { x: number; y: number } | null {
-    const container = this.containerRef.nativeElement;
-    const rect = container.getBoundingClientRect();
-    const z = this.zoom();
-    const offset = this.panOffset();
+    if (!this.canvasRef) return null;
+    const canvasRect = this.canvasRef.nativeElement.getBoundingClientRect();
+    const localX = event.clientX - canvasRect.left;
+    const localY = event.clientY - canvasRect.top;
 
-    const screenX = event.clientX - rect.left;
-    const screenY = event.clientY - rect.top;
+    if (localX < 0 || localY < 0 || localX >= canvasRect.width || localY >= canvasRect.height) {
+      return null;
+    }
 
-    const mapX = Math.floor((screenX - offset.x) / z);
-    const mapY = Math.floor((screenY - offset.y) / z);
+    const mapX = Math.floor((localX / canvasRect.width) * MAP_WIDTH);
+    const mapY = Math.floor((localY / canvasRect.height) * MAP_HEIGHT);
 
     if (mapX < 0 || mapX >= MAP_WIDTH || mapY < 0 || mapY >= MAP_HEIGHT) {
       return null;
@@ -395,17 +402,9 @@ export class TableEditorView implements OnInit, AfterViewInit, OnDestroy {
   private renderPreview(): void {
     if (!this.previewCanvasRef) return;
     const previewCanvas = this.previewCanvasRef.nativeElement;
-    const container = this.containerRef.nativeElement;
     const ctx = previewCanvas.getContext('2d')!;
 
-    const dpr = window.devicePixelRatio || 1;
-    previewCanvas.width = container.clientWidth * dpr;
-    previewCanvas.height = container.clientHeight * dpr;
-    previewCanvas.style.width = `${container.clientWidth}px`;
-    previewCanvas.style.height = `${container.clientHeight}px`;
-    ctx.scale(dpr, dpr);
-
-    ctx.clearRect(0, 0, container.clientWidth, container.clientHeight);
+    ctx.clearRect(0, 0, MAP_WIDTH, MAP_HEIGHT);
 
     if (!this.linePreviewVisible()) return;
 
@@ -413,8 +412,6 @@ export class TableEditorView implements OnInit, AfterViewInit, OnDestroy {
     const end = this.lineEndPoint();
     if (!start || !end) return;
 
-    const z = this.zoom();
-    const offset = this.panOffset();
     const color = this.selectedColor();
 
     // Draw preview pixels
@@ -422,17 +419,13 @@ export class TableEditorView implements OnInit, AfterViewInit, OnDestroy {
     ctx.fillStyle = colorToHex(color);
 
     for (const p of points) {
-      const screenX = offset.x + p.x * z;
-      const screenY = offset.y + p.y * z;
-      ctx.fillRect(screenX, screenY, z, z);
+      ctx.fillRect(p.x, p.y, 1, 1);
     }
 
     // Draw semi-transparent overlay
     ctx.globalAlpha = 0.5;
     for (const p of points) {
-      const screenX = offset.x + p.x * z;
-      const screenY = offset.y + p.y * z;
-      ctx.fillRect(screenX, screenY, z, z);
+      ctx.fillRect(p.x, p.y, 1, 1);
     }
     ctx.globalAlpha = 1;
   }

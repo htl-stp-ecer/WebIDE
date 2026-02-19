@@ -38,7 +38,12 @@
     <canvas #gridCanvas class="grid-overlay"></canvas>
 
     <!-- Line tool preview -->
-    <canvas #previewCanvas class="preview-overlay"></canvas>
+    <canvas
+      #previewCanvas
+      class="preview-overlay"
+      [width]="MAP_WIDTH"
+      [height]="MAP_HEIGHT"
+      [style.transform]="canvasTransform()"></canvas>
   </div>
 
   <!-- Status bar -->
