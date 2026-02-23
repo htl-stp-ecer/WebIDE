@@ -35,19 +35,8 @@
   image-rendering: pixelated;
   image-rendering: crisp-edges;
   background: #ffffff;
-  box-shadow:
-    0 0 0 1px rgba(148, 163, 184, 0.3),
-    0 8px 32px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
   transform-origin: 0 0;
-  pointer-events: none;
-}
-
-.grid-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
   pointer-events: none;
 }
 
@@ -55,6 +44,8 @@
   position: absolute;
   top: 0;
   left: 0;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
   transform-origin: 0 0;
   pointer-events: none;
 }
@@ -115,9 +106,7 @@
   }
 
   .editor-canvas {
-    box-shadow:
-      0 0 0 1px rgba(148, 163, 184, 0.4),
-      0 8px 32px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
   }
 
   .status-bar {

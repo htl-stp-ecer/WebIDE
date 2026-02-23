@@ -37,7 +37,6 @@ import {
 })
 export class TableEditorView implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('editorCanvas') canvasRef!: ElementRef<HTMLCanvasElement>;
-  @ViewChild('gridCanvas') gridCanvasRef!: ElementRef<HTMLCanvasElement>;
   @ViewChild('previewCanvas') previewCanvasRef!: ElementRef<HTMLCanvasElement>;
   @ViewChild('canvasContainer') containerRef!: ElementRef<HTMLDivElement>;
 
@@ -81,6 +80,7 @@ export class TableEditorView implements OnInit, AfterViewInit, OnDestroy {
   private isPanning = false;
   private panStartPos = { x: 0, y: 0 };
   private resizeObserver!: ResizeObserver;
+  private overlayRenderFrame: number | null = null;
 
   ngOnInit(): void {
     // Nothing to do here yet
@@ -93,10 +93,10 @@ export class TableEditorView implements OnInit, AfterViewInit, OnDestroy {
     this.centerCanvas();
 
     this.resizeObserver = new ResizeObserver(() => {
-      this.renderGrid();
-      this.renderPreview();
+      this.scheduleOverlayRender();
     });
     this.resizeObserver.observe(this.containerRef.nativeElement);
+    this.scheduleOverlayRender();
 
     // Load saved map from backend after canvas is ready
     this.loadSavedMap();
@@ -104,22 +104,25 @@ export class TableEditorView implements OnInit, AfterViewInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.resizeObserver?.disconnect();
+    if (this.overlayRenderFrame !== null) {
+      cancelAnimationFrame(this.overlayRenderFrame);
+      this.overlayRenderFrame = null;
+    }
   }
 
   // --- Zoom Controls ---
 
   setZoom(newZoom: number): void {
-    const clamped = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, newZoom));
+    const clamped = this.resolveZoomRequest(newZoom);
     this.zoom.set(clamped);
-    this.renderGrid();
-    this.renderPreview();
+    this.scheduleOverlayRender();
   }
 
   onWheel(event: WheelEvent): void {
     event.preventDefault();
     const delta = event.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP;
     const oldZoom = this.zoom();
-    const newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, oldZoom + delta));
+    const newZoom = this.resolveZoomRequest(oldZoom + delta);
 
     if (newZoom === oldZoom) return;
 
@@ -132,14 +135,14 @@ export class TableEditorView implements OnInit, AfterViewInit, OnDestroy {
     const offset = this.panOffset();
     const zoomRatio = newZoom / oldZoom;
 
-    this.panOffset.set({
-      x: mouseX - (mouseX - offset.x) * zoomRatio,
-      y: mouseY - (mouseY - offset.y) * zoomRatio,
-    });
+    const nextOffset = {
+      x: Math.round(mouseX - (mouseX - offset.x) * zoomRatio),
+      y: Math.round(mouseY - (mouseY - offset.y) * zoomRatio),
+    };
 
     this.zoom.set(newZoom);
-    this.renderGrid();
-    this.renderPreview();
+    this.panOffset.set(nextOffset);
+    this.scheduleOverlayRender();
   }
 
   fitToView(): void {
@@ -151,10 +154,40 @@ export class TableEditorView implements OnInit, AfterViewInit, OnDestroy {
     const scaleY = containerHeight / MAP_HEIGHT;
     const newZoom = Math.min(scaleX, scaleY, MAX_ZOOM);
 
-    this.zoom.set(Math.max(MIN_ZOOM, newZoom));
+    this.zoom.set(this.snapZoomToDevicePixels(newZoom, 'floor'));
     this.centerCanvas();
-    this.renderGrid();
-    this.renderPreview();
+    this.scheduleOverlayRender();
+  }
+
+  /**
+   * Align zoom to steps that map one source pixel to an integer count of physical pixels.
+   * This prevents cumulative drift between pixel-art rendering and overlay grid lines.
+   */
+  private snapZoomToDevicePixels(zoom: number, mode: 'nearest' | 'floor' = 'nearest'): number {
+    const dpr = window.devicePixelRatio || 1;
+    const step = 1 / dpr;
+    const clamped = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoom));
+    const stepped = mode === 'floor'
+      ? Math.floor(clamped / step) * step
+      : Math.round(clamped / step) * step;
+    return Math.max(MIN_ZOOM, stepped);
+  }
+
+  /**
+   * Ensure interactive zoom changes always move at least one snapped step,
+   * otherwise +/- or wheel can appear "stuck" after snapping.
+   */
+  private resolveZoomRequest(requestedZoom: number): number {
+    const currentZoom = this.zoom();
+    let snapped = this.snapZoomToDevicePixels(requestedZoom, 'nearest');
+
+    if (snapped === currentZoom && requestedZoom !== currentZoom) {
+      const step = 1 / (window.devicePixelRatio || 1);
+      const direction = requestedZoom > currentZoom ? 1 : -1;
+      snapped = this.snapZoomToDevicePixels(currentZoom + direction * step, 'nearest');
+    }
+
+    return snapped;
   }
 
   private centerCanvas(): void {
@@ -164,8 +197,16 @@ export class TableEditorView implements OnInit, AfterViewInit, OnDestroy {
     const canvasDisplayHeight = MAP_HEIGHT * z;
 
     this.panOffset.set({
-      x: (container.clientWidth - canvasDisplayWidth) / 2,
-      y: (container.clientHeight - canvasDisplayHeight) / 2,
+      x: Math.round((container.clientWidth - canvasDisplayWidth) / 2),
+      y: Math.round((container.clientHeight - canvasDisplayHeight) / 2),
+    });
+  }
+
+  private scheduleOverlayRender(): void {
+    if (this.overlayRenderFrame !== null) return;
+    this.overlayRenderFrame = requestAnimationFrame(() => {
+      this.overlayRenderFrame = null;
+      this.renderPreview();
     });
   }
 
@@ -173,60 +214,7 @@ export class TableEditorView implements OnInit, AfterViewInit, OnDestroy {
 
   toggleGrid(): void {
     this.showGrid.update(v => !v);
-    this.renderGrid();
-  }
-
-  private renderGrid(): void {
-    if (!this.gridCanvasRef || !this.containerRef || !this.canvasRef) return;
-    const gridCanvas = this.gridCanvasRef.nativeElement;
-    const container = this.containerRef.nativeElement;
-    const editorCanvas = this.canvasRef.nativeElement;
-    const ctx = gridCanvas.getContext('2d')!;
-
-    const dpr = window.devicePixelRatio || 1;
-    gridCanvas.width = container.clientWidth * dpr;
-    gridCanvas.height = container.clientHeight * dpr;
-    gridCanvas.style.width = `${container.clientWidth}px`;
-    gridCanvas.style.height = `${container.clientHeight}px`;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, container.clientWidth, container.clientHeight);
-
-    if (!this.showGrid()) return;
-
-    // Only draw grid when zoomed in enough
-    if (this.zoom() < 2) return;
-
-    const containerRect = container.getBoundingClientRect();
-    const canvasRect = editorCanvas.getBoundingClientRect();
-    const left = canvasRect.left - containerRect.left;
-    const top = canvasRect.top - containerRect.top;
-    const width = canvasRect.width;
-    const height = canvasRect.height;
-    const cellWidth = width / MAP_WIDTH;
-    const cellHeight = height / MAP_HEIGHT;
-
-    ctx.strokeStyle = 'rgba(100, 116, 139, 0.4)';
-    ctx.lineWidth = 1;
-
-    // Vertical lines
-    for (let x = 0; x <= MAP_WIDTH; x++) {
-      const screenX = left + x * cellWidth;
-      if (screenX < 0 || screenX > container.clientWidth) continue;
-      ctx.beginPath();
-      ctx.moveTo(screenX, Math.max(0, top));
-      ctx.lineTo(screenX, Math.min(container.clientHeight, top + height));
-      ctx.stroke();
-    }
-
-    // Horizontal lines
-    for (let y = 0; y <= MAP_HEIGHT; y++) {
-      const screenY = top + y * cellHeight;
-      if (screenY < 0 || screenY > container.clientHeight) continue;
-      ctx.beginPath();
-      ctx.moveTo(Math.max(0, left), screenY);
-      ctx.lineTo(Math.min(container.clientWidth, left + width), screenY);
-      ctx.stroke();
-    }
+    this.scheduleOverlayRender();
   }
 
   // --- Tool Handling ---
@@ -345,11 +333,10 @@ export class TableEditorView implements OnInit, AfterViewInit, OnDestroy {
     this.panStartPos = { x: event.clientX, y: event.clientY };
 
     this.panOffset.update(offset => ({
-      x: offset.x + dx,
-      y: offset.y + dy,
+      x: Math.round(offset.x + dx),
+      y: Math.round(offset.y + dy),
     }));
-    this.renderGrid();
-    this.renderPreview();
+    this.scheduleOverlayRender();
   }
 
   private endPan(): void {
@@ -359,8 +346,10 @@ export class TableEditorView implements OnInit, AfterViewInit, OnDestroy {
   // --- Coordinate Transform ---
 
   private getMapCoords(event: PointerEvent): { x: number; y: number } | null {
-    if (!this.canvasRef) return null;
+    if (!this.canvasRef || !this.containerRef) return null;
+
     const canvasRect = this.canvasRef.nativeElement.getBoundingClientRect();
+    if (canvasRect.width <= 0 || canvasRect.height <= 0) return null;
     const localX = event.clientX - canvasRect.left;
     const localY = event.clientY - canvasRect.top;
 
@@ -368,14 +357,55 @@ export class TableEditorView implements OnInit, AfterViewInit, OnDestroy {
       return null;
     }
 
-    const mapX = Math.floor((localX / canvasRect.width) * MAP_WIDTH);
-    const mapY = Math.floor((localY / canvasRect.height) * MAP_HEIGHT);
+    const dpr = window.devicePixelRatio || 1;
+    const mapWidthDev = Math.max(1, Math.round(canvasRect.width * dpr));
+    const mapHeightDev = Math.max(1, Math.round(canvasRect.height * dpr));
+    const xEdgesDev = this.buildRasterEdges(mapWidthDev, MAP_WIDTH);
+    const yEdgesDev = this.buildRasterEdges(mapHeightDev, MAP_HEIGHT);
+
+    const localDevX = Math.min(
+      mapWidthDev - 1,
+      Math.max(0, Math.floor((localX / canvasRect.width) * mapWidthDev))
+    );
+    const localDevY = Math.min(
+      mapHeightDev - 1,
+      Math.max(0, Math.floor((localY / canvasRect.height) * mapHeightDev))
+    );
+
+    const mapX = this.findCellIndex(localDevX, xEdgesDev);
+    const mapY = this.findCellIndex(localDevY, yEdgesDev);
 
     if (mapX < 0 || mapX >= MAP_WIDTH || mapY < 0 || mapY >= MAP_HEIGHT) {
       return null;
     }
 
     return { x: mapX, y: mapY };
+  }
+
+  private buildRasterEdges(totalDev: number, cells: number): number[] {
+    const edges = new Array<number>(cells + 1);
+    for (let i = 0; i <= cells; i++) {
+      edges[i] = Math.round((i * totalDev) / cells);
+    }
+    return edges;
+  }
+
+  private findCellIndex(valueDev: number, edges: number[]): number {
+    let lo = 0;
+    let hi = edges.length - 2;
+
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      if (valueDev < edges[mid]) {
+        hi = mid - 1;
+      } else if (valueDev >= edges[mid + 1]) {
+        lo = mid + 1;
+      } else {
+        return mid;
+      }
+    }
+
+    return Math.max(0, Math.min(edges.length - 2, lo));
   }
 
   // --- Drawing ---
@@ -405,6 +435,17 @@ export class TableEditorView implements OnInit, AfterViewInit, OnDestroy {
     const ctx = previewCanvas.getContext('2d')!;
 
     ctx.clearRect(0, 0, MAP_WIDTH, MAP_HEIGHT);
+
+    if (this.showGrid() && this.zoom() >= 2) {
+      const lineWidth = 1 / this.zoom();
+      ctx.fillStyle = 'rgba(100, 116, 139, 0.5)';
+      for (let x = 0; x <= MAP_WIDTH; x++) {
+        ctx.fillRect(x - lineWidth / 2, 0, lineWidth, MAP_HEIGHT);
+      }
+      for (let y = 0; y <= MAP_HEIGHT; y++) {
+        ctx.fillRect(0, y - lineWidth / 2, MAP_WIDTH, lineWidth);
+      }
+    }
 
     if (!this.linePreviewVisible()) return;
 
