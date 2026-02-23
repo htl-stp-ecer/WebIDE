@@ -440,9 +440,15 @@ export class TableEditorView implements OnInit, AfterViewInit, OnDestroy {
 
     ctx.clearRect(0, 0, previewWidth, previewHeight);
 
-    if (this.showGrid() && this.zoom() >= 2) {
-      const lineWidth = scale / this.zoom();
-      ctx.fillStyle = 'rgba(100, 116, 139, 0.5)';
+    if (this.showGrid() && this.zoom() > 2) {
+      const zoom = this.zoom();
+      const lineWidth = scale / zoom;
+      const minZoom = 2;
+      const maxZoom = 12;
+      const maxAlpha = 0.5;
+      const zoomRatio = Math.max(0, Math.min(1, (zoom - minZoom) / (maxZoom - minZoom)));
+      const alpha = maxAlpha * zoomRatio;
+      ctx.fillStyle = `rgba(100, 116, 139, ${alpha})`;
       for (let x = 0; x <= MAP_WIDTH; x++) {
         const gx = x * scale;
         ctx.fillRect(gx - lineWidth / 2, 0, lineWidth, previewHeight);
