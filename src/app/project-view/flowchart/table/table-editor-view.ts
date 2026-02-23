@@ -55,6 +55,7 @@ export class TableEditorView implements OnInit, AfterViewInit, OnDestroy {
   // Canvas dimensions
   readonly MAP_WIDTH = MAP_WIDTH;
   readonly MAP_HEIGHT = MAP_HEIGHT;
+  readonly PREVIEW_SCALE = 16;
 
   // Computed canvas transform
   readonly canvasTransform = computed(() => {
@@ -433,17 +434,22 @@ export class TableEditorView implements OnInit, AfterViewInit, OnDestroy {
     if (!this.previewCanvasRef) return;
     const previewCanvas = this.previewCanvasRef.nativeElement;
     const ctx = previewCanvas.getContext('2d')!;
+    const scale = this.PREVIEW_SCALE;
+    const previewWidth = MAP_WIDTH * scale;
+    const previewHeight = MAP_HEIGHT * scale;
 
-    ctx.clearRect(0, 0, MAP_WIDTH, MAP_HEIGHT);
+    ctx.clearRect(0, 0, previewWidth, previewHeight);
 
     if (this.showGrid() && this.zoom() >= 2) {
-      const lineWidth = 1 / this.zoom();
+      const lineWidth = scale / this.zoom();
       ctx.fillStyle = 'rgba(100, 116, 139, 0.5)';
       for (let x = 0; x <= MAP_WIDTH; x++) {
-        ctx.fillRect(x - lineWidth / 2, 0, lineWidth, MAP_HEIGHT);
+        const gx = x * scale;
+        ctx.fillRect(gx - lineWidth / 2, 0, lineWidth, previewHeight);
       }
       for (let y = 0; y <= MAP_HEIGHT; y++) {
-        ctx.fillRect(0, y - lineWidth / 2, MAP_WIDTH, lineWidth);
+        const gy = y * scale;
+        ctx.fillRect(0, gy - lineWidth / 2, previewWidth, lineWidth);
       }
     }
 
@@ -460,13 +466,13 @@ export class TableEditorView implements OnInit, AfterViewInit, OnDestroy {
     ctx.fillStyle = colorToHex(color);
 
     for (const p of points) {
-      ctx.fillRect(p.x, p.y, 1, 1);
+      ctx.fillRect(p.x * scale, p.y * scale, scale, scale);
     }
 
     // Draw semi-transparent overlay
     ctx.globalAlpha = 0.5;
     for (const p of points) {
-      ctx.fillRect(p.x, p.y, 1, 1);
+      ctx.fillRect(p.x * scale, p.y * scale, scale, scale);
     }
     ctx.globalAlpha = 1;
   }

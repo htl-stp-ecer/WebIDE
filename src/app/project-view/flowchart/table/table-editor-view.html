@@ -38,8 +38,10 @@
     <canvas
       #previewCanvas
       class="preview-overlay"
-      [width]="MAP_WIDTH"
-      [height]="MAP_HEIGHT"
+      [width]="MAP_WIDTH * PREVIEW_SCALE"
+      [height]="MAP_HEIGHT * PREVIEW_SCALE"
+      [style.width.px]="MAP_WIDTH"
+      [style.height.px]="MAP_HEIGHT"
       [style.transform]="canvasTransform()"></canvas>
   </div>
 
