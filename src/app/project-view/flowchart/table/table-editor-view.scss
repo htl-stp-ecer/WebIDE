@@ -35,7 +35,9 @@
   image-rendering: pixelated;
   image-rendering: crisp-edges;
   background: #ffffff;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  box-shadow:
+    0 0 0 1px rgba(148, 163, 184, 0.3),
+    0 8px 32px rgba(0, 0, 0, 0.4);
   transform-origin: 0 0;
   pointer-events: none;
 }
@@ -106,7 +108,9 @@
   }
 
   .editor-canvas {
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+    box-shadow:
+      0 0 0 1px rgba(148, 163, 184, 0.4),
+      0 8px 32px rgba(0, 0, 0, 0.15);
   }
 
   .status-bar {
