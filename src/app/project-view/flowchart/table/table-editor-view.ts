@@ -136,10 +136,10 @@ export class TableEditorView implements OnInit, AfterViewInit, OnDestroy {
     const offset = this.panOffset();
     const zoomRatio = newZoom / oldZoom;
 
-    const nextOffset = {
-      x: Math.round(mouseX - (mouseX - offset.x) * zoomRatio),
-      y: Math.round(mouseY - (mouseY - offset.y) * zoomRatio),
-    };
+    const nextOffset = this.snapOffsetToDevicePixels({
+      x: mouseX - (mouseX - offset.x) * zoomRatio,
+      y: mouseY - (mouseY - offset.y) * zoomRatio,
+    });
 
     this.zoom.set(newZoom);
     this.panOffset.set(nextOffset);
@@ -197,10 +197,10 @@ export class TableEditorView implements OnInit, AfterViewInit, OnDestroy {
     const canvasDisplayWidth = MAP_WIDTH * z;
     const canvasDisplayHeight = MAP_HEIGHT * z;
 
-    this.panOffset.set({
-      x: Math.round((container.clientWidth - canvasDisplayWidth) / 2),
-      y: Math.round((container.clientHeight - canvasDisplayHeight) / 2),
-    });
+    this.panOffset.set(this.snapOffsetToDevicePixels({
+      x: (container.clientWidth - canvasDisplayWidth) / 2,
+      y: (container.clientHeight - canvasDisplayHeight) / 2,
+    }));
   }
 
   private scheduleOverlayRender(): void {
@@ -333,9 +333,9 @@ export class TableEditorView implements OnInit, AfterViewInit, OnDestroy {
     const dy = event.clientY - this.panStartPos.y;
     this.panStartPos = { x: event.clientX, y: event.clientY };
 
-    this.panOffset.update(offset => ({
-      x: Math.round(offset.x + dx),
-      y: Math.round(offset.y + dy),
+    this.panOffset.update(offset => this.snapOffsetToDevicePixels({
+      x: offset.x + dx,
+      y: offset.y + dy,
     }));
     this.scheduleOverlayRender();
   }
@@ -442,20 +442,37 @@ export class TableEditorView implements OnInit, AfterViewInit, OnDestroy {
 
     if (this.showGrid() && this.zoom() > 2) {
       const zoom = this.zoom();
-      const lineWidth = scale / zoom;
+      const dpr = window.devicePixelRatio || 1;
+      const lineWidth = scale / (zoom * dpr);
+
+      // Keep a minimum spacing in screen space to avoid moire artifacts at low zoom.
+      const minScreenSpacingPx = 4;
+      const lineStep = Math.max(1, Math.ceil(minScreenSpacingPx / zoom));
+      const majorStep = lineStep * 5;
+      const drawMinorLines = zoom >= 4;
+      const drawStep = drawMinorLines ? lineStep : majorStep;
+
       const minZoom = 2;
       const maxZoom = 12;
-      const maxAlpha = 0.5;
+      const baseMaxAlpha = 0.35;
+      const majorMaxAlpha = 0.5;
       const zoomRatio = Math.max(0, Math.min(1, (zoom - minZoom) / (maxZoom - minZoom)));
-      const alpha = maxAlpha * zoomRatio;
-      ctx.fillStyle = `rgba(100, 116, 139, ${alpha})`;
-      for (let x = 0; x <= MAP_WIDTH; x++) {
+      const baseAlpha = baseMaxAlpha * zoomRatio;
+      const majorAlpha = majorMaxAlpha * zoomRatio;
+
+      for (let x = 0; x <= MAP_WIDTH; x += drawStep) {
         const gx = x * scale;
-        ctx.fillRect(gx - lineWidth / 2, 0, lineWidth, previewHeight);
+        const isMajor = x % majorStep === 0;
+        const alpha = drawMinorLines ? (isMajor ? majorAlpha : baseAlpha) : majorAlpha;
+        ctx.fillStyle = `rgba(100, 116, 139, ${alpha})`;
+        ctx.fillRect(gx, 0, lineWidth, previewHeight);
       }
-      for (let y = 0; y <= MAP_HEIGHT; y++) {
+      for (let y = 0; y <= MAP_HEIGHT; y += drawStep) {
         const gy = y * scale;
-        ctx.fillRect(0, gy - lineWidth / 2, previewWidth, lineWidth);
+        const isMajor = y % majorStep === 0;
+        const alpha = drawMinorLines ? (isMajor ? majorAlpha : baseAlpha) : majorAlpha;
+        ctx.fillStyle = `rgba(100, 116, 139, ${alpha})`;
+        ctx.fillRect(0, gy, previewWidth, lineWidth);
       }
     }
 
@@ -481,6 +498,18 @@ export class TableEditorView implements OnInit, AfterViewInit, OnDestroy {
       ctx.fillRect(p.x * scale, p.y * scale, scale, scale);
     }
     ctx.globalAlpha = 1;
+  }
+
+  private snapOffsetToDevicePixels(offset: { x: number; y: number }): { x: number; y: number } {
+    return {
+      x: this.snapToDevicePixel(offset.x),
+      y: this.snapToDevicePixel(offset.y),
+    };
+  }
+
+  private snapToDevicePixel(value: number): number {
+    const dpr = window.devicePixelRatio || 1;
+    return Math.round(value * dpr) / dpr;
   }
 
   // --- PNG Upload ---
