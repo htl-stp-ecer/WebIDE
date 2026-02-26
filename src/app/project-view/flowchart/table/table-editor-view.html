@@ -34,6 +34,13 @@
       [style.transform]="canvasTransform()">
     </canvas>
 
+    <canvas
+      #gridCanvas
+      class="grid-overlay"
+      [style.width.px]="MAP_WIDTH"
+      [style.height.px]="MAP_HEIGHT"
+      [style.transform]="canvasTransform()"></canvas>
+
     <!-- Line tool preview -->
     <canvas
       #previewCanvas

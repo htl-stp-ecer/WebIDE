@@ -52,6 +52,16 @@
   pointer-events: none;
 }
 
+.grid-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  transform-origin: 0 0;
+  pointer-events: none;
+}
+
 .status-bar {
   display: flex;
   align-items: center;

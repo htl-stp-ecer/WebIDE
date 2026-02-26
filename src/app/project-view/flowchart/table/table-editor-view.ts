@@ -37,6 +37,7 @@ import {
 })
 export class TableEditorView implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('editorCanvas') canvasRef!: ElementRef<HTMLCanvasElement>;
+  @ViewChild('gridCanvas') gridCanvasRef!: ElementRef<HTMLCanvasElement>;
   @ViewChild('previewCanvas') previewCanvasRef!: ElementRef<HTMLCanvasElement>;
   @ViewChild('canvasContainer') containerRef!: ElementRef<HTMLDivElement>;
 
@@ -207,6 +208,7 @@ export class TableEditorView implements OnInit, AfterViewInit, OnDestroy {
     if (this.overlayRenderFrame !== null) return;
     this.overlayRenderFrame = requestAnimationFrame(() => {
       this.overlayRenderFrame = null;
+      this.renderGridOverlay();
       this.renderPreview();
     });
   }
@@ -440,42 +442,6 @@ export class TableEditorView implements OnInit, AfterViewInit, OnDestroy {
 
     ctx.clearRect(0, 0, previewWidth, previewHeight);
 
-    if (this.showGrid() && this.zoom() > 2) {
-      const zoom = this.zoom();
-      const dpr = window.devicePixelRatio || 1;
-      const lineWidth = scale / (zoom * dpr);
-
-      // Keep a minimum spacing in screen space to avoid moire artifacts at low zoom.
-      const minScreenSpacingPx = 4;
-      const lineStep = Math.max(1, Math.ceil(minScreenSpacingPx / zoom));
-      const majorStep = lineStep * 5;
-      const drawMinorLines = zoom >= 4;
-      const drawStep = drawMinorLines ? lineStep : majorStep;
-
-      const minZoom = 2;
-      const maxZoom = 12;
-      const baseMaxAlpha = 0.35;
-      const majorMaxAlpha = 0.5;
-      const zoomRatio = Math.max(0, Math.min(1, (zoom - minZoom) / (maxZoom - minZoom)));
-      const baseAlpha = baseMaxAlpha * zoomRatio;
-      const majorAlpha = majorMaxAlpha * zoomRatio;
-
-      for (let x = 0; x <= MAP_WIDTH; x += drawStep) {
-        const gx = x * scale;
-        const isMajor = x % majorStep === 0;
-        const alpha = drawMinorLines ? (isMajor ? majorAlpha : baseAlpha) : majorAlpha;
-        ctx.fillStyle = `rgba(100, 116, 139, ${alpha})`;
-        ctx.fillRect(gx, 0, lineWidth, previewHeight);
-      }
-      for (let y = 0; y <= MAP_HEIGHT; y += drawStep) {
-        const gy = y * scale;
-        const isMajor = y % majorStep === 0;
-        const alpha = drawMinorLines ? (isMajor ? majorAlpha : baseAlpha) : majorAlpha;
-        ctx.fillStyle = `rgba(100, 116, 139, ${alpha})`;
-        ctx.fillRect(0, gy, previewWidth, lineWidth);
-      }
-    }
-
     if (!this.linePreviewVisible()) return;
 
     const start = this.lineStartPoint();
@@ -498,6 +464,45 @@ export class TableEditorView implements OnInit, AfterViewInit, OnDestroy {
       ctx.fillRect(p.x * scale, p.y * scale, scale, scale);
     }
     ctx.globalAlpha = 1;
+  }
+
+  private renderGridOverlay(): void {
+    if (!this.gridCanvasRef) return;
+
+    const zoom = this.zoom();
+    const dpr = window.devicePixelRatio || 1;
+    const canvas = this.gridCanvasRef.nativeElement;
+    const widthDev = Math.max(1, Math.round(MAP_WIDTH * zoom * dpr));
+    const heightDev = Math.max(1, Math.round(MAP_HEIGHT * zoom * dpr));
+
+    if (canvas.width !== widthDev || canvas.height !== heightDev) {
+      canvas.width = widthDev;
+      canvas.height = heightDev;
+    }
+
+    const ctx = canvas.getContext('2d')!;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, widthDev, heightDev);
+
+    if (!this.showGrid() || zoom <= 2) return;
+
+    const baseAlpha = 0.25;
+    const majorAlpha = 0.5;
+    const majorStep = 5;
+    const cellWidthDev = widthDev / MAP_WIDTH;
+    const cellHeightDev = heightDev / MAP_HEIGHT;
+
+    for (let x = 0; x <= MAP_WIDTH; x++) {
+      const xDev = Math.round(x * cellWidthDev);
+      ctx.fillStyle = `rgba(100, 116, 139, ${x % majorStep === 0 ? majorAlpha : baseAlpha})`;
+      ctx.fillRect(xDev, 0, 1, heightDev);
+    }
+
+    for (let y = 0; y <= MAP_HEIGHT; y++) {
+      const yDev = Math.round(y * cellHeightDev);
+      ctx.fillStyle = `rgba(100, 116, 139, ${y % majorStep === 0 ? majorAlpha : baseAlpha})`;
+      ctx.fillRect(0, yDev, widthDev, 1);
+    }
   }
 
   private snapOffsetToDevicePixels(offset: { x: number; y: number }): { x: number; y: number } {
