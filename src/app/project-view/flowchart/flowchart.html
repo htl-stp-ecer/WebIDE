@@ -240,14 +240,28 @@
                   <div class="arg">
                     <label class="arg-label" pTooltip="{{arg.name}} ({{arg.type}})" tooltipPosition="top" [showDelay]="150" [hideDelay]="50" tooltipStyleClass="!max-w-[24rem] !break-words">{{ arg.name }}</label>
                     <div class="arg-control">
+                      @let options = definitionOptionsForType(arg.type);
                       @if (arg.type === 'bool') {
                         <p-checkbox [(ngModel)]="node.args[arg.name]" [binary]="true" (ngModelChange)="actions.onArgumentChange(node.id, arg.name, idx, $event)"></p-checkbox>
                       } @else if (arg.type === 'str') {
                         <input pInputText [(ngModel)]="node.args[arg.name]" class="arg-input" [placeholder]="arg.default || ('FLOWCHART.ENTER_VALUE'|translate:{value:arg.name})" (ngModelChange)="actions.onArgumentChange(node.id, arg.name, idx, $event)" />
                       } @else if (arg.type === 'float') {
                         <p-inputNumber [(ngModel)]="node.args[arg.name]" mode="decimal" [minFractionDigits]="1" [maxFractionDigits]="2" styleClass="arg-number" inputStyleClass="arg-input" [placeholder]="'FLOWCHART.ENTER_VALUE'|translate:{value:arg.name}" (ngModelChange)="actions.onArgumentChange(node.id, arg.name, idx, $event)"></p-inputNumber>
+                      } @else if (isMultiSensorArgType(arg.type)) {
+                        <p-multiselect
+                          [ngModel]="selectedMultiSensors(node.args[arg.name])"
+                          [options]="options"
+                          optionLabel="label"
+                          optionValue="value"
+                          [appendTo]="'body'"
+                          styleClass="arg-dropdown"
+                          [showClear]="true"
+                          display="chip"
+                          [disabled]="!options.length"
+                          [placeholder]="options.length ? ('FLOWCHART.SELECT_TYPE_DEFINITION'|translate:{type:arg.type}) : ('FLOWCHART.NO_TYPE_DEFINITIONS'|translate:{type:arg.type})"
+                          (ngModelChange)="actions.onArgumentChange(node.id, arg.name, idx, $event)">
+                        </p-multiselect>
                       } @else {
-                        @let options = typeDefinitionOptions()[arg.type] ?? [];
                         <p-select
                           [(ngModel)]="node.args[arg.name]"
                           [options]="options"
