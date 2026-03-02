@@ -157,6 +157,7 @@
     @if (selectedEditorPosition(); as editorPos) {
       <div
         class="length-editor"
+        [style.transform]="'translate(-50%, -50%)'"
         [style.left.px]="editorPos.x"
         [style.top.px]="editorPos.y"
         (pointerdown)="$event.stopPropagation()">

@@ -112,14 +112,66 @@ export class TableEditorView implements AfterViewInit, OnDestroy {
   readonly selectedEditorPosition = computed(() => {
     const line = this.selectedLine();
     if (!line) return null;
+    this.viewportVersion();
 
     const midpoint = this.lineMidpoint(line);
     const zoom = this.zoom();
     const offset = this.panOffset();
-
-    return {
+    const midpointPx = {
       x: offset.x + midpoint.x * zoom,
       y: offset.y + midpoint.y * zoom,
+    };
+
+    const dx = line.endX - line.startX;
+    const dy = line.endY - line.startY;
+    const length = Math.hypot(dx, dy);
+
+    let nx = 0;
+    let ny = -1;
+    if (length > 0.0001) {
+      nx = -dy / length;
+      ny = dx / length;
+    }
+
+    const panelWidthPx = 230;
+    const panelHeightPx = 142;
+    const desiredGapPx = 24;
+    // Rectangle support distance in direction (nx, ny): guarantees fixed edge gap for any angle.
+    const directionalHalfExtentPx = Math.abs(nx) * (panelWidthPx * 0.5) + Math.abs(ny) * (panelHeightPx * 0.5);
+    const popupOffsetPx = directionalHalfExtentPx + desiredGapPx;
+    const candidateA = {
+      x: midpointPx.x + nx * popupOffsetPx,
+      y: midpointPx.y + ny * popupOffsetPx,
+    };
+    const candidateB = {
+      x: midpointPx.x - nx * popupOffsetPx,
+      y: midpointPx.y - ny * popupOffsetPx,
+    };
+
+    const container = this.containerRef?.nativeElement;
+    if (!container) {
+      return midpointPx;
+    }
+
+    const marginPx = 12;
+    const maxX = container.clientWidth - marginPx - panelWidthPx * 0.5;
+    const maxY = container.clientHeight - marginPx - panelHeightPx * 0.5;
+    const minX = marginPx + panelWidthPx * 0.5;
+    const minY = marginPx + panelHeightPx * 0.5;
+
+    const scoreCandidate = (candidate: { x: number; y: number }): number => {
+      const left = candidate.x - panelWidthPx * 0.5 - marginPx;
+      const top = candidate.y - panelHeightPx * 0.5 - marginPx;
+      const right = container.clientWidth - marginPx - (candidate.x + panelWidthPx * 0.5);
+      const bottom = container.clientHeight - marginPx - (candidate.y + panelHeightPx * 0.5);
+      return Math.min(left, top, right, bottom);
+    };
+
+    const chosen = scoreCandidate(candidateA) >= scoreCandidate(candidateB) ? candidateA : candidateB;
+
+    return {
+      x: Math.max(minX, Math.min(maxX, chosen.x)),
+      y: Math.max(minY, Math.min(maxY, chosen.y)),
     };
   });
 
@@ -146,6 +198,7 @@ export class TableEditorView implements AfterViewInit, OnDestroy {
   private readonly http = inject(HttpService);
 
   private resizeObserver?: ResizeObserver;
+  private readonly viewportVersion = signal(0);
   private isPanning = false;
   private panStartPos = { x: 0, y: 0 };
   private selectDragState: SelectDragState | null = null;
@@ -183,6 +236,7 @@ export class TableEditorView implements AfterViewInit, OnDestroy {
       if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) {
         this.centerCanvas();
       }
+      this.viewportVersion.update(v => v + 1);
     });
     this.resizeObserver.observe(this.containerRef.nativeElement);
 
