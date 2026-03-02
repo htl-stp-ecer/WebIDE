@@ -1,11 +1,19 @@
 .editor-toolbar {
   display: flex;
-  align-items: center;
-  gap: 0.5rem;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.35rem;
   padding: 0.5rem 0.75rem;
   background: rgba(15, 23, 42, 0.95);
   border-bottom: 1px solid rgba(148, 163, 184, 0.15);
   user-select: none;
+}
+
+.toolbar-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
 }
 
 .tool-group,
@@ -94,6 +102,12 @@
   i {
     font-size: 14px;
   }
+}
+
+.select-icon {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
 }
 
 .zoom-select {
