@@ -1,4 +1,4 @@
-<div class="editor-container">
+<div class="editor-container" xmlns:svg="http://www.w3.org/1999/XSL/Transform">
   <app-table-editor-toolbar
     [zoom]="zoom()"
     [showGrid]="showGrid()"
@@ -106,7 +106,7 @@
         <g class="label-layer">
           @for (line of lines(); track line.id) {
             @let midpoint = lineMidpoint(line);
-            <text
+            <svg:text
               class="line-label"
               [attr.x]="midpoint.x"
               [attr.y]="midpoint.y - 1.1"
@@ -114,7 +114,7 @@
               [class.selected-label]="selectedLineId() === line.id"
               (pointerdown)="onLineLabelPointerDown($event, line.id)">
               {{ lineLengthLabel(line) }}
-            </text>
+            </svg:text>
           }
 
           @if (draftStart() && draftEnd() && draftLengthLabel(); as label) {
@@ -126,13 +126,13 @@
               endX: draftEnd()!.x,
               endY: draftEnd()!.y,
             });
-            <text
+            <svg:text
               class="line-label draft-label"
               [attr.x]="draftMid.x"
               [attr.y]="draftMid.y - 1.1"
               fill="#0f172a">
               {{ label }}
-            </text>
+            </svg:text>
           }
         </g>
       </svg>
