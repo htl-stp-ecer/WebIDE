@@ -1,68 +1,178 @@
 <div class="editor-container">
-  <!-- Toolbar -->
   <app-table-editor-toolbar
     [zoom]="zoom()"
     [showGrid]="showGrid()"
+    [showSmartGuides]="showSmartGuides()"
     [activeTool]="activeTool()"
-    [selectedColor]="selectedColor()"
+    [lineKind]="lineKind()"
+    [measurementUnit]="measurementUnit()"
+    [hasSelection]="!!selectedLine()"
     (zoomChange)="setZoom($event)"
     (gridToggle)="toggleGrid()"
+    (smartGuidesToggle)="toggleSmartGuides()"
     (toolChange)="setTool($event)"
-    (colorChange)="setColor($event)"
+    (lineKindChange)="setLineKind($event)"
+    (unitChange)="setMeasurementUnit($event)"
     (uploadRequest)="uploadPng()"
     (clearRequest)="clearCanvas()"
     (loadMapRequest)="loadMap()"
+    (deleteLineRequest)="deleteSelectedLine()"
     (zoomToFit)="fitToView()">
   </app-table-editor-toolbar>
 
-  <!-- Canvas Area -->
   <div
     class="canvas-wrapper"
     #canvasContainer
+    [class.draw-mode]="activeTool() === 'draw'"
+    [class.select-mode]="activeTool() === 'select'"
     (wheel)="onWheel($event)"
     (pointerdown)="onPointerDown($event)"
     (pointermove)="onPointerMove($event)"
     (pointerup)="onPointerUp($event)"
     (pointerleave)="onPointerLeave()">
 
-    <!-- Main drawing canvas (79x40 actual pixels) -->
-    <canvas
-      #editorCanvas
-      class="editor-canvas"
-      [width]="MAP_WIDTH"
-      [height]="MAP_HEIGHT"
+    <div
+      class="map-stage"
+      [style.width.px]="TABLE_WIDTH_CM"
+      [style.height.px]="TABLE_HEIGHT_CM"
       [style.transform]="canvasTransform()">
-    </canvas>
+      <svg
+        class="map-svg"
+        [attr.viewBox]="'0 0 ' + TABLE_WIDTH_CM + ' ' + TABLE_HEIGHT_CM"
+        [attr.width]="TABLE_WIDTH_CM"
+        [attr.height]="TABLE_HEIGHT_CM">
+        <rect x="0" y="0" [attr.width]="TABLE_WIDTH_CM" [attr.height]="TABLE_HEIGHT_CM" class="map-bg"></rect>
 
-    <canvas
-      #gridCanvas
-      class="grid-overlay"
-      [style.width.px]="MAP_WIDTH"
-      [style.height.px]="MAP_HEIGHT"
-      [style.transform]="canvasTransform()"></canvas>
+        @if (showGrid()) {
+          <g class="grid-layer">
+            @for (x of gridX; track x) {
+              <line
+                [attr.x1]="x"
+                y1="0"
+                [attr.x2]="x"
+                [attr.y2]="TABLE_HEIGHT_CM"
+                [class.grid-major]="x % 10 === 0"
+                [class.grid-minor]="x % 10 !== 0"></line>
+            }
+            @for (y of gridY; track y) {
+              <line
+                x1="0"
+                [attr.y1]="y"
+                [attr.x2]="TABLE_WIDTH_CM"
+                [attr.y2]="y"
+                [class.grid-major]="y % 10 === 0"
+                [class.grid-minor]="y % 10 !== 0"></line>
+            }
+          </g>
+        }
 
-    <!-- Line tool preview -->
-    <canvas
-      #previewCanvas
-      class="preview-overlay"
-      [width]="MAP_WIDTH * PREVIEW_SCALE"
-      [height]="MAP_HEIGHT * PREVIEW_SCALE"
-      [style.width.px]="MAP_WIDTH"
-      [style.height.px]="MAP_HEIGHT"
-      [style.transform]="canvasTransform()"></canvas>
+        @if (showSmartGuides()) {
+          <g class="guide-layer">
+            @for (guide of guideLines(); track $index) {
+              <line
+                [attr.x1]="guide.x1"
+                [attr.y1]="guide.y1"
+                [attr.x2]="guide.x2"
+                [attr.y2]="guide.y2"
+                [attr.stroke]="guideColor(guide)"></line>
+            }
+          </g>
+        }
+
+        <g class="line-layer">
+          @for (line of lines(); track line.id) {
+            <line
+              [attr.x1]="line.startX"
+              [attr.y1]="line.startY"
+              [attr.x2]="line.endX"
+              [attr.y2]="line.endY"
+              [attr.stroke]="lineColor(line)"
+              [attr.stroke-width]="lineStrokeWidth(line)"
+              [class.selected-line]="selectedLineId() === line.id"></line>
+          }
+
+          @if (draftStart() && draftEnd()) {
+            <line
+              class="draft-line"
+              [attr.x1]="draftStart()!.x"
+              [attr.y1]="draftStart()!.y"
+              [attr.x2]="draftEnd()!.x"
+              [attr.y2]="draftEnd()!.y"
+              [attr.stroke]="lineKind() === 'wall' ? '#94a3b8' : '#0f172a'"
+              [attr.stroke-width]="lineKind() === 'wall' ? 1.1 : 0.7"></line>
+          }
+        </g>
+
+        <g class="label-layer">
+          @for (line of lines(); track line.id) {
+            @let midpoint = lineMidpoint(line);
+            <text
+              class="line-label"
+              [attr.x]="midpoint.x"
+              [attr.y]="midpoint.y - 1.1"
+              [attr.fill]="labelColor(line)"
+              [class.selected-label]="selectedLineId() === line.id"
+              (pointerdown)="onLineLabelPointerDown($event, line.id)">
+              {{ lineLengthLabel(line) }}
+            </text>
+          }
+
+          @if (draftStart() && draftEnd() && draftLengthLabel(); as label) {
+            @let draftMid = lineMidpoint({
+              id: '__draft__',
+              kind: lineKind(),
+              startX: draftStart()!.x,
+              startY: draftStart()!.y,
+              endX: draftEnd()!.x,
+              endY: draftEnd()!.y,
+            });
+            <text
+              class="line-label draft-label"
+              [attr.x]="draftMid.x"
+              [attr.y]="draftMid.y - 1.1"
+              fill="#0f172a">
+              {{ label }}
+            </text>
+          }
+        </g>
+      </svg>
+    </div>
+
+    @if (selectedEditorPosition(); as editorPos) {
+      <div
+        class="length-editor"
+        [style.left.px]="editorPos.x"
+        [style.top.px]="editorPos.y"
+        (pointerdown)="$event.stopPropagation()">
+        <label>{{ 'FLOWCHART.TABLE_SELECTED_LENGTH' | translate }}</label>
+        <div class="length-editor-row">
+          <input
+            type="number"
+            step="0.01"
+            [value]="lengthInputValue()"
+            (input)="lengthInputValue.set($any($event.target).value)"
+            (keydown)="onLengthInputKeydown($event)" />
+          <span>{{ measurementUnit() }}</span>
+          <button type="button" (click)="applySelectedLength()">
+            {{ 'COMMON.SAVE' | translate }}
+          </button>
+        </div>
+      </div>
+    }
   </div>
 
-  <!-- Status bar -->
   <div class="status-bar">
     @if (hoverCoords(); as coords) {
-      <span class="coords">X: {{ coords.x }}, Y: {{ coords.y }}</span>
+      <span class="coords">{{ hoverCoordLabel(coords) }}</span>
     } @else {
       <span class="coords coords-placeholder">--</span>
     }
     <span class="divider">|</span>
-    <span class="dimensions">{{ MAP_WIDTH }} x {{ MAP_HEIGHT }} px</span>
+    <span class="dimensions">{{ TABLE_WIDTH_CM }} x {{ TABLE_HEIGHT_CM }} cm</span>
     <span class="divider">|</span>
     <span class="zoom-level">{{ zoom() * 100 | number:'1.0-0' }}%</span>
+    <span class="divider">|</span>
+    <span class="dimensions">{{ lines().length }} {{ 'FLOWCHART.TABLE_LINES' | translate }}</span>
     @if (message()) {
       <span class="divider">|</span>
       <span class="message">{{ message() }}</span>

@@ -69,6 +69,8 @@ export class TableMapService {
   private readonly _mapImage = signal<HTMLImageElement | null>(null);
   private readonly _imageData = signal<ImageData | null>(null);
   private readonly _parsedData = signal<ParsedMapData | null>(null);
+  private readonly _vectorLineSegmentsCm = signal<LineSegmentCm[] | null>(null);
+  private readonly _vectorWallSegmentsCm = signal<WallSegmentCm[] | null>(null);
   private readonly _isLoading = signal<boolean>(false);
   // Default dimensions: 79x40 pixels mapped to 200x100 cm
   private readonly _config = signal<MapConfig>({
@@ -79,11 +81,19 @@ export class TableMapService {
 
   readonly mapImage = this._mapImage.asReadonly();
   readonly config = this._config.asReadonly();
-  readonly isLoaded = computed(() => this._mapImage() !== null);
+  readonly isLoaded = computed(() =>
+    this._mapImage() !== null ||
+    this._parsedData() !== null ||
+    this._vectorLineSegmentsCm() !== null ||
+    this._vectorWallSegmentsCm() !== null
+  );
   readonly isLoading = this._isLoading.asReadonly();
 
   /** Line segments in table coordinates (cm) */
   readonly lineSegmentsCm = computed<LineSegmentCm[]>(() => {
+    const vector = this._vectorLineSegmentsCm();
+    if (vector) return vector;
+
     const data = this._parsedData();
     if (!data) return [];
 
@@ -95,6 +105,9 @@ export class TableMapService {
 
   /** Wall segments in table coordinates (cm) */
   readonly wallSegmentsCm = computed<WallSegmentCm[]>(() => {
+    const vector = this._vectorWallSegmentsCm();
+    if (vector) return vector;
+
     const data = this._parsedData();
     if (!data) return [];
 
@@ -119,6 +132,8 @@ export class TableMapService {
   /** Load a map image from a URL */
   async loadMap(url: string): Promise<void> {
     this._isLoading.set(true);
+    this._vectorLineSegmentsCm.set(null);
+    this._vectorWallSegmentsCm.set(null);
     return new Promise((resolve, reject) => {
       const img = new Image();
       img.crossOrigin = 'anonymous';
@@ -151,11 +166,30 @@ export class TableMapService {
     return this.loadMap(`data:image/png;base64,${base64}`);
   }
 
+  /**
+   * Set map vectors directly in table coordinates (cm). This keeps geometric precision
+   * for planning/simulation while still allowing PNG persistence separately.
+   */
+  setVectorMap(lineSegments: LineSegmentCm[], wallSegments: WallSegmentCm[] = []): void {
+    this._vectorLineSegmentsCm.set([...lineSegments]);
+    this._vectorWallSegmentsCm.set([...wallSegments]);
+    this._parsedData.set(null);
+    this._mapImage.set(null);
+    this._imageData.set(null);
+    this._config.set({
+      widthCm: 79 * CM_PER_PIXEL_X,
+      heightCm: 40 * CM_PER_PIXEL_Y,
+      pixelsPerCm: 1 / CM_PER_PIXEL_AVG,
+    });
+  }
+
   /** Clear loaded map */
   clear(): void {
     this._mapImage.set(null);
     this._imageData.set(null);
     this._parsedData.set(null);
+    this._vectorLineSegmentsCm.set(null);
+    this._vectorWallSegmentsCm.set(null);
   }
 
   private extractImageData(img: HTMLImageElement): void {
@@ -169,6 +203,17 @@ export class TableMapService {
 
   /** Check if a position (in table cm) is on a black line */
   isOnBlackLine(xCm: number, yCm: number): boolean {
+    const vectorSegments = this._vectorLineSegmentsCm();
+    if (vectorSegments?.length) {
+      const thresholdCm = Math.max(1, Math.min(CM_PER_PIXEL_X, CM_PER_PIXEL_Y) * 0.7);
+      for (const segment of vectorSegments) {
+        if (this.pointToLineDistanceCm(xCm, yCm, segment) <= thresholdCm) {
+          return true;
+        }
+      }
+      return false;
+    }
+
     const imageData = this._imageData();
     const img = this._mapImage();
     if (!imageData || !img) return false;
@@ -191,6 +236,32 @@ export class TableMapService {
   /** Check if a position (in table cm) is on white surface */
   isOnWhite(xCm: number, yCm: number): boolean {
     return !this.isOnBlackLine(xCm, yCm);
+  }
+
+  private pointToLineDistanceCm(
+    xCm: number,
+    yCm: number,
+    segment: { startX: number; startY: number; endX: number; endY: number }
+  ): number {
+    const vx = segment.endX - segment.startX;
+    const vy = segment.endY - segment.startY;
+    const wx = xCm - segment.startX;
+    const wy = yCm - segment.startY;
+
+    const c1 = vx * wx + vy * wy;
+    if (c1 <= 0) {
+      return Math.hypot(xCm - segment.startX, yCm - segment.startY);
+    }
+
+    const c2 = vx * vx + vy * vy;
+    if (c2 <= c1) {
+      return Math.hypot(xCm - segment.endX, yCm - segment.endY);
+    }
+
+    const t = c1 / c2;
+    const px = segment.startX + t * vx;
+    const py = segment.startY + t * vy;
+    return Math.hypot(xCm - px, yCm - py);
   }
 
   /** Convert table coordinates (cm) to canvas coordinates */

@@ -1,31 +1,45 @@
 import {
+  AfterViewInit,
   Component,
   ElementRef,
-  ViewChild,
-  AfterViewInit,
+  HostListener,
   OnDestroy,
-  OnInit,
-  signal,
+  ViewChild,
   computed,
+  effect,
   inject,
   input,
   output,
+  signal,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { TableEditorToolbar } from './table-editor-toolbar';
-import { TableMapService } from './services';
+import { TableMapService, type LineSegmentCm, type WallSegmentCm } from './services';
 import { HttpService } from '../../../services/http-service';
 import {
-  DrawingTool,
-  PaintColor,
-  MAP_WIDTH,
+  EditorTool,
+  GuideLine,
+  LineKind,
   MAP_HEIGHT,
-  MIN_ZOOM,
+  MAP_WIDTH,
   MAX_ZOOM,
+  MeasurementUnit,
+  MIN_ZOOM,
+  TABLE_HEIGHT_CM,
+  TABLE_WIDTH_CM,
+  VectorLine,
+  VectorPoint,
   ZOOM_STEP,
-  colorToHex,
-  bresenhamLine,
+  clampToTable,
+  convertFromCm,
+  convertToCm,
+  formatDistance,
+  lineLengthCm,
+  pointToSegmentDistanceCm,
+  roundTo,
+  CM_PER_PIXEL_X,
+  CM_PER_PIXEL_Y,
 } from './models/editor-state';
 
 @Component({
@@ -35,295 +49,290 @@ import {
   templateUrl: './table-editor-view.html',
   styleUrl: './table-editor-view.scss',
 })
-export class TableEditorView implements OnInit, AfterViewInit, OnDestroy {
-  @ViewChild('editorCanvas') canvasRef!: ElementRef<HTMLCanvasElement>;
-  @ViewChild('gridCanvas') gridCanvasRef!: ElementRef<HTMLCanvasElement>;
-  @ViewChild('previewCanvas') previewCanvasRef!: ElementRef<HTMLCanvasElement>;
+export class TableEditorView implements AfterViewInit, OnDestroy {
   @ViewChild('canvasContainer') containerRef!: ElementRef<HTMLDivElement>;
 
   readonly projectUuid = input<string | null>(null);
   readonly mapExported = output<string>();
 
-  // State signals
-  readonly zoom = signal<number>(8);
+  readonly TABLE_WIDTH_CM = TABLE_WIDTH_CM;
+  readonly TABLE_HEIGHT_CM = TABLE_HEIGHT_CM;
+
+  readonly zoom = signal<number>(4);
   readonly panOffset = signal<{ x: number; y: number }>({ x: 0, y: 0 });
   readonly showGrid = signal<boolean>(true);
-  readonly activeTool = signal<DrawingTool>('brush');
-  readonly selectedColor = signal<PaintColor>('black');
+  readonly showSmartGuides = signal<boolean>(true);
+  readonly activeTool = signal<EditorTool>('draw');
+  readonly lineKind = signal<LineKind>('line');
+  readonly measurementUnit = signal<MeasurementUnit>('cm');
   readonly message = signal<string>('');
-  readonly hoverCoords = signal<{ x: number; y: number } | null>(null);
+  readonly hoverCoords = signal<VectorPoint | null>(null);
 
-  // Canvas dimensions
-  readonly MAP_WIDTH = MAP_WIDTH;
-  readonly MAP_HEIGHT = MAP_HEIGHT;
-  readonly PREVIEW_SCALE = 16;
+  readonly lines = signal<VectorLine[]>([]);
+  readonly selectedLineId = signal<string | null>(null);
+  readonly lengthInputValue = signal<string>('');
 
-  // Computed canvas transform
+  readonly draftStart = signal<VectorPoint | null>(null);
+  readonly draftEnd = signal<VectorPoint | null>(null);
+  readonly guideLines = signal<GuideLine[]>([]);
+
+  readonly selectedLine = computed(() => {
+    const id = this.selectedLineId();
+    if (!id) return null;
+    return this.lines().find(line => line.id === id) ?? null;
+  });
+
   readonly canvasTransform = computed(() => {
     const z = this.zoom();
     const offset = this.panOffset();
     return `translate(${offset.x}px, ${offset.y}px) scale(${z})`;
   });
 
-  // Line tool state
-  readonly lineStartPoint = signal<{ x: number; y: number } | null>(null);
-  readonly lineEndPoint = signal<{ x: number; y: number } | null>(null);
-  readonly linePreviewVisible = computed(() =>
-    this.activeTool() === 'line' && this.lineStartPoint() !== null
-  );
+  readonly selectedEditorPosition = computed(() => {
+    const line = this.selectedLine();
+    if (!line) return null;
+
+    const midpoint = this.lineMidpoint(line);
+    const zoom = this.zoom();
+    const offset = this.panOffset();
+
+    return {
+      x: offset.x + midpoint.x * zoom,
+      y: offset.y + midpoint.y * zoom,
+    };
+  });
+
+  readonly draftLengthLabel = computed(() => {
+    const start = this.draftStart();
+    const end = this.draftEnd();
+    if (!start || !end) return null;
+
+    const length = lineLengthCm({
+      startX: start.x,
+      startY: start.y,
+      endX: end.x,
+      endY: end.y,
+    });
+
+    return formatDistance(length, this.measurementUnit());
+  });
+
+  readonly gridX = Array.from({ length: Math.floor(TABLE_WIDTH_CM / 5) + 1 }, (_, idx) => idx * 5);
+  readonly gridY = Array.from({ length: Math.floor(TABLE_HEIGHT_CM / 5) + 1 }, (_, idx) => idx * 5);
 
   private readonly mapService = inject(TableMapService);
   private readonly translate = inject(TranslateService);
   private readonly http = inject(HttpService);
 
-  private ctx!: CanvasRenderingContext2D;
-  private drawing = false;
-  private lastPoint: { x: number; y: number } | null = null;
+  private resizeObserver?: ResizeObserver;
   private isPanning = false;
   private panStartPos = { x: 0, y: 0 };
-  private resizeObserver!: ResizeObserver;
-  private overlayRenderFrame: number | null = null;
 
-  ngOnInit(): void {
-    // Nothing to do here yet
+  private readonly createLineThresholdCm = 0.4;
+  private readonly selectThresholdCm = 1.6;
+  private readonly endpointSnapThresholdCm = 1.4;
+  private readonly alignmentSnapThresholdCm = 1;
+  private readonly angleSnapThresholdRad = Math.PI / 36;
+
+  constructor() {
+    effect(() => {
+      const selected = this.selectedLine();
+      const unit = this.measurementUnit();
+      if (!selected) {
+        this.lengthInputValue.set('');
+        return;
+      }
+
+      const value = convertFromCm(lineLengthCm(selected), unit);
+      this.lengthInputValue.set(`${roundTo(value, 2)}`);
+    });
   }
 
   ngAfterViewInit(): void {
-    const canvas = this.canvasRef.nativeElement;
-    this.ctx = canvas.getContext('2d', { willReadFrequently: true })!;
-    this.clearCanvasWithoutMessage();
     this.centerCanvas();
 
     this.resizeObserver = new ResizeObserver(() => {
-      this.scheduleOverlayRender();
+      // Keep current pan/zoom; only ensure map remains visible after strong container changes.
+      const point = this.panOffset();
+      if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) {
+        this.centerCanvas();
+      }
     });
     this.resizeObserver.observe(this.containerRef.nativeElement);
-    this.scheduleOverlayRender();
 
-    // Load saved map from backend after canvas is ready
     this.loadSavedMap();
   }
 
   ngOnDestroy(): void {
     this.resizeObserver?.disconnect();
-    if (this.overlayRenderFrame !== null) {
-      cancelAnimationFrame(this.overlayRenderFrame);
-      this.overlayRenderFrame = null;
+  }
+
+  @HostListener('window:keydown', ['$event'])
+  onWindowKeyDown(event: KeyboardEvent): void {
+    if (event.key !== 'Delete' && event.key !== 'Backspace') return;
+    const activeElement = document.activeElement;
+    if (activeElement && ['INPUT', 'TEXTAREA', 'SELECT'].includes(activeElement.tagName)) return;
+
+    if (this.selectedLine()) {
+      event.preventDefault();
+      this.deleteSelectedLine();
     }
   }
 
-  // --- Zoom Controls ---
-
   setZoom(newZoom: number): void {
-    const clamped = this.resolveZoomRequest(newZoom);
+    const clamped = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, newZoom));
     this.zoom.set(clamped);
-    this.scheduleOverlayRender();
   }
 
   onWheel(event: WheelEvent): void {
     event.preventDefault();
-    const delta = event.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP;
-    const oldZoom = this.zoom();
-    const newZoom = this.resolveZoomRequest(oldZoom + delta);
 
+    const oldZoom = this.zoom();
+    const delta = event.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP;
+    const newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, oldZoom + delta));
     if (newZoom === oldZoom) return;
 
-    // Zoom toward mouse position
-    const container = this.containerRef.nativeElement;
-    const rect = container.getBoundingClientRect();
+    const rect = this.containerRef.nativeElement.getBoundingClientRect();
     const mouseX = event.clientX - rect.left;
     const mouseY = event.clientY - rect.top;
-
-    const offset = this.panOffset();
+    const pan = this.panOffset();
     const zoomRatio = newZoom / oldZoom;
 
-    const nextOffset = this.snapOffsetToDevicePixels({
-      x: mouseX - (mouseX - offset.x) * zoomRatio,
-      y: mouseY - (mouseY - offset.y) * zoomRatio,
+    this.panOffset.set({
+      x: mouseX - (mouseX - pan.x) * zoomRatio,
+      y: mouseY - (mouseY - pan.y) * zoomRatio,
     });
-
     this.zoom.set(newZoom);
-    this.panOffset.set(nextOffset);
-    this.scheduleOverlayRender();
   }
 
   fitToView(): void {
     const container = this.containerRef.nativeElement;
-    const containerWidth = container.clientWidth - 40; // padding
-    const containerHeight = container.clientHeight - 40;
+    const availableWidth = Math.max(40, container.clientWidth - 40);
+    const availableHeight = Math.max(40, container.clientHeight - 40);
 
-    const scaleX = containerWidth / MAP_WIDTH;
-    const scaleY = containerHeight / MAP_HEIGHT;
-    const newZoom = Math.min(scaleX, scaleY, MAX_ZOOM);
-
-    this.zoom.set(this.snapZoomToDevicePixels(newZoom, 'floor'));
+    const scaleX = availableWidth / TABLE_WIDTH_CM;
+    const scaleY = availableHeight / TABLE_HEIGHT_CM;
+    this.zoom.set(Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, Math.min(scaleX, scaleY))));
     this.centerCanvas();
-    this.scheduleOverlayRender();
-  }
-
-  /**
-   * Align zoom to steps that map one source pixel to an integer count of physical pixels.
-   * This prevents cumulative drift between pixel-art rendering and overlay grid lines.
-   */
-  private snapZoomToDevicePixels(zoom: number, mode: 'nearest' | 'floor' = 'nearest'): number {
-    const dpr = window.devicePixelRatio || 1;
-    const step = 1 / dpr;
-    const clamped = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoom));
-    const stepped = mode === 'floor'
-      ? Math.floor(clamped / step) * step
-      : Math.round(clamped / step) * step;
-    return Math.max(MIN_ZOOM, stepped);
-  }
-
-  /**
-   * Ensure interactive zoom changes always move at least one snapped step,
-   * otherwise +/- or wheel can appear "stuck" after snapping.
-   */
-  private resolveZoomRequest(requestedZoom: number): number {
-    const currentZoom = this.zoom();
-    let snapped = this.snapZoomToDevicePixels(requestedZoom, 'nearest');
-
-    if (snapped === currentZoom && requestedZoom !== currentZoom) {
-      const step = 1 / (window.devicePixelRatio || 1);
-      const direction = requestedZoom > currentZoom ? 1 : -1;
-      snapped = this.snapZoomToDevicePixels(currentZoom + direction * step, 'nearest');
-    }
-
-    return snapped;
   }
 
   private centerCanvas(): void {
-    const container = this.containerRef.nativeElement;
+    const container = this.containerRef?.nativeElement;
+    if (!container) return;
+
     const z = this.zoom();
-    const canvasDisplayWidth = MAP_WIDTH * z;
-    const canvasDisplayHeight = MAP_HEIGHT * z;
+    const width = TABLE_WIDTH_CM * z;
+    const height = TABLE_HEIGHT_CM * z;
 
-    this.panOffset.set(this.snapOffsetToDevicePixels({
-      x: (container.clientWidth - canvasDisplayWidth) / 2,
-      y: (container.clientHeight - canvasDisplayHeight) / 2,
-    }));
-  }
-
-  private scheduleOverlayRender(): void {
-    if (this.overlayRenderFrame !== null) return;
-    this.overlayRenderFrame = requestAnimationFrame(() => {
-      this.overlayRenderFrame = null;
-      this.renderGridOverlay();
-      this.renderPreview();
+    this.panOffset.set({
+      x: (container.clientWidth - width) / 2,
+      y: (container.clientHeight - height) / 2,
     });
   }
 
-  // --- Grid ---
-
   toggleGrid(): void {
-    this.showGrid.update(v => !v);
-    this.scheduleOverlayRender();
+    this.showGrid.update(value => !value);
   }
 
-  // --- Tool Handling ---
+  toggleSmartGuides(): void {
+    this.showSmartGuides.update(value => !value);
+  }
 
-  setTool(tool: DrawingTool): void {
+  setTool(tool: EditorTool): void {
     this.activeTool.set(tool);
-    this.lineStartPoint.set(null);
-    this.lineEndPoint.set(null);
-    this.renderPreview();
+    this.clearDraft();
   }
 
-  setColor(color: PaintColor): void {
-    this.selectedColor.set(color);
+  setLineKind(kind: LineKind): void {
+    this.lineKind.set(kind);
   }
 
-  // --- Pointer Events ---
+  setMeasurementUnit(unit: MeasurementUnit): void {
+    this.measurementUnit.set(unit);
+  }
 
   onPointerDown(event: PointerEvent): void {
-    // Middle click or space+click for panning
     if (event.button === 1) {
+      event.preventDefault();
       this.startPan(event);
       return;
     }
 
     if (event.button !== 0) return;
 
-    const coords = this.getMapCoords(event);
-    if (!coords) return;
+    const container = this.containerRef.nativeElement;
+    container.setPointerCapture(event.pointerId);
 
-    const tool = this.activeTool();
+    const point = this.getMapCoords(event);
+    if (!point) return;
 
-    if (tool === 'line') {
-      this.lineStartPoint.set(coords);
-      this.lineEndPoint.set(coords);
-    } else {
-      this.drawing = true;
-      this.lastPoint = coords;
-      this.paintPixel(coords.x, coords.y);
+    if (this.activeTool() === 'select') {
+      this.selectLineAt(point);
+      return;
     }
+
+    const start = this.snapStartPoint(point);
+    this.selectedLineId.set(null);
+    this.draftStart.set(start);
+    this.draftEnd.set(start);
+    this.guideLines.set([]);
   }
 
   onPointerMove(event: PointerEvent): void {
-    // Update hover coordinates
-    const coords = this.getMapCoords(event);
-    this.hoverCoords.set(coords);
+    const point = this.getMapCoords(event);
+    this.hoverCoords.set(point);
 
     if (this.isPanning) {
       this.updatePan(event);
       return;
     }
 
-    if (!coords) return;
+    const start = this.draftStart();
+    if (!start || !point) return;
 
-    const tool = this.activeTool();
-
-    if (tool === 'line' && this.lineStartPoint()) {
-      this.lineEndPoint.set(coords);
-      this.renderPreview();
-    } else if (this.drawing && this.lastPoint) {
-      // Draw line from last point to current for smooth strokes
-      const points = bresenhamLine(this.lastPoint.x, this.lastPoint.y, coords.x, coords.y);
-      for (const p of points) {
-        this.paintPixel(p.x, p.y);
-      }
-      this.lastPoint = coords;
-    }
+    const snapped = this.applySmartGuides(point, start);
+    this.draftEnd.set(snapped.point);
+    this.guideLines.set(snapped.guides);
   }
 
   onPointerUp(event: PointerEvent): void {
+    const container = this.containerRef?.nativeElement;
+    if (container?.hasPointerCapture(event.pointerId)) {
+      container.releasePointerCapture(event.pointerId);
+    }
+
     if (this.isPanning) {
       this.endPan();
       return;
     }
 
-    const tool = this.activeTool();
+    const start = this.draftStart();
+    const end = this.draftEnd();
+    if (!start || !end) return;
 
-    if (tool === 'line' && this.lineStartPoint()) {
-      const coords = this.getMapCoords(event);
-      if (coords) {
-        const start = this.lineStartPoint()!;
-        const points = bresenhamLine(start.x, start.y, coords.x, coords.y);
-        for (const p of points) {
-          this.paintPixel(p.x, p.y);
-        }
-      }
-      this.lineStartPoint.set(null);
-      this.lineEndPoint.set(null);
-      this.renderPreview();
-    } else {
-      this.drawing = false;
-      this.lastPoint = null;
+    const newLine: VectorLine = {
+      id: this.createLineId(),
+      startX: roundTo(start.x, 2),
+      startY: roundTo(start.y, 2),
+      endX: roundTo(end.x, 2),
+      endY: roundTo(end.y, 2),
+      kind: this.lineKind(),
+    };
+
+    if (lineLengthCm(newLine) >= this.createLineThresholdCm) {
+      this.lines.update(lines => [...lines, newLine]);
+      this.selectedLineId.set(newLine.id);
     }
+
+    this.clearDraft();
   }
 
   onPointerLeave(): void {
     this.hoverCoords.set(null);
-    if (!this.activeTool() || this.activeTool() !== 'line') {
-      this.drawing = false;
-      this.lastPoint = null;
-    }
     if (this.isPanning) {
       this.endPan();
     }
   }
-
-  // --- Panning ---
 
   private startPan(event: PointerEvent): void {
     this.isPanning = true;
@@ -335,189 +344,284 @@ export class TableEditorView implements OnInit, AfterViewInit, OnDestroy {
     const dy = event.clientY - this.panStartPos.y;
     this.panStartPos = { x: event.clientX, y: event.clientY };
 
-    this.panOffset.update(offset => this.snapOffsetToDevicePixels({
+    this.panOffset.update(offset => ({
       x: offset.x + dx,
       y: offset.y + dy,
     }));
-    this.scheduleOverlayRender();
   }
 
   private endPan(): void {
     this.isPanning = false;
   }
 
-  // --- Coordinate Transform ---
-
-  private getMapCoords(event: PointerEvent): { x: number; y: number } | null {
-    if (!this.canvasRef || !this.containerRef) return null;
-
-    const canvasRect = this.canvasRef.nativeElement.getBoundingClientRect();
-    if (canvasRect.width <= 0 || canvasRect.height <= 0) return null;
-    const localX = event.clientX - canvasRect.left;
-    const localY = event.clientY - canvasRect.top;
-
-    if (localX < 0 || localY < 0 || localX >= canvasRect.width || localY >= canvasRect.height) {
-      return null;
-    }
-
-    const dpr = window.devicePixelRatio || 1;
-    const mapWidthDev = Math.max(1, Math.round(canvasRect.width * dpr));
-    const mapHeightDev = Math.max(1, Math.round(canvasRect.height * dpr));
-    const xEdgesDev = this.buildRasterEdges(mapWidthDev, MAP_WIDTH);
-    const yEdgesDev = this.buildRasterEdges(mapHeightDev, MAP_HEIGHT);
-
-    const localDevX = Math.min(
-      mapWidthDev - 1,
-      Math.max(0, Math.floor((localX / canvasRect.width) * mapWidthDev))
-    );
-    const localDevY = Math.min(
-      mapHeightDev - 1,
-      Math.max(0, Math.floor((localY / canvasRect.height) * mapHeightDev))
-    );
-
-    const mapX = this.findCellIndex(localDevX, xEdgesDev);
-    const mapY = this.findCellIndex(localDevY, yEdgesDev);
-
-    if (mapX < 0 || mapX >= MAP_WIDTH || mapY < 0 || mapY >= MAP_HEIGHT) {
-      return null;
-    }
-
-    return { x: mapX, y: mapY };
+  private clearDraft(): void {
+    this.draftStart.set(null);
+    this.draftEnd.set(null);
+    this.guideLines.set([]);
   }
 
-  private buildRasterEdges(totalDev: number, cells: number): number[] {
-    const edges = new Array<number>(cells + 1);
-    for (let i = 0; i <= cells; i++) {
-      edges[i] = Math.round((i * totalDev) / cells);
-    }
-    return edges;
-  }
+  private getMapCoords(event: PointerEvent): VectorPoint | null {
+    if (!this.containerRef) return null;
 
-  private findCellIndex(valueDev: number, edges: number[]): number {
-    let lo = 0;
-    let hi = edges.length - 2;
+    const rect = this.containerRef.nativeElement.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return null;
 
-    while (lo <= hi) {
-      const mid = (lo + hi) >> 1;
-      if (valueDev < edges[mid]) {
-        hi = mid - 1;
-      } else if (valueDev >= edges[mid + 1]) {
-        lo = mid + 1;
-      } else {
-        return mid;
-      }
-    }
-
-    return Math.max(0, Math.min(edges.length - 2, lo));
-  }
-
-  // --- Drawing ---
-
-  private paintPixel(x: number, y: number): void {
-    const tool = this.activeTool();
-    const color = tool === 'eraser' ? 'white' : this.selectedColor();
-    this.ctx.fillStyle = colorToHex(color);
-    this.ctx.fillRect(x, y, 1, 1);
-  }
-
-  clearCanvas(): void {
-    this.clearCanvasWithoutMessage();
-    this.message.set(this.translate.instant('FLOWCHART.TABLE_MESSAGE_CLEARED'));
-  }
-
-  private clearCanvasWithoutMessage(): void {
-    this.ctx.fillStyle = '#ffffff';
-    this.ctx.fillRect(0, 0, MAP_WIDTH, MAP_HEIGHT);
-  }
-
-  // --- Line Preview ---
-
-  private renderPreview(): void {
-    if (!this.previewCanvasRef) return;
-    const previewCanvas = this.previewCanvasRef.nativeElement;
-    const ctx = previewCanvas.getContext('2d')!;
-    const scale = this.PREVIEW_SCALE;
-    const previewWidth = MAP_WIDTH * scale;
-    const previewHeight = MAP_HEIGHT * scale;
-
-    ctx.clearRect(0, 0, previewWidth, previewHeight);
-
-    if (!this.linePreviewVisible()) return;
-
-    const start = this.lineStartPoint();
-    const end = this.lineEndPoint();
-    if (!start || !end) return;
-
-    const color = this.selectedColor();
-
-    // Draw preview pixels
-    const points = bresenhamLine(start.x, start.y, end.x, end.y);
-    ctx.fillStyle = colorToHex(color);
-
-    for (const p of points) {
-      ctx.fillRect(p.x * scale, p.y * scale, scale, scale);
-    }
-
-    // Draw semi-transparent overlay
-    ctx.globalAlpha = 0.5;
-    for (const p of points) {
-      ctx.fillRect(p.x * scale, p.y * scale, scale, scale);
-    }
-    ctx.globalAlpha = 1;
-  }
-
-  private renderGridOverlay(): void {
-    if (!this.gridCanvasRef) return;
-
+    const pan = this.panOffset();
     const zoom = this.zoom();
-    const dpr = window.devicePixelRatio || 1;
-    const canvas = this.gridCanvasRef.nativeElement;
-    const widthDev = Math.max(1, Math.round(MAP_WIDTH * zoom * dpr));
-    const heightDev = Math.max(1, Math.round(MAP_HEIGHT * zoom * dpr));
 
-    if (canvas.width !== widthDev || canvas.height !== heightDev) {
-      canvas.width = widthDev;
-      canvas.height = heightDev;
+    const x = (event.clientX - rect.left - pan.x) / zoom;
+    const y = (event.clientY - rect.top - pan.y) / zoom;
+
+    if (x < 0 || y < 0 || x > TABLE_WIDTH_CM || y > TABLE_HEIGHT_CM) {
+      return null;
     }
 
-    const ctx = canvas.getContext('2d')!;
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.clearRect(0, 0, widthDev, heightDev);
-
-    if (!this.showGrid() || zoom <= 2) return;
-
-    const baseAlpha = 0.25;
-    const majorAlpha = 0.5;
-    const majorStep = 5;
-    const cellWidthDev = widthDev / MAP_WIDTH;
-    const cellHeightDev = heightDev / MAP_HEIGHT;
-
-    for (let x = 0; x <= MAP_WIDTH; x++) {
-      const xDev = Math.round(x * cellWidthDev);
-      ctx.fillStyle = `rgba(100, 116, 139, ${x % majorStep === 0 ? majorAlpha : baseAlpha})`;
-      ctx.fillRect(xDev, 0, 1, heightDev);
-    }
-
-    for (let y = 0; y <= MAP_HEIGHT; y++) {
-      const yDev = Math.round(y * cellHeightDev);
-      ctx.fillStyle = `rgba(100, 116, 139, ${y % majorStep === 0 ? majorAlpha : baseAlpha})`;
-      ctx.fillRect(0, yDev, widthDev, 1);
-    }
-  }
-
-  private snapOffsetToDevicePixels(offset: { x: number; y: number }): { x: number; y: number } {
     return {
-      x: this.snapToDevicePixel(offset.x),
-      y: this.snapToDevicePixel(offset.y),
+      x: roundTo(x, 2),
+      y: roundTo(y, 2),
     };
   }
 
-  private snapToDevicePixel(value: number): number {
-    const dpr = window.devicePixelRatio || 1;
-    return Math.round(value * dpr) / dpr;
+  private createLineId(): string {
+    if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+      return crypto.randomUUID();
+    }
+    return `line-${Date.now()}-${Math.round(Math.random() * 1_000_000)}`;
   }
 
-  // --- PNG Upload ---
+  private snapStartPoint(point: VectorPoint): VectorPoint {
+    const nearest = this.findNearestAnchor(point, this.endpointSnapThresholdCm);
+    return nearest ?? point;
+  }
+
+  private applySmartGuides(point: VectorPoint, start: VectorPoint): { point: VectorPoint; guides: GuideLine[] } {
+    if (!this.showSmartGuides()) {
+      return { point: clampToTable(point), guides: [] };
+    }
+
+    const guides: GuideLine[] = [];
+    const anchors = this.getAnchorPoints();
+    let snapped = { ...point };
+
+    const xCandidates = [start.x, ...anchors.map(anchor => anchor.x)];
+    const yCandidates = [start.y, ...anchors.map(anchor => anchor.y)];
+
+    const snapX = this.findClosestAxis(snapped.x, xCandidates, this.alignmentSnapThresholdCm);
+    if (snapX !== null) {
+      snapped.x = snapX;
+      guides.push({ x1: snapX, y1: 0, x2: snapX, y2: TABLE_HEIGHT_CM, kind: 'alignment' });
+    }
+
+    const snapY = this.findClosestAxis(snapped.y, yCandidates, this.alignmentSnapThresholdCm);
+    if (snapY !== null) {
+      snapped.y = snapY;
+      guides.push({ x1: 0, y1: snapY, x2: TABLE_WIDTH_CM, y2: snapY, kind: 'alignment' });
+    }
+
+    const dx = snapped.x - start.x;
+    const dy = snapped.y - start.y;
+    const length = Math.hypot(dx, dy);
+
+    if (length > 0.001) {
+      const angle = Math.atan2(dy, dx);
+      const step = Math.PI / 4;
+      const snappedAngle = Math.round(angle / step) * step;
+      const angleDelta = this.angleDelta(angle, snappedAngle);
+
+      if (angleDelta <= this.angleSnapThresholdRad) {
+        snapped = clampToTable({
+          x: start.x + Math.cos(snappedAngle) * length,
+          y: start.y + Math.sin(snappedAngle) * length,
+        });
+        guides.push({ x1: start.x, y1: start.y, x2: snapped.x, y2: snapped.y, kind: 'angle' });
+      }
+    }
+
+    const endpoint = this.findNearestAnchor(snapped, this.endpointSnapThresholdCm);
+    if (endpoint) {
+      snapped = endpoint;
+      guides.push({ x1: start.x, y1: start.y, x2: endpoint.x, y2: endpoint.y, kind: 'endpoint' });
+    }
+
+    return {
+      point: {
+        x: roundTo(snapped.x, 2),
+        y: roundTo(snapped.y, 2),
+      },
+      guides,
+    };
+  }
+
+  private angleDelta(a: number, b: number): number {
+    let delta = Math.abs(a - b);
+    while (delta > Math.PI) {
+      delta = Math.abs(delta - Math.PI * 2);
+    }
+    return delta;
+  }
+
+  private getAnchorPoints(): VectorPoint[] {
+    const anchors: VectorPoint[] = [];
+    for (const line of this.lines()) {
+      anchors.push({ x: line.startX, y: line.startY });
+      anchors.push({ x: line.endX, y: line.endY });
+      anchors.push(this.lineMidpoint(line));
+    }
+    return anchors;
+  }
+
+  private findNearestAnchor(point: VectorPoint, thresholdCm: number): VectorPoint | null {
+    let nearest: VectorPoint | null = null;
+    let nearestDistance = Number.POSITIVE_INFINITY;
+
+    for (const anchor of this.getAnchorPoints()) {
+      const distance = Math.hypot(anchor.x - point.x, anchor.y - point.y);
+      if (distance <= thresholdCm && distance < nearestDistance) {
+        nearest = anchor;
+        nearestDistance = distance;
+      }
+    }
+
+    return nearest;
+  }
+
+  private findClosestAxis(value: number, candidates: number[], thresholdCm: number): number | null {
+    let best: number | null = null;
+    let bestDist = Number.POSITIVE_INFINITY;
+
+    for (const candidate of candidates) {
+      const dist = Math.abs(candidate - value);
+      if (dist <= thresholdCm && dist < bestDist) {
+        best = candidate;
+        bestDist = dist;
+      }
+    }
+
+    return best;
+  }
+
+  private selectLineAt(point: VectorPoint): void {
+    let hitLine: VectorLine | null = null;
+    let bestDistance = Number.POSITIVE_INFINITY;
+
+    for (const line of this.lines()) {
+      const distance = pointToSegmentDistanceCm(point, line);
+      if (distance <= this.selectThresholdCm && distance < bestDistance) {
+        bestDistance = distance;
+        hitLine = line;
+      }
+    }
+
+    this.selectedLineId.set(hitLine?.id ?? null);
+  }
+
+  onLineLabelPointerDown(event: PointerEvent, lineId: string): void {
+    event.stopPropagation();
+    this.selectedLineId.set(lineId);
+    this.activeTool.set('select');
+    this.clearDraft();
+  }
+
+  deleteSelectedLine(): void {
+    const selected = this.selectedLine();
+    if (!selected) return;
+
+    this.lines.update(lines => lines.filter(line => line.id !== selected.id));
+    this.selectedLineId.set(null);
+  }
+
+  applySelectedLength(): void {
+    const selected = this.selectedLine();
+    if (!selected) return;
+
+    const raw = this.lengthInputValue().trim().replace(',', '.');
+    const numeric = Number.parseFloat(raw);
+
+    if (!Number.isFinite(numeric) || numeric <= 0) {
+      this.message.set(this.translate.instant('FLOWCHART.TABLE_MESSAGE_INVALID_LENGTH'));
+      return;
+    }
+
+    const targetCm = convertToCm(numeric, this.measurementUnit());
+    const dx = selected.endX - selected.startX;
+    const dy = selected.endY - selected.startY;
+    const currentLength = Math.hypot(dx, dy);
+
+    const dirX = currentLength > 0.0001 ? dx / currentLength : 1;
+    const dirY = currentLength > 0.0001 ? dy / currentLength : 0;
+
+    const newEnd = {
+      x: roundTo(selected.startX + dirX * targetCm, 2),
+      y: roundTo(selected.startY + dirY * targetCm, 2),
+    };
+
+    if (newEnd.x < 0 || newEnd.x > TABLE_WIDTH_CM || newEnd.y < 0 || newEnd.y > TABLE_HEIGHT_CM) {
+      this.message.set(this.translate.instant('FLOWCHART.TABLE_MESSAGE_LENGTH_OUT_OF_BOUNDS'));
+      return;
+    }
+
+    this.lines.update(lines => lines.map(line => {
+      if (line.id !== selected.id) return line;
+      return {
+        ...line,
+        endX: newEnd.x,
+        endY: newEnd.y,
+      };
+    }));
+
+    this.message.set(this.translate.instant('FLOWCHART.TABLE_MESSAGE_LENGTH_APPLIED'));
+  }
+
+  onLengthInputKeydown(event: KeyboardEvent): void {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    this.applySelectedLength();
+  }
+
+  lineMidpoint(line: VectorLine): VectorPoint {
+    return {
+      x: (line.startX + line.endX) / 2,
+      y: (line.startY + line.endY) / 2,
+    };
+  }
+
+  lineColor(line: VectorLine): string {
+    return line.kind === 'wall' ? '#7a879a' : '#111827';
+  }
+
+  lineStrokeWidth(line: VectorLine): number {
+    return line.kind === 'wall' ? 1.1 : 0.7;
+  }
+
+  guideColor(guide: GuideLine): string {
+    switch (guide.kind) {
+      case 'endpoint':
+        return '#22d3ee';
+      case 'angle':
+        return '#fb7185';
+      case 'axis':
+      case 'alignment':
+      default:
+        return '#38bdf8';
+    }
+  }
+
+  labelColor(line: VectorLine): string {
+    if (this.selectedLineId() === line.id) {
+      return '#0ea5e9';
+    }
+    return line.kind === 'wall' ? '#64748b' : '#0f172a';
+  }
+
+  lineLengthLabel(line: VectorLine): string {
+    return formatDistance(lineLengthCm(line), this.measurementUnit());
+  }
+
+  hoverCoordLabel(coords: VectorPoint): string {
+    const x = roundTo(convertFromCm(coords.x, this.measurementUnit()), 2);
+    const y = roundTo(convertFromCm(coords.y, this.measurementUnit()), 2);
+    return `X: ${x} ${this.measurementUnit()}, Y: ${y} ${this.measurementUnit()}`;
+  }
 
   async uploadPng(): Promise<void> {
     const input = document.createElement('input');
@@ -541,8 +645,9 @@ export class TableEditorView implements OnInit, AfterViewInit, OnDestroy {
           return;
         }
 
-        // Draw to canvas
-        this.ctx.drawImage(img, 0, 0);
+        const dataUrl = await this.imageToDataUrl(img);
+        const base64 = dataUrl.split(',')[1];
+        await this.importMapFromBase64(base64);
         this.message.set(this.translate.instant('FLOWCHART.TABLE_UPLOAD_SUCCESS'));
       } catch (err) {
         this.message.set(
@@ -556,30 +661,20 @@ export class TableEditorView implements OnInit, AfterViewInit, OnDestroy {
     input.click();
   }
 
-  private loadImage(file: File): Promise<HTMLImageElement> {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const img = new Image();
-        img.onload = () => resolve(img);
-        img.onerror = reject;
-        img.src = reader.result as string;
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
+  clearCanvas(): void {
+    this.lines.set([]);
+    this.selectedLineId.set(null);
+    this.clearDraft();
+    this.message.set(this.translate.instant('FLOWCHART.TABLE_MESSAGE_CLEARED'));
   }
 
-  // --- Load Map (apply + persist) ---
-
   async loadMap(): Promise<void> {
-    const canvas = this.canvasRef.nativeElement;
-    const dataUrl = canvas.toDataURL('image/png');
-    const base64 = dataUrl.split(',')[1];
+    const base64 = this.exportRasterBase64();
 
     try {
-      // Always load into map service first so the UI updates even if backend save fails.
-      await this.mapService.loadMapFromBase64(base64);
+      const lineSegments = this.toServiceLineSegments(this.lines().filter(line => line.kind === 'line'));
+      const wallSegments = this.toServiceWallSegments(this.lines().filter(line => line.kind === 'wall'));
+      this.mapService.setVectorMap(lineSegments, wallSegments);
       this.mapExported.emit(base64);
     } catch (err) {
       this.message.set(
@@ -597,6 +692,7 @@ export class TableEditorView implements OnInit, AfterViewInit, OnDestroy {
       } else {
         await this.http.saveTableMap(base64).toPromise();
       }
+
       this.message.set(
         this.translate.instant('FLOWCHART.TABLE_MESSAGE_SAVED', {
           width: MAP_WIDTH,
@@ -612,7 +708,112 @@ export class TableEditorView implements OnInit, AfterViewInit, OnDestroy {
     }
   }
 
-  // --- Load saved map from backend ---
+  private exportRasterBase64(): string {
+    const canvas = document.createElement('canvas');
+    canvas.width = MAP_WIDTH;
+    canvas.height = MAP_HEIGHT;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      throw new Error('Unable to create raster export context');
+    }
+
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, MAP_WIDTH, MAP_HEIGHT);
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    for (const line of this.lines()) {
+      ctx.strokeStyle = line.kind === 'wall' ? '#808080' : '#000000';
+      ctx.lineWidth = line.kind === 'wall' ? 2 : 1;
+      ctx.beginPath();
+      ctx.moveTo(line.startX / CM_PER_PIXEL_X, line.startY / CM_PER_PIXEL_Y);
+      ctx.lineTo(line.endX / CM_PER_PIXEL_X, line.endY / CM_PER_PIXEL_Y);
+      ctx.stroke();
+    }
+
+    return canvas.toDataURL('image/png').split(',')[1];
+  }
+
+  private toServiceLineSegments(lines: VectorLine[]): LineSegmentCm[] {
+    return lines.map(line => ({
+      startX: line.startX,
+      startY: TABLE_HEIGHT_CM - line.startY,
+      endX: line.endX,
+      endY: TABLE_HEIGHT_CM - line.endY,
+      isDiagonal: Math.abs(line.startX - line.endX) > 0.01 && Math.abs(line.startY - line.endY) > 0.01,
+    }));
+  }
+
+  private toServiceWallSegments(lines: VectorLine[]): WallSegmentCm[] {
+    return lines.map(line => ({
+      startX: line.startX,
+      startY: TABLE_HEIGHT_CM - line.startY,
+      endX: line.endX,
+      endY: TABLE_HEIGHT_CM - line.endY,
+      thickness: 2.54,
+    }));
+  }
+
+  private async loadImage(file: File): Promise<HTMLImageElement> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = reject;
+        img.src = reader.result as string;
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  private async imageToDataUrl(img: HTMLImageElement): Promise<string> {
+    const canvas = document.createElement('canvas');
+    canvas.width = img.width;
+    canvas.height = img.height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Unable to create image conversion context');
+
+    ctx.drawImage(img, 0, 0);
+    return canvas.toDataURL('image/png');
+  }
+
+  private async importMapFromBase64(base64: string): Promise<void> {
+    await this.mapService.loadMapFromBase64(base64);
+    this.rebuildLinesFromMapService();
+    this.selectedLineId.set(null);
+    this.clearDraft();
+  }
+
+  private rebuildLinesFromMapService(): void {
+    const vectorLines: VectorLine[] = [];
+
+    for (const segment of this.mapService.lineSegmentsCm()) {
+      vectorLines.push({
+        id: this.createLineId(),
+        kind: 'line',
+        startX: roundTo(segment.startX, 2),
+        startY: roundTo(TABLE_HEIGHT_CM - segment.startY, 2),
+        endX: roundTo(segment.endX, 2),
+        endY: roundTo(TABLE_HEIGHT_CM - segment.endY, 2),
+      });
+    }
+
+    for (const segment of this.mapService.wallSegmentsCm()) {
+      vectorLines.push({
+        id: this.createLineId(),
+        kind: 'wall',
+        startX: roundTo(segment.startX, 2),
+        startY: roundTo(TABLE_HEIGHT_CM - segment.startY, 2),
+        endX: roundTo(segment.endX, 2),
+        endY: roundTo(TABLE_HEIGHT_CM - segment.endY, 2),
+      });
+    }
+
+    this.lines.set(vectorLines);
+  }
 
   private loadSavedMap(): void {
     const projectUuid = this.projectUuid();
@@ -622,35 +823,30 @@ export class TableEditorView implements OnInit, AfterViewInit, OnDestroy {
         : this.http.getTableMap();
 
       request$.subscribe({
-        next: (response) => {
-          if (response.image) {
-            this.loadImageToCanvas(response.image);
-          }
+        next: response => {
+          if (!response.image) return;
+          void this.loadSavedImage(response.image);
         },
         error: () => {
-          // Silently ignore if no saved map exists
+          // Silently ignore when there is no stored map.
         },
       });
     } catch {
-      // No device base configured in remote mode; silently skip.
+      // Silently ignore in contexts without backend routing.
     }
   }
 
-  private loadImageToCanvas(base64: string): void {
-    const img = new Image();
-    img.onload = () => {
-      if (this.ctx && img.width === MAP_WIDTH && img.height === MAP_HEIGHT) {
-        this.ctx.drawImage(img, 0, 0);
-        // Also load into map service
-        this.mapService.loadMapFromBase64(base64);
-        this.message.set(
-          this.translate.instant('FLOWCHART.TABLE_MESSAGE_LOADED', {
-            width: MAP_WIDTH,
-            height: MAP_HEIGHT,
-          })
-        );
-      }
-    };
-    img.src = `data:image/png;base64,${base64}`;
+  private async loadSavedImage(base64: string): Promise<void> {
+    try {
+      await this.importMapFromBase64(base64);
+      this.message.set(
+        this.translate.instant('FLOWCHART.TABLE_MESSAGE_LOADED', {
+          width: MAP_WIDTH,
+          height: MAP_HEIGHT,
+        })
+      );
+    } catch {
+      // Ignore startup load failures.
+    }
   }
 }

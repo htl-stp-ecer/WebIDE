@@ -9,7 +9,6 @@
 }
 
 .tool-group,
-.color-group,
 .zoom-group,
 .action-group {
   display: flex;
@@ -17,11 +16,46 @@
   gap: 4px;
 }
 
+.field-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: rgba(226, 232, 240, 0.85);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+
+  span {
+    white-space: nowrap;
+  }
+
+  select {
+    height: 30px;
+    padding: 0 0.5rem;
+    border: 1px solid rgba(148, 163, 184, 0.25);
+    border-radius: 6px;
+    background: rgba(30, 41, 59, 0.65);
+    color: #e2e8f0;
+    font-size: 12px;
+    min-width: 86px;
+
+    &:focus {
+      outline: none;
+      border-color: rgba(56, 189, 248, 0.65);
+    }
+
+    option {
+      background: #1e293b;
+      color: #e2e8f0;
+    }
+  }
+}
+
 .toolbar-divider {
   width: 1px;
   height: 24px;
   background: rgba(148, 163, 184, 0.2);
-  margin: 0 0.25rem;
+  margin: 0 0.15rem;
 }
 
 .toolbar-spacer {
@@ -47,9 +81,9 @@
   }
 
   &.active {
-    background: rgba(34, 197, 94, 0.15);
-    border-color: rgba(34, 197, 94, 0.4);
-    color: #4ade80;
+    background: rgba(56, 189, 248, 0.18);
+    border-color: rgba(56, 189, 248, 0.45);
+    color: #7dd3fc;
   }
 
   &:disabled {
@@ -62,45 +96,8 @@
   }
 }
 
-.color-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border: 2px solid transparent;
-  border-radius: 6px;
-  background: transparent;
-  cursor: pointer;
-  transition: all 0.12s ease;
-
-  &:hover:not(:disabled) {
-    border-color: rgba(148, 163, 184, 0.4);
-  }
-
-  &.active {
-    border-color: #4ade80;
-  }
-
-  &.disabled,
-  &:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-  }
-}
-
-.color-swatch {
-  width: 18px;
-  height: 18px;
-  border-radius: 4px;
-  background: var(--swatch-color, #000);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
-}
-
 .zoom-select {
-  width: 70px;
+  width: 74px;
   height: 28px;
   padding: 0 0.5rem;
   border: 1px solid rgba(148, 163, 184, 0.25);
@@ -111,13 +108,9 @@
   font-family: 'SF Mono', 'Consolas', monospace;
   cursor: pointer;
 
-  &:hover {
-    border-color: rgba(148, 163, 184, 0.4);
-  }
-
   &:focus {
     outline: none;
-    border-color: rgba(34, 197, 94, 0.5);
+    border-color: rgba(56, 189, 248, 0.65);
   }
 
   option {
@@ -131,7 +124,7 @@
   align-items: center;
   justify-content: center;
   height: 32px;
-  padding: 0 1rem;
+  padding: 0 0.95rem;
   border: 1px solid rgba(148, 163, 184, 0.3);
   border-radius: 6px;
   background: rgba(30, 41, 59, 0.6);
@@ -147,18 +140,17 @@
   }
 
   &.primary {
-    background: rgba(34, 197, 94, 0.15);
-    border-color: rgba(34, 197, 94, 0.4);
-    color: #4ade80;
+    background: rgba(56, 189, 248, 0.17);
+    border-color: rgba(56, 189, 248, 0.45);
+    color: #7dd3fc;
 
     &:hover {
-      background: rgba(34, 197, 94, 0.25);
-      border-color: rgba(34, 197, 94, 0.6);
+      background: rgba(56, 189, 248, 0.26);
+      border-color: rgba(56, 189, 248, 0.65);
     }
   }
 }
 
-// Light mode
 :host-context(:not(.dark)) {
   .editor-toolbar {
     background: rgba(255, 255, 255, 0.95);
@@ -166,7 +158,22 @@
   }
 
   .toolbar-divider {
-    background: rgba(148, 163, 184, 0.3);
+    background: rgba(148, 163, 184, 0.28);
+  }
+
+  .field-group {
+    color: #475569;
+
+    select {
+      background: rgba(248, 250, 252, 0.9);
+      border-color: rgba(148, 163, 184, 0.35);
+      color: #1e293b;
+
+      option {
+        background: #f8fafc;
+        color: #1e293b;
+      }
+    }
   }
 
   .tool-btn {
@@ -178,19 +185,8 @@
     }
 
     &.active {
-      background: rgba(34, 197, 94, 0.1);
-      color: #16a34a;
+      color: #0369a1;
     }
-  }
-
-  .color-btn {
-    &.active {
-      border-color: #16a34a;
-    }
-  }
-
-  .color-swatch {
-    border-color: rgba(0, 0, 0, 0.15);
   }
 
   .zoom-select {
@@ -214,12 +210,7 @@
     }
 
     &.primary {
-      background: rgba(34, 197, 94, 0.1);
-      color: #16a34a;
-
-      &:hover {
-        background: rgba(34, 197, 94, 0.2);
-      }
+      color: #0369a1;
     }
   }
 }
