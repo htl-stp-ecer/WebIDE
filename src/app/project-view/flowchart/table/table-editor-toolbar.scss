@@ -4,8 +4,8 @@
   align-items: stretch;
   gap: 0.35rem;
   padding: 0.5rem 0.75rem;
-  background: rgba(15, 23, 42, 0.95);
-  border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+  background: rgba(255, 255, 255, 0.95);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.25);
   user-select: none;
 }
 
@@ -28,7 +28,7 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  color: rgba(226, 232, 240, 0.85);
+  color: #475569;
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -40,10 +40,10 @@
   select {
     height: 30px;
     padding: 0 0.5rem;
-    border: 1px solid rgba(148, 163, 184, 0.25);
+    border: 1px solid rgba(148, 163, 184, 0.35);
     border-radius: 6px;
-    background: rgba(30, 41, 59, 0.65);
-    color: #e2e8f0;
+    background: rgba(248, 250, 252, 0.9);
+    color: #1e293b;
     font-size: 12px;
     min-width: 86px;
 
@@ -53,8 +53,8 @@
     }
 
     option {
-      background: #1e293b;
-      color: #e2e8f0;
+      background: #f8fafc;
+      color: #1e293b;
     }
   }
 }
@@ -62,7 +62,7 @@
 .toolbar-divider {
   width: 1px;
   height: 24px;
-  background: rgba(148, 163, 184, 0.2);
+  background: rgba(148, 163, 184, 0.28);
   margin: 0 0.15rem;
 }
 
@@ -79,13 +79,13 @@
   border: 1px solid transparent;
   border-radius: 6px;
   background: transparent;
-  color: rgba(226, 232, 240, 0.8);
+  color: #475569;
   cursor: pointer;
   transition: all 0.12s ease;
 
   &:hover {
     background: rgba(148, 163, 184, 0.15);
-    color: #e2e8f0;
+    color: #1e293b;
   }
 
   &.active {
@@ -114,10 +114,10 @@
   width: 74px;
   height: 28px;
   padding: 0 0.5rem;
-  border: 1px solid rgba(148, 163, 184, 0.25);
+  border: 1px solid rgba(148, 163, 184, 0.35);
   border-radius: 6px;
-  background: rgba(30, 41, 59, 0.6);
-  color: #e2e8f0;
+  background: rgba(248, 250, 252, 0.9);
+  color: #1e293b;
   font-size: 12px;
   font-family: 'SF Mono', 'Consolas', monospace;
   cursor: pointer;
@@ -128,8 +128,8 @@
   }
 
   option {
-    background: #1e293b;
-    color: #e2e8f0;
+    background: #f8fafc;
+    color: #1e293b;
   }
 }
 
@@ -139,24 +139,23 @@
   justify-content: center;
   height: 32px;
   padding: 0 0.95rem;
-  border: 1px solid rgba(148, 163, 184, 0.3);
+  border: 1px solid rgba(148, 163, 184, 0.4);
   border-radius: 6px;
-  background: rgba(30, 41, 59, 0.6);
-  color: #e2e8f0;
+  background: rgba(248, 250, 252, 0.9);
+  color: #1e293b;
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.12s ease;
 
   &:hover {
-    background: rgba(51, 65, 85, 0.8);
-    border-color: rgba(148, 163, 184, 0.5);
+    background: #e2e8f0;
   }
 
   &.primary {
     background: rgba(56, 189, 248, 0.17);
     border-color: rgba(56, 189, 248, 0.45);
-    color: #7dd3fc;
+    color: #0369a1;
 
     &:hover {
       background: rgba(56, 189, 248, 0.26);
@@ -165,66 +164,68 @@
   }
 }
 
-:host-context(:not(.dark)) {
+:host-context(.dark),
+:host-context(.p-dark) {
   .editor-toolbar {
-    background: rgba(255, 255, 255, 0.95);
-    border-bottom-color: rgba(148, 163, 184, 0.25);
+    background: rgba(15, 23, 42, 0.95);
+    border-bottom-color: rgba(148, 163, 184, 0.15);
   }
 
   .toolbar-divider {
-    background: rgba(148, 163, 184, 0.28);
+    background: rgba(148, 163, 184, 0.2);
   }
 
   .field-group {
-    color: #475569;
+    color: rgba(226, 232, 240, 0.85);
 
     select {
-      background: rgba(248, 250, 252, 0.9);
-      border-color: rgba(148, 163, 184, 0.35);
-      color: #1e293b;
+      background: rgba(30, 41, 59, 0.65);
+      border-color: rgba(148, 163, 184, 0.25);
+      color: #e2e8f0;
 
       option {
-        background: #f8fafc;
-        color: #1e293b;
+        background: #1e293b;
+        color: #e2e8f0;
       }
     }
   }
 
   .tool-btn {
-    color: #475569;
+    color: rgba(226, 232, 240, 0.8);
 
     &:hover {
       background: rgba(148, 163, 184, 0.15);
-      color: #1e293b;
+      color: #e2e8f0;
     }
 
     &.active {
-      color: #0369a1;
+      color: #7dd3fc;
     }
   }
 
   .zoom-select {
-    background: rgba(248, 250, 252, 0.9);
-    border-color: rgba(148, 163, 184, 0.35);
-    color: #1e293b;
+    background: rgba(30, 41, 59, 0.6);
+    border-color: rgba(148, 163, 184, 0.25);
+    color: #e2e8f0;
 
     option {
-      background: #f8fafc;
-      color: #1e293b;
+      background: #1e293b;
+      color: #e2e8f0;
     }
   }
 
   .action-btn {
-    background: rgba(248, 250, 252, 0.9);
-    border-color: rgba(148, 163, 184, 0.4);
-    color: #1e293b;
+    background: rgba(30, 41, 59, 0.6);
+    border-color: rgba(148, 163, 184, 0.3);
+    color: #e2e8f0;
 
     &:hover {
-      background: #e2e8f0;
+      background: rgba(51, 65, 85, 0.8);
+      border-color: rgba(148, 163, 184, 0.5);
     }
 
     &.primary {
-      color: #0369a1;
+      color: #7dd3fc;
     }
   }
 }

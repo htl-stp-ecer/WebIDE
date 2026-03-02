@@ -9,7 +9,7 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: #0f172a;
+  background: #f1f5f9;
 }
 
 .canvas-wrapper {
@@ -17,9 +17,9 @@
   position: relative;
   overflow: hidden;
   background:
-    radial-gradient(circle at 15% 20%, rgba(56, 189, 248, 0.08) 0, transparent 35%),
-    radial-gradient(circle at 85% 80%, rgba(2, 132, 199, 0.07) 0, transparent 42%),
-    linear-gradient(to bottom, #0f172a, #172235);
+    radial-gradient(circle at 12% 15%, rgba(14, 165, 233, 0.1) 0, transparent 34%),
+    radial-gradient(circle at 88% 78%, rgba(56, 189, 248, 0.11) 0, transparent 40%),
+    linear-gradient(to bottom, #eef4ff, #dbeafe);
 
   &.draw-mode {
     cursor: crosshair;
@@ -36,8 +36,8 @@
   left: 0;
   transform-origin: 0 0;
   box-shadow:
-    0 0 0 1px rgba(148, 163, 184, 0.35),
-    0 12px 30px rgba(2, 6, 23, 0.4);
+    0 0 0 1px rgba(148, 163, 184, 0.45),
+    0 10px 26px rgba(15, 23, 42, 0.12);
 }
 
 .map-svg {
@@ -130,15 +130,15 @@
   padding: 0.45rem 0.55rem;
   border-radius: 8px;
   border: 1px solid rgba(14, 165, 233, 0.45);
-  background: rgba(15, 23, 42, 0.95);
-  color: #e2e8f0;
+  background: rgba(255, 255, 255, 0.95);
+  color: #0f172a;
   backdrop-filter: blur(6px);
   box-shadow: 0 10px 22px rgba(2, 6, 23, 0.4);
   z-index: 5;
 
   label {
     font-size: 11px;
-    color: rgba(226, 232, 240, 0.82);
+    color: rgba(51, 65, 85, 0.9);
   }
 }
 
@@ -152,8 +152,8 @@
     height: 28px;
     border: 1px solid rgba(148, 163, 184, 0.35);
     border-radius: 6px;
-    background: rgba(15, 23, 42, 0.6);
-    color: #e2e8f0;
+    background: rgba(248, 250, 252, 0.95);
+    color: #0f172a;
     padding: 0 0.5rem;
     font: 500 12px 'SF Mono', 'Consolas', monospace;
 
@@ -165,7 +165,7 @@
 
   span {
     font-size: 12px;
-    color: rgba(148, 163, 184, 0.9);
+    color: #475569;
     min-width: 30px;
   }
 
@@ -190,10 +190,10 @@
   align-items: center;
   gap: 0.75rem;
   padding: 0.5rem 1rem;
-  background: rgba(15, 23, 42, 0.95);
-  border-top: 1px solid rgba(148, 163, 184, 0.15);
+  background: rgba(255, 255, 255, 0.94);
+  border-top: 1px solid rgba(148, 163, 184, 0.25);
   font-size: 12px;
-  color: rgba(226, 232, 240, 0.74);
+  color: #475569;
   user-select: none;
 }
 
@@ -203,74 +203,75 @@
 }
 
 .coords-placeholder {
-  color: rgba(148, 163, 184, 0.4);
+  color: rgba(148, 163, 184, 0.55);
 }
 
 .divider {
-  color: rgba(148, 163, 184, 0.28);
+  color: rgba(148, 163, 184, 0.42);
 }
 
 .dimensions {
-  color: rgba(148, 163, 184, 0.66);
+  color: #64748b;
 }
 
 .message {
   color: #38bdf8;
 }
 
-:host-context(:not(.dark)) {
+:host-context(.dark),
+:host-context(.p-dark) {
   .editor-container {
-    background: #f1f5f9;
+    background: #0f172a;
   }
 
   .canvas-wrapper {
     background:
-      radial-gradient(circle at 12% 15%, rgba(14, 165, 233, 0.1) 0, transparent 34%),
-      radial-gradient(circle at 88% 78%, rgba(56, 189, 248, 0.11) 0, transparent 40%),
-      linear-gradient(to bottom, #eef4ff, #dbeafe);
+      radial-gradient(circle at 15% 20%, rgba(56, 189, 248, 0.08) 0, transparent 35%),
+      radial-gradient(circle at 85% 80%, rgba(2, 132, 199, 0.07) 0, transparent 42%),
+      linear-gradient(to bottom, #0f172a, #172235);
   }
 
   .map-stage {
     box-shadow:
-      0 0 0 1px rgba(148, 163, 184, 0.45),
-      0 10px 26px rgba(15, 23, 42, 0.12);
+      0 0 0 1px rgba(148, 163, 184, 0.35),
+      0 12px 30px rgba(2, 6, 23, 0.4);
   }
 
   .length-editor {
-    background: rgba(255, 255, 255, 0.95);
-    color: #0f172a;
+    background: rgba(15, 23, 42, 0.95);
+    color: #e2e8f0;
 
     label {
-      color: rgba(51, 65, 85, 0.9);
+      color: rgba(226, 232, 240, 0.82);
     }
 
     .length-editor-row {
       input {
-        background: rgba(248, 250, 252, 0.95);
-        color: #0f172a;
+        background: rgba(15, 23, 42, 0.6);
+        color: #e2e8f0;
       }
 
       span {
-        color: #475569;
+        color: rgba(148, 163, 184, 0.9);
       }
     }
   }
 
   .status-bar {
-    background: rgba(255, 255, 255, 0.94);
-    border-top-color: rgba(148, 163, 184, 0.25);
-    color: #475569;
+    background: rgba(15, 23, 42, 0.95);
+    border-top-color: rgba(148, 163, 184, 0.15);
+    color: rgba(226, 232, 240, 0.74);
   }
 
   .coords-placeholder {
-    color: rgba(148, 163, 184, 0.55);
+    color: rgba(148, 163, 184, 0.4);
   }
 
   .divider {
-    color: rgba(148, 163, 184, 0.42);
+    color: rgba(148, 163, 184, 0.28);
   }
 
   .dimensions {
-    color: #64748b;
+    color: rgba(148, 163, 184, 0.66);
   }
 }
