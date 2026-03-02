@@ -55,10 +55,17 @@ interface ParsedMapData {
   wallSegments: WallSegment[];
 }
 
+interface VectorMapCache {
+  hash: string;
+  lineSegments: LineSegmentCm[];
+  wallSegments: WallSegmentCm[];
+}
+
 // Color thresholds
 const BLACK_THRESHOLD = 50;   // Dark pixels are black lines
 const GRAY_MIN = 80;          // Gray pixels are walls
 const GRAY_MAX = 180;         // Gray range upper bound
+const VECTOR_MAP_CACHE_KEY = 'tableVectorMapCacheV1';
 
 /**
  * Service for loading and querying the game table map.
@@ -163,6 +170,12 @@ export class TableMapService {
 
   /** Load map from a base64 string */
   async loadMapFromBase64(base64: string): Promise<void> {
+    const cached = this.readVectorCache(base64);
+    if (cached) {
+      this.setVectorMap(cached.lineSegments, cached.wallSegments);
+      return;
+    }
+
     return this.loadMap(`data:image/png;base64,${base64}`);
   }
 
@@ -181,6 +194,20 @@ export class TableMapService {
       heightCm: 40 * CM_PER_PIXEL_Y,
       pixelsPerCm: 1 / CM_PER_PIXEL_AVG,
     });
+  }
+
+  cacheVectorMapForBase64(base64: string, lineSegments: LineSegmentCm[], wallSegments: WallSegmentCm[] = []): void {
+    const payload: VectorMapCache = {
+      hash: this.hashBase64(base64),
+      lineSegments: [...lineSegments],
+      wallSegments: [...wallSegments],
+    };
+
+    try {
+      localStorage.setItem(VECTOR_MAP_CACHE_KEY, JSON.stringify(payload));
+    } catch {
+      // Ignore storage quota/security errors.
+    }
   }
 
   /** Clear loaded map */
@@ -262,6 +289,34 @@ export class TableMapService {
     const px = segment.startX + t * vx;
     const py = segment.startY + t * vy;
     return Math.hypot(xCm - px, yCm - py);
+  }
+
+  private readVectorCache(base64: string): VectorMapCache | null {
+    try {
+      const raw = localStorage.getItem(VECTOR_MAP_CACHE_KEY);
+      if (!raw) return null;
+
+      const parsed = JSON.parse(raw) as Partial<VectorMapCache>;
+      if (!parsed || parsed.hash !== this.hashBase64(base64)) return null;
+      if (!Array.isArray(parsed.lineSegments) || !Array.isArray(parsed.wallSegments)) return null;
+
+      return {
+        hash: parsed.hash,
+        lineSegments: parsed.lineSegments,
+        wallSegments: parsed.wallSegments,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  private hashBase64(value: string): string {
+    let hash = 2166136261;
+    for (let i = 0; i < value.length; i++) {
+      hash ^= value.charCodeAt(i);
+      hash = Math.imul(hash, 16777619);
+    }
+    return (hash >>> 0).toString(16);
   }
 
   /** Convert table coordinates (cm) to canvas coordinates */

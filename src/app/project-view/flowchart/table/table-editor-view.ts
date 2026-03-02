@@ -675,6 +675,7 @@ export class TableEditorView implements AfterViewInit, OnDestroy {
       const lineSegments = this.toServiceLineSegments(this.lines().filter(line => line.kind === 'line'));
       const wallSegments = this.toServiceWallSegments(this.lines().filter(line => line.kind === 'wall'));
       this.mapService.setVectorMap(lineSegments, wallSegments);
+      this.mapService.cacheVectorMapForBase64(base64, lineSegments, wallSegments);
       this.mapExported.emit(base64);
     } catch (err) {
       this.message.set(
@@ -718,21 +719,85 @@ export class TableEditorView implements AfterViewInit, OnDestroy {
       throw new Error('Unable to create raster export context');
     }
 
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, MAP_WIDTH, MAP_HEIGHT);
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
+    const imageData = ctx.createImageData(MAP_WIDTH, MAP_HEIGHT);
+    const data = imageData.data;
 
-    for (const line of this.lines()) {
-      ctx.strokeStyle = line.kind === 'wall' ? '#808080' : '#000000';
-      ctx.lineWidth = line.kind === 'wall' ? 2 : 1;
-      ctx.beginPath();
-      ctx.moveTo(line.startX / CM_PER_PIXEL_X, line.startY / CM_PER_PIXEL_Y);
-      ctx.lineTo(line.endX / CM_PER_PIXEL_X, line.endY / CM_PER_PIXEL_Y);
-      ctx.stroke();
+    for (let i = 0; i < data.length; i += 4) {
+      data[i] = 255;
+      data[i + 1] = 255;
+      data[i + 2] = 255;
+      data[i + 3] = 255;
     }
 
+    for (const line of this.lines()) {
+      const x0 = Math.round(line.startX / CM_PER_PIXEL_X);
+      const y0 = Math.round(line.startY / CM_PER_PIXEL_Y);
+      const x1 = Math.round(line.endX / CM_PER_PIXEL_X);
+      const y1 = Math.round(line.endY / CM_PER_PIXEL_Y);
+      const color = line.kind === 'wall' ? 128 : 0;
+      const thickness = line.kind === 'wall' ? 2 : 1;
+
+      this.rasterizeLine(imageData, x0, y0, x1, y1, color, thickness);
+    }
+
+    ctx.putImageData(imageData, 0, 0);
+
     return canvas.toDataURL('image/png').split(',')[1];
+  }
+
+  private rasterizeLine(
+    imageData: ImageData,
+    x0: number,
+    y0: number,
+    x1: number,
+    y1: number,
+    grayValue: number,
+    thickness: number
+  ): void {
+    const dx = Math.abs(x1 - x0);
+    const dy = Math.abs(y1 - y0);
+    const sx = x0 < x1 ? 1 : -1;
+    const sy = y0 < y1 ? 1 : -1;
+    let err = dx - dy;
+
+    let x = x0;
+    let y = y0;
+    const radius = Math.max(0, Math.floor((thickness - 1) / 2));
+
+    while (true) {
+      this.setPixelWithRadius(imageData, x, y, grayValue, radius);
+      if (x === x1 && y === y1) break;
+
+      const e2 = err * 2;
+      if (e2 > -dy) {
+        err -= dy;
+        x += sx;
+      }
+      if (e2 < dx) {
+        err += dx;
+        y += sy;
+      }
+    }
+  }
+
+  private setPixelWithRadius(imageData: ImageData, x: number, y: number, grayValue: number, radius: number): void {
+    const width = imageData.width;
+    const height = imageData.height;
+    const data = imageData.data;
+
+    for (let oy = -radius; oy <= radius; oy++) {
+      for (let ox = -radius; ox <= radius; ox++) {
+        const px = x + ox;
+        const py = y + oy;
+        if (px < 0 || py < 0 || px >= width || py >= height) continue;
+
+        const idx = (py * width + px) * 4;
+        data[idx] = grayValue;
+        data[idx + 1] = grayValue;
+        data[idx + 2] = grayValue;
+        data[idx + 3] = 255;
+      }
+    }
   }
 
   private toServiceLineSegments(lines: VectorLine[]): LineSegmentCm[] {
