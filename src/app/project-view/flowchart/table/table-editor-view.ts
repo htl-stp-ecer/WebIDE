@@ -261,7 +261,7 @@ export class TableEditorView implements AfterViewInit, OnDestroy {
 
   setZoom(newZoom: number): void {
     const clamped = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, newZoom));
-    this.zoom.set(clamped);
+    this.zoom.set(Number(clamped.toFixed(4)));
   }
 
   onWheel(event: WheelEvent): void {
@@ -269,7 +269,7 @@ export class TableEditorView implements AfterViewInit, OnDestroy {
 
     const oldZoom = this.zoom();
     const delta = event.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP;
-    const newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, oldZoom + delta));
+    const newZoom = Number(Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, oldZoom + delta)).toFixed(4));
     if (newZoom === oldZoom) return;
 
     const rect = this.containerRef.nativeElement.getBoundingClientRect();

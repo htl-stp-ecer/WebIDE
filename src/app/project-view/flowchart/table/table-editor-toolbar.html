@@ -85,9 +85,10 @@
         <i class="pi pi-minus"></i>
       </button>
 
-      <select class="zoom-select" [value]="zoom()" (change)="onZoomSelect($event)">
-        @for (level of zoomLevels; track level) {
-          <option [value]="level">{{ level * 100 | number:'1.0-0' }}%</option>
+      <select class="zoom-select" [value]="currentZoomOptionKey" (change)="onZoomSelect($event)">
+        <option [value]="currentZoomOptionKey">{{ currentZoomLabel() }}</option>
+        @for (level of presetZoomOptions; track level.key) {
+          <option [value]="level.key">{{ level.value * 100 | number:'1.0-0' }}%</option>
         }
       </select>
 
