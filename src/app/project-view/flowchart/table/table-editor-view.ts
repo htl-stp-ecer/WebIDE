@@ -26,6 +26,9 @@ import {
   MAX_ZOOM,
   MeasurementUnit,
   MIN_ZOOM,
+  MIN_LINE_WIDTH_CM,
+  DEFAULT_LINE_WIDTH_CM,
+  DEFAULT_WALL_WIDTH_CM,
   TABLE_HEIGHT_CM,
   TABLE_WIDTH_CM,
   VectorLine,
@@ -88,6 +91,7 @@ export class TableEditorView implements AfterViewInit, OnDestroy {
   readonly lines = signal<VectorLine[]>([]);
   readonly selectedLineId = signal<string | null>(null);
   readonly lengthInputValue = signal<string>('');
+  readonly widthInputValue = signal<string>('');
 
   readonly draftStart = signal<VectorPoint | null>(null);
   readonly draftEnd = signal<VectorPoint | null>(null);
@@ -159,11 +163,14 @@ export class TableEditorView implements AfterViewInit, OnDestroy {
       const unit = this.measurementUnit();
       if (!selected) {
         this.lengthInputValue.set('');
+        this.widthInputValue.set('');
         return;
       }
 
       const value = convertFromCm(lineLengthCm(selected), unit);
       this.lengthInputValue.set(`${roundTo(value, 2)}`);
+      const width = convertFromCm(selected.widthCm, unit);
+      this.widthInputValue.set(`${roundTo(width, 2)}`);
     });
   }
 
@@ -350,6 +357,7 @@ export class TableEditorView implements AfterViewInit, OnDestroy {
       endX: roundTo(end.x, 2),
       endY: roundTo(end.y, 2),
       kind: this.lineKind(),
+      widthCm: this.defaultWidthForKind(this.lineKind()),
     };
 
     if (lineLengthCm(newLine) >= this.createLineThresholdCm) {
@@ -554,11 +562,6 @@ export class TableEditorView implements AfterViewInit, OnDestroy {
     }
 
     return best;
-  }
-
-  private selectLineAt(point: VectorPoint): void {
-    const hitLine = this.findHitLine(point);
-    this.selectedLineId.set(hitLine?.id ?? null);
   }
 
   private findHitLine(point: VectorPoint): VectorLine | null {
@@ -901,13 +904,47 @@ export class TableEditorView implements AfterViewInit, OnDestroy {
     this.message.set(this.translate.instant('FLOWCHART.TABLE_MESSAGE_LENGTH_APPLIED'));
   }
 
+  applySelectedWidth(): void {
+    const selected = this.selectedLine();
+    if (!selected) return;
+
+    const raw = this.widthInputValue().trim().replace(',', '.');
+    const numeric = Number.parseFloat(raw);
+    if (!Number.isFinite(numeric) || numeric <= 0) {
+      this.message.set(this.translate.instant('FLOWCHART.TABLE_MESSAGE_INVALID_WIDTH'));
+      return;
+    }
+
+    const targetCm = convertToCm(numeric, this.measurementUnit());
+    if (targetCm < MIN_LINE_WIDTH_CM) {
+      this.message.set(this.translate.instant('FLOWCHART.TABLE_MESSAGE_INVALID_WIDTH'));
+      return;
+    }
+
+    this.lines.update(lines => lines.map(line => {
+      if (line.id !== selected.id) return line;
+      return {
+        ...line,
+        widthCm: roundTo(targetCm, 2),
+      };
+    }));
+
+    this.message.set(this.translate.instant('FLOWCHART.TABLE_MESSAGE_WIDTH_APPLIED'));
+  }
+
   onLengthInputKeydown(event: KeyboardEvent): void {
     if (event.key !== 'Enter') return;
     event.preventDefault();
     this.applySelectedLength();
   }
 
-  lineMidpoint(line: VectorLine): VectorPoint {
+  onWidthInputKeydown(event: KeyboardEvent): void {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    this.applySelectedWidth();
+  }
+
+  lineMidpoint(line: Pick<VectorLine, 'startX' | 'startY' | 'endX' | 'endY'>): VectorPoint {
     return {
       x: (line.startX + line.endX) / 2,
       y: (line.startY + line.endY) / 2,
@@ -919,7 +956,11 @@ export class TableEditorView implements AfterViewInit, OnDestroy {
   }
 
   lineStrokeWidth(line: VectorLine): number {
-    return line.kind === 'wall' ? 1.1 : 0.7;
+    return Math.max(MIN_LINE_WIDTH_CM, line.widthCm);
+  }
+
+  draftLineStrokeWidth(): number {
+    return this.defaultWidthForKind(this.lineKind());
   }
 
   guideColor(guide: GuideLine): string {
@@ -944,6 +985,10 @@ export class TableEditorView implements AfterViewInit, OnDestroy {
 
   lineLengthLabel(line: VectorLine): string {
     return formatDistance(lineLengthCm(line), this.measurementUnit());
+  }
+
+  private defaultWidthForKind(kind: LineKind): number {
+    return kind === 'wall' ? DEFAULT_WALL_WIDTH_CM : DEFAULT_LINE_WIDTH_CM;
   }
 
   hoverCoordLabel(coords: VectorPoint): string {
@@ -1064,7 +1109,8 @@ export class TableEditorView implements AfterViewInit, OnDestroy {
       const x1 = Math.round(line.endX / CM_PER_PIXEL_X);
       const y1 = Math.round(line.endY / CM_PER_PIXEL_Y);
       const color = line.kind === 'wall' ? 128 : 0;
-      const thickness = line.kind === 'wall' ? 2 : 1;
+      const cmPerPixelAvg = (CM_PER_PIXEL_X + CM_PER_PIXEL_Y) * 0.5;
+      const thickness = Math.max(1, Math.round(line.widthCm / cmPerPixelAvg));
 
       this.rasterizeLine(imageData, x0, y0, x1, y1, color, thickness);
     }
@@ -1136,6 +1182,7 @@ export class TableEditorView implements AfterViewInit, OnDestroy {
       endX: line.endX,
       endY: TABLE_HEIGHT_CM - line.endY,
       isDiagonal: Math.abs(line.startX - line.endX) > 0.01 && Math.abs(line.startY - line.endY) > 0.01,
+      thickness: line.widthCm,
     }));
   }
 
@@ -1145,7 +1192,7 @@ export class TableEditorView implements AfterViewInit, OnDestroy {
       startY: TABLE_HEIGHT_CM - line.startY,
       endX: line.endX,
       endY: TABLE_HEIGHT_CM - line.endY,
-      thickness: 2.54,
+      thickness: line.widthCm,
     }));
   }
 
@@ -1192,6 +1239,7 @@ export class TableEditorView implements AfterViewInit, OnDestroy {
         startY: roundTo(TABLE_HEIGHT_CM - segment.startY, 2),
         endX: roundTo(segment.endX, 2),
         endY: roundTo(TABLE_HEIGHT_CM - segment.endY, 2),
+        widthCm: roundTo(segment.thickness ?? DEFAULT_LINE_WIDTH_CM, 2),
       });
     }
 
@@ -1203,6 +1251,7 @@ export class TableEditorView implements AfterViewInit, OnDestroy {
         startY: roundTo(TABLE_HEIGHT_CM - segment.startY, 2),
         endX: roundTo(segment.endX, 2),
         endY: roundTo(TABLE_HEIGHT_CM - segment.endY, 2),
+        widthCm: roundTo(segment.thickness ?? DEFAULT_WALL_WIDTH_CM, 2),
       });
     }
 

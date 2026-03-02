@@ -1,4 +1,4 @@
-<div class="editor-container" xmlns:svg="http://www.w3.org/1999/XSL/Transform">
+<div class="editor-container">
   <app-table-editor-toolbar
     [zoom]="zoom()"
     [showGrid]="showGrid()"
@@ -102,7 +102,7 @@
               [attr.x2]="draftEnd()!.x"
               [attr.y2]="draftEnd()!.y"
               [attr.stroke]="lineKind() === 'wall' ? '#94a3b8' : '#0f172a'"
-              [attr.stroke-width]="lineKind() === 'wall' ? 1.1 : 0.7"></line>
+              [attr.stroke-width]="draftLineStrokeWidth()"></line>
           }
 
           @if (activeTool() === 'select' && selectedLine(); as selected) {
@@ -137,8 +137,6 @@
 
           @if (draftStart() && draftEnd() && draftLengthLabel(); as label) {
             @let draftMid = lineMidpoint({
-              id: '__draft__',
-              kind: lineKind(),
               startX: draftStart()!.x,
               startY: draftStart()!.y,
               endX: draftEnd()!.x,
@@ -172,6 +170,19 @@
             (keydown)="onLengthInputKeydown($event)" />
           <span>{{ measurementUnit() }}</span>
           <button type="button" (click)="applySelectedLength()">
+            {{ 'COMMON.SAVE' | translate }}
+          </button>
+        </div>
+        <label>{{ 'FLOWCHART.TABLE_SELECTED_WIDTH' | translate }}</label>
+        <div class="length-editor-row">
+          <input
+            type="number"
+            step="0.01"
+            [value]="widthInputValue()"
+            (input)="widthInputValue.set($any($event.target).value)"
+            (keydown)="onWidthInputKeydown($event)" />
+          <span>{{ measurementUnit() }}</span>
+          <button type="button" (click)="applySelectedWidth()">
             {{ 'COMMON.SAVE' | translate }}
           </button>
         </div>

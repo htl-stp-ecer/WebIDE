@@ -18,6 +18,7 @@ export interface LineSegmentCm {
   endX: number;
   endY: number;
   isDiagonal: boolean;
+  thickness?: number;
 }
 
 /** Wall segment in table coordinates (cm) */
@@ -107,6 +108,7 @@ export class TableMapService {
     return data.lineSegments.map(seg => ({
       ...this.pixelSegmentToTableCm(seg, data.height),
       isDiagonal: seg.isDiagonal,
+      thickness: CM_PER_PIXEL_AVG,
     }));
   });
 
@@ -232,8 +234,9 @@ export class TableMapService {
   isOnBlackLine(xCm: number, yCm: number): boolean {
     const vectorSegments = this._vectorLineSegmentsCm();
     if (vectorSegments?.length) {
-      const thresholdCm = Math.max(1, Math.min(CM_PER_PIXEL_X, CM_PER_PIXEL_Y) * 0.7);
       for (const segment of vectorSegments) {
+        const segmentThickness = Math.max(0.6, segment.thickness ?? Math.min(CM_PER_PIXEL_X, CM_PER_PIXEL_Y));
+        const thresholdCm = Math.max(0.75, segmentThickness * 0.5);
         if (this.pointToLineDistanceCm(xCm, yCm, segment) <= thresholdCm) {
           return true;
         }

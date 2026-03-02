@@ -14,6 +14,7 @@ export interface VectorLine {
   endX: number;
   endY: number;
   kind: LineKind;
+  widthCm: number;
 }
 
 export interface GuideLine {
@@ -35,6 +36,9 @@ export const CM_PER_PIXEL_X = TABLE_WIDTH_CM / MAP_WIDTH;
 export const CM_PER_PIXEL_Y = TABLE_HEIGHT_CM / MAP_HEIGHT;
 
 export const CM_PER_INCH = 2.54;
+export const DEFAULT_LINE_WIDTH_CM = 1;
+export const DEFAULT_WALL_WIDTH_CM = 2.54;
+export const MIN_LINE_WIDTH_CM = 0.2;
 
 export const MIN_ZOOM = 0.5;
 export const MAX_ZOOM = 24;

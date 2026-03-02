@@ -246,9 +246,10 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
     this.ctx.strokeStyle = '#000000';
     this.ctx.lineCap = 'round';
     this.ctx.lineJoin = 'round';
-    this.ctx.lineWidth = Math.max(1, LINE_THICKNESS_CM * Math.min(scaleX, scaleY));
 
     for (const seg of lineSegments) {
+      const segmentThickness = seg.thickness ?? LINE_THICKNESS_CM;
+      this.ctx.lineWidth = Math.max(1, segmentThickness * Math.min(scaleX, scaleY));
       const startCanvas = this.tableToCanvasWithParams(
         seg.startX, seg.startY, offsetX, offsetY, scaleX, scaleY, drawHeight
       );
@@ -264,9 +265,10 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
 
     // Draw wall segments
     this.ctx.strokeStyle = WALL_COLOR;
-    this.ctx.lineWidth = Math.max(2, WALL_THICKNESS_CM * Math.min(scaleX, scaleY));
 
     for (const wall of wallSegments) {
+      const wallThickness = wall.thickness || WALL_THICKNESS_CM;
+      this.ctx.lineWidth = Math.max(2, wallThickness * Math.min(scaleX, scaleY));
       const startCanvas = this.tableToCanvasWithParams(
         wall.startX, wall.startY, offsetX, offsetY, scaleX, scaleY, drawHeight
       );
