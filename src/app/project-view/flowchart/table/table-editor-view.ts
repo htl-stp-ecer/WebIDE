@@ -42,6 +42,23 @@ import {
   CM_PER_PIXEL_Y,
 } from './models/editor-state';
 
+type EndpointHandle = 'start' | 'end';
+
+type SelectDragState =
+  | {
+      mode: 'line';
+      lineId: string;
+      startPointer: VectorPoint;
+      originStart: VectorPoint;
+      originEnd: VectorPoint;
+    }
+  | {
+      mode: 'endpoint';
+      lineId: string;
+      endpoint: EndpointHandle;
+      anchor: VectorPoint;
+    };
+
 @Component({
   selector: 'app-table-editor-view',
   standalone: true,
@@ -127,9 +144,11 @@ export class TableEditorView implements AfterViewInit, OnDestroy {
   private resizeObserver?: ResizeObserver;
   private isPanning = false;
   private panStartPos = { x: 0, y: 0 };
+  private selectDragState: SelectDragState | null = null;
 
   private readonly createLineThresholdCm = 0.4;
   private readonly selectThresholdCm = 1.6;
+  private readonly endpointHandleHitThresholdCm = 1.8;
   private readonly endpointSnapThresholdCm = 1.4;
   private readonly alignmentSnapThresholdCm = 1;
   private readonly angleSnapThresholdRad = Math.PI / 36;
@@ -240,6 +259,8 @@ export class TableEditorView implements AfterViewInit, OnDestroy {
 
   setTool(tool: EditorTool): void {
     this.activeTool.set(tool);
+    this.selectDragState = null;
+    this.guideLines.set([]);
     this.clearDraft();
   }
 
@@ -267,7 +288,7 @@ export class TableEditorView implements AfterViewInit, OnDestroy {
     if (!point) return;
 
     if (this.activeTool() === 'select') {
-      this.selectLineAt(point);
+      this.startSelectionInteraction(point);
       return;
     }
 
@@ -279,18 +300,24 @@ export class TableEditorView implements AfterViewInit, OnDestroy {
   }
 
   onPointerMove(event: PointerEvent): void {
-    const point = this.getMapCoords(event);
-    this.hoverCoords.set(point);
+    const hoverPoint = this.getMapCoords(event);
+    this.hoverCoords.set(hoverPoint);
 
     if (this.isPanning) {
       this.updatePan(event);
       return;
     }
 
-    const start = this.draftStart();
-    if (!start || !point) return;
+    if (this.selectDragState) {
+      const point = this.getMapCoordsClamped(event);
+      this.updateSelectDrag(point);
+      return;
+    }
 
-    const snapped = this.applySmartGuides(point, start);
+    const start = this.draftStart();
+    if (!start || !hoverPoint) return;
+
+    const snapped = this.applySmartGuides(hoverPoint, start);
     this.draftEnd.set(snapped.point);
     this.guideLines.set(snapped.guides);
   }
@@ -303,6 +330,12 @@ export class TableEditorView implements AfterViewInit, OnDestroy {
 
     if (this.isPanning) {
       this.endPan();
+      return;
+    }
+
+    if (this.selectDragState) {
+      this.selectDragState = null;
+      this.guideLines.set([]);
       return;
     }
 
@@ -331,6 +364,10 @@ export class TableEditorView implements AfterViewInit, OnDestroy {
     this.hoverCoords.set(null);
     if (this.isPanning) {
       this.endPan();
+    }
+    if (this.selectDragState) {
+      this.selectDragState = null;
+      this.guideLines.set([]);
     }
   }
 
@@ -382,6 +419,20 @@ export class TableEditorView implements AfterViewInit, OnDestroy {
     };
   }
 
+  private getMapCoordsClamped(event: PointerEvent): VectorPoint {
+    const rect = this.containerRef.nativeElement.getBoundingClientRect();
+    const pan = this.panOffset();
+    const zoom = this.zoom();
+
+    const x = (event.clientX - rect.left - pan.x) / zoom;
+    const y = (event.clientY - rect.top - pan.y) / zoom;
+
+    return {
+      x: roundTo(Math.max(0, Math.min(TABLE_WIDTH_CM, x)), 2),
+      y: roundTo(Math.max(0, Math.min(TABLE_HEIGHT_CM, y)), 2),
+    };
+  }
+
   private createLineId(): string {
     if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
       return crypto.randomUUID();
@@ -394,13 +445,17 @@ export class TableEditorView implements AfterViewInit, OnDestroy {
     return nearest ?? point;
   }
 
-  private applySmartGuides(point: VectorPoint, start: VectorPoint): { point: VectorPoint; guides: GuideLine[] } {
+  private applySmartGuides(
+    point: VectorPoint,
+    start: VectorPoint,
+    excludeLineId?: string
+  ): { point: VectorPoint; guides: GuideLine[] } {
     if (!this.showSmartGuides()) {
       return { point: clampToTable(point), guides: [] };
     }
 
     const guides: GuideLine[] = [];
-    const anchors = this.getAnchorPoints();
+    const anchors = this.getAnchorPoints(excludeLineId);
     let snapped = { ...point };
 
     const xCandidates = [start.x, ...anchors.map(anchor => anchor.x)];
@@ -437,7 +492,7 @@ export class TableEditorView implements AfterViewInit, OnDestroy {
       }
     }
 
-    const endpoint = this.findNearestAnchor(snapped, this.endpointSnapThresholdCm);
+    const endpoint = this.findNearestAnchor(snapped, this.endpointSnapThresholdCm, excludeLineId);
     if (endpoint) {
       snapped = endpoint;
       guides.push({ x1: start.x, y1: start.y, x2: endpoint.x, y2: endpoint.y, kind: 'endpoint' });
@@ -460,9 +515,10 @@ export class TableEditorView implements AfterViewInit, OnDestroy {
     return delta;
   }
 
-  private getAnchorPoints(): VectorPoint[] {
+  private getAnchorPoints(excludeLineId?: string): VectorPoint[] {
     const anchors: VectorPoint[] = [];
     for (const line of this.lines()) {
+      if (excludeLineId && line.id === excludeLineId) continue;
       anchors.push({ x: line.startX, y: line.startY });
       anchors.push({ x: line.endX, y: line.endY });
       anchors.push(this.lineMidpoint(line));
@@ -470,11 +526,11 @@ export class TableEditorView implements AfterViewInit, OnDestroy {
     return anchors;
   }
 
-  private findNearestAnchor(point: VectorPoint, thresholdCm: number): VectorPoint | null {
+  private findNearestAnchor(point: VectorPoint, thresholdCm: number, excludeLineId?: string): VectorPoint | null {
     let nearest: VectorPoint | null = null;
     let nearestDistance = Number.POSITIVE_INFINITY;
 
-    for (const anchor of this.getAnchorPoints()) {
+    for (const anchor of this.getAnchorPoints(excludeLineId)) {
       const distance = Math.hypot(anchor.x - point.x, anchor.y - point.y);
       if (distance <= thresholdCm && distance < nearestDistance) {
         nearest = anchor;
@@ -501,6 +557,11 @@ export class TableEditorView implements AfterViewInit, OnDestroy {
   }
 
   private selectLineAt(point: VectorPoint): void {
+    const hitLine = this.findHitLine(point);
+    this.selectedLineId.set(hitLine?.id ?? null);
+  }
+
+  private findHitLine(point: VectorPoint): VectorLine | null {
     let hitLine: VectorLine | null = null;
     let bestDistance = Number.POSITIVE_INFINITY;
 
@@ -512,7 +573,275 @@ export class TableEditorView implements AfterViewInit, OnDestroy {
       }
     }
 
-    this.selectedLineId.set(hitLine?.id ?? null);
+    return hitLine;
+  }
+
+  private startSelectionInteraction(point: VectorPoint): void {
+    this.clearDraft();
+    const selected = this.selectedLine();
+    if (selected) {
+      const endpoint = this.hitEndpointHandle(point, selected);
+      if (endpoint) {
+        const anchor = endpoint === 'start'
+          ? { x: selected.endX, y: selected.endY }
+          : { x: selected.startX, y: selected.startY };
+        this.selectDragState = {
+          mode: 'endpoint',
+          lineId: selected.id,
+          endpoint,
+          anchor,
+        };
+        return;
+      }
+    }
+
+    const hitLine = this.findHitLine(point);
+    if (!hitLine) {
+      this.selectedLineId.set(null);
+      this.selectDragState = null;
+      this.guideLines.set([]);
+      return;
+    }
+
+    this.selectedLineId.set(hitLine.id);
+    this.selectDragState = {
+      mode: 'line',
+      lineId: hitLine.id,
+      startPointer: point,
+      originStart: { x: hitLine.startX, y: hitLine.startY },
+      originEnd: { x: hitLine.endX, y: hitLine.endY },
+    };
+  }
+
+  onLinePointerDown(event: PointerEvent, lineId: string): void {
+    if (this.activeTool() !== 'select' || event.button !== 0) return;
+    event.stopPropagation();
+    this.clearDraft();
+
+    const point = this.getMapCoords(event) ?? this.getMapCoordsClamped(event);
+    const line = this.lines().find(item => item.id === lineId);
+    if (!line) return;
+
+    this.containerRef.nativeElement.setPointerCapture(event.pointerId);
+    this.selectedLineId.set(lineId);
+    this.selectDragState = {
+      mode: 'line',
+      lineId,
+      startPointer: point,
+      originStart: { x: line.startX, y: line.startY },
+      originEnd: { x: line.endX, y: line.endY },
+    };
+  }
+
+  onEndpointHandlePointerDown(event: PointerEvent, lineId: string, endpoint: EndpointHandle): void {
+    if (this.activeTool() !== 'select' || event.button !== 0) return;
+    event.stopPropagation();
+    this.clearDraft();
+
+    const line = this.lines().find(item => item.id === lineId);
+    if (!line) return;
+
+    this.containerRef.nativeElement.setPointerCapture(event.pointerId);
+    this.selectedLineId.set(lineId);
+    this.selectDragState = {
+      mode: 'endpoint',
+      lineId,
+      endpoint,
+      anchor: endpoint === 'start'
+        ? { x: line.endX, y: line.endY }
+        : { x: line.startX, y: line.startY },
+    };
+  }
+
+  private hitEndpointHandle(point: VectorPoint, line: VectorLine): EndpointHandle | null {
+    const startDistance = Math.hypot(point.x - line.startX, point.y - line.startY);
+    const endDistance = Math.hypot(point.x - line.endX, point.y - line.endY);
+
+    if (startDistance <= this.endpointHandleHitThresholdCm || endDistance <= this.endpointHandleHitThresholdCm) {
+      return startDistance <= endDistance ? 'start' : 'end';
+    }
+
+    return null;
+  }
+
+  private updateSelectDrag(point: VectorPoint): void {
+    const drag = this.selectDragState;
+    if (!drag) return;
+
+    if (drag.mode === 'line') {
+      const dx = point.x - drag.startPointer.x;
+      const dy = point.y - drag.startPointer.y;
+      const guided = this.applyLineMoveSmartGuides(drag.lineId, drag.originStart, drag.originEnd, dx, dy);
+      const clamped = this.clampLineDelta(drag.originStart, drag.originEnd, guided.dx, guided.dy);
+      const wasClamped = Math.abs(clamped.dx - guided.dx) > 0.001 || Math.abs(clamped.dy - guided.dy) > 0.001;
+
+      this.lines.update(lines => lines.map(line => {
+        if (line.id !== drag.lineId) return line;
+        return {
+          ...line,
+          startX: roundTo(drag.originStart.x + clamped.dx, 2),
+          startY: roundTo(drag.originStart.y + clamped.dy, 2),
+          endX: roundTo(drag.originEnd.x + clamped.dx, 2),
+          endY: roundTo(drag.originEnd.y + clamped.dy, 2),
+        };
+      }));
+
+      this.guideLines.set(wasClamped ? [] : guided.guides);
+      return;
+    }
+
+    const snapped = this.applySmartGuides(point, drag.anchor, drag.lineId);
+    this.lines.update(lines => lines.map(line => {
+      if (line.id !== drag.lineId) return line;
+      if (drag.endpoint === 'start') {
+        return {
+          ...line,
+          startX: roundTo(snapped.point.x, 2),
+          startY: roundTo(snapped.point.y, 2),
+        };
+      }
+      return {
+        ...line,
+        endX: roundTo(snapped.point.x, 2),
+        endY: roundTo(snapped.point.y, 2),
+      };
+    }));
+    this.guideLines.set(snapped.guides);
+  }
+
+  private applyLineMoveSmartGuides(
+    lineId: string,
+    originStart: VectorPoint,
+    originEnd: VectorPoint,
+    dx: number,
+    dy: number
+  ): { dx: number; dy: number; guides: GuideLine[] } {
+    if (!this.showSmartGuides()) {
+      return { dx, dy, guides: [] };
+    }
+
+    const anchors = this.getAnchorPoints(lineId);
+    if (!anchors.length) {
+      return { dx, dy, guides: [] };
+    }
+
+    let snapDx = dx;
+    let snapDy = dy;
+    const guides: GuideLine[] = [];
+
+    const refsForAnchor = this.buildMovedLineReferencePoints(originStart, originEnd, snapDx, snapDy);
+    let bestAnchorSnap: { offsetX: number; offsetY: number; distance: number; anchor: VectorPoint } | null = null;
+
+    for (const ref of refsForAnchor) {
+      for (const anchor of anchors) {
+        const offsetX = anchor.x - ref.x;
+        const offsetY = anchor.y - ref.y;
+        const distance = Math.hypot(offsetX, offsetY);
+        if (distance > this.endpointSnapThresholdCm) continue;
+        if (!bestAnchorSnap || distance < bestAnchorSnap.distance) {
+          bestAnchorSnap = { offsetX, offsetY, distance, anchor };
+        }
+      }
+    }
+
+    if (bestAnchorSnap) {
+      snapDx += bestAnchorSnap.offsetX;
+      snapDy += bestAnchorSnap.offsetY;
+      guides.push({
+        x1: bestAnchorSnap.anchor.x,
+        y1: 0,
+        x2: bestAnchorSnap.anchor.x,
+        y2: TABLE_HEIGHT_CM,
+        kind: 'endpoint',
+      });
+      guides.push({
+        x1: 0,
+        y1: bestAnchorSnap.anchor.y,
+        x2: TABLE_WIDTH_CM,
+        y2: bestAnchorSnap.anchor.y,
+        kind: 'endpoint',
+      });
+    }
+
+    const refs = this.buildMovedLineReferencePoints(originStart, originEnd, snapDx, snapDy);
+    const xCandidates = anchors.map(anchor => anchor.x);
+    const yCandidates = anchors.map(anchor => anchor.y);
+
+    let bestX: { offset: number; targetX: number } | null = null;
+    for (const ref of refs) {
+      for (const targetX of xCandidates) {
+        const offset = targetX - ref.x;
+        const dist = Math.abs(offset);
+        if (dist > this.alignmentSnapThresholdCm) continue;
+        if (!bestX || dist < Math.abs(bestX.offset)) {
+          bestX = { offset, targetX };
+        }
+      }
+    }
+    if (bestX) {
+      snapDx += bestX.offset;
+      guides.push({
+        x1: bestX.targetX,
+        y1: 0,
+        x2: bestX.targetX,
+        y2: TABLE_HEIGHT_CM,
+        kind: 'alignment',
+      });
+    }
+
+    const refsAfterX = this.buildMovedLineReferencePoints(originStart, originEnd, snapDx, snapDy);
+    let bestY: { offset: number; targetY: number } | null = null;
+    for (const ref of refsAfterX) {
+      for (const targetY of yCandidates) {
+        const offset = targetY - ref.y;
+        const dist = Math.abs(offset);
+        if (dist > this.alignmentSnapThresholdCm) continue;
+        if (!bestY || dist < Math.abs(bestY.offset)) {
+          bestY = { offset, targetY };
+        }
+      }
+    }
+    if (bestY) {
+      snapDy += bestY.offset;
+      guides.push({
+        x1: 0,
+        y1: bestY.targetY,
+        x2: TABLE_WIDTH_CM,
+        y2: bestY.targetY,
+        kind: 'alignment',
+      });
+    }
+
+    return { dx: snapDx, dy: snapDy, guides };
+  }
+
+  private buildMovedLineReferencePoints(
+    originStart: VectorPoint,
+    originEnd: VectorPoint,
+    dx: number,
+    dy: number
+  ): VectorPoint[] {
+    const start = { x: originStart.x + dx, y: originStart.y + dy };
+    const end = { x: originEnd.x + dx, y: originEnd.y + dy };
+    const midpoint = { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 };
+    return [start, end, midpoint];
+  }
+
+  private clampLineDelta(originStart: VectorPoint, originEnd: VectorPoint, dx: number, dy: number): { dx: number; dy: number } {
+    let clampedDx = dx;
+    let clampedDy = dy;
+
+    const minX = Math.min(originStart.x, originEnd.x);
+    const maxX = Math.max(originStart.x, originEnd.x);
+    const minY = Math.min(originStart.y, originEnd.y);
+    const maxY = Math.max(originStart.y, originEnd.y);
+
+    if (minX + clampedDx < 0) clampedDx = -minX;
+    if (maxX + clampedDx > TABLE_WIDTH_CM) clampedDx = TABLE_WIDTH_CM - maxX;
+    if (minY + clampedDy < 0) clampedDy = -minY;
+    if (maxY + clampedDy > TABLE_HEIGHT_CM) clampedDy = TABLE_HEIGHT_CM - maxY;
+
+    return { dx: clampedDx, dy: clampedDy };
   }
 
   onLineLabelPointerDown(event: PointerEvent, lineId: string): void {

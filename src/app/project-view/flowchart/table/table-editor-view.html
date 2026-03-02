@@ -88,7 +88,8 @@
               [attr.y2]="line.endY"
               [attr.stroke]="lineColor(line)"
               [attr.stroke-width]="lineStrokeWidth(line)"
-              [class.selected-line]="selectedLineId() === line.id"></line>
+              [class.selected-line]="selectedLineId() === line.id"
+              (pointerdown)="onLinePointerDown($event, line.id)"></line>
           }
 
           @if (draftStart() && draftEnd()) {
@@ -100,6 +101,21 @@
               [attr.y2]="draftEnd()!.y"
               [attr.stroke]="lineKind() === 'wall' ? '#94a3b8' : '#0f172a'"
               [attr.stroke-width]="lineKind() === 'wall' ? 1.1 : 0.7"></line>
+          }
+
+          @if (activeTool() === 'select' && selectedLine(); as selected) {
+            <circle
+              class="endpoint-handle"
+              [attr.cx]="selected.startX"
+              [attr.cy]="selected.startY"
+              r="1.4"
+              (pointerdown)="onEndpointHandlePointerDown($event, selected.id, 'start')"></circle>
+            <circle
+              class="endpoint-handle"
+              [attr.cx]="selected.endX"
+              [attr.cy]="selected.endY"
+              r="1.4"
+              (pointerdown)="onEndpointHandlePointerDown($event, selected.id, 'end')"></circle>
           }
         </g>
 
