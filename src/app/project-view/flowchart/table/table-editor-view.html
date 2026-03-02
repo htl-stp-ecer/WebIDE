@@ -38,6 +38,8 @@
       [style.transform]="canvasTransform()">
       <svg
         class="map-svg"
+        xmlns="http://www.w3.org/2000/svg"
+        xmlns:svg="http://www.w3.org/2000/svg"
         [attr.viewBox]="'0 0 ' + TABLE_WIDTH_CM + ' ' + TABLE_HEIGHT_CM"
         [attr.width]="TABLE_WIDTH_CM"
         [attr.height]="TABLE_HEIGHT_CM">
@@ -104,18 +106,18 @@
           }
 
           @if (activeTool() === 'select' && selectedLine(); as selected) {
-            <circle
+            <svg:circle
               class="endpoint-handle"
               [attr.cx]="selected.startX"
               [attr.cy]="selected.startY"
               r="1.4"
-              (pointerdown)="onEndpointHandlePointerDown($event, selected.id, 'start')"></circle>
-            <circle
+              (pointerdown)="onEndpointHandlePointerDown($event, selected.id, 'start')"></svg:circle>
+            <svg:circle
               class="endpoint-handle"
               [attr.cx]="selected.endX"
               [attr.cy]="selected.endY"
               r="1.4"
-              (pointerdown)="onEndpointHandlePointerDown($event, selected.id, 'end')"></circle>
+              (pointerdown)="onEndpointHandlePointerDown($event, selected.id, 'end')"></svg:circle>
           }
         </g>
 
