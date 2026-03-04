@@ -18,7 +18,7 @@ import { KeybindingsService } from '../../services/keybindings-service';
 import { FlowHistory } from '../../entities/flow-history';
 import { Mission } from '../../entities/Mission';
 import { MissionSimulationData, ProjectSimulationData } from '../../entities/Simulation';
-import { Connection, FlowComment, FlowGroup, FlowNode, FlowOrientation, Step, toVal } from './models';
+import { Connection, FlowComment, FlowGroup, FlowNode, FlowOrientation, Step, isMultiSensorType, parseMultiSensorSelection, resolveDefinitionType, toVal } from './models';
 import { FlowchartHistoryManager } from './flowchart-history-manager';
 import { FlowchartRunManager } from './flowchart-run-manager';
 import { createHistoryManager, createRunManager } from './manager-factories';
@@ -32,6 +32,7 @@ import { recomputeMergedView } from './view-merger';
 import { createFlowchartActions, FlowchartActions } from './flowchart-actions';
 import { TypeDefinition } from '../../entities/TypeDefinition';
 import { Select } from 'primeng/select';
+import { MultiSelect } from 'primeng/multiselect';
 import { DecimalPipe } from '@angular/common';
 import { ProgressSpinner } from 'primeng/progressspinner';
 import { TableVisualizationPanel } from './table/table-visualization-panel';
@@ -76,7 +77,7 @@ const DEFAULT_PANEL_OFFSETS: Record<FloatingPanelKey, PanelOffset> = {
 
 @Component({
   selector: 'app-flowchart',
-  imports: [FFlowComponent, FFlowModule, InputNumberModule, CheckboxModule, InputTextModule, ContextMenuModule, Tooltip, SelectButtonModule, FormsModule, TranslateModule, Select, DecimalPipe, ProgressSpinner, TableVisualizationPanel, PlanningOverlayComponent, TimingPanel, RobotSettingsModal, RunLogPanel],
+  imports: [FFlowComponent, FFlowModule, InputNumberModule, CheckboxModule, InputTextModule, ContextMenuModule, Tooltip, SelectButtonModule, FormsModule, TranslateModule, Select, MultiSelect, DecimalPipe, ProgressSpinner, TableVisualizationPanel, PlanningOverlayComponent, TimingPanel, RobotSettingsModal, RunLogPanel],
   templateUrl: './flowchart.html',
   styleUrl: './flowchart.scss',
   providers: [FlowHistory],
@@ -157,6 +158,7 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
     | null = null;
   private suppressContextMenuOnce = false;
   private suppressContextMenuTimeout?: ReturnType<typeof setTimeout>;
+  private readonly multiSensorSelectionCache = new Map<string, string[]>();
   multiDragStartPositions: Map<string, { x: number; y: number }> | null = null;
   private multiDragPointerUpBound = () => this.stopMultiDrag();
   private rightDragState: { startX: number; startY: number; moved: boolean } | null = null;
@@ -1167,6 +1169,45 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
       return null;
     }
     return this.selectedNodeIds().has(nodeId) ? group.id : null;
+  }
+
+  isMultiSensorArgType(type?: string | null): boolean {
+    return isMultiSensorType(type);
+  }
+
+  definitionOptionsForType(type?: string | null): DefinitionOption[] {
+    const key = resolveDefinitionType(type);
+    return this.typeDefinitionOptions()[key] ?? [];
+  }
+
+  selectedMultiSensors(value: unknown): string[] {
+    const key = this.multiSensorSelectionCacheKey(value);
+    const cached = this.multiSensorSelectionCache.get(key);
+    if (cached) {
+      return cached;
+    }
+    const parsed = parseMultiSensorSelection(value);
+    this.multiSensorSelectionCache.set(key, parsed);
+    if (this.multiSensorSelectionCache.size > 256) {
+      const oldestKey = this.multiSensorSelectionCache.keys().next().value as string | undefined;
+      if (oldestKey) {
+        this.multiSensorSelectionCache.delete(oldestKey);
+      }
+    }
+    return parsed;
+  }
+
+  private multiSensorSelectionCacheKey(value: unknown): string {
+    if (Array.isArray(value)) {
+      return `arr:${value.map(item => (typeof item === 'string' ? item : String(item))).join('\u001f')}`;
+    }
+    if (typeof value === 'string') {
+      return `str:${value}`;
+    }
+    if (value == null) {
+      return 'null';
+    }
+    return `other:${String(value)}`;
   }
 
   private getNodeSize(nodeId: string, fallback: { width: number; height: number }): { width: number; height: number } {

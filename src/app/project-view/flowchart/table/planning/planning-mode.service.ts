@@ -28,6 +28,15 @@ import {
   simulateForwardLineupOnBlack,
   simulateForwardLineupOnWhite,
 } from '../simulation-path';
+import {
+  driveUntilColorFromStepId,
+  isBackwardStepId,
+  isDriveStepId,
+  isFollowLineStepId,
+  lineupColorFromStepId,
+  lineupDirectionFromStepId,
+  stepId,
+} from '../step-id';
 import { Pose2D, forwardMove } from '../models';
 
 const DEFAULT_FOLLOW_LINE_MAX_DISTANCE_CM = 300;
@@ -329,13 +338,13 @@ export class PlanningModeService {
     rawPoses.push({ ...currentPose });
 
     for (const step of steps) {
-      const fn = step.function_name;
+      const fn = stepId(step);
       const arg = (step.arguments[0]?.value as number) ?? 0;
 
-      if (fn === 'drive_until_black' || fn === 'drive_until_white') {
+      const driveUntilColor = driveUntilColorFromStepId(fn);
+      if (driveUntilColor) {
         if (lineupContext) {
-          const target = fn === 'drive_until_black' ? 'black' : 'white';
-          const drivePoses = simulateDriveUntilColor(currentPose, lineupContext, target);
+          const drivePoses = simulateDriveUntilColor(currentPose, lineupContext, driveUntilColor);
           if (drivePoses.length) {
             rawPoses.push(...drivePoses);
             currentPose = drivePoses[drivePoses.length - 1];
@@ -344,7 +353,7 @@ export class PlanningModeService {
         continue;
       }
 
-      if (fn === 'follow_line') {
+      if (isFollowLineStepId(fn)) {
         const stopOnIntersection = arg <= 0;
         const maxDistance = lineupContext?.maxDistanceCm ?? DEFAULT_FOLLOW_LINE_MAX_DISTANCE_CM;
         const targetDistance = stopOnIntersection ? maxDistance : arg;
@@ -366,9 +375,20 @@ export class PlanningModeService {
         continue;
       }
 
-      if (fn === 'forward_lineup_on_black') {
+      const lineupDirection = lineupDirectionFromStepId(fn);
+      const lineupColor = lineupColorFromStepId(fn);
+      if (lineupDirection && lineupColor) {
         if (lineupContext) {
-          const lineupPoses = simulateForwardLineupOnBlack(currentPose, lineupContext);
+          let lineupPoses: Pose2D[] = [];
+          if (lineupDirection === 'forward' && lineupColor === 'black') {
+            lineupPoses = simulateForwardLineupOnBlack(currentPose, lineupContext);
+          } else if (lineupDirection === 'forward' && lineupColor === 'white') {
+            lineupPoses = simulateForwardLineupOnWhite(currentPose, lineupContext);
+          } else if (lineupDirection === 'backward' && lineupColor === 'black') {
+            lineupPoses = simulateBackwardLineupOnBlack(currentPose, lineupContext);
+          } else if (lineupDirection === 'backward' && lineupColor === 'white') {
+            lineupPoses = simulateBackwardLineupOnWhite(currentPose, lineupContext);
+          }
           if (lineupPoses.length) {
             rawPoses.push(...lineupPoses);
             currentPose = lineupPoses[lineupPoses.length - 1];
@@ -377,42 +397,9 @@ export class PlanningModeService {
         continue;
       }
 
-      if (fn === 'forward_lineup_on_white') {
-        if (lineupContext) {
-          const lineupPoses = simulateForwardLineupOnWhite(currentPose, lineupContext);
-          if (lineupPoses.length) {
-            rawPoses.push(...lineupPoses);
-            currentPose = lineupPoses[lineupPoses.length - 1];
-          }
-        }
-        continue;
-      }
-
-      if (fn === 'backward_lineup_on_black') {
-        if (lineupContext) {
-          const lineupPoses = simulateBackwardLineupOnBlack(currentPose, lineupContext);
-          if (lineupPoses.length) {
-            rawPoses.push(...lineupPoses);
-            currentPose = lineupPoses[lineupPoses.length - 1];
-          }
-        }
-        continue;
-      }
-
-      if (fn === 'backward_lineup_on_white') {
-        if (lineupContext) {
-          const lineupPoses = simulateBackwardLineupOnWhite(currentPose, lineupContext);
-          if (lineupPoses.length) {
-            rawPoses.push(...lineupPoses);
-            currentPose = lineupPoses[lineupPoses.length - 1];
-          }
-        }
-        continue;
-      }
-
-      if (fn === 'drive_forward' || fn === 'drive_backward') {
+      if (isDriveStepId(fn)) {
         // Add intermediate points every 2cm for smooth path and accurate physics
-        const distance = fn === 'drive_backward' ? -arg : arg;
+        const distance = isBackwardStepId(fn) ? -arg : arg;
         const numSteps = Math.max(1, Math.ceil(Math.abs(distance) / 2));
         const stepDist = distance / numSteps;
 

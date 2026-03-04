@@ -60,6 +60,77 @@ export interface Step {
   tags?: string[];
 }
 
+const normalizedArgType = (type?: string | null) => (type ?? '').replace(/\s+/g, '').toLowerCase();
+
+export const isMultiSensorType = (type?: string | null): boolean => {
+  const normalized = normalizedArgType(type);
+  return normalized.includes('list[irsensor]') && normalized.includes('irsensor');
+};
+
+export const resolveDefinitionType = (type?: string | null): string => {
+  if (isMultiSensorType(type)) {
+    return 'IRSensor';
+  }
+  return (type ?? '').trim();
+};
+
+export const parseMultiSensorSelection = (value: unknown): string[] => {
+  if (Array.isArray(value)) {
+    return value
+      .map(item => (typeof item === 'string' ? item.trim() : String(item).trim()))
+      .filter(item => item.length > 0);
+  }
+  if (typeof value !== 'string') {
+    return [];
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return [];
+  }
+  if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+    const inner = trimmed.slice(1, -1).trim();
+    if (!inner) {
+      return [];
+    }
+    return inner
+      .split(',')
+      .map(part => part.trim().replace(/^['"]|['"]$/g, ''))
+      .filter(part => part.length > 0);
+  }
+  if (trimmed.includes(',')) {
+    return trimmed
+      .split(',')
+      .map(part => part.trim())
+      .filter(part => part.length > 0);
+  }
+  return [trimmed];
+};
+
+export const serializeMultiSensorSelection = (value: unknown): string | null => {
+  if (value == null) {
+    return null;
+  }
+
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed.length ? trimmed : null;
+  }
+
+  const unique = Array.from(
+    new Set(
+      parseMultiSensorSelection(value).map(sensor => sensor.trim()).filter(sensor => sensor.length > 0)
+    )
+  );
+  if (!unique.length) {
+    return null;
+  }
+  if (unique.length === 1) {
+    return unique[0];
+  }
+  return `[${unique.join(', ')}]`;
+};
+
 export const lc = (s?: string | null) => (s ?? '').toLowerCase();
 export const isType = (s: MissionStep | null | undefined, t: 'parallel' | 'seq' | 'breakpoint') => !!s && (lc(s.function_name) === t || lc(s.step_type) === t);
 export const isBreakpoint = (s: MissionStep | null | undefined) => isType(s, 'breakpoint');

@@ -20,6 +20,15 @@ import { ToggleButtonModule } from 'primeng/togglebutton';
 import { TooltipModule } from 'primeng/tooltip';
 import { PlanningModeService } from './planning-mode.service';
 import { formatStepForPreview } from './path-to-steps';
+import {
+  driveUntilColorFromStepId,
+  isBackwardStepId,
+  isDriveStep,
+  isFollowLineStep,
+  isLineupStep as isLineupMissionStep,
+  isTurnStep,
+  stepId,
+} from '../step-id';
 import { MissionStep } from '../../../../entities/MissionStep';
 import { TableMapService, TableVisualizationService } from '../services';
 import { HttpService } from '../../../../services/http-service';
@@ -78,6 +87,7 @@ export class PlanningOverlayComponent implements OnInit, AfterViewInit, OnDestro
   /** Parent canvas dimensions for coordinate conversion */
   readonly parentWidth = input<number>(0);
   readonly parentHeight = input<number>(0);
+  readonly projectUuid = input<string | null>(null);
 
   /** Emitted when steps should be added to mission */
   readonly addSteps = output<MissionStep[]>();
@@ -153,16 +163,25 @@ export class PlanningOverlayComponent implements OnInit, AfterViewInit, OnDestro
   private loadStoredMap(): void {
     if (this.mapService.isLoaded()) return;
 
-    this.httpService.getTableMap().subscribe({
-      next: (response) => {
-        if (response.image) {
-          this.mapService.loadMapFromBase64(response.image);
-        }
-      },
-      error: (err) => {
-        console.warn('Failed to load stored table map:', err);
-      },
-    });
+    const projectUuid = this.projectUuid();
+    try {
+      const request$ = projectUuid
+        ? this.httpService.getLocalTableMap(projectUuid)
+        : this.httpService.getTableMap();
+
+      request$.subscribe({
+        next: (response) => {
+          if (response.image) {
+            this.mapService.loadMapFromBase64(response.image);
+          }
+        },
+        error: (err) => {
+          console.warn('Failed to load stored table map:', err);
+        },
+      });
+    } catch (err) {
+      console.warn('Failed to prepare table map request:', err);
+    }
   }
 
   ngOnDestroy(): void {
@@ -1157,26 +1176,27 @@ export class PlanningOverlayComponent implements OnInit, AfterViewInit, OnDestro
   }
 
   getStepIcon(step: MissionStep): string {
-    const fn = step.function_name;
-    if (fn === 'turn_cw' || fn === 'turn_ccw' || fn === 'tank_turn_cw' || fn === 'tank_turn_ccw') {
+    const fn = stepId(step);
+    if (isTurnStep(step)) {
       return 'pi pi-sync';
     }
-    if (fn === 'drive_forward') {
+    if (isDriveStep(step)) {
+      return isBackwardStepId(fn) ? 'pi pi-arrow-down' : 'pi pi-arrow-up';
+    }
+    if (driveUntilColorFromStepId(fn)) {
       return 'pi pi-arrow-up';
     }
-    if (fn === 'drive_backward') {
-      return 'pi pi-arrow-down';
-    }
-    if (fn === 'drive_until_black' || fn === 'drive_until_white') {
-      return 'pi pi-arrow-up';
-    }
-    if (fn === 'follow_line') {
+    if (isFollowLineStep(step)) {
       return 'pi pi-sliders-h';
     }
-    if (fn.includes('lineup')) {
+    if (isLineupMissionStep(step)) {
       return 'pi pi-align-center';
     }
     return 'pi pi-circle';
+  }
+
+  isLineupStep(step: MissionStep): boolean {
+    return isLineupMissionStep(step);
   }
 
   // --- UI State Methods ---

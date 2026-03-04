@@ -1,6 +1,17 @@
 import { MissionStep } from '../../../../entities/MissionStep';
 import { Waypoint } from './models';
 import { normalizeAngle } from '../models';
+import {
+  driveUntilColorFromStepId,
+  FlowStepId,
+  isDriveStepId,
+  isFollowLineStepId,
+  isLineupStepId,
+  isTurnStepId,
+  lineupColorFromStepId,
+  lineupDirectionFromStepId,
+  stepId,
+} from '../step-id';
 
 export interface ConversionOptions {
   /** Initial robot heading in radians (default: 0 = facing +X) */
@@ -63,11 +74,11 @@ export function waypointsToMissionSteps(
 function createTurnStep(angleDeg: number, useTank: boolean): MissionStep {
   const isClockwise = angleDeg < 0;
   const functionName = useTank
-    ? (isClockwise ? 'tank_turn_cw' : 'tank_turn_ccw')
-    : (isClockwise ? 'turn_cw' : 'turn_ccw');
+    ? (isClockwise ? FlowStepId.TankTurnCw : FlowStepId.TankTurnCcw)
+    : (isClockwise ? FlowStepId.TurnCw : FlowStepId.TurnCcw);
 
   return {
-    step_type: '',
+    step_type: functionName,
     function_name: functionName,
     arguments: [
       {
@@ -86,8 +97,8 @@ function createTurnStep(angleDeg: number, useTank: boolean): MissionStep {
  */
 function createDriveStep(distanceCm: number): MissionStep {
   return {
-    step_type: '',
-    function_name: 'drive_forward',
+    step_type: FlowStepId.DriveForward,
+    function_name: FlowStepId.DriveForward,
     arguments: [
       {
         name: 'cm',
@@ -104,32 +115,33 @@ function createDriveStep(distanceCm: number): MissionStep {
  * Format a step for display in the preview panel.
  */
 export function formatStepForPreview(step: MissionStep): string {
-  const fn = step.function_name;
+  const fn = stepId(step);
+  const display = step.function_name || step.step_type || fn;
   const arg = step.arguments[0];
 
   // Lineup steps have no arguments
-  if (fn.includes('lineup')) {
-    // Shorten the name for display
-    if (fn === 'forward_lineup_on_black') return 'lineup(black)';
-    if (fn === 'forward_lineup_on_white') return 'lineup(white)';
-    if (fn === 'backward_lineup_on_black') return 'lineup_bwd(black)';
-    if (fn === 'backward_lineup_on_white') return 'lineup_bwd(white)';
-    return fn;
+  if (isLineupStepId(fn)) {
+    const direction = lineupDirectionFromStepId(fn);
+    const color = lineupColorFromStepId(fn);
+    if (direction && color) {
+      return direction === 'backward' ? `lineup_bwd(${color})` : `lineup(${color})`;
+    }
+    return display;
   }
-  if (fn === 'drive_until_black') return 'drive_until(black)';
-  if (fn === 'drive_until_white') return 'drive_until(white)';
-  if (fn === 'follow_line') {
+  const driveUntilColor = driveUntilColorFromStepId(fn);
+  if (driveUntilColor) return `drive_until(${driveUntilColor})`;
+  if (isFollowLineStepId(fn)) {
     if (!arg) return 'follow_line';
     return `follow_line(${arg.value}cm)`;
   }
 
-  if (!arg) return fn;
+  if (!arg) return display;
 
-  if (fn === 'turn_cw' || fn === 'turn_ccw' || fn === 'tank_turn_cw' || fn === 'tank_turn_ccw') {
-    return `${fn}(${arg.value}°)`;
+  if (isTurnStepId(fn)) {
+    return `${display}(${arg.value}°)`;
   }
-  if (fn === 'drive_forward' || fn === 'drive_backward') {
-    return `${fn}(${arg.value}cm)`;
+  if (isDriveStepId(fn)) {
+    return `${display}(${arg.value}cm)`;
   }
-  return `${fn}(${arg.value})`;
+  return `${display}(${arg.value})`;
 }

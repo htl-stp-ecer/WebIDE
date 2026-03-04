@@ -4,6 +4,7 @@ import { Pose2D, applyLocalDelta, forwardMove, normalizeAngle } from '../models'
 import { LineSegmentCm } from '../services';
 import { SensorConfig } from '../models';
 import { lineupProximityCm } from './line-utils';
+import { FlowStepId, lineupStepId } from '../step-id';
 import {
   LineupSimulationContext,
   simulateFollowLine,
@@ -208,11 +209,11 @@ export function optimizeWaypointsToSteps(
 function createTurnStep(angleDeg: number, useTank: boolean): MissionStep {
   const isClockwise = angleDeg < 0;
   const functionName = useTank
-    ? (isClockwise ? 'tank_turn_cw' : 'tank_turn_ccw')
-    : (isClockwise ? 'turn_cw' : 'turn_ccw');
+    ? (isClockwise ? FlowStepId.TankTurnCw : FlowStepId.TankTurnCcw)
+    : (isClockwise ? FlowStepId.TurnCw : FlowStepId.TurnCcw);
 
   return {
-    step_type: '',
+    step_type: functionName,
     function_name: functionName,
     arguments: [{ name: 'deg', value: Math.abs(angleDeg), type: 'float' }],
     position: { x: 0, y: 0 },
@@ -222,8 +223,8 @@ function createTurnStep(angleDeg: number, useTank: boolean): MissionStep {
 
 function createDriveStep(distanceCm: number): MissionStep {
   return {
-    step_type: '',
-    function_name: 'drive_forward',
+    step_type: FlowStepId.DriveForward,
+    function_name: FlowStepId.DriveForward,
     arguments: [{ name: 'cm', value: distanceCm, type: 'float' }],
     position: { x: 0, y: 0 },
     children: [],
@@ -232,8 +233,8 @@ function createDriveStep(distanceCm: number): MissionStep {
 
 function createFollowLineStep(distanceCm: number | null): MissionStep {
   return {
-    step_type: '',
-    function_name: 'follow_line',
+    step_type: FlowStepId.FollowLine,
+    function_name: FlowStepId.FollowLine,
     arguments: distanceCm === null ? [] : [{ name: 'cm', value: distanceCm, type: 'float' }],
     position: { x: 0, y: 0 },
     children: [],
@@ -241,14 +242,10 @@ function createFollowLineStep(distanceCm: number | null): MissionStep {
 }
 
 function createLineupStep(direction: 'forward' | 'backward', color: 'black' | 'white'): MissionStep {
-  let functionName = 'forward_lineup_on_black';
-  if (direction === 'forward' && color === 'black') functionName = 'forward_lineup_on_black';
-  if (direction === 'forward' && color === 'white') functionName = 'forward_lineup_on_white';
-  if (direction === 'backward' && color === 'black') functionName = 'backward_lineup_on_black';
-  if (direction === 'backward' && color === 'white') functionName = 'backward_lineup_on_white';
+  const functionName = lineupStepId(direction, color);
 
   return {
-    step_type: '',
+    step_type: functionName,
     function_name: functionName,
     arguments: [],
     position: { x: 0, y: 0 },

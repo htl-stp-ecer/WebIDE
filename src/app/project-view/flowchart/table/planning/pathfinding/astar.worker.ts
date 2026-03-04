@@ -7,6 +7,20 @@ import { WallSegment, checkPathCollision, checkRobotCollision, isRobotInBounds }
 import { findPath, optimizePath, type AStarConfig } from './astar-commands';
 import { simulateCommand, simulateCommands } from './pose-simulator';
 import {
+  FlowStepId,
+  driveUntilColorFromStepId,
+  isBackwardStepId,
+  isDriveOrStrafeStepId,
+  isDriveStepId,
+  isFollowLineStepId,
+  isLineupStep,
+  lineupColorFromStepId,
+  lineupDirectionFromStepId,
+  isTurnStepId,
+  lineupStepId,
+  stepId,
+} from '../../step-id';
+import {
   findClosestLineSegment,
   lineupProximityCm,
 } from '../line-utils';
@@ -159,7 +173,7 @@ function appendLineupForWaypoint(
   if (!waypoint.lineup || waypoint.lineSnapAction === 'follow' || waypoint.lineSnapAction === 'drive') {
     return currentPose;
   }
-  if (segmentSteps.some(step => step.function_name.includes('lineup'))) return currentPose;
+  if (segmentSteps.some(step => isLineupStep(step))) return currentPose;
 
   const lastDrive = getLastDriveInfo(segmentSteps);
   let lineupStartPose = currentPose;
@@ -269,10 +283,14 @@ function getLastDriveInfo(
   steps: MissionStep[]
 ): { index: number; direction: 'forward' | 'backward'; distanceCm: number } | null {
   for (let i = steps.length - 1; i >= 0; i -= 1) {
-    const fn = steps[i].function_name;
-    if (fn === 'drive_backward' || fn === 'drive_forward') {
+    const fn = stepId(steps[i]);
+    if (isDriveStepId(fn)) {
       const distance = (steps[i].arguments[0]?.value as number) ?? 0;
-      return { index: i, direction: fn === 'drive_backward' ? 'backward' : 'forward', distanceCm: distance };
+      return {
+        index: i,
+        direction: isBackwardStepId(fn) ? 'backward' : 'forward',
+        distanceCm: distance
+      };
     }
   }
   return null;
@@ -343,18 +361,14 @@ function validateCommands(
   let pose = startPose;
   const rotationConfig = inflateRobotConfig(request.robotConfig, TURN_CLEARANCE_CM);
   for (const command of commands) {
-    const fn = command.function_name;
+    const fn = stepId(command);
     const arg = (command.arguments[0]?.value as number) ?? 0;
     const nextPose = simulateCommand(pose, command);
 
     if (!isRobotInBounds(nextPose, request.mapConfig, request.robotConfig)) return null;
 
-    const isTurn = fn === 'turn_cw' || fn === 'turn_ccw' || fn === 'tank_turn_cw' || fn === 'tank_turn_ccw';
-    const isDrive =
-      fn === 'drive_forward' ||
-      fn === 'drive_backward' ||
-      fn === 'strafe_left' ||
-      fn === 'strafe_right';
+    const isTurn = isTurnStepId(fn);
+    const isDrive = isDriveOrStrafeStepId(fn);
     if (isTurn) {
       const angleSteps = Math.max(6, Math.ceil(Math.abs(arg) / 5));
       if (checkRotationCollision(pose, nextPose, rotationConfig, request.walls, angleSteps)) {
@@ -534,9 +548,10 @@ function generateAdStarSteps(
 
 function createTurnStep(angleDeg: number): MissionStep {
   const isClockwise = angleDeg < 0;
+  const functionName = isClockwise ? FlowStepId.TurnCw : FlowStepId.TurnCcw;
   return {
-    step_type: '',
-    function_name: isClockwise ? 'turn_cw' : 'turn_ccw',
+    step_type: functionName,
+    function_name: functionName,
     arguments: [{ name: 'deg', value: Math.abs(angleDeg), type: 'float' }],
     position: { x: 0, y: 0 },
     children: [],
@@ -545,8 +560,8 @@ function createTurnStep(angleDeg: number): MissionStep {
 
 function createDriveStep(distanceCm: number): MissionStep {
   return {
-    step_type: '',
-    function_name: 'drive_forward',
+    step_type: FlowStepId.DriveForward,
+    function_name: FlowStepId.DriveForward,
     arguments: [{ name: 'cm', value: distanceCm, type: 'float' }],
     position: { x: 0, y: 0 },
     children: [],
@@ -555,8 +570,8 @@ function createDriveStep(distanceCm: number): MissionStep {
 
 function createFollowLineStep(distanceCm: number | null): MissionStep {
   return {
-    step_type: '',
-    function_name: 'follow_line',
+    step_type: FlowStepId.FollowLine,
+    function_name: FlowStepId.FollowLine,
     arguments: distanceCm === null ? [] : [{ name: 'cm', value: distanceCm, type: 'float' }],
     position: { x: 0, y: 0 },
     children: [],
@@ -742,50 +757,36 @@ function simulateCommandsWithLineups(
 ): Pose2D {
   let pose = startPose;
   for (const command of commands) {
-    const fn = command.function_name;
-    if (fn === 'drive_until_black') {
-      const poses = simulateDriveUntilColor(pose, context, 'black');
+    const fn = stepId(command);
+    const driveUntilColor = driveUntilColorFromStepId(fn);
+    if (driveUntilColor) {
+      const poses = simulateDriveUntilColor(pose, context, driveUntilColor);
       if (poses.length) {
         pose = poses[poses.length - 1];
       }
       continue;
     }
-    if (fn === 'drive_until_white') {
-      const poses = simulateDriveUntilColor(pose, context, 'white');
+
+    const lineupDirection = lineupDirectionFromStepId(fn);
+    const lineupColor = lineupColorFromStepId(fn);
+    if (lineupDirection && lineupColor) {
+      let poses: Pose2D[] = [];
+      if (lineupDirection === 'forward' && lineupColor === 'black') {
+        poses = simulateForwardLineupOnBlack(pose, context);
+      } else if (lineupDirection === 'forward' && lineupColor === 'white') {
+        poses = simulateForwardLineupOnWhite(pose, context);
+      } else if (lineupDirection === 'backward' && lineupColor === 'black') {
+        poses = simulateBackwardLineupOnBlack(pose, context);
+      } else if (lineupDirection === 'backward' && lineupColor === 'white') {
+        poses = simulateBackwardLineupOnWhite(pose, context);
+      }
       if (poses.length) {
         pose = poses[poses.length - 1];
       }
       continue;
     }
-    if (fn === 'forward_lineup_on_black') {
-      const poses = simulateForwardLineupOnBlack(pose, context);
-      if (poses.length) {
-        pose = poses[poses.length - 1];
-      }
-      continue;
-    }
-    if (fn === 'forward_lineup_on_white') {
-      const poses = simulateForwardLineupOnWhite(pose, context);
-      if (poses.length) {
-        pose = poses[poses.length - 1];
-      }
-      continue;
-    }
-    if (fn === 'backward_lineup_on_black') {
-      const poses = simulateBackwardLineupOnBlack(pose, context);
-      if (poses.length) {
-        pose = poses[poses.length - 1];
-      }
-      continue;
-    }
-    if (fn === 'backward_lineup_on_white') {
-      const poses = simulateBackwardLineupOnWhite(pose, context);
-      if (poses.length) {
-        pose = poses[poses.length - 1];
-      }
-      continue;
-    }
-    if (fn === 'follow_line') {
+
+    if (isFollowLineStepId(fn)) {
       const distance = (command.arguments[0]?.value as number) ?? 0;
       const stopOnIntersection = distance <= 0;
       const maxDistance = context.maxDistanceCm ?? Math.max(300, distance);
@@ -808,14 +809,10 @@ function simulateCommandsWithLineups(
 }
 
 function createLineupStep(direction: 'forward' | 'backward', color: 'black' | 'white'): MissionStep {
-  let functionName = 'forward_lineup_on_black';
-  if (direction === 'forward' && color === 'black') functionName = 'forward_lineup_on_black';
-  if (direction === 'forward' && color === 'white') functionName = 'forward_lineup_on_white';
-  if (direction === 'backward' && color === 'black') functionName = 'backward_lineup_on_black';
-  if (direction === 'backward' && color === 'white') functionName = 'backward_lineup_on_white';
+  const functionName = lineupStepId(direction, color);
 
   return {
-    step_type: '',
+    step_type: functionName,
     function_name: functionName,
     arguments: [],
     position: { x: 0, y: 0 },

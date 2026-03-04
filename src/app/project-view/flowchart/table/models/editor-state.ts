@@ -1,87 +1,125 @@
-/** Drawing tool types */
-export type DrawingTool = 'brush' | 'line' | 'eraser';
+export type EditorTool = 'draw' | 'select';
+export type LineKind = 'line' | 'wall';
+export type MeasurementUnit = 'cm' | 'inch';
 
-/** Paint color types */
-export type PaintColor = 'white' | 'black' | 'gray';
-
-/** Editor state interface */
-export interface EditorState {
-  zoom: number;
-  panOffset: { x: number; y: number };
-  showGrid: boolean;
-  activeTool: DrawingTool;
-  selectedColor: PaintColor;
+export interface VectorPoint {
+  x: number;
+  y: number;
 }
 
-/** Map dimensions in pixels */
+export interface VectorLine {
+  id: string;
+  startX: number;
+  startY: number;
+  endX: number;
+  endY: number;
+  kind: LineKind;
+  widthCm: number;
+}
+
+export interface GuideLine {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  kind: 'axis' | 'alignment' | 'endpoint' | 'angle';
+}
+
+export const TABLE_WIDTH_CM = 200;
+export const TABLE_HEIGHT_CM = 100;
+
+/** Raster export size used by backend persistence. */
 export const MAP_WIDTH = 79;
 export const MAP_HEIGHT = 40;
 
-/** Zoom constraints */
+export const CM_PER_PIXEL_X = TABLE_WIDTH_CM / MAP_WIDTH;
+export const CM_PER_PIXEL_Y = TABLE_HEIGHT_CM / MAP_HEIGHT;
+
+export const CM_PER_INCH = 2.54;
+export const DEFAULT_LINE_WIDTH_CM = 1;
+export const DEFAULT_WALL_WIDTH_CM = 2.54;
+export const MIN_LINE_WIDTH_CM = 0.2;
+
 export const MIN_ZOOM = 0.5;
-export const MAX_ZOOM = Infinity;
+export const MAX_ZOOM = 24;
 export const ZOOM_STEP = 0.25;
+export const ZOOM_LEVELS = [0.5, 0.75, 1, 1.5, 2, 3, 4, 6, 8, 10, 12, 16, 20, 24];
 
-/** Available zoom levels for dropdown */
-export const ZOOM_LEVELS = [0.5, 0.75, 1, 1.5, 2, 3, 4, 6, 8, 10, 12, 16, 20];
-
-/** Default editor state */
-export const DEFAULT_EDITOR_STATE: EditorState = {
-  zoom: 8, // Start at 8x zoom (800%)
-  panOffset: { x: 0, y: 0 },
-  showGrid: true,
-  activeTool: 'brush',
-  selectedColor: 'black',
-};
-
-/** Color options for UI */
-export const COLOR_OPTIONS: { value: PaintColor; labelKey: string; hex: string }[] = [
-  { value: 'white', labelKey: 'FLOWCHART.TABLE_COLOR_GROUND', hex: '#ffffff' },
-  { value: 'black', labelKey: 'FLOWCHART.TABLE_COLOR_LINE', hex: '#000000' },
-  { value: 'gray', labelKey: 'FLOWCHART.TABLE_COLOR_WALL', hex: '#808080' },
+export const TOOL_OPTIONS: { value: EditorTool; labelKey: string; icon: string }[] = [
+  { value: 'draw', labelKey: 'FLOWCHART.TABLE_TOOL_DRAW', icon: 'pi pi-pencil' },
+  { value: 'select', labelKey: 'FLOWCHART.TABLE_TOOL_SELECT', icon: 'pi pi-mouse' },
 ];
 
-/** Tool options for UI */
-export const TOOL_OPTIONS: { value: DrawingTool; labelKey: string; icon: string }[] = [
-  { value: 'brush', labelKey: 'FLOWCHART.TABLE_TOOL_BRUSH', icon: 'pi pi-pencil' },
-  { value: 'line', labelKey: 'FLOWCHART.TABLE_TOOL_LINE', icon: 'pi pi-minus' },
-  { value: 'eraser', labelKey: 'FLOWCHART.TABLE_TOOL_ERASER', icon: 'pi pi-eraser' },
+export const LINE_KIND_OPTIONS: { value: LineKind; labelKey: string }[] = [
+  { value: 'line', labelKey: 'FLOWCHART.TABLE_LINE_TYPE_LINE' },
+  { value: 'wall', labelKey: 'FLOWCHART.TABLE_LINE_TYPE_WALL' },
 ];
 
-/** Convert PaintColor to hex string */
-export function colorToHex(color: PaintColor): string {
-  switch (color) {
-    case 'white': return '#ffffff';
-    case 'black': return '#000000';
-    case 'gray': return '#808080';
-  }
+export const UNIT_OPTIONS: { value: MeasurementUnit; labelKey: string }[] = [
+  { value: 'cm', labelKey: 'FLOWCHART.TABLE_UNIT_CM' },
+  { value: 'inch', labelKey: 'FLOWCHART.TABLE_UNIT_INCH' },
+];
+
+export function clampToTable(point: VectorPoint): VectorPoint {
+  return {
+    x: Math.max(0, Math.min(TABLE_WIDTH_CM, point.x)),
+    y: Math.max(0, Math.min(TABLE_HEIGHT_CM, point.y)),
+  };
 }
 
-/** Bresenham's line algorithm - returns array of points */
-export function bresenhamLine(x0: number, y0: number, x1: number, y1: number): { x: number; y: number }[] {
-  const points: { x: number; y: number }[] = [];
-  const dx = Math.abs(x1 - x0);
-  const dy = Math.abs(y1 - y0);
-  const sx = x0 < x1 ? 1 : -1;
-  const sy = y0 < y1 ? 1 : -1;
-  let err = dx - dy;
+export function lineLengthCm(line: Pick<VectorLine, 'startX' | 'startY' | 'endX' | 'endY'>): number {
+  const dx = line.endX - line.startX;
+  const dy = line.endY - line.startY;
+  return Math.hypot(dx, dy);
+}
 
-  let x = x0;
-  let y = y0;
+export function roundTo(value: number, digits = 2): number {
+  const scale = 10 ** digits;
+  return Math.round(value * scale) / scale;
+}
 
-  while (true) {
-    points.push({ x, y });
-    if (x === x1 && y === y1) break;
-    const e2 = 2 * err;
-    if (e2 > -dy) {
-      err -= dy;
-      x += sx;
-    }
-    if (e2 < dx) {
-      err += dx;
-      y += sy;
-    }
+export function convertFromCm(valueCm: number, unit: MeasurementUnit): number {
+  if (unit === 'inch') {
+    return valueCm / CM_PER_INCH;
   }
+  return valueCm;
+}
 
-  return points;
+export function convertToCm(value: number, unit: MeasurementUnit): number {
+  if (unit === 'inch') {
+    return value * CM_PER_INCH;
+  }
+  return value;
+}
+
+export function formatDistance(valueCm: number, unit: MeasurementUnit): string {
+  const converted = convertFromCm(valueCm, unit);
+  const rounded = roundTo(converted, converted >= 100 ? 1 : 2);
+  return `${rounded} ${unit}`;
+}
+
+export function pixelToTableY(pixelY: number): number {
+  return TABLE_HEIGHT_CM - pixelY * CM_PER_PIXEL_Y;
+}
+
+export function tableToPixelY(yCm: number): number {
+  return (TABLE_HEIGHT_CM - yCm) / CM_PER_PIXEL_Y;
+}
+
+export function pointToSegmentDistanceCm(point: VectorPoint, line: VectorLine): number {
+  const vx = line.endX - line.startX;
+  const vy = line.endY - line.startY;
+  const wx = point.x - line.startX;
+  const wy = point.y - line.startY;
+
+  const c1 = vx * wx + vy * wy;
+  if (c1 <= 0) return Math.hypot(point.x - line.startX, point.y - line.startY);
+
+  const c2 = vx * vx + vy * vy;
+  if (c2 <= c1) return Math.hypot(point.x - line.endX, point.y - line.endY);
+
+  const b = c1 / c2;
+  const px = line.startX + b * vx;
+  const py = line.startY + b * vy;
+  return Math.hypot(point.x - px, point.y - py);
 }

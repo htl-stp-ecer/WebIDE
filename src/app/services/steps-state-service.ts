@@ -1,5 +1,6 @@
 import {Injectable, signal} from '@angular/core';
 import {Subject} from 'rxjs';
+import { configureStepTagCatalog } from '../project-view/flowchart/table/step-id';
 
 @Injectable({
   providedIn: 'root'
@@ -13,6 +14,7 @@ export class StepsStateService {
 
   setSteps(steps: Step[]) {
     this.currentSteps.set(steps);
+    configureStepTagCatalog(steps);
   }
 
   /** Trigger a refresh of steps from the server */

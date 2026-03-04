@@ -181,7 +181,7 @@
                       <span class="step-number">{{ $index + 1 }}.</span>
                       <i [class]="getStepIcon(step)"></i>
                       <span class="step-text">{{ formatStep(step) }}</span>
-                      @if (step.function_name.includes('lineup')) {
+                      @if (isLineupStep(step)) {
                         <span class="step-badge" [pTooltip]="'FLOWCHART.PLANNER_LINEUP_BADGE' | translate">⚡</span>
                       }
                     </div>

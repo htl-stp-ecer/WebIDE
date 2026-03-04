@@ -1,15 +1,22 @@
 .editor-toolbar {
   display: flex;
-  align-items: center;
-  gap: 0.5rem;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.35rem;
   padding: 0.5rem 0.75rem;
-  background: rgba(15, 23, 42, 0.95);
-  border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+  background: rgba(255, 255, 255, 0.95);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.25);
   user-select: none;
 }
 
+.toolbar-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
 .tool-group,
-.color-group,
 .zoom-group,
 .action-group {
   display: flex;
@@ -17,11 +24,46 @@
   gap: 4px;
 }
 
+.field-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #475569;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+
+  span {
+    white-space: nowrap;
+  }
+
+  select {
+    height: 30px;
+    padding: 0 0.5rem;
+    border: 1px solid rgba(148, 163, 184, 0.35);
+    border-radius: 6px;
+    background: rgba(248, 250, 252, 0.9);
+    color: #1e293b;
+    font-size: 12px;
+    min-width: 86px;
+
+    &:focus {
+      outline: none;
+      border-color: rgba(56, 189, 248, 0.65);
+    }
+
+    option {
+      background: #f8fafc;
+      color: #1e293b;
+    }
+  }
+}
+
 .toolbar-divider {
   width: 1px;
   height: 24px;
-  background: rgba(148, 163, 184, 0.2);
-  margin: 0 0.25rem;
+  background: rgba(148, 163, 184, 0.28);
+  margin: 0 0.15rem;
 }
 
 .toolbar-spacer {
@@ -37,19 +79,19 @@
   border: 1px solid transparent;
   border-radius: 6px;
   background: transparent;
-  color: rgba(226, 232, 240, 0.8);
+  color: #475569;
   cursor: pointer;
   transition: all 0.12s ease;
 
   &:hover {
     background: rgba(148, 163, 184, 0.15);
-    color: #e2e8f0;
+    color: #1e293b;
   }
 
   &.active {
-    background: rgba(34, 197, 94, 0.15);
-    border-color: rgba(34, 197, 94, 0.4);
-    color: #4ade80;
+    background: rgba(56, 189, 248, 0.18);
+    border-color: rgba(56, 189, 248, 0.45);
+    color: #7dd3fc;
   }
 
   &:disabled {
@@ -62,67 +104,32 @@
   }
 }
 
-.color-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border: 2px solid transparent;
-  border-radius: 6px;
-  background: transparent;
-  cursor: pointer;
-  transition: all 0.12s ease;
-
-  &:hover:not(:disabled) {
-    border-color: rgba(148, 163, 184, 0.4);
-  }
-
-  &.active {
-    border-color: #4ade80;
-  }
-
-  &.disabled,
-  &:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-  }
-}
-
-.color-swatch {
-  width: 18px;
-  height: 18px;
-  border-radius: 4px;
-  background: var(--swatch-color, #000);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
+.select-icon {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
 }
 
 .zoom-select {
-  width: 70px;
+  width: 74px;
   height: 28px;
   padding: 0 0.5rem;
-  border: 1px solid rgba(148, 163, 184, 0.25);
+  border: 1px solid rgba(148, 163, 184, 0.35);
   border-radius: 6px;
-  background: rgba(30, 41, 59, 0.6);
-  color: #e2e8f0;
+  background: rgba(248, 250, 252, 0.9);
+  color: #1e293b;
   font-size: 12px;
   font-family: 'SF Mono', 'Consolas', monospace;
   cursor: pointer;
 
-  &:hover {
-    border-color: rgba(148, 163, 184, 0.4);
-  }
-
   &:focus {
     outline: none;
-    border-color: rgba(34, 197, 94, 0.5);
+    border-color: rgba(56, 189, 248, 0.65);
   }
 
   option {
-    background: #1e293b;
-    color: #e2e8f0;
+    background: #f8fafc;
+    color: #1e293b;
   }
 }
 
@@ -131,95 +138,94 @@
   align-items: center;
   justify-content: center;
   height: 32px;
-  padding: 0 1rem;
-  border: 1px solid rgba(148, 163, 184, 0.3);
+  padding: 0 0.95rem;
+  border: 1px solid rgba(148, 163, 184, 0.4);
   border-radius: 6px;
-  background: rgba(30, 41, 59, 0.6);
-  color: #e2e8f0;
+  background: rgba(248, 250, 252, 0.9);
+  color: #1e293b;
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.12s ease;
 
   &:hover {
-    background: rgba(51, 65, 85, 0.8);
-    border-color: rgba(148, 163, 184, 0.5);
+    background: #e2e8f0;
   }
 
   &.primary {
-    background: rgba(34, 197, 94, 0.15);
-    border-color: rgba(34, 197, 94, 0.4);
-    color: #4ade80;
+    background: rgba(56, 189, 248, 0.17);
+    border-color: rgba(56, 189, 248, 0.45);
+    color: #0369a1;
 
     &:hover {
-      background: rgba(34, 197, 94, 0.25);
-      border-color: rgba(34, 197, 94, 0.6);
+      background: rgba(56, 189, 248, 0.26);
+      border-color: rgba(56, 189, 248, 0.65);
     }
   }
 }
 
-// Light mode
-:host-context(:not(.dark)) {
+:host-context(.dark),
+:host-context(.p-dark) {
   .editor-toolbar {
-    background: rgba(255, 255, 255, 0.95);
-    border-bottom-color: rgba(148, 163, 184, 0.25);
+    background: rgba(15, 23, 42, 0.95);
+    border-bottom-color: rgba(148, 163, 184, 0.15);
   }
 
   .toolbar-divider {
-    background: rgba(148, 163, 184, 0.3);
+    background: rgba(148, 163, 184, 0.2);
+  }
+
+  .field-group {
+    color: rgba(226, 232, 240, 0.85);
+
+    select {
+      background: rgba(30, 41, 59, 0.65);
+      border-color: rgba(148, 163, 184, 0.25);
+      color: #e2e8f0;
+
+      option {
+        background: #1e293b;
+        color: #e2e8f0;
+      }
+    }
   }
 
   .tool-btn {
-    color: #475569;
+    color: rgba(226, 232, 240, 0.8);
 
     &:hover {
       background: rgba(148, 163, 184, 0.15);
-      color: #1e293b;
+      color: #e2e8f0;
     }
 
     &.active {
-      background: rgba(34, 197, 94, 0.1);
-      color: #16a34a;
+      color: #7dd3fc;
     }
-  }
-
-  .color-btn {
-    &.active {
-      border-color: #16a34a;
-    }
-  }
-
-  .color-swatch {
-    border-color: rgba(0, 0, 0, 0.15);
   }
 
   .zoom-select {
-    background: rgba(248, 250, 252, 0.9);
-    border-color: rgba(148, 163, 184, 0.35);
-    color: #1e293b;
+    background: rgba(30, 41, 59, 0.6);
+    border-color: rgba(148, 163, 184, 0.25);
+    color: #e2e8f0;
 
     option {
-      background: #f8fafc;
-      color: #1e293b;
+      background: #1e293b;
+      color: #e2e8f0;
     }
   }
 
   .action-btn {
-    background: rgba(248, 250, 252, 0.9);
-    border-color: rgba(148, 163, 184, 0.4);
-    color: #1e293b;
+    background: rgba(30, 41, 59, 0.6);
+    border-color: rgba(148, 163, 184, 0.3);
+    color: #e2e8f0;
 
     &:hover {
-      background: #e2e8f0;
+      background: rgba(51, 65, 85, 0.8);
+      border-color: rgba(148, 163, 184, 0.5);
     }
 
     &.primary {
-      background: rgba(34, 197, 94, 0.1);
-      color: #16a34a;
-
-      &:hover {
-        background: rgba(34, 197, 94, 0.2);
-      }
+      color: #7dd3fc;
     }
   }
 }

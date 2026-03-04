@@ -23,7 +23,9 @@ export class PortInterceptor implements HttpInterceptor {
     try {
       const parsed = new URL(url);
 
-      parsed.port = '8000';
+      if (!parsed.port) {
+        parsed.port = '8000';
+      }
 
       const newUrl = `${parsed.protocol}//${parsed.hostname}:${parsed.port}${parsed.pathname}${parsed.search}${parsed.hash}`;
 

@@ -156,6 +156,10 @@
   width: 100%;
 }
 
+:host ::ng-deep .node .p-multiselect.arg-dropdown {
+  width: 100%;
+}
+
 :host ::ng-deep .node .p-checkbox {
   display: inline-flex;
 }

@@ -1,16 +1,18 @@
-import { Component, input, output } from '@angular/core';
+import { Component, computed, input, output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule } from '@ngx-translate/core';
 import { Tooltip } from 'primeng/tooltip';
 import {
-  DrawingTool,
-  PaintColor,
+  EditorTool,
+  LineKind,
+  MeasurementUnit,
   ZOOM_LEVELS,
   MIN_ZOOM,
   MAX_ZOOM,
   ZOOM_STEP,
-  COLOR_OPTIONS,
   TOOL_OPTIONS,
+  LINE_KIND_OPTIONS,
+  UNIT_OPTIONS,
 } from './models/editor-state';
 
 @Component({
@@ -21,41 +23,72 @@ import {
   styleUrl: './table-editor-toolbar.scss',
 })
 export class TableEditorToolbar {
-  // Inputs
+  readonly currentZoomOptionKey = '__current__';
+
   readonly zoom = input.required<number>();
   readonly showGrid = input.required<boolean>();
-  readonly activeTool = input.required<DrawingTool>();
-  readonly selectedColor = input.required<PaintColor>();
+  readonly showSmartGuides = input.required<boolean>();
+  readonly activeTool = input.required<EditorTool>();
+  readonly lineKind = input.required<LineKind>();
+  readonly measurementUnit = input.required<MeasurementUnit>();
+  readonly hasSelection = input.required<boolean>();
 
-  // Outputs
   readonly zoomChange = output<number>();
   readonly gridToggle = output<void>();
-  readonly toolChange = output<DrawingTool>();
-  readonly colorChange = output<PaintColor>();
+  readonly smartGuidesToggle = output<void>();
+  readonly toolChange = output<EditorTool>();
+  readonly lineKindChange = output<LineKind>();
+  readonly unitChange = output<MeasurementUnit>();
   readonly uploadRequest = output<void>();
   readonly clearRequest = output<void>();
   readonly loadMapRequest = output<void>();
+  readonly deleteLineRequest = output<void>();
   readonly zoomToFit = output<void>();
 
-  readonly colorOptions = COLOR_OPTIONS;
   readonly toolOptions = TOOL_OPTIONS;
-  readonly zoomLevels = ZOOM_LEVELS;
+  readonly lineKindOptions = LINE_KIND_OPTIONS;
+  readonly unitOptions = UNIT_OPTIONS;
+  readonly currentZoomLabel = computed<string>(() => this.formatZoomPercent(this.zoom()));
+  readonly presetZoomOptions: { key: string; value: number }[] = ZOOM_LEVELS.map(value => ({
+    key: this.toZoomKey(value),
+    value,
+  }));
 
   zoomIn(): void {
-    const newZoom = Math.min(MAX_ZOOM, this.zoom() + ZOOM_STEP);
-    this.zoomChange.emit(newZoom);
+    const next = Math.min(MAX_ZOOM, this.zoom() + ZOOM_STEP);
+    this.zoomChange.emit(next);
   }
 
   zoomOut(): void {
-    const newZoom = Math.max(MIN_ZOOM, this.zoom() - ZOOM_STEP);
-    this.zoomChange.emit(newZoom);
+    const next = Math.max(MIN_ZOOM, this.zoom() - ZOOM_STEP);
+    this.zoomChange.emit(next);
   }
 
   onZoomSelect(event: Event): void {
-    const select = event.target as HTMLSelectElement;
-    const value = parseFloat(select.value);
-    if (!isNaN(value)) {
+    const rawValue = (event.target as HTMLSelectElement).value;
+    if (rawValue === this.currentZoomOptionKey) {
+      return;
+    }
+    const value = parseFloat(rawValue);
+    if (!Number.isNaN(value)) {
       this.zoomChange.emit(value);
     }
+  }
+
+  onLineKindSelect(event: Event): void {
+    this.lineKindChange.emit((event.target as HTMLSelectElement).value as LineKind);
+  }
+
+  onUnitSelect(event: Event): void {
+    this.unitChange.emit((event.target as HTMLSelectElement).value as MeasurementUnit);
+  }
+
+  private toZoomKey(value: number): string {
+    return value.toFixed(4);
+  }
+
+  private formatZoomPercent(value: number): string {
+    const rounded = Number((value * 100).toFixed(2));
+    return `${rounded}%`;
   }
 }

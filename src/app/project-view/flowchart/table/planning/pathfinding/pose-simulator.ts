@@ -1,42 +1,46 @@
-import { Pose2D, forwardMove, rotate, normalizeAngle } from '../../models/pose2d';
+import { Pose2D, forwardMove, rotate } from '../../models';
 import { MissionStep } from '../../../../../entities/MissionStep';
+import {
+  isBackwardStepId,
+  isClockwiseStepId,
+  isCounterClockwiseStepId,
+  isDriveStepId,
+  isLeftStepId,
+  isStrafeStepId,
+  isTurnStepId,
+  stepId,
+} from '../../step-id';
 
 /**
  * Simulate the resulting pose from executing a command.
  * This is a lightweight computation without backend calls.
  */
 export function simulateCommand(startPose: Pose2D, command: MissionStep): Pose2D {
-  const fn = command.function_name;
+  const fn = stepId(command);
   const arg = command.arguments[0]?.value as number ?? 0;
 
-  switch (fn) {
-    case 'drive_forward':
-      return forwardMove(startPose, arg);
-
-    case 'drive_backward':
-      return forwardMove(startPose, -arg);
-
-    case 'turn_cw':
-    case 'tank_turn_cw':
-      // Clockwise = negative angle (in radians)
-      return rotate(startPose, -arg * Math.PI / 180);
-
-    case 'turn_ccw':
-    case 'tank_turn_ccw':
-      // Counter-clockwise = positive angle
-      return rotate(startPose, arg * Math.PI / 180);
-
-    case 'strafe_left':
-      // Strafe perpendicular to heading (left = positive perpendicular)
-      return strafeMove(startPose, arg);
-
-    case 'strafe_right':
-      return strafeMove(startPose, -arg);
-
-    default:
-      // Unknown command - return unchanged pose
-      return { ...startPose };
+  if (isDriveStepId(fn)) {
+    return forwardMove(startPose, isBackwardStepId(fn) ? -arg : arg);
   }
+
+  if (isTurnStepId(fn)) {
+    // Prefer explicit turn direction tokens; if missing, use argument sign.
+    const positiveDegrees = Math.abs(arg);
+    const signedDegrees = isClockwiseStepId(fn)
+      ? -positiveDegrees
+      : isCounterClockwiseStepId(fn)
+        ? positiveDegrees
+        : arg;
+    return rotate(startPose, signedDegrees * Math.PI / 180);
+  }
+
+  if (isStrafeStepId(fn)) {
+    // Strafe perpendicular to heading (left = positive perpendicular).
+    return strafeMove(startPose, isLeftStepId(fn) ? arg : -arg);
+  }
+
+  // Unknown command - return unchanged pose
+  return { ...startPose };
 }
 
 /**
@@ -78,12 +82,12 @@ export function getCommandTrajectory(startPose: Pose2D, commands: MissionStep[])
  * This allows physics simulation to properly handle wall sliding.
  */
 export function getSingleCommandTrajectory(startPose: Pose2D, command: MissionStep, stepSize: number = 1): Pose2D[] {
-  const fn = command.function_name;
+  const fn = stepId(command);
   const arg = command.arguments[0]?.value as number ?? 0;
   const poses: Pose2D[] = [startPose];
 
-  if (fn === 'drive_forward' || fn === 'drive_backward') {
-    const distance = fn === 'drive_backward' ? -arg : arg;
+  if (isDriveStepId(fn)) {
+    const distance = isBackwardStepId(fn) ? -arg : arg;
     const steps = Math.max(1, Math.ceil(Math.abs(distance) / stepSize));
     const stepDist = distance / steps;
     let pose = startPose;
@@ -92,7 +96,7 @@ export function getSingleCommandTrajectory(startPose: Pose2D, command: MissionSt
       pose = forwardMove(pose, stepDist);
       poses.push(pose);
     }
-  } else if (fn === 'turn_cw' || fn === 'turn_ccw' || fn === 'tank_turn_cw' || fn === 'tank_turn_ccw') {
+  } else if (isTurnStepId(fn)) {
     // For turns, just add start and end (no intermediate needed for physics)
     poses.push(simulateCommand(startPose, command));
   } else {

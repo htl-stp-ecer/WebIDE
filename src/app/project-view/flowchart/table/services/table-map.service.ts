@@ -18,6 +18,7 @@ export interface LineSegmentCm {
   endX: number;
   endY: number;
   isDiagonal: boolean;
+  thickness?: number;
 }
 
 /** Wall segment in table coordinates (cm) */
@@ -55,10 +56,17 @@ interface ParsedMapData {
   wallSegments: WallSegment[];
 }
 
+interface VectorMapCache {
+  hash: string;
+  lineSegments: LineSegmentCm[];
+  wallSegments: WallSegmentCm[];
+}
+
 // Color thresholds
 const BLACK_THRESHOLD = 50;   // Dark pixels are black lines
 const GRAY_MIN = 80;          // Gray pixels are walls
 const GRAY_MAX = 180;         // Gray range upper bound
+const VECTOR_MAP_CACHE_KEY = 'tableVectorMapCacheV1';
 
 /**
  * Service for loading and querying the game table map.
@@ -69,6 +77,8 @@ export class TableMapService {
   private readonly _mapImage = signal<HTMLImageElement | null>(null);
   private readonly _imageData = signal<ImageData | null>(null);
   private readonly _parsedData = signal<ParsedMapData | null>(null);
+  private readonly _vectorLineSegmentsCm = signal<LineSegmentCm[] | null>(null);
+  private readonly _vectorWallSegmentsCm = signal<WallSegmentCm[] | null>(null);
   private readonly _isLoading = signal<boolean>(false);
   // Default dimensions: 79x40 pixels mapped to 200x100 cm
   private readonly _config = signal<MapConfig>({
@@ -79,22 +89,34 @@ export class TableMapService {
 
   readonly mapImage = this._mapImage.asReadonly();
   readonly config = this._config.asReadonly();
-  readonly isLoaded = computed(() => this._mapImage() !== null);
+  readonly isLoaded = computed(() =>
+    this._mapImage() !== null ||
+    this._parsedData() !== null ||
+    this._vectorLineSegmentsCm() !== null ||
+    this._vectorWallSegmentsCm() !== null
+  );
   readonly isLoading = this._isLoading.asReadonly();
 
   /** Line segments in table coordinates (cm) */
   readonly lineSegmentsCm = computed<LineSegmentCm[]>(() => {
+    const vector = this._vectorLineSegmentsCm();
+    if (vector) return vector;
+
     const data = this._parsedData();
     if (!data) return [];
 
     return data.lineSegments.map(seg => ({
       ...this.pixelSegmentToTableCm(seg, data.height),
       isDiagonal: seg.isDiagonal,
+      thickness: CM_PER_PIXEL_AVG,
     }));
   });
 
   /** Wall segments in table coordinates (cm) */
   readonly wallSegmentsCm = computed<WallSegmentCm[]>(() => {
+    const vector = this._vectorWallSegmentsCm();
+    if (vector) return vector;
+
     const data = this._parsedData();
     if (!data) return [];
 
@@ -119,6 +141,8 @@ export class TableMapService {
   /** Load a map image from a URL */
   async loadMap(url: string): Promise<void> {
     this._isLoading.set(true);
+    this._vectorLineSegmentsCm.set(null);
+    this._vectorWallSegmentsCm.set(null);
     return new Promise((resolve, reject) => {
       const img = new Image();
       img.crossOrigin = 'anonymous';
@@ -148,7 +172,44 @@ export class TableMapService {
 
   /** Load map from a base64 string */
   async loadMapFromBase64(base64: string): Promise<void> {
+    const cached = this.readVectorCache(base64);
+    if (cached) {
+      this.setVectorMap(cached.lineSegments, cached.wallSegments);
+      return;
+    }
+
     return this.loadMap(`data:image/png;base64,${base64}`);
+  }
+
+  /**
+   * Set map vectors directly in table coordinates (cm). This keeps geometric precision
+   * for planning/simulation while still allowing PNG persistence separately.
+   */
+  setVectorMap(lineSegments: LineSegmentCm[], wallSegments: WallSegmentCm[] = []): void {
+    this._vectorLineSegmentsCm.set([...lineSegments]);
+    this._vectorWallSegmentsCm.set([...wallSegments]);
+    this._parsedData.set(null);
+    this._mapImage.set(null);
+    this._imageData.set(null);
+    this._config.set({
+      widthCm: 79 * CM_PER_PIXEL_X,
+      heightCm: 40 * CM_PER_PIXEL_Y,
+      pixelsPerCm: 1 / CM_PER_PIXEL_AVG,
+    });
+  }
+
+  cacheVectorMapForBase64(base64: string, lineSegments: LineSegmentCm[], wallSegments: WallSegmentCm[] = []): void {
+    const payload: VectorMapCache = {
+      hash: this.hashBase64(base64),
+      lineSegments: [...lineSegments],
+      wallSegments: [...wallSegments],
+    };
+
+    try {
+      localStorage.setItem(VECTOR_MAP_CACHE_KEY, JSON.stringify(payload));
+    } catch {
+      // Ignore storage quota/security errors.
+    }
   }
 
   /** Clear loaded map */
@@ -156,6 +217,8 @@ export class TableMapService {
     this._mapImage.set(null);
     this._imageData.set(null);
     this._parsedData.set(null);
+    this._vectorLineSegmentsCm.set(null);
+    this._vectorWallSegmentsCm.set(null);
   }
 
   private extractImageData(img: HTMLImageElement): void {
@@ -169,6 +232,18 @@ export class TableMapService {
 
   /** Check if a position (in table cm) is on a black line */
   isOnBlackLine(xCm: number, yCm: number): boolean {
+    const vectorSegments = this._vectorLineSegmentsCm();
+    if (vectorSegments?.length) {
+      for (const segment of vectorSegments) {
+        const segmentThickness = Math.max(0.6, segment.thickness ?? Math.min(CM_PER_PIXEL_X, CM_PER_PIXEL_Y));
+        const thresholdCm = Math.max(0.75, segmentThickness * 0.5);
+        if (this.pointToLineDistanceCm(xCm, yCm, segment) <= thresholdCm) {
+          return true;
+        }
+      }
+      return false;
+    }
+
     const imageData = this._imageData();
     const img = this._mapImage();
     if (!imageData || !img) return false;
@@ -191,6 +266,60 @@ export class TableMapService {
   /** Check if a position (in table cm) is on white surface */
   isOnWhite(xCm: number, yCm: number): boolean {
     return !this.isOnBlackLine(xCm, yCm);
+  }
+
+  private pointToLineDistanceCm(
+    xCm: number,
+    yCm: number,
+    segment: { startX: number; startY: number; endX: number; endY: number }
+  ): number {
+    const vx = segment.endX - segment.startX;
+    const vy = segment.endY - segment.startY;
+    const wx = xCm - segment.startX;
+    const wy = yCm - segment.startY;
+
+    const c1 = vx * wx + vy * wy;
+    if (c1 <= 0) {
+      return Math.hypot(xCm - segment.startX, yCm - segment.startY);
+    }
+
+    const c2 = vx * vx + vy * vy;
+    if (c2 <= c1) {
+      return Math.hypot(xCm - segment.endX, yCm - segment.endY);
+    }
+
+    const t = c1 / c2;
+    const px = segment.startX + t * vx;
+    const py = segment.startY + t * vy;
+    return Math.hypot(xCm - px, yCm - py);
+  }
+
+  private readVectorCache(base64: string): VectorMapCache | null {
+    try {
+      const raw = localStorage.getItem(VECTOR_MAP_CACHE_KEY);
+      if (!raw) return null;
+
+      const parsed = JSON.parse(raw) as Partial<VectorMapCache>;
+      if (!parsed || parsed.hash !== this.hashBase64(base64)) return null;
+      if (!Array.isArray(parsed.lineSegments) || !Array.isArray(parsed.wallSegments)) return null;
+
+      return {
+        hash: parsed.hash,
+        lineSegments: parsed.lineSegments,
+        wallSegments: parsed.wallSegments,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  private hashBase64(value: string): string {
+    let hash = 2166136261;
+    for (let i = 0; i < value.length; i++) {
+      hash ^= value.charCodeAt(i);
+      hash = Math.imul(hash, 16777619);
+    }
+    return (hash >>> 0).toString(16);
   }
 
   /** Convert table coordinates (cm) to canvas coordinates */

@@ -11,7 +11,6 @@ import { NotificationService } from '../services/NotificationService';
 import { interval, Subscription, timeout } from 'rxjs';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { encodeRouteIp } from '../services/route-ip-serializer';
-import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 
 @Component({
   selector: 'app-home',
@@ -34,7 +33,6 @@ export class Home implements OnInit, OnDestroy {
   localProjectsCount = 0;
   localProjectsLoading = true;
   corsConfirmUrl?: string;
-  corsConfirmSafeUrl?: SafeResourceUrl;
   corsConfirmIp?: string;
   private statusLoading = new Map<string, boolean>();
   private refreshSub?: Subscription;
@@ -43,8 +41,7 @@ export class Home implements OnInit, OnDestroy {
   constructor(
     private httpService: HttpService,
     private router: Router,
-    private translate: TranslateService,
-    private sanitizer: DomSanitizer
+    private translate: TranslateService
   ) {
     const connections = localStorage.getItem("previousConnections");
     if (connections) {
@@ -96,7 +93,6 @@ export class Home implements OnInit, OnDestroy {
             if (this.corsConfirmIp === conn.ip) {
               this.corsConfirmIp = undefined;
               this.corsConfirmUrl = undefined;
-              this.corsConfirmSafeUrl = undefined;
             }
           },
           error: err => {
@@ -125,7 +121,6 @@ export class Home implements OnInit, OnDestroy {
 
   tryConnecting(ip: string) {
     this.corsConfirmUrl = undefined;
-    this.corsConfirmSafeUrl = undefined;
     this.corsConfirmIp = undefined;
     const targetIp = (ip || '').trim();
     if (!targetIp) {
@@ -155,7 +150,6 @@ export class Home implements OnInit, OnDestroy {
           this.httpService.setDeviceBase(targetIp);
           this.router.navigate(['/device', encodeRouteIp(targetIp), 'projects']);
           this.corsConfirmUrl = undefined;
-          this.corsConfirmSafeUrl = undefined;
           this.corsConfirmIp = undefined;
         },
         error: (err) => {
@@ -183,7 +177,6 @@ export class Home implements OnInit, OnDestroy {
           if (this.isCorsLikeError(err)) {
             this.corsConfirmIp = targetIp;
             this.corsConfirmUrl = this.buildConfirmUrl(targetIp);
-            this.corsConfirmSafeUrl = this.sanitizer.bypassSecurityTrustResourceUrl(this.corsConfirmUrl);
           }
         }
       });
@@ -194,7 +187,6 @@ export class Home implements OnInit, OnDestroy {
     if (this.corsConfirmIp === ip) {
       this.corsConfirmIp = undefined;
       this.corsConfirmUrl = undefined;
-      this.corsConfirmSafeUrl = undefined;
     }
     this.saveToLocalStorage();
   }

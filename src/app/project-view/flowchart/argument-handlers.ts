@@ -1,6 +1,7 @@
 import type { Flowchart } from './flowchart';
 import type { FlowNode } from './models';
 import type { MissionStep } from '../../entities/MissionStep';
+import { isMultiSensorType, serializeMultiSensorSelection } from './models';
 import { handleSave } from './save-handlers';
 
 type ArgPrimitive = string | number | boolean | null;
@@ -73,6 +74,9 @@ function resolveControlValue(value: unknown, argType?: string): ArgPrimitive {
     return null;
   }
   const kind = (argType ?? '').toLowerCase();
+  if (isMultiSensorType(argType)) {
+    return serializeMultiSensorSelection(unwrapped);
+  }
   if (kind === 'bool' || kind === 'boolean') {
     return unwrapped === true || unwrapped === 'true';
   }

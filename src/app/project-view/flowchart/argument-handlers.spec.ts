@@ -95,4 +95,19 @@ describe('handleArgumentChange', () => {
     jasmine.clock().tick(200);
     expect(saveMissionSpy).toHaveBeenCalledTimes(1);
   });
+
+  it('serializes multi-sensor selections to a backend-compatible expression', () => {
+    const node = flow.nodes()[0];
+    node.step.arguments[0].type = 'Union[IRSensor, list[IRSensor]]';
+    missionStep.arguments[0].type = 'Union[IRSensor, list[IRSensor]]';
+
+    handleArgumentChange(flow, nodeId, 'Arg', 0, ['left_ir_sensor', 'right_ir_sensor']);
+    expect(missionStep.arguments[0].value).toBe('[left_ir_sensor, right_ir_sensor]');
+
+    handleArgumentChange(flow, nodeId, 'Arg', 0, ['left_ir_sensor']);
+    expect(missionStep.arguments[0].value).toBe('left_ir_sensor');
+
+    handleArgumentChange(flow, nodeId, 'Arg', 0, []);
+    expect(missionStep.arguments[0].value).toBeNull();
+  });
 });
