@@ -62,6 +62,29 @@ type SelectDragState =
       anchor: VectorPoint;
     };
 
+const TABLE_MAP_FILE_FORMAT = 'flowchart-table-map';
+const TABLE_MAP_FILE_VERSION = 1;
+const TABLE_MAP_FILE_EXTENSION = 'ftmap';
+
+interface TableMapFileLine {
+  kind: LineKind;
+  startX: number;
+  startY: number;
+  endX: number;
+  endY: number;
+  widthCm: number;
+}
+
+interface TableMapFileV1 {
+  format: typeof TABLE_MAP_FILE_FORMAT;
+  version: typeof TABLE_MAP_FILE_VERSION;
+  table: {
+    widthCm: number;
+    heightCm: number;
+  };
+  lines: TableMapFileLine[];
+}
+
 @Component({
   selector: 'app-table-editor-view',
   standalone: true,
@@ -1051,38 +1074,42 @@ export class TableEditorView implements AfterViewInit, OnDestroy {
     return `X: ${x} ${this.measurementUnit()}, Y: ${y} ${this.measurementUnit()}`;
   }
 
-  async uploadPng(): Promise<void> {
+  exportMapFile(): void {
+    try {
+      const content = JSON.stringify(this.buildMapFilePayload(), null, 2);
+      const blob = new Blob([content], { type: 'application/x-flowchart-tablemap+json' });
+      const timestamp = this.buildFileTimestamp();
+      const fileName = `table-map-${timestamp}.${TABLE_MAP_FILE_EXTENSION}`;
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = fileName;
+      anchor.click();
+      setTimeout(() => URL.revokeObjectURL(url), 0);
+      this.message.set(`Exported ${fileName}`);
+    } catch (err) {
+      this.message.set(`Map export failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  async importMapFile(): Promise<void> {
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = 'image/png';
+    input.accept = `.${TABLE_MAP_FILE_EXTENSION}`;
 
     input.onchange = async () => {
       const file = input.files?.[0];
       if (!file) return;
 
       try {
-        const img = await this.loadImage(file);
-
-        if (img.width !== MAP_WIDTH || img.height !== MAP_HEIGHT) {
-          this.message.set(
-            this.translate.instant('FLOWCHART.TABLE_UPLOAD_INVALID_SIZE', {
-              expected: `${MAP_WIDTH}x${MAP_HEIGHT}`,
-              actual: `${img.width}x${img.height}`,
-            })
-          );
-          return;
-        }
-
-        const dataUrl = await this.imageToDataUrl(img);
-        const base64 = dataUrl.split(',')[1];
-        await this.importMapFromBase64(base64);
-        this.message.set(this.translate.instant('FLOWCHART.TABLE_UPLOAD_SUCCESS'));
+        const content = await file.text();
+        const importedLines = this.parseMapFile(content);
+        this.lines.set(importedLines);
+        this.selectedLineId.set(null);
+        this.clearDraft();
+        this.message.set(`Imported ${importedLines.length} line(s) from ${file.name}`);
       } catch (err) {
-        this.message.set(
-          this.translate.instant('FLOWCHART.TABLE_UPLOAD_FAILED', {
-            error: err instanceof Error ? err.message : String(err),
-          })
-        );
+        this.message.set(`Map import failed: ${err instanceof Error ? err.message : String(err)}`);
       }
     };
 
@@ -1250,36 +1277,120 @@ export class TableEditorView implements AfterViewInit, OnDestroy {
     }));
   }
 
-  private async loadImage(file: File): Promise<HTMLImageElement> {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const img = new Image();
-        img.onload = () => resolve(img);
-        img.onerror = reject;
-        img.src = reader.result as string;
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-  }
-
-  private async imageToDataUrl(img: HTMLImageElement): Promise<string> {
-    const canvas = document.createElement('canvas');
-    canvas.width = img.width;
-    canvas.height = img.height;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) throw new Error('Unable to create image conversion context');
-
-    ctx.drawImage(img, 0, 0);
-    return canvas.toDataURL('image/png');
-  }
-
   private async importMapFromBase64(base64: string): Promise<void> {
     await this.mapService.loadMapFromBase64(base64);
     this.rebuildLinesFromMapService();
     this.selectedLineId.set(null);
     this.clearDraft();
+  }
+
+  private buildMapFilePayload(): TableMapFileV1 {
+    return {
+      format: TABLE_MAP_FILE_FORMAT,
+      version: TABLE_MAP_FILE_VERSION,
+      table: {
+        widthCm: TABLE_WIDTH_CM,
+        heightCm: TABLE_HEIGHT_CM,
+      },
+      lines: this.lines().map(line => ({
+        kind: line.kind,
+        startX: roundTo(line.startX, 2),
+        startY: roundTo(line.startY, 2),
+        endX: roundTo(line.endX, 2),
+        endY: roundTo(line.endY, 2),
+        widthCm: roundTo(Math.max(MIN_LINE_WIDTH_CM, line.widthCm), 2),
+      })),
+    };
+  }
+
+  private parseMapFile(content: string): VectorLine[] {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(content);
+    } catch {
+      throw new Error('File is not valid JSON.');
+    }
+
+    if (!parsed || typeof parsed !== 'object') {
+      throw new Error('Invalid map file structure.');
+    }
+
+    const file = parsed as Partial<TableMapFileV1>;
+    if (file.format !== TABLE_MAP_FILE_FORMAT) {
+      throw new Error(`Unsupported map file format: ${String(file.format ?? 'unknown')}`);
+    }
+    if (file.version !== TABLE_MAP_FILE_VERSION) {
+      throw new Error(`Unsupported map file version: ${String(file.version ?? 'unknown')}`);
+    }
+
+    const table = file.table;
+    if (!table || typeof table !== 'object') {
+      throw new Error('Missing table dimensions in map file.');
+    }
+
+    const widthCm = this.readFiniteNumber(table.widthCm, 'table.widthCm');
+    const heightCm = this.readFiniteNumber(table.heightCm, 'table.heightCm');
+    if (Math.abs(widthCm - TABLE_WIDTH_CM) > 0.01 || Math.abs(heightCm - TABLE_HEIGHT_CM) > 0.01) {
+      throw new Error(`Map dimensions must be ${TABLE_WIDTH_CM}x${TABLE_HEIGHT_CM} cm.`);
+    }
+
+    if (!Array.isArray(file.lines)) {
+      throw new Error('Map file does not contain a valid line list.');
+    }
+
+    return file.lines.map((entry, index) => this.parseMapFileLine(entry, index));
+  }
+
+  private parseMapFileLine(entry: unknown, index: number): VectorLine {
+    if (!entry || typeof entry !== 'object') {
+      throw new Error(`Line ${index + 1} is not an object.`);
+    }
+
+    const line = entry as Partial<TableMapFileLine>;
+    if (line.kind !== 'line' && line.kind !== 'wall') {
+      throw new Error(`Line ${index + 1} has invalid kind.`);
+    }
+
+    const start = clampToTable({
+      x: this.readFiniteNumber(line.startX, `lines[${index}].startX`),
+      y: this.readFiniteNumber(line.startY, `lines[${index}].startY`),
+    });
+    const end = clampToTable({
+      x: this.readFiniteNumber(line.endX, `lines[${index}].endX`),
+      y: this.readFiniteNumber(line.endY, `lines[${index}].endY`),
+    });
+    const widthCm = this.readFiniteNumber(line.widthCm, `lines[${index}].widthCm`);
+    if (widthCm <= 0) {
+      throw new Error(`Line ${index + 1} has invalid width.`);
+    }
+
+    return {
+      id: this.createLineId(),
+      kind: line.kind,
+      startX: roundTo(start.x, 2),
+      startY: roundTo(start.y, 2),
+      endX: roundTo(end.x, 2),
+      endY: roundTo(end.y, 2),
+      widthCm: roundTo(Math.max(MIN_LINE_WIDTH_CM, widthCm), 2),
+    };
+  }
+
+  private readFiniteNumber(value: unknown, fieldName: string): number {
+    if (typeof value !== 'number' || !Number.isFinite(value)) {
+      throw new Error(`Invalid number at ${fieldName}.`);
+    }
+    return value;
+  }
+
+  private buildFileTimestamp(): string {
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const dd = String(now.getDate()).padStart(2, '0');
+    const hh = String(now.getHours()).padStart(2, '0');
+    const min = String(now.getMinutes()).padStart(2, '0');
+    const ss = String(now.getSeconds()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}_${hh}-${min}-${ss}`;
   }
 
   private rebuildLinesFromMapService(): void {
