@@ -20,6 +20,10 @@ function normalizeNodeIds(value: unknown): string[] {
   return value.filter((id): id is string => typeof id === 'string' && !!id);
 }
 
+function isSyntheticJunctionNodeId(nodeId: string): boolean {
+  return nodeId.startsWith('junction-');
+}
+
 function stableHash(input: string): string {
   let hash = 0;
   for (let i = 0; i < input.length; i++) {
@@ -129,7 +133,7 @@ function fillGroupNodeIdsFromPaths(flow: Flowchart, group: FlowGroup): FlowGroup
 }
 
 function resolveGroupNodeIds(flow: Flowchart, group: FlowGroup): string[] {
-  const nodeIds = normalizeNodeIds((group as any).nodeIds);
+  const nodeIds = normalizeNodeIds((group as any).nodeIds).filter(id => !isSyntheticJunctionNodeId(id));
   if (nodeIds.length) {
     return nodeIds;
   }
@@ -153,6 +157,7 @@ function getNodesUnderGroup(flow: Flowchart, group: FlowGroup, candidates: FlowN
   const sizeMap = buildNodeElementSizeMap(flow);
 
   return candidates
+    .filter(node => !isSyntheticJunctionNodeId(node.id))
     .filter(node => {
       const size = sizeMap.get(node.id) ?? getNodeElementSize(flow, node.id);
       const centerX = node.position.x + size.width / 2;
@@ -204,7 +209,9 @@ function applyAutoAssignNodesToGroup(flow: Flowchart, groups: FlowGroup[], targe
   const currentTargetNodeIds = resolveGroupNodeIds(flow, target);
   const visibleNodes = getVisibleNodes(flow);
   const visibleNodeIds = new Set(visibleNodes.map(n => n.id));
-  const candidates = flow.nodes().filter(node => visibleNodeIds.has(node.id) || currentTargetNodeIds.includes(node.id));
+  const candidates = flow.nodes().filter(
+    node => !isSyntheticJunctionNodeId(node.id) && (visibleNodeIds.has(node.id) || currentTargetNodeIds.includes(node.id)),
+  );
 
   const nodesUnderGroup = getNodesUnderGroup(flow, target, candidates);
   if (!strict && !nodesUnderGroup.length) {
@@ -497,6 +504,7 @@ export function handleDropToGroup(flow: Flowchart, event: FDropToGroupEvent): vo
   const allNodeIds = new Set(flow.nodes().map(n => n.id));
   const draggedIds = (event.fNodes ?? [])
     .filter((id): id is string => !!id)
+    .filter(id => !isSyntheticJunctionNodeId(id))
     .filter(id => allNodeIds.has(id));
   if (!draggedIds.length) {
     return;

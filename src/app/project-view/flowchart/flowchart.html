@@ -219,6 +219,7 @@
             [fNodePosition]="node.position"
             [fNodeParentId]="getSelectionParentId(node.id)"
             class="node"
+            [class.node-junction]="node.step?.name === '__junction__'"
             [class.node-completed]="actions.isNodeCompleted(node.id)"
             [class.node-selected]="isNodeSelected(node.id)"
             [attr.data-node-id]="node.id"

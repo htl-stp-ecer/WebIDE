@@ -732,6 +732,10 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
     return this.selectedNodeIds().has(nodeId);
   }
 
+  private isSyntheticJunctionNodeId(nodeId: string): boolean {
+    return nodeId.startsWith('junction-');
+  }
+
   clearNodeSelection(): void {
     if (this.selectedNodeIds().size) {
       this.selectedNodeIds.set(new Set());
@@ -741,6 +745,7 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
 
   onNodePointerDown(event: PointerEvent, nodeId: string): void {
     if (!event.isPrimary || event.button !== 0) return;
+    if (this.isSyntheticJunctionNodeId(nodeId)) return;
     const current = this.selectedNodeIds();
     if (current.size > 1) {
       this.selectedNodeIds.set(new Set([nodeId]));
@@ -1015,7 +1020,7 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
     }
     const nodeEl = target?.closest<HTMLElement>('.node[data-node-id]');
     const nodeId = nodeEl?.getAttribute('data-node-id');
-    if (nodeId && nodeId !== 'start-node') {
+    if (nodeId && nodeId !== 'start-node' && !this.isSyntheticJunctionNodeId(nodeId)) {
       if (!this.selectedNodeIds().has(nodeId)) {
         this.selectedNodeIds.set(new Set([nodeId]));
       }
@@ -1121,7 +1126,7 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
     const selected = new Set<string>();
     nodes.forEach(node => {
       const id = node.getAttribute('data-node-id');
-      if (!id || id === 'start-node') return;
+      if (!id || id === 'start-node' || this.isSyntheticJunctionNodeId(id)) return;
       const rect = node.getBoundingClientRect();
       const intersects =
         rect.left <= maxX &&
@@ -1137,8 +1142,10 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
   }
 
   syncSelectionGroup(): void {
-    const selected = this.selectedNodeIds();
-    if (selected.size < 2) {
+    const selected = Array.from(this.selectedNodeIds()).filter(
+      id => id !== 'start-node' && !this.isSyntheticJunctionNodeId(id),
+    );
+    if (selected.length < 2) {
       this.selectionGroup.set(null);
       return;
     }
@@ -1149,7 +1156,6 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
     let maxY = Number.NEGATIVE_INFINITY;
     const nodes = this.nodes();
     selected.forEach(id => {
-      if (id === 'start-node') return;
       const node = nodes.find(n => n.id === id);
       if (!node) return;
       const size = this.getNodeSize(id, fallbackSize);
@@ -1169,7 +1175,7 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
       position: { x: minX - padding, y: minY - padding },
       size: { width: (maxX - minX) + padding * 2, height: (maxY - minY) + padding * 2 },
       collapsed: false,
-      nodeIds: Array.from(selected),
+      nodeIds: selected,
       stepPaths: [],
       expandedSize: null,
     };

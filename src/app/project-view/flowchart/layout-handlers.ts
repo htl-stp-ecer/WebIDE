@@ -3,6 +3,7 @@ import type { FlowNode } from './models';
 import { LAYOUT_SPACING, START_NODE_ID } from './constants';
 import { computeAutoLayout } from './layout-utils';
 import { isVerticalOrientation } from './orientation-handlers';
+import { baseId } from './models';
 
 export function handleAfterViewChecked(flow: Flowchart): void {
   if (!flow.useAutoLayout) {
@@ -92,10 +93,124 @@ export function runAutoLayout(flow: Flowchart): void {
     LAYOUT_SPACING.vertical.gap,
     LAYOUT_SPACING.horizontal.gap
   );
-  flow.nodes.set(applyCollapsedGroupOffsets(flow, laidOut, heights));
+  const withCollapsedOffsets = applyCollapsedGroupOffsets(flow, laidOut, heights);
+  const withJunctions = repositionSyntheticJunctions(flow, withCollapsedOffsets, heights);
+  flow.nodes.set(withJunctions);
 }
 
 const DEFAULT_NODE_HEIGHT = 80;
+const DEFAULT_NODE_WIDTH = 240;
+
+function isSyntheticJunctionNode(node: FlowNode): boolean {
+  return node.id.startsWith('junction-') || node.step?.name === '__junction__';
+}
+
+function repositionSyntheticJunctions(
+  flow: Flowchart,
+  nodes: FlowNode[],
+  heights: Map<string, number>,
+): FlowNode[] {
+  const junctions = nodes.filter(node => isSyntheticJunctionNode(node));
+  if (!junctions.length) {
+    return nodes;
+  }
+
+  const byId = new Map(nodes.map(node => [node.id, node]));
+  const startPos = startNodePosition(flow);
+  const startHeight = heights.get(START_NODE_ID) ?? flow.lookups.lastNodeHeights.get(START_NODE_ID) ?? DEFAULT_NODE_HEIGHT;
+  const orientation = isVerticalOrientation(flow) ? 'vertical' : 'horizontal';
+  const connections = flow.connections();
+
+  const getCenterX = (node: FlowNode): number => node.position.x + (isSyntheticJunctionNode(node) ? 0 : DEFAULT_NODE_WIDTH / 2);
+  const getCenterY = (node: FlowNode): number => node.position.y + (heights.get(node.id) ?? flow.lookups.lastNodeHeights.get(node.id) ?? DEFAULT_NODE_HEIGHT) / 2;
+  const getTopY = (node: FlowNode): number => node.position.y;
+  const getBottomY = (node: FlowNode): number =>
+    node.position.y + (heights.get(node.id) ?? flow.lookups.lastNodeHeights.get(node.id) ?? DEFAULT_NODE_HEIGHT);
+  const getLeftX = (node: FlowNode): number => node.position.x;
+  const getRightX = (node: FlowNode): number => node.position.x + (isSyntheticJunctionNode(node) ? 0 : DEFAULT_NODE_WIDTH);
+
+  const updates = new Map<string, { x: number; y: number }>();
+
+  junctions.forEach(junction => {
+    const incoming = connections.filter(
+      conn => (conn.targetNodeId ?? baseId(conn.inputId, 'input')) === junction.id,
+    );
+    const outgoing = connections.filter(
+      conn => (conn.sourceNodeId ?? baseId(conn.outputId, 'output')) === junction.id,
+    );
+
+    const incomingNodes = incoming
+      .map(conn => conn.sourceNodeId ?? baseId(conn.outputId, 'output'))
+      .map(sourceId => sourceId === START_NODE_ID ? null : byId.get(sourceId))
+      .filter((node): node is FlowNode => !!node);
+    const outgoingNodes = outgoing
+      .map(conn => conn.targetNodeId ?? baseId(conn.inputId, 'input'))
+      .map(targetId => byId.get(targetId))
+      .filter((node): node is FlowNode => !!node);
+
+    if (!incoming.length && !outgoing.length) {
+      return;
+    }
+
+    if (orientation === 'vertical') {
+      const xCandidates = [
+        ...incomingNodes.map(getCenterX),
+        ...outgoingNodes.map(getCenterX),
+      ];
+      const incomingBottoms = incomingNodes.map(getBottomY);
+      if (incoming.some(conn => (conn.sourceNodeId ?? baseId(conn.outputId, 'output')) === START_NODE_ID)) {
+        incomingBottoms.push(startPos.y + startHeight);
+      }
+      const outgoingTops = outgoingNodes.map(getTopY);
+
+      const x = xCandidates.length
+        ? xCandidates.reduce((sum, value) => sum + value, 0) / xCandidates.length
+        : junction.position.x;
+      let y = junction.position.y;
+      if (incomingBottoms.length && outgoingTops.length) {
+        y = (Math.max(...incomingBottoms) + Math.min(...outgoingTops)) / 2;
+      } else if (incomingBottoms.length) {
+        y = Math.max(...incomingBottoms) + 40;
+      } else if (outgoingTops.length) {
+        y = Math.min(...outgoingTops) - 40;
+      }
+      updates.set(junction.id, { x, y });
+      return;
+    }
+
+    const yCandidates = [
+      ...incomingNodes.map(getCenterY),
+      ...outgoingNodes.map(getCenterY),
+    ];
+    const incomingRights = incomingNodes.map(getRightX);
+    if (incoming.some(conn => (conn.sourceNodeId ?? baseId(conn.outputId, 'output')) === START_NODE_ID)) {
+      incomingRights.push(startPos.x + DEFAULT_NODE_WIDTH);
+    }
+    const outgoingLefts = outgoingNodes.map(getLeftX);
+
+    let x = junction.position.x;
+    if (incomingRights.length && outgoingLefts.length) {
+      x = (Math.max(...incomingRights) + Math.min(...outgoingLefts)) / 2;
+    } else if (incomingRights.length) {
+      x = Math.max(...incomingRights) + 40;
+    } else if (outgoingLefts.length) {
+      x = Math.min(...outgoingLefts) - 40;
+    }
+    const y = yCandidates.length
+      ? yCandidates.reduce((sum, value) => sum + value, 0) / yCandidates.length
+      : junction.position.y;
+    updates.set(junction.id, { x, y });
+  });
+
+  if (!updates.size) {
+    return nodes;
+  }
+
+  return nodes.map(node => {
+    const nextPos = updates.get(node.id);
+    return nextPos ? { ...node, position: nextPos } : node;
+  });
+}
 
 function applyCollapsedGroupOffsets(flow: Flowchart, nodes: FlowNode[], heights: Map<string, number>): FlowNode[] {
   if (!isVerticalOrientation(flow)) {
