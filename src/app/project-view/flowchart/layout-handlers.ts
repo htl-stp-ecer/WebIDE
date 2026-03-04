@@ -30,7 +30,10 @@ export function handleLoaded(flow: Flowchart): void {
     canvas.emitCanvasChangeEvent();
     return;
   }
-  canvas.resetScaleAndCenter(false);
+  if (!flow.viewportInitialized) {
+    flow.viewportInitialized = true;
+    canvas.resetScaleAndCenter(false);
+  }
   canvas.emitCanvasChangeEvent();
 }
 

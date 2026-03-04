@@ -55,7 +55,6 @@ export class FlowchartHistoryManager {
       this.ctx.adHocConnections.set(cloneConnections(saved?.connections ?? []));
       this.ctx.comments.set(cloneComments(saved?.comments ?? []));
       this.ctx.groups.set(cloneGroups(saved?.groups ?? []));
-      this.ctx.markViewportResetPending();
       this.currentMissionKey = newKey;
       this.historyInitialized = false;
       this.hasPendingChanges = false;

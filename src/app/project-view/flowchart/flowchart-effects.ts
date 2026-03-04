@@ -28,7 +28,7 @@ export function setupFlowchartEffects(flow: Flowchart): void {
         flow.historyManager.resetHistoryWithCurrentState();
       }
 
-      flow.updatePlannedPathForMission(mission);
+      flow.schedulePlannedPathUpdate(mission);
     });
   });
 

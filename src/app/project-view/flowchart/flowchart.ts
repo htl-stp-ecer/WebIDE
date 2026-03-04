@@ -123,6 +123,7 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
   readonly robotSettingsInitialTab = signal<'project' | 'robot' | 'start' | 'map' | 'keybindings' | null>(null);
   readonly saveStatus = signal<'idle' | 'saving' | 'saved'>('idle');
   readonly logsFullscreen = signal<boolean>(false);
+  viewportInitialized = false;
   private saveStatusTimeout?: ReturnType<typeof setTimeout>;
   actions!: FlowchartActions;
   readonly eMarkerType = EFMarkerType;
@@ -150,6 +151,7 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
   private loadingDeviceInfo = false;
   private libstpIndexTriggered = false;
   private projectSimulationCache: ProjectSimulationData | null = null;
+  private plannedPathUpdateTimeout?: ReturnType<typeof setTimeout>;
   private robotSettingsWasOpen = false;
   private panelResizeObserver?: ResizeObserver;
   private pendingPanelClamp = false;
@@ -243,6 +245,10 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
     this.stopMultiDrag();
     if (this.suppressContextMenuTimeout) {
       clearTimeout(this.suppressContextMenuTimeout);
+    }
+    if (this.plannedPathUpdateTimeout) {
+      clearTimeout(this.plannedPathUpdateTimeout);
+      this.plannedPathUpdateTimeout = undefined;
     }
     this.stopRightDrag();
   }
@@ -497,6 +503,16 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
 
   toggleSimulation(): void {
     this.simulateRuns.update(prev => !prev);
+  }
+
+  schedulePlannedPathUpdate(mission: Mission | null): void {
+    if (this.plannedPathUpdateTimeout) {
+      clearTimeout(this.plannedPathUpdateTimeout);
+    }
+    this.plannedPathUpdateTimeout = setTimeout(() => {
+      this.plannedPathUpdateTimeout = undefined;
+      this.updatePlannedPathForMission(mission);
+    }, 0);
   }
 
   updatePlannedPathForMission(mission: Mission | null): void {
