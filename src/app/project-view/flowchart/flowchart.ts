@@ -1175,6 +1175,48 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
     return isMultiSensorType(type);
   }
 
+  isBooleanArgType(type?: string | null): boolean {
+    const kind = (type ?? '').trim().toLowerCase();
+    return kind === 'bool' || kind === 'boolean';
+  }
+
+  isStringArgType(type?: string | null): boolean {
+    const kind = (type ?? '').trim().toLowerCase();
+    return kind === 'str' || kind === 'string';
+  }
+
+  isFloatArgType(type?: string | null): boolean {
+    const kind = (type ?? '').trim().toLowerCase();
+    return kind === 'float' || kind === 'number';
+  }
+
+  isIntegerArgType(type?: string | null): boolean {
+    const kind = (type ?? '').trim().toLowerCase();
+    return kind === 'int' || kind === 'integer';
+  }
+
+  isImplicitIntegerArgType(type: string | null | undefined, name: string, value: unknown, fallback?: unknown): boolean {
+    const numeric = this.resolveImplicitNumericValue(type, name, value, fallback);
+    return numeric !== null && Number.isInteger(numeric);
+  }
+
+  isImplicitFloatArgType(type: string | null | undefined, name: string, value: unknown, fallback?: unknown): boolean {
+    const numeric = this.resolveImplicitNumericValue(type, name, value, fallback);
+    return numeric !== null && !Number.isInteger(numeric);
+  }
+
+  definitionOptionsForArg(type?: string | null, currentValue?: unknown): DefinitionOption[] {
+    const baseOptions = this.definitionOptionsForType(type);
+    if (!baseOptions.length || resolveDefinitionType(type) !== 'IRSensor') {
+      return baseOptions;
+    }
+    const prefix = this.detectSensorValuePrefix(currentValue);
+    if (!prefix) {
+      return baseOptions;
+    }
+    return baseOptions.map(option => ({ label: option.label, value: `${prefix}${option.value}` }));
+  }
+
   definitionOptionsForType(type?: string | null): DefinitionOption[] {
     const key = resolveDefinitionType(type);
     return this.typeDefinitionOptions()[key] ?? [];
@@ -1208,6 +1250,42 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
       return 'null';
     }
     return `other:${String(value)}`;
+  }
+
+  private detectSensorValuePrefix(value: unknown): string {
+    const selected = parseMultiSensorSelection(value);
+    for (const item of selected) {
+      const sensor = item.trim();
+      if (!sensor) continue;
+      const dot = sensor.lastIndexOf('.');
+      if (dot <= 0 || dot >= sensor.length - 1) continue;
+      return sensor.slice(0, dot + 1);
+    }
+    return '';
+  }
+
+  private resolveImplicitNumericValue(
+    type: string | null | undefined,
+    name: string,
+    value: unknown,
+    fallback?: unknown
+  ): number | null {
+    const kind = (type ?? '').trim().toLowerCase();
+    if (kind !== 'any') {
+      return null;
+    }
+    if ((name ?? '').trim().toLowerCase() !== 'speed') {
+      return null;
+    }
+    const candidate = value ?? fallback;
+    if (typeof candidate === 'number' && Number.isFinite(candidate)) {
+      return candidate;
+    }
+    if (typeof candidate === 'string' && candidate.trim().length) {
+      const parsed = Number(candidate);
+      return Number.isFinite(parsed) ? parsed : null;
+    }
+    return null;
   }
 
   private getNodeSize(nodeId: string, fallback: { width: number; height: number }): { width: number; height: number } {

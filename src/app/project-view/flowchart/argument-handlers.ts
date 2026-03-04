@@ -80,12 +80,22 @@ function resolveControlValue(value: unknown, argType?: string): ArgPrimitive {
   if (kind === 'bool' || kind === 'boolean') {
     return unwrapped === true || unwrapped === 'true';
   }
-  if (kind === 'float' || kind === 'number' || kind === 'int' || kind === 'integer') {
+  if (kind === 'float' || kind === 'number') {
     if (typeof unwrapped === 'number' && Number.isFinite(unwrapped)) {
       return unwrapped;
     }
     const parsed = Number(unwrapped);
     return Number.isFinite(parsed) ? parsed : null;
+  }
+  if (kind === 'int' || kind === 'integer') {
+    if (typeof unwrapped === 'number' && Number.isFinite(unwrapped)) {
+      return Math.trunc(unwrapped);
+    }
+    const parsed = Number(unwrapped);
+    return Number.isFinite(parsed) ? Math.trunc(parsed) : null;
+  }
+  if (typeof unwrapped === 'number' && Number.isFinite(unwrapped)) {
+    return unwrapped;
   }
   return String(unwrapped);
 }
