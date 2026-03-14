@@ -49,11 +49,6 @@
     </div>
 
     <div class="topbar-right">
-      @if (planningService.isGenerating()) {
-        <span class="planner-loading" [pTooltip]="'FLOWCHART.PLANNER_GENERATING' | translate">
-          <i class="pi pi-spin pi-spinner"></i>
-        </span>
-      }
       @if (planningService.waypoints().length) {
         <span class="waypoint-count">
           {{ planningService.waypoints().length }}

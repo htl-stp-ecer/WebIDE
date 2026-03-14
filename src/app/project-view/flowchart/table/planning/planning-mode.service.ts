@@ -91,8 +91,14 @@ export class PlanningModeService {
   }
 
   /** Add a waypoint at the given position */
-  addWaypoint(x: number, y: number): void {
-    const wp = createWaypoint(x, y);
+  addWaypoint(
+    x: number,
+    y: number,
+    lineup = false,
+    lineupLineIndex?: number,
+    lineSnapAction?: 'lineup' | 'follow' | 'drive'
+  ): void {
+    const wp = createWaypoint(x, y, lineup, lineupLineIndex, lineSnapAction);
     this._waypoints.update(wps => [...wps, wp]);
     this._selectedIndex.set(this._waypoints().length - 1);
   }
@@ -111,9 +117,35 @@ export class PlanningModeService {
   }
 
   /** Move waypoint at index to new position */
-  moveWaypoint(index: number, x: number, y: number): void {
+  moveWaypoint(
+    index: number,
+    x: number,
+    y: number,
+    lineup?: boolean,
+    lineupLineIndex?: number,
+    lineSnapAction?: 'lineup' | 'follow' | 'drive'
+  ): void {
     this._waypoints.update(wps =>
-      wps.map((wp, i) => (i === index ? { ...wp, x, y } : wp))
+      wps.map((wp, i) => {
+        if (i !== index) return wp;
+        const nextLineup = lineup ?? wp.lineup;
+        const nextLineSnapAction = nextLineup ? (lineSnapAction ?? wp.lineSnapAction) : undefined;
+        return {
+          ...wp,
+          x,
+          y,
+          lineup: nextLineup,
+          lineupLineIndex: nextLineup ? (lineupLineIndex ?? wp.lineupLineIndex) : undefined,
+          lineSnapAction: nextLineSnapAction,
+        };
+      })
+    );
+  }
+
+  /** Clear lineup flags from all waypoints */
+  clearWaypointLineups(): void {
+    this._waypoints.update(wps =>
+      wps.map(wp => (wp.lineup ? { ...wp, lineup: false, lineupLineIndex: undefined, lineSnapAction: undefined } : wp))
     );
   }
 
