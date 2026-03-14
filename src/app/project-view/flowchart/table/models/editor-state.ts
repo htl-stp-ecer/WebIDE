@@ -36,7 +36,7 @@ export const CM_PER_PIXEL_X = TABLE_WIDTH_CM / MAP_WIDTH;
 export const CM_PER_PIXEL_Y = TABLE_HEIGHT_CM / MAP_HEIGHT;
 
 export const CM_PER_INCH = 2.54;
-export const DEFAULT_LINE_WIDTH_CM = 1;
+export const DEFAULT_LINE_WIDTH_CM = 5;
 export const DEFAULT_WALL_WIDTH_CM = 2.54;
 export const MIN_LINE_WIDTH_CM = 0.2;
 

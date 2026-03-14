@@ -117,10 +117,19 @@
       <button
         type="button"
         class="tool-btn"
-        (click)="uploadRequest.emit()"
-        [pTooltip]="'FLOWCHART.TABLE_UPLOAD' | translate"
+        (click)="importFileRequest.emit()"
+        pTooltip="Import map file"
         tooltipPosition="bottom">
         <i class="pi pi-upload"></i>
+      </button>
+
+      <button
+        type="button"
+        class="tool-btn"
+        (click)="exportFileRequest.emit()"
+        pTooltip="Export map file"
+        tooltipPosition="bottom">
+        <i class="pi pi-download"></i>
       </button>
 
       <button

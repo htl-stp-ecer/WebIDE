@@ -70,7 +70,8 @@ describe('handleArgumentChange', () => {
       missionState: { currentMission: () => mission } as any,
       projectUUID: 'proj-123',
       http: { saveMission: saveMissionSpy } as any,
-    } as Flowchart;
+      setSaveStatus: jasmine.createSpy('setSaveStatus'),
+    } as unknown as Flowchart;
   });
 
   afterEach(() => {
@@ -109,5 +110,23 @@ describe('handleArgumentChange', () => {
 
     handleArgumentChange(flow, nodeId, 'Arg', 0, []);
     expect(missionStep.arguments[0].value).toBeNull();
+  });
+
+  it('stores integer arguments without fractional digits', () => {
+    const node = flow.nodes()[0];
+    node.step.arguments[0].type = 'int';
+    missionStep.arguments[0].type = 'int';
+
+    handleArgumentChange(flow, nodeId, 'Arg', 0, 123.9);
+    expect(missionStep.arguments[0].value).toBe(123);
+  });
+
+  it('keeps numeric values for Any-typed arguments', () => {
+    const node = flow.nodes()[0];
+    node.step.arguments[0].type = 'Any';
+    missionStep.arguments[0].type = 'Any';
+
+    handleArgumentChange(flow, nodeId, 'Arg', 0, 300);
+    expect(missionStep.arguments[0].value).toBe(300);
   });
 });

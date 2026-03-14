@@ -1,45 +1,9 @@
-import { Injectable, inject, signal, computed, effect } from '@angular/core';
+import { Injectable, inject, signal, computed } from '@angular/core';
 import { Waypoint, createWaypoint } from './models';
 import { MissionStep } from '../../../../entities/MissionStep';
 import { optimizeWaypointsToSteps, OptimizationContext } from './path-optimizer';
-import {
-  TableMapService,
-  TableVisualizationService,
-  type LineSegmentCm,
-  type MapConfig,
-  type RobotConfig,
-  type WallSegmentCm,
-} from '../services';
-import {
-  buildCollisionWalls,
-  applyWallPhysicsToPath,
-} from '../physics';
-import {
-  DEFAULT_ASTAR_CONFIG,
-  simulateCommand,
-  type AStarConfig,
-} from './pathfinding';
-import {
-  LineupSimulationContext,
-  simulateBackwardLineupOnBlack,
-  simulateBackwardLineupOnWhite,
-  simulateDriveUntilColor,
-  simulateFollowLine,
-  simulateForwardLineupOnBlack,
-  simulateForwardLineupOnWhite,
-} from '../simulation-path';
-import {
-  driveUntilColorFromStepId,
-  isBackwardStepId,
-  isDriveStepId,
-  isFollowLineStepId,
-  lineupColorFromStepId,
-  lineupDirectionFromStepId,
-  stepId,
-} from '../step-id';
-import { Pose2D, forwardMove } from '../models';
-
-const DEFAULT_FOLLOW_LINE_MAX_DISTANCE_CM = 300;
+import { TableMapService } from '../services';
+import { TableVisualizationService } from '../services';
 
 /**
  * Service for managing planning mode state.
@@ -56,17 +20,6 @@ export class PlanningModeService {
   private readonly _draggingIndex = signal<number | null>(null);
   private readonly _startPose = signal<{ x: number; y: number; theta: number }>({ x: 0, y: 0, theta: 0 });
   private readonly _lineupThreshold = signal<number>(0.5);
-  private readonly _useAStarPathfinding = signal<boolean>(true);
-  private readonly _allowStrafe = signal<boolean>(true);
-  private readonly _generatedSteps = signal<MissionStep[]>([]);
-  private readonly _isGenerating = signal<boolean>(false);
-  private generationId = 0;
-  private activeGenerationId = 0;
-  private astarWorker: Worker | null = null;
-  private lastGenerationInput: { wps: Waypoint[]; start: { x: number; y: number; theta: number }; threshold: number } | null = null;
-  private generationTimer: ReturnType<typeof setTimeout> | null = null;
-  private isDragging = false;
-  private readonly generationDebounceMs = 150;
 
   readonly isActive = this._isActive.asReadonly();
   readonly waypoints = this._waypoints.asReadonly();
@@ -74,221 +27,17 @@ export class PlanningModeService {
   readonly draggingIndex = this._draggingIndex.asReadonly();
   readonly startPose = this._startPose.asReadonly();
   readonly lineupThreshold = this._lineupThreshold.asReadonly();
-  readonly useAStarPathfinding = this._useAStarPathfinding.asReadonly();
-  readonly allowStrafe = this._allowStrafe.asReadonly();
-  readonly generatedSteps = this._generatedSteps.asReadonly();
-  readonly isGenerating = this._isGenerating.asReadonly();
 
-  constructor() {
-    effect(() => {
-      const wps = this._waypoints();
-      const start = this._startPose();
-      const threshold = this._lineupThreshold();
-      const useAStar = this._useAStarPathfinding();
-      const allowStrafe = this._allowStrafe();
-      const wallSegments = this.mapService.wallSegmentsCm();
-      const lineSegments = this.mapService.lineSegmentsCm();
-      const mapConfig = this.mapService.config();
-      const robotConfig = this.vizService.robotConfig();
-      const sensorConfig = this.vizService.sensorConfig();
-      const draggingIndex = this._draggingIndex();
+  /** Computed: generated mission steps from current waypoints (with lineup optimization) */
+  readonly generatedSteps = computed<MissionStep[]>(() => {
+    const wps = this._waypoints();
+    const start = this._startPose();
+    const threshold = this._lineupThreshold();
+    if (wps.length < 1) return [];
 
-      if (draggingIndex !== null) {
-        if (!this.isDragging) {
-          this.isDragging = true;
-          this.cancelGeneration();
-        }
-        return;
-      }
-
-      if (this.isDragging) {
-        this.isDragging = false;
-      }
-
-      this.scheduleStepGeneration(
-        wps,
-        start,
-        threshold,
-        useAStar,
-        allowStrafe,
-        wallSegments,
-        lineSegments,
-        sensorConfig.lineSensors.length,
-        mapConfig,
-        robotConfig
-      );
-    });
-  }
-
-  private scheduleStepGeneration(
-    wps: Waypoint[],
-    start: { x: number; y: number; theta: number },
-    threshold: number,
-    useAStar: boolean,
-    allowStrafe: boolean,
-    wallSegments: WallSegmentCm[],
-    lineSegments: LineSegmentCm[],
-    lineSensorCount: number,
-    mapConfig: MapConfig,
-    robotConfig: RobotConfig
-  ): void {
-    if (this.generationTimer) {
-      clearTimeout(this.generationTimer);
-    }
-
-    this.generationTimer = setTimeout(() => {
-      this.generationTimer = null;
-      this.queueStepGeneration(
-        wps,
-        start,
-        threshold,
-        useAStar,
-        allowStrafe,
-        wallSegments,
-        lineSegments,
-        lineSensorCount,
-        mapConfig,
-        robotConfig
-      );
-    }, this.generationDebounceMs);
-  }
-
-  private cancelGeneration(): void {
-    if (this.generationTimer) {
-      clearTimeout(this.generationTimer);
-      this.generationTimer = null;
-    }
-    this.activeGenerationId = ++this.generationId;
-    this.stopAStarWorker();
-    this._isGenerating.set(false);
-  }
-
-  private stopAStarWorker(): void {
-    if (this.astarWorker) {
-      this.astarWorker.terminate();
-      this.astarWorker = null;
-    }
-  }
-
-  private queueStepGeneration(
-    wps: Waypoint[],
-    start: { x: number; y: number; theta: number },
-    threshold: number,
-    useAStar: boolean,
-    allowStrafe: boolean,
-    wallSegments: WallSegmentCm[],
-    lineSegments: LineSegmentCm[],
-    lineSensorCount: number,
-    mapConfig: MapConfig,
-    robotConfig: RobotConfig
-  ): void {
-    const requestId = ++this.generationId;
-    this.activeGenerationId = requestId;
-    this.lastGenerationInput = { wps, start, threshold };
-
-    if (wps.length < 1) {
-      this._generatedSteps.set([]);
-      this._isGenerating.set(false);
-      return;
-    }
-
-    if (!useAStar) {
-      this._isGenerating.set(false);
-      this._generatedSteps.set(this.generateStepsDirectly(wps, start, threshold));
-      return;
-    }
-
-    if (this._isGenerating()) {
-      this.stopAStarWorker();
-    }
-
-    const worker = this.getAStarWorker();
-    if (!worker) {
-      this._isGenerating.set(false);
-      this._generatedSteps.set(this.generateStepsDirectly(wps, start, threshold));
-      return;
-    }
-
-    const walls = buildCollisionWalls(wallSegments, mapConfig);
-    const tightConfig: AStarConfig = {
-      ...DEFAULT_ASTAR_CONFIG,
-      positionResolutionCm: 2,
-      angleResolutionDeg: 5,
-      goalToleranceCm: 3,
-      maxIterations: DEFAULT_ASTAR_CONFIG.maxIterations * 2,
-    };
-
-    this._isGenerating.set(true);
-    worker.postMessage({
-      id: requestId,
-      startPose: start,
-      waypoints: wps.map(wp => ({
-        x: wp.x,
-        y: wp.y,
-        lineup: !!wp.lineup,
-        lineupLineIndex: wp.lineupLineIndex,
-        lineSnapAction: wp.lineSnapAction,
-      })),
-      walls,
-      robotConfig,
-      mapConfig,
-      config: DEFAULT_ASTAR_CONFIG,
-      tightConfig,
-      lineSegments,
-      lineupThreshold: threshold,
-      lineSensorCount,
-      lineSensors: this.vizService.sensorConfig().lineSensors,
-      rotationCenterForwardCm: this.vizService.robotConfig().rotationCenterForwardCm,
-      rotationCenterStrafeCm: this.vizService.robotConfig().rotationCenterStrafeCm,
-      allowStrafe,
-    });
-  }
-
-  private getAStarWorker(): Worker | null {
-    if (typeof Worker === 'undefined') return null;
-    if (!this.astarWorker) {
-      this.astarWorker = new Worker(
-        new URL('./pathfinding/astar.worker', import.meta.url),
-        { type: 'module' }
-      );
-      this.astarWorker.onmessage = (event: MessageEvent<{ id: number; steps: MissionStep[] }>) => {
-        this.handleAStarWorkerMessage(event);
-      };
-      this.astarWorker.onerror = () => {
-        this.handleAStarWorkerError();
-      };
-    }
-    return this.astarWorker;
-  }
-
-  private handleAStarWorkerMessage(event: MessageEvent<{ id: number; steps: MissionStep[] }>): void {
-    if (event.data.id !== this.activeGenerationId) {
-      return;
-    }
-    this._generatedSteps.set(event.data.steps ?? []);
-    this._isGenerating.set(false);
-  }
-
-  private handleAStarWorkerError(): void {
-    if (!this._isGenerating()) return;
-    const input = this.lastGenerationInput;
-    if (input?.wps?.length) {
-      this._generatedSteps.set(this.generateStepsDirectly(input.wps, input.start, input.threshold));
-    }
-    this._isGenerating.set(false);
-  }
-
-  /**
-   * Generate steps using direct waypoint-to-steps conversion (original behavior).
-   */
-  private generateStepsDirectly(
-    wps: Waypoint[],
-    start: { x: number; y: number; theta: number },
-    threshold: number
-  ): MissionStep[] {
     // Include robot start position as first waypoint for path calculation
     const fullPath: Waypoint[] = [
-      { id: 'start', x: start.x, y: start.y, lineup: false, lineupLineIndex: undefined, lineSnapAction: undefined },
+      { id: 'start', x: start.x, y: start.y },
       ...wps,
     ];
 
@@ -296,9 +45,6 @@ export class PlanningModeService {
       lineSegments: this.mapService.lineSegmentsCm(),
       sensorConfig: this.vizService.sensorConfig(),
       isOnBlackLine: (x, y) => this.mapService.isOnBlackLine(x, y),
-      rotationCenterForwardCm: this.vizService.robotConfig().rotationCenterForwardCm,
-      rotationCenterStrafeCm: this.vizService.robotConfig().rotationCenterStrafeCm,
-      maxLineupDistanceCm: Math.max(this.mapService.config().widthCm, this.mapService.config().heightCm),
     };
 
     return optimizeWaypointsToSteps(
@@ -307,132 +53,6 @@ export class PlanningModeService {
       context,
       { lineupThreshold: threshold }
     );
-  }
-
-  private buildLineupContext(): LineupSimulationContext | null {
-    if (!this.mapService.isLoaded()) return null;
-    const sensorConfig = this.vizService.sensorConfig();
-    if (sensorConfig.lineSensors.length === 0) return null;
-
-    const robotConfig = this.vizService.robotConfig();
-    const mapConfig = this.mapService.config();
-    return {
-      isOnBlackLine: (x, y) => this.mapService.isOnBlackLine(x, y),
-      lineSensors: sensorConfig.lineSensors,
-      rotationCenterForwardCm: robotConfig.rotationCenterForwardCm,
-      rotationCenterStrafeCm: robotConfig.rotationCenterStrafeCm,
-      maxDistanceCm: Math.max(mapConfig.widthCm, mapConfig.heightCm),
-    };
-  }
-
-  /** Computed: trajectory poses from the generated steps (with wall physics) */
-  readonly computedTrajectory = computed<Pose2D[]>(() => {
-    const steps = this.generatedSteps();
-    const start = this._startPose();
-    if (steps.length === 0) return [];
-    const lineupContext = this.buildLineupContext();
-
-    // First, compute the raw trajectory from commands
-    const rawPoses: Pose2D[] = [];
-    let currentPose: Pose2D = { x: start.x, y: start.y, theta: start.theta };
-    rawPoses.push({ ...currentPose });
-
-    for (const step of steps) {
-      const fn = stepId(step);
-      const arg = (step.arguments[0]?.value as number) ?? 0;
-
-      const driveUntilColor = driveUntilColorFromStepId(fn);
-      if (driveUntilColor) {
-        if (lineupContext) {
-          const drivePoses = simulateDriveUntilColor(currentPose, lineupContext, driveUntilColor);
-          if (drivePoses.length) {
-            rawPoses.push(...drivePoses);
-            currentPose = drivePoses[drivePoses.length - 1];
-          }
-        }
-        continue;
-      }
-
-      if (isFollowLineStepId(fn)) {
-        const stopOnIntersection = arg <= 0;
-        const maxDistance = lineupContext?.maxDistanceCm ?? DEFAULT_FOLLOW_LINE_MAX_DISTANCE_CM;
-        const targetDistance = stopOnIntersection ? maxDistance : arg;
-        if (targetDistance > 0) {
-          if (lineupContext) {
-            const followPoses = simulateFollowLine(currentPose, lineupContext, targetDistance, stopOnIntersection);
-            if (followPoses.length) {
-              rawPoses.push(...followPoses);
-              currentPose = followPoses[followPoses.length - 1];
-            } else if (!stopOnIntersection) {
-              currentPose = forwardMove(currentPose, arg);
-              rawPoses.push({ ...currentPose });
-            }
-          } else if (!stopOnIntersection) {
-            currentPose = forwardMove(currentPose, arg);
-            rawPoses.push({ ...currentPose });
-          }
-        }
-        continue;
-      }
-
-      const lineupDirection = lineupDirectionFromStepId(fn);
-      const lineupColor = lineupColorFromStepId(fn);
-      if (lineupDirection && lineupColor) {
-        if (lineupContext) {
-          let lineupPoses: Pose2D[] = [];
-          if (lineupDirection === 'forward' && lineupColor === 'black') {
-            lineupPoses = simulateForwardLineupOnBlack(currentPose, lineupContext);
-          } else if (lineupDirection === 'forward' && lineupColor === 'white') {
-            lineupPoses = simulateForwardLineupOnWhite(currentPose, lineupContext);
-          } else if (lineupDirection === 'backward' && lineupColor === 'black') {
-            lineupPoses = simulateBackwardLineupOnBlack(currentPose, lineupContext);
-          } else if (lineupDirection === 'backward' && lineupColor === 'white') {
-            lineupPoses = simulateBackwardLineupOnWhite(currentPose, lineupContext);
-          }
-          if (lineupPoses.length) {
-            rawPoses.push(...lineupPoses);
-            currentPose = lineupPoses[lineupPoses.length - 1];
-          }
-        }
-        continue;
-      }
-
-      if (isDriveStepId(fn)) {
-        // Add intermediate points every 2cm for smooth path and accurate physics
-        const distance = isBackwardStepId(fn) ? -arg : arg;
-        const numSteps = Math.max(1, Math.ceil(Math.abs(distance) / 2));
-        const stepDist = distance / numSteps;
-
-        for (let i = 0; i < numSteps; i++) {
-          currentPose = {
-            x: currentPose.x + stepDist * Math.cos(currentPose.theta),
-            y: currentPose.y + stepDist * Math.sin(currentPose.theta),
-            theta: currentPose.theta,
-          };
-          rawPoses.push({ ...currentPose });
-        }
-        continue;
-      }
-
-      // For turns and other commands, just compute the final pose
-      currentPose = simulateCommand(currentPose, step);
-      rawPoses.push({ ...currentPose });
-    }
-
-    // Apply wall physics to get the actual trajectory with wall sliding
-    const wallSegments = this.mapService.wallSegmentsCm();
-    const mapConfig = this.mapService.config();
-    const walls = buildCollisionWalls(wallSegments, mapConfig);
-    const robotConfig = this.vizService.robotConfig();
-
-    return applyWallPhysicsToPath(rawPoses, robotConfig, walls);
-  });
-
-  /** Computed: final pose after all steps */
-  readonly endPose = computed<Pose2D | null>(() => {
-    const trajectory = this.computedTrajectory();
-    if (trajectory.length === 0) return null;
-    return trajectory[trajectory.length - 1];
   });
 
   /** Computed: whether we have enough waypoints to generate steps */
@@ -470,35 +90,9 @@ export class PlanningModeService {
     this._lineupThreshold.set(Math.max(0, Math.min(1, threshold)));
   }
 
-  /** Enable or disable A* pathfinding */
-  setUseAStarPathfinding(enabled: boolean): void {
-    this._useAStarPathfinding.set(enabled);
-  }
-
-  /** Toggle A* pathfinding on/off */
-  toggleAStarPathfinding(): void {
-    this._useAStarPathfinding.update(v => !v);
-  }
-
-  /** Enable or disable strafe commands in pathfinding */
-  setAllowStrafe(enabled: boolean): void {
-    this._allowStrafe.set(enabled);
-  }
-
-  /** Toggle strafe commands on/off */
-  toggleAllowStrafe(): void {
-    this._allowStrafe.update(v => !v);
-  }
-
   /** Add a waypoint at the given position */
-  addWaypoint(
-    x: number,
-    y: number,
-    lineup = false,
-    lineupLineIndex?: number,
-    lineSnapAction?: 'lineup' | 'follow' | 'drive'
-  ): void {
-    const wp = createWaypoint(x, y, lineup, lineupLineIndex, lineSnapAction);
+  addWaypoint(x: number, y: number): void {
+    const wp = createWaypoint(x, y);
     this._waypoints.update(wps => [...wps, wp]);
     this._selectedIndex.set(this._waypoints().length - 1);
   }
@@ -517,35 +111,9 @@ export class PlanningModeService {
   }
 
   /** Move waypoint at index to new position */
-  moveWaypoint(
-    index: number,
-    x: number,
-    y: number,
-    lineup?: boolean,
-    lineupLineIndex?: number,
-    lineSnapAction?: 'lineup' | 'follow' | 'drive'
-  ): void {
+  moveWaypoint(index: number, x: number, y: number): void {
     this._waypoints.update(wps =>
-      wps.map((wp, i) => {
-        if (i !== index) return wp;
-        const nextLineup = lineup ?? wp.lineup;
-        const nextLineSnapAction = nextLineup ? (lineSnapAction ?? wp.lineSnapAction) : undefined;
-        return {
-          ...wp,
-          x,
-          y,
-          lineup: nextLineup,
-          lineupLineIndex: nextLineup ? (lineupLineIndex ?? wp.lineupLineIndex) : undefined,
-          lineSnapAction: nextLineSnapAction,
-        };
-      })
-    );
-  }
-
-  /** Clear lineup flags from all waypoints */
-  clearWaypointLineups(): void {
-    this._waypoints.update(wps =>
-      wps.map(wp => (wp.lineup ? { ...wp, lineup: false, lineupLineIndex: undefined, lineSnapAction: undefined } : wp))
+      wps.map((wp, i) => (i === index ? { ...wp, x, y } : wp))
     );
   }
 

@@ -29,6 +29,78 @@ export function rebuildMissionView(
 
   type ExitRef = { id: string; breakpointPathKey?: string | null };
   const toPathKey = (path?: number[]) => (path && path.length ? path.join('.') : null);
+  const registerPathConnection = (pathKey: string | null, connectionId: string) => {
+    if (!pathKey) {
+      return;
+    }
+    const existing = pathToConnectionIds.get(pathKey) ?? [];
+    existing.push(connectionId);
+    pathToConnectionIds.set(pathKey, existing);
+  };
+
+  const pushConnection = (
+    exit: ExitRef,
+    inputId: string,
+    targetNodeId: string | null,
+    targetPathKey: string | null
+  ) => {
+    const connId = generateGuid();
+    const sourceNode = baseId(exit.id, 'output');
+    const connection: Connection = {
+      id: connId,
+      outputId: exit.id,
+      inputId,
+      sourceNodeId: sourceNode === START_NODE_ID ? null : sourceNode,
+      targetNodeId,
+      targetPathKey,
+    };
+    const breakpointPathKey = exit.breakpointPathKey ?? null;
+    if (breakpointPathKey) {
+      connection.hasBreakpoint = true;
+      connection.breakpointPathKey = breakpointPathKey;
+    }
+    conns.push(connection);
+    registerPathConnection(targetPathKey, connId);
+  };
+
+  const estimateJunctionPosition = (exits: ExitRef[]): { x: number; y: number } => {
+    const refs = exits
+      .map(exit => {
+        const nodeId = baseId(exit.id, 'output');
+        return nodes.find(node => node.id === nodeId)?.position;
+      })
+      .filter((pos): pos is { x: number; y: number } => !!pos);
+
+    if (!refs.length) {
+      return { x: 300, y: 120 };
+    }
+
+    const x = refs.reduce((sum, pos) => sum + pos.x, 0) / refs.length;
+    const y = Math.max(...refs.map(pos => pos.y)) + 110;
+    return { x, y };
+  };
+
+  const createParallelJunction = (exits: ExitRef[]): ExitRef => {
+    const junctionId = `junction-${generateGuid()}`;
+    const junctionInputId = `${junctionId}-input`;
+    const junctionOutputId = `${junctionId}-output`;
+    nodes.push({
+      id: junctionId,
+      text: '',
+      position: estimateJunctionPosition(exits),
+      step: { name: '__junction__', arguments: [] },
+      args: {},
+    });
+
+    exits.forEach(exit => {
+      pushConnection(exit, junctionInputId, junctionId, null);
+    });
+
+    const mergedBreakpointPathKey = exits.find(exit => !!exit.breakpointPathKey)?.breakpointPathKey ?? null;
+    return mergedBreakpointPathKey
+      ? { id: junctionOutputId, breakpointPathKey: mergedBreakpointPathKey }
+      : { id: junctionOutputId };
+  };
 
   const build = (
     steps: MissionStep[],
@@ -58,9 +130,12 @@ export function rebuildMissionView(
         continue;
       }
       if (isType(s, 'parallel')) {
-        const r = build(s.children ?? [], parentExits);
+        const children = s.children ?? [];
+        const useJoinSplitJunction = parentExits.length > 1 && children.length > 1;
+        const bridgeExits = useJoinSplitJunction ? [createParallelJunction(parentExits)] : parentExits;
+        const r = build(children, bridgeExits);
         if (r.entryRefs.length) entries.push(...r.entryRefs);
-        exits.push(...(r.exitRefs.length ? r.exitRefs : parentExits));
+        exits.push(...(r.exitRefs.length ? r.exitRefs : bridgeExits));
         continue;
       }
       if (isBreakpoint(s)) {
@@ -93,28 +168,8 @@ export function rebuildMissionView(
       if (pathKey) {
         pathToNodeId.set(pathKey, id);
       }
-      parentExits.forEach((exit) => {
-        const connId = generateGuid();
-        const sourceNode = baseId(exit.id, 'output');
-        const connection: Connection = {
-          id: connId,
-          outputId: exit.id,
-          inputId,
-          sourceNodeId: sourceNode === START_NODE_ID ? null : sourceNode,
-          targetNodeId: id,
-          targetPathKey: pathKey ?? null,
-        };
-        const breakpointPathKey = exit.breakpointPathKey ?? null;
-        if (breakpointPathKey) {
-          connection.hasBreakpoint = true;
-          connection.breakpointPathKey = breakpointPathKey;
-        }
-        conns.push(connection);
-        if (pathKey) {
-          const existing = pathToConnectionIds.get(pathKey) ?? [];
-          existing.push(connId);
-          pathToConnectionIds.set(pathKey, existing);
-        }
+      parentExits.forEach(exit => {
+        pushConnection(exit, inputId, id, pathKey ?? null);
       });
       const childResult = s.children?.length
         ? build(s.children, [{ id: outputId }])
