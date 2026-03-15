@@ -43,7 +43,7 @@ export class HttpService {
       }
       const u = new URL(base);
       if (!u.port) {
-        u.port = '8000';
+        u.port = '8421';
       }
       // Keep only origin (scheme://host:port)
       this.deviceBaseSubject.next(u.origin);
@@ -352,7 +352,7 @@ export class HttpService {
         const u = new URL(/^https?:\/\//i.test(httpUrl) ? httpUrl : `http://${httpUrl}`);
         if (u.protocol === 'http:') u.protocol = 'ws:';
         if (u.protocol === 'https:') u.protocol = 'wss:';
-        if (!u.port) u.port = '8000';
+        if (!u.port) u.port = '8421';
         return u.toString();
       } catch {
         return httpUrl.replace(/^http:/, 'ws:').replace(/^https:/, 'wss:');

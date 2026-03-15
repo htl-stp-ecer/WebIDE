@@ -18,6 +18,7 @@ import { TableEditorToolbar } from './table-editor-toolbar';
 import { TableMapService, type LineSegmentCm, type WallSegmentCm } from './services';
 import { HttpService } from '../../../services/http-service';
 import {
+  CoordOrigin,
   EditorTool,
   GuideLine,
   LineKind,
@@ -115,6 +116,28 @@ export class TableEditorView implements AfterViewInit, OnDestroy {
   readonly selectedLineId = signal<string | null>(null);
   readonly lengthInputValue = signal<string>('');
   readonly widthInputValue = signal<string>('');
+  readonly startXInputValue = signal<string>('');
+  readonly startYInputValue = signal<string>('');
+  readonly endXInputValue = signal<string>('');
+  readonly endYInputValue = signal<string>('');
+
+  /** Which table corner the X/Y coordinate inputs measure from. */
+  readonly coordOrigin = signal<CoordOrigin>('tl');
+
+  /** Measurement tool state: two picked anchor points. */
+  readonly measurePointA = signal<VectorPoint | null>(null);
+  readonly measurePointB = signal<VectorPoint | null>(null);
+  readonly measurement = computed(() => {
+    const a = this.measurePointA();
+    const b = this.measurePointB();
+    if (!a || !b) return null;
+    return {
+      a, b,
+      dx: Math.abs(b.x - a.x),
+      dy: Math.abs(b.y - a.y),
+      direct: Math.hypot(b.x - a.x, b.y - a.y),
+    };
+  });
 
   readonly draftStart = signal<VectorPoint | null>(null);
   readonly draftEnd = signal<VectorPoint | null>(null);
@@ -156,8 +179,8 @@ export class TableEditorView implements AfterViewInit, OnDestroy {
       ny = dx / length;
     }
 
-    const panelWidthPx = 230;
-    const panelHeightPx = 142;
+    const panelWidthPx = 250;
+    const panelHeightPx = 250;
     const desiredGapPx = 24;
     // Rectangle support distance in direction (nx, ny): guarantees fixed edge gap for any angle.
     const directionalHalfExtentPx = Math.abs(nx) * (panelWidthPx * 0.5) + Math.abs(ny) * (panelHeightPx * 0.5);
@@ -237,9 +260,14 @@ export class TableEditorView implements AfterViewInit, OnDestroy {
     effect(() => {
       const selected = this.selectedLine();
       const unit = this.measurementUnit();
+      const origin = this.coordOrigin();
       if (!selected) {
         this.lengthInputValue.set('');
         this.widthInputValue.set('');
+        this.startXInputValue.set('');
+        this.startYInputValue.set('');
+        this.endXInputValue.set('');
+        this.endYInputValue.set('');
         return;
       }
 
@@ -247,7 +275,28 @@ export class TableEditorView implements AfterViewInit, OnDestroy {
       this.lengthInputValue.set(`${roundTo(value, 2)}`);
       const width = convertFromCm(selected.widthCm, unit);
       this.widthInputValue.set(`${roundTo(width, 2)}`);
+      this.startXInputValue.set(`${roundTo(convertFromCm(this.toDisplayX(selected.startX, origin), unit), 2)}`);
+      this.startYInputValue.set(`${roundTo(convertFromCm(this.toDisplayY(selected.startY, origin), unit), 2)}`);
+      this.endXInputValue.set(`${roundTo(convertFromCm(this.toDisplayX(selected.endX, origin), unit), 2)}`);
+      this.endYInputValue.set(`${roundTo(convertFromCm(this.toDisplayY(selected.endY, origin), unit), 2)}`);
     });
+  }
+
+  /** Convert absolute X to display value based on chosen origin corner. */
+  private toDisplayX(absX: number, origin: CoordOrigin): number {
+    return origin === 'tr' || origin === 'br' ? TABLE_WIDTH_CM - absX : absX;
+  }
+  /** Convert absolute Y to display value based on chosen origin corner. */
+  private toDisplayY(absY: number, origin: CoordOrigin): number {
+    return origin === 'bl' || origin === 'br' ? TABLE_HEIGHT_CM - absY : absY;
+  }
+  /** Convert display X back to absolute. */
+  private fromDisplayX(displayX: number, origin: CoordOrigin): number {
+    return origin === 'tr' || origin === 'br' ? TABLE_WIDTH_CM - displayX : displayX;
+  }
+  /** Convert display Y back to absolute. */
+  private fromDisplayY(displayY: number, origin: CoordOrigin): number {
+    return origin === 'bl' || origin === 'br' ? TABLE_HEIGHT_CM - displayY : displayY;
   }
 
   ngAfterViewInit(): void {
@@ -272,6 +321,13 @@ export class TableEditorView implements AfterViewInit, OnDestroy {
 
   @HostListener('window:keydown', ['$event'])
   onWindowKeyDown(event: KeyboardEvent): void {
+    if (event.key === 'Escape' && this.activeTool() === 'measure') {
+      this.measurePointA.set(null);
+      this.measurePointB.set(null);
+      this.activeTool.set('draw');
+      return;
+    }
+
     if (event.key !== 'Delete' && event.key !== 'Backspace') return;
     const activeElement = document.activeElement;
     if (activeElement && ['INPUT', 'TEXTAREA', 'SELECT'].includes(activeElement.tagName)) return;
@@ -346,6 +402,25 @@ export class TableEditorView implements AfterViewInit, OnDestroy {
     this.selectDragState = null;
     this.guideLines.set([]);
     this.clearDraft();
+    if (tool !== 'measure') {
+      this.measurePointA.set(null);
+      this.measurePointB.set(null);
+    }
+  }
+
+  private handleMeasureClick(point: VectorPoint): void {
+    // Snap to nearest anchor point
+    const snapped = this.findNearestAnchor(point, this.endpointSnapThresholdCm * 2) ?? point;
+    const picked = { x: roundTo(snapped.x, 2), y: roundTo(snapped.y, 2) };
+
+    if (!this.measurePointA() || this.measurePointB()) {
+      // Start new measurement (or reset after both were set)
+      this.measurePointA.set(picked);
+      this.measurePointB.set(null);
+    } else {
+      // Set second point
+      this.measurePointB.set(picked);
+    }
   }
 
   setLineKind(kind: LineKind): void {
@@ -370,6 +445,11 @@ export class TableEditorView implements AfterViewInit, OnDestroy {
 
     const point = this.getMapCoords(event);
     if (!point) return;
+
+    if (this.activeTool() === 'measure') {
+      this.handleMeasureClick(point);
+      return;
+    }
 
     if (this.activeTool() === 'select') {
       this.startSelectionInteraction(point);
@@ -677,9 +757,14 @@ export class TableEditorView implements AfterViewInit, OnDestroy {
 
     const hitLine = this.findHitLine(point);
     if (!hitLine) {
+      // Auto-switch back to draw mode and start drawing immediately
       this.selectedLineId.set(null);
       this.selectDragState = null;
       this.guideLines.set([]);
+      this.activeTool.set('draw');
+      const start = this.snapStartPoint(point);
+      this.draftStart.set(start);
+      this.draftEnd.set(start);
       return;
     }
 
@@ -694,7 +779,31 @@ export class TableEditorView implements AfterViewInit, OnDestroy {
   }
 
   onLinePointerDown(event: PointerEvent, lineId: string): void {
-    if (this.activeTool() !== 'select' || event.button !== 0) return;
+    if (event.button !== 0) return;
+
+    // Auto-switch from draw to select when clicking a line
+    if (this.activeTool() === 'draw') {
+      event.stopPropagation();
+      this.activeTool.set('select');
+      this.clearDraft();
+      this.selectedLineId.set(lineId);
+
+      const point = this.getMapCoords(event) ?? this.getMapCoordsClamped(event);
+      const line = this.lines().find(item => item.id === lineId);
+      if (!line) return;
+
+      this.containerRef.nativeElement.setPointerCapture(event.pointerId);
+      this.selectDragState = {
+        mode: 'line',
+        lineId,
+        startPointer: point,
+        originStart: { x: line.startX, y: line.startY },
+        originEnd: { x: line.endX, y: line.endY },
+      };
+      return;
+    }
+
+    if (this.activeTool() !== 'select') return;
     event.stopPropagation();
     this.clearDraft();
 
@@ -1021,6 +1130,56 @@ export class TableEditorView implements AfterViewInit, OnDestroy {
     this.applySelectedWidth();
   }
 
+  applyStartCoords(): void {
+    this.applyEndpointCoords('start', this.startXInputValue(), this.startYInputValue());
+  }
+
+  applyEndCoords(): void {
+    this.applyEndpointCoords('end', this.endXInputValue(), this.endYInputValue());
+  }
+
+  onStartCoordsKeydown(event: KeyboardEvent): void {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    this.applyStartCoords();
+  }
+
+  onEndCoordsKeydown(event: KeyboardEvent): void {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    this.applyEndCoords();
+  }
+
+  private applyEndpointCoords(endpoint: 'start' | 'end', rawX: string, rawY: string): void {
+    const selected = this.selectedLine();
+    if (!selected) return;
+
+    const x = Number.parseFloat(rawX.trim().replace(',', '.'));
+    const y = Number.parseFloat(rawY.trim().replace(',', '.'));
+
+    if (!Number.isFinite(x) || !Number.isFinite(y)) {
+      this.message.set(this.translate.instant('FLOWCHART.TABLE_MESSAGE_INVALID_LENGTH'));
+      return;
+    }
+
+    const origin = this.coordOrigin();
+    const xCm = roundTo(this.fromDisplayX(convertToCm(x, this.measurementUnit()), origin), 2);
+    const yCm = roundTo(this.fromDisplayY(convertToCm(y, this.measurementUnit()), origin), 2);
+
+    if (xCm < 0 || xCm > TABLE_WIDTH_CM || yCm < 0 || yCm > TABLE_HEIGHT_CM) {
+      this.message.set(this.translate.instant('FLOWCHART.TABLE_MESSAGE_LENGTH_OUT_OF_BOUNDS'));
+      return;
+    }
+
+    this.lines.update(lines => lines.map(line => {
+      if (line.id !== selected.id) return line;
+      if (endpoint === 'start') {
+        return { ...line, startX: xCm, startY: yCm };
+      }
+      return { ...line, endX: xCm, endY: yCm };
+    }));
+  }
+
   lineMidpoint(line: Pick<VectorLine, 'startX' | 'startY' | 'endX' | 'endY'>): VectorPoint {
     return {
       x: (line.startX + line.endX) / 2,
@@ -1069,9 +1228,19 @@ export class TableEditorView implements AfterViewInit, OnDestroy {
   }
 
   hoverCoordLabel(coords: VectorPoint): string {
-    const x = roundTo(convertFromCm(coords.x, this.measurementUnit()), 2);
-    const y = roundTo(convertFromCm(coords.y, this.measurementUnit()), 2);
-    return `X: ${x} ${this.measurementUnit()}, Y: ${y} ${this.measurementUnit()}`;
+    const origin = this.coordOrigin();
+    const unit = this.measurementUnit();
+    const x = roundTo(convertFromCm(this.toDisplayX(coords.x, origin), unit), 2);
+    const y = roundTo(convertFromCm(this.toDisplayY(coords.y, origin), unit), 2);
+    return `X: ${x} ${unit}, Y: ${y} ${unit}`;
+  }
+
+  setCoordOrigin(origin: CoordOrigin): void {
+    this.coordOrigin.set(origin);
+  }
+
+  measurementLabel(valueCm: number): string {
+    return formatDistance(valueCm, this.measurementUnit());
   }
 
   exportMapFile(): void {

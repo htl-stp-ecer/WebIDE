@@ -1,4 +1,5 @@
-export type EditorTool = 'draw' | 'select';
+export type EditorTool = 'draw' | 'select' | 'measure';
+export type CoordOrigin = 'tl' | 'tr' | 'bl' | 'br';
 export type LineKind = 'line' | 'wall';
 export type MeasurementUnit = 'cm' | 'inch';
 
@@ -48,6 +49,7 @@ export const ZOOM_LEVELS = [0.5, 0.75, 1, 1.5, 2, 3, 4, 6, 8, 10, 12, 16, 20, 24
 export const TOOL_OPTIONS: { value: EditorTool; labelKey: string; icon: string }[] = [
   { value: 'draw', labelKey: 'FLOWCHART.TABLE_TOOL_DRAW', icon: 'pi pi-pencil' },
   { value: 'select', labelKey: 'FLOWCHART.TABLE_TOOL_SELECT', icon: 'pi pi-mouse' },
+  { value: 'measure', labelKey: 'FLOWCHART.TABLE_TOOL_MEASURE', icon: 'pi pi-arrows-h' },
 ];
 
 export const LINE_KIND_OPTIONS: { value: LineKind; labelKey: string }[] = [
