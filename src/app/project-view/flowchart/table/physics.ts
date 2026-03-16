@@ -23,14 +23,35 @@ const STEP_CM = 1;
 const STEP_ANGLE_RAD = Math.PI / 36;
 const EPS = 1e-6;
 const MAX_ITERATIONS = 4000;
+const MIN_WALL_THICKNESS_CM = 0.01;
 
 export function buildCollisionWalls(walls: WallSegmentCm[], config: MapConfig): WallSegment[] {
-  const result: WallSegment[] = walls.map(seg => ({
-    startX: seg.startX,
-    startY: seg.startY,
-    endX: seg.endX,
-    endY: seg.endY,
-  }));
+  const result: WallSegment[] = [];
+
+  for (const seg of walls) {
+    const thickness = Math.max(0, seg.thickness ?? 0);
+    if (thickness < MIN_WALL_THICKNESS_CM) {
+      result.push({
+        startX: seg.startX,
+        startY: seg.startY,
+        endX: seg.endX,
+        endY: seg.endY,
+      });
+      continue;
+    }
+
+    const expanded = expandWallSegment(seg, thickness);
+    if (expanded.length) {
+      result.push(...expanded);
+    } else {
+      result.push({
+        startX: seg.startX,
+        startY: seg.startY,
+        endX: seg.endX,
+        endY: seg.endY,
+      });
+    }
+  }
 
   const width = config.widthCm;
   const height = config.heightCm;
@@ -44,6 +65,34 @@ export function buildCollisionWalls(walls: WallSegmentCm[], config: MapConfig): 
   }
 
   return result;
+}
+
+function expandWallSegment(
+  seg: WallSegmentCm,
+  thicknessCm: number
+): WallSegment[] {
+  const dx = seg.endX - seg.startX;
+  const dy = seg.endY - seg.startY;
+  const length = Math.hypot(dx, dy);
+  if (length <= EPS) return [];
+
+  const halfThickness = thicknessCm / 2;
+  const nx = -dy / length;
+  const ny = dx / length;
+  const offsetX = nx * halfThickness;
+  const offsetY = ny * halfThickness;
+
+  const a = { x: seg.startX + offsetX, y: seg.startY + offsetY };
+  const b = { x: seg.endX + offsetX, y: seg.endY + offsetY };
+  const c = { x: seg.endX - offsetX, y: seg.endY - offsetY };
+  const d = { x: seg.startX - offsetX, y: seg.startY - offsetY };
+
+  return [
+    { startX: a.x, startY: a.y, endX: b.x, endY: b.y },
+    { startX: b.x, startY: b.y, endX: c.x, endY: c.y },
+    { startX: c.x, startY: c.y, endX: d.x, endY: d.y },
+    { startX: d.x, startY: d.y, endX: a.x, endY: a.y },
+  ];
 }
 
 export function applyWallPhysicsToPath(poses: Pose2D[], robotConfig: RobotConfig, walls: WallSegment[]): Pose2D[] {
