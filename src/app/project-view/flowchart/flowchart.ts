@@ -67,6 +67,13 @@ interface PanelDragState {
   surfaceRect: DOMRect;
 }
 
+interface OffscreenIndicatorState {
+  visible: boolean;
+  x: number;
+  y: number;
+  angle: number;
+}
+
 const DEFAULT_VIEW_TOGGLE_STATE: Record<string, boolean> = { timestamps: true, tableVisualization: false, logs: true };
 const DEFAULT_PANEL_OFFSETS: Record<FloatingPanelKey, PanelOffset> = {
   timing: { x: 0, y: 0 },
@@ -74,6 +81,10 @@ const DEFAULT_PANEL_OFFSETS: Record<FloatingPanelKey, PanelOffset> = {
   table: { x: 0, y: 0 },
   logs: { x: 0, y: 0 },
 };
+const OFFSCREEN_INDICATOR_HORIZONTAL_THRESHOLD_PX = 340;
+const OFFSCREEN_INDICATOR_VERTICAL_THRESHOLD_PX = 220;
+const OFFSCREEN_INDICATOR_EDGE_PADDING_PX = 40;
+const OFFSCREEN_INDICATOR_BOUNDS_PADDING_PX = 64;
 
 @Component({
   selector: 'app-flowchart',
@@ -115,6 +126,7 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
   readonly selectedNodeIds = signal<Set<string>>(new Set());
   readonly selectionRect = signal<{ x: number; y: number; width: number; height: number } | null>(null);
   readonly selectionGroup = signal<FlowGroup | null>(null);
+  readonly offscreenIndicator = signal<OffscreenIndicatorState>({ visible: false, x: 0, y: 0, angle: 0 });
   readonly selectionGroupId = '__selection__';
   readonly contextMenuOnPointerUp = true;
   readonly timingViewMode = signal<TimingViewMode>('list');
@@ -158,6 +170,10 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
   private selectionDrag:
     | { startX: number; startY: number; surfaceRect: DOMRect; moved: boolean }
     | null = null;
+  private offscreenIndicatorFrame: number | null = null;
+  private liveCanvasTrackingFrame: number | null = null;
+  private liveCanvasTrackingActive = false;
+  private recenterTrackingTimeout?: ReturnType<typeof setTimeout>;
   private suppressContextMenuOnce = false;
   private suppressContextMenuTimeout?: ReturnType<typeof setTimeout>;
   private readonly multiSensorSelectionCache = new Map<string, string[]>();
@@ -192,6 +208,21 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
       }
       this.robotSettingsWasOpen = isOpen;
     });
+
+    effect(() => {
+      this.actions.visibleNodes();
+      this.groups();
+      this.comments();
+      this.orientation();
+      this.selectionGroup();
+
+      if (this.planningService.isActive() || this.logsFullscreen()) {
+        this.hideOffscreenIndicator();
+        return;
+      }
+
+      this.scheduleOffscreenIndicatorUpdate();
+    });
   }
 
   ngOnInit(): void {
@@ -225,6 +256,7 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
     this.panelResizeObserver = new ResizeObserver(() => this.schedulePanelClamp());
     this.panelResizeObserver.observe(surface);
     this.schedulePanelClamp();
+    this.scheduleOffscreenIndicatorUpdate();
   }
 
   ngOnDestroy(): void {
@@ -250,6 +282,15 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
       clearTimeout(this.plannedPathUpdateTimeout);
       this.plannedPathUpdateTimeout = undefined;
     }
+    if (this.offscreenIndicatorFrame !== null && typeof cancelAnimationFrame === 'function') {
+      cancelAnimationFrame(this.offscreenIndicatorFrame);
+      this.offscreenIndicatorFrame = null;
+    }
+    if (this.recenterTrackingTimeout) {
+      clearTimeout(this.recenterTrackingTimeout);
+      this.recenterTrackingTimeout = undefined;
+    }
+    this.stopLiveCanvasTracking();
     this.stopRightDrag();
   }
 
@@ -260,6 +301,12 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
     if (!surface || !surface.contains(event.target as Node)) return;
     this.lastRightDown = { x: event.clientX, y: event.clientY };
     this.startRightDrag(event);
+  }
+
+  @HostListener('window:pointerup')
+  @HostListener('window:pointercancel')
+  onWindowPointerRelease(): void {
+    this.stopLiveCanvasTracking();
   }
 
   @HostListener('window:keydown', ['$event'])
@@ -368,6 +415,24 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
     this.robotSettingsVisible.set(true);
   }
 
+  onCanvasChange(): void {
+    this.scheduleOffscreenIndicatorUpdate();
+  }
+
+  recenterFlowchart(): void {
+    this.startLiveCanvasTracking();
+    this.fCanvas()?.resetScaleAndCenter(true);
+    this.scheduleOffscreenIndicatorUpdate();
+    if (this.recenterTrackingTimeout) {
+      clearTimeout(this.recenterTrackingTimeout);
+    }
+    this.recenterTrackingTimeout = setTimeout(() => {
+      this.recenterTrackingTimeout = undefined;
+      this.stopLiveCanvasTracking();
+      this.scheduleOffscreenIndicatorUpdate();
+    }, 500);
+  }
+
   onSurfacePointerUp(event: PointerEvent): void {
     if (event.button !== 2 || !this.contextMenuOnPointerUp) return;
     const start = this.lastRightDown;
@@ -419,6 +484,149 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
         this.typeDefinitionsLoading.set(false);
       },
     });
+  }
+
+  private scheduleOffscreenIndicatorUpdate(): void {
+    if (this.offscreenIndicatorFrame !== null) {
+      return;
+    }
+    if (typeof requestAnimationFrame !== 'function') {
+      this.updateOffscreenIndicator();
+      return;
+    }
+    this.offscreenIndicatorFrame = requestAnimationFrame(() => {
+      this.offscreenIndicatorFrame = null;
+      this.updateOffscreenIndicator();
+    });
+  }
+
+  private startLiveCanvasTracking(): void {
+    if (this.liveCanvasTrackingActive) {
+      return;
+    }
+    this.liveCanvasTrackingActive = true;
+    this.scheduleLiveCanvasTrackingFrame();
+  }
+
+  private scheduleLiveCanvasTrackingFrame(): void {
+    if (!this.liveCanvasTrackingActive || this.liveCanvasTrackingFrame !== null) {
+      return;
+    }
+    if (typeof requestAnimationFrame !== 'function') {
+      this.scheduleOffscreenIndicatorUpdate();
+      return;
+    }
+    this.liveCanvasTrackingFrame = requestAnimationFrame(() => {
+      this.liveCanvasTrackingFrame = null;
+      if (!this.liveCanvasTrackingActive) {
+        return;
+      }
+      this.scheduleOffscreenIndicatorUpdate();
+      this.scheduleLiveCanvasTrackingFrame();
+    });
+  }
+
+  private stopLiveCanvasTracking(): void {
+    this.liveCanvasTrackingActive = false;
+    if (this.liveCanvasTrackingFrame !== null && typeof cancelAnimationFrame === 'function') {
+      cancelAnimationFrame(this.liveCanvasTrackingFrame);
+      this.liveCanvasTrackingFrame = null;
+    }
+  }
+
+  private updateOffscreenIndicator(): void {
+    if (this.planningService.isActive() || this.logsFullscreen()) {
+      this.hideOffscreenIndicator();
+      return;
+    }
+
+    const surface = this.flowSurfaceRef?.nativeElement;
+    if (!surface) {
+      this.hideOffscreenIndicator();
+      return;
+    }
+
+    const width = surface.clientWidth;
+    const height = surface.clientHeight;
+    if (!width || !height) {
+      this.hideOffscreenIndicator();
+      return;
+    }
+
+    const renderedBounds = this.getRenderedFlowchartBounds(surface);
+    if (!renderedBounds) {
+      this.hideOffscreenIndicator();
+      return;
+    }
+
+    const screenBounds = {
+      left: renderedBounds.left - OFFSCREEN_INDICATOR_BOUNDS_PADDING_PX,
+      right: renderedBounds.right + OFFSCREEN_INDICATOR_BOUNDS_PADDING_PX,
+      top: renderedBounds.top - OFFSCREEN_INDICATOR_BOUNDS_PADDING_PX,
+      bottom: renderedBounds.bottom + OFFSCREEN_INDICATOR_BOUNDS_PADDING_PX,
+    };
+
+    const centerX = width / 2;
+    const centerY = height / 2;
+    const targetX = clamp(centerX, screenBounds.left, screenBounds.right);
+    const targetY = clamp(centerY, screenBounds.top, screenBounds.bottom);
+    const dx = targetX - centerX;
+    const dy = targetY - centerY;
+    if (Math.abs(dx) < OFFSCREEN_INDICATOR_HORIZONTAL_THRESHOLD_PX
+      && Math.abs(dy) < OFFSCREEN_INDICATOR_VERTICAL_THRESHOLD_PX) {
+      this.hideOffscreenIndicator();
+      return;
+    }
+
+    const edgeX = width / 2 - OFFSCREEN_INDICATOR_EDGE_PADDING_PX;
+    const edgeY = height / 2 - OFFSCREEN_INDICATOR_EDGE_PADDING_PX;
+    const travel = Math.min(
+      dx === 0 ? Number.POSITIVE_INFINITY : edgeX / Math.abs(dx),
+      dy === 0 ? Number.POSITIVE_INFINITY : edgeY / Math.abs(dy),
+    );
+
+    this.offscreenIndicator.set({
+      visible: true,
+      x: centerX + dx * travel,
+      y: centerY + dy * travel,
+      angle: Math.atan2(dy, dx) * (180 / Math.PI),
+    });
+  }
+
+  private getRenderedFlowchartBounds(surface: HTMLElement): { left: number; right: number; top: number; bottom: number } | null {
+    const surfaceRect = surface.getBoundingClientRect();
+    const elements = Array.from(
+      surface.querySelectorAll<HTMLElement>('.node[data-node-id], .comment-node, .group-node:not(.selection-group)')
+    );
+
+    let left = Number.POSITIVE_INFINITY;
+    let right = Number.NEGATIVE_INFINITY;
+    let top = Number.POSITIVE_INFINITY;
+    let bottom = Number.NEGATIVE_INFINITY;
+
+    for (const element of elements) {
+      const rect = element.getBoundingClientRect();
+      if (!rect.width && !rect.height) {
+        continue;
+      }
+      left = Math.min(left, rect.left - surfaceRect.left);
+      right = Math.max(right, rect.right - surfaceRect.left);
+      top = Math.min(top, rect.top - surfaceRect.top);
+      bottom = Math.max(bottom, rect.bottom - surfaceRect.top);
+    }
+
+    if (!Number.isFinite(left) || !Number.isFinite(right) || !Number.isFinite(top) || !Number.isFinite(bottom)) {
+      return null;
+    }
+
+    return { left, right, top, bottom };
+  }
+
+  private hideOffscreenIndicator(): void {
+    if (!this.offscreenIndicator().visible) {
+      return;
+    }
+    this.offscreenIndicator.set({ visible: false, x: 0, y: 0, angle: 0 });
   }
 
   private preloadMissionAndSteps(): void {
@@ -760,6 +968,7 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
   }
 
   onSurfacePointerDown(event: PointerEvent): void {
+    this.startLiveCanvasTracking();
     if (!event.isPrimary || event.button !== 2) return;
     if (!this.flowSurfaceRef?.nativeElement) return;
     this.stopSelectionDrag();
@@ -1356,4 +1565,8 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
     });
     return grouped;
   }
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max);
 }

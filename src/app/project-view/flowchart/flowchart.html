@@ -135,7 +135,7 @@
     }
     <f-flow class="flow-root" fDraggable fEmitOnNodeIntersect (fNodeIntersectedWithConnections)="actions.onNodeIntersected($event)" (fDropToGroup)="actions.onDropToGroup($event)" (fLoaded)="actions.onLoaded()" (fCreateNode)="actions.onCreateNode($event)" (fCreateConnection)="actions.addConnection($event)" (fDragEnded)="actions.onSave()">
       <f-background class="flow-bg"><f-circle-pattern color="#4a5565"></f-circle-pattern></f-background>
-      <f-canvas fZoom class="flow-canvas">
+      <f-canvas fZoom class="flow-canvas" [debounceTime]="0" (fCanvasChange)="onCanvasChange()">
         <f-connection-for-create fBehavior="fixed" fType="segment" [fStartColor]="isDarkMode() ? '#EEE5E9' : '#131217'" [fEndColor]="isDarkMode() ? '#EEE5E9' : '#131217'"></f-connection-for-create>
         <f-snap-connection [fSnapThreshold]="50" fBehavior="fixed" fType="segment" [fStartColor]="isDarkMode() ? '#EEE5E9' : '#131217'" [fEndColor]="isDarkMode() ? '#EEE5E9' : '#131217'"></f-snap-connection>
 
@@ -294,6 +294,21 @@
           </div>
         }
       </f-canvas>
+
+      @if (offscreenIndicator().visible) {
+        <button
+          type="button"
+          class="flow-offscreen-indicator"
+          [style.left.px]="offscreenIndicator().x"
+          [style.top.px]="offscreenIndicator().y"
+          [style.--indicator-angle]="offscreenIndicator().angle + 'deg'"
+          (click)="recenterFlowchart()"
+          [attr.aria-label]="'FLOWCHART.RETURN_TO_CHART' | translate">
+          <span class="flow-offscreen-indicator__arrow" aria-hidden="true">
+            <i class="pi pi-arrow-right"></i>
+          </span>
+        </button>
+      }
     </f-flow>
 
     @if (selectionRect(); as rect) {
