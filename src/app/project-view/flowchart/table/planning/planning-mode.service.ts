@@ -261,7 +261,7 @@ export class PlanningModeService {
     y: number,
     lineup = false,
     lineupLineIndex?: number,
-    lineSnapAction?: 'lineup' | 'follow' | 'drive'
+    lineSnapAction?: 'lineup' | 'follow' | 'drive' | 'drive_until'
   ): void {
     const wp = createWaypoint(x, y, lineup, lineupLineIndex, lineSnapAction);
     this._waypoints.update(wps => [...wps, wp]);
@@ -288,7 +288,7 @@ export class PlanningModeService {
     y: number,
     lineup?: boolean,
     lineupLineIndex?: number,
-    lineSnapAction?: 'lineup' | 'follow' | 'drive'
+    lineSnapAction?: 'lineup' | 'follow' | 'drive' | 'drive_until'
   ): void {
     this._waypoints.update(wps =>
       wps.map((wp, i) => {

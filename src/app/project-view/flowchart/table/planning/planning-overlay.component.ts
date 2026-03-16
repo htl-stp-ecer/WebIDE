@@ -120,8 +120,8 @@ export class PlanningOverlayComponent implements OnInit, AfterViewInit, OnDestro
   private activeLineSnap = signal<{ startX: number; startY: number; endX: number; endY: number } | null>(null);
 
   // Undo/Redo history
-  private undoStack: { waypoints: { id: string; x: number; y: number; lineup?: boolean; lineupLineIndex?: number; lineSnapAction?: 'lineup' | 'follow' | 'drive' }[] }[] = [];
-  private redoStack: { waypoints: { id: string; x: number; y: number; lineup?: boolean; lineupLineIndex?: number; lineSnapAction?: 'lineup' | 'follow' | 'drive' }[] }[] = [];
+  private undoStack: { waypoints: { id: string; x: number; y: number; lineup?: boolean; lineupLineIndex?: number; lineSnapAction?: 'lineup' | 'follow' | 'drive' | 'drive_until' }[] }[] = [];
+  private redoStack: { waypoints: { id: string; x: number; y: number; lineup?: boolean; lineupLineIndex?: number; lineSnapAction?: 'lineup' | 'follow' | 'drive' | 'drive_until' }[] }[] = [];
 
   // Line snap action menu
   readonly lineSnapMenu = signal<{ x: number; y: number; lineIndex: number; screenX: number; screenY: number; waypointIndex?: number } | null>(null);
@@ -1087,7 +1087,7 @@ export class PlanningOverlayComponent implements OnInit, AfterViewInit, OnDestro
     });
   }
 
-  selectLineSnapAction(action: 'lineup' | 'follow' | 'drive'): void {
+  selectLineSnapAction(action: 'lineup' | 'follow' | 'drive' | 'drive_until'): void {
     const pending = this.lineSnapMenu();
     if (!pending) return;
     this.saveUndoState();
@@ -1327,7 +1327,7 @@ export class PlanningOverlayComponent implements OnInit, AfterViewInit, OnDestro
     this.restoreWaypoints(nextState.waypoints);
   }
 
-  private restoreWaypoints(waypoints: { id: string; x: number; y: number; lineup?: boolean; lineupLineIndex?: number; lineSnapAction?: 'lineup' | 'follow' | 'drive' }[]): void {
+  private restoreWaypoints(waypoints: { id: string; x: number; y: number; lineup?: boolean; lineupLineIndex?: number; lineSnapAction?: 'lineup' | 'follow' | 'drive' | 'drive_until' }[]): void {
     this.planningService.clear();
     for (const wp of waypoints) {
       this.planningService.addWaypoint(wp.x, wp.y, !!wp.lineup, wp.lineupLineIndex, wp.lineSnapAction);

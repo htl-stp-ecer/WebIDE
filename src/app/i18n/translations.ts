@@ -321,6 +321,7 @@ export const enTranslations = {
     PLANNER_LINEUP_BADGE: 'Lineup optimization',
     PLANNER_LINE_FOLLOW: 'Line Follow',
     PLANNER_NORMAL_DRIVE: 'Normal Drive',
+    PLANNER_DRIVE_UNTIL: 'Drive Until',
   },
 };
 
@@ -645,6 +646,7 @@ export const deTranslations = {
     PLANNER_LINEUP_BADGE: 'Ausrichtungsoptimierung',
     PLANNER_LINE_FOLLOW: 'Linie folgen',
     PLANNER_NORMAL_DRIVE: 'Normal fahren',
+    PLANNER_DRIVE_UNTIL: 'Fahre bis',
   },
 };
 

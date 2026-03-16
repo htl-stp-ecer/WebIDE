@@ -39,7 +39,7 @@ import { buildAdStarGrid, findAdStarPath } from './adstar-grid';
 interface AStarWorkerRequest {
   id: number;
   startPose: Pose2D;
-  waypoints: { x: number; y: number; lineup?: boolean; lineupLineIndex?: number; lineSnapAction?: 'lineup' | 'follow' | 'drive' }[];
+  waypoints: { x: number; y: number; lineup?: boolean; lineupLineIndex?: number; lineSnapAction?: 'lineup' | 'follow' | 'drive' | 'drive_until' }[];
   walls: WallSegment[];
   robotConfig: RobotConfig;
   mapConfig: MapConfig;
@@ -167,48 +167,45 @@ function appendLineupForWaypoint(
   segmentSteps: MissionStep[],
   segmentStartPose: Pose2D,
   currentPose: Pose2D,
-  waypoint: { lineup?: boolean; lineupLineIndex?: number; lineSnapAction?: 'lineup' | 'follow' | 'drive' },
+  waypoint: { lineup?: boolean; lineupLineIndex?: number; lineSnapAction?: 'lineup' | 'follow' | 'drive' | 'drive_until' },
   request: AStarWorkerRequest
 ): Pose2D {
   if (!waypoint.lineup || waypoint.lineSnapAction === 'follow' || waypoint.lineSnapAction === 'drive') {
     return currentPose;
   }
-  if (segmentSteps.some(step => isLineupStep(step))) return currentPose;
+  const lineAction = waypoint.lineSnapAction ?? 'lineup';
+  if (segmentSteps.some(step => isLineupStep(step)) || segmentSteps.some(step => !!driveUntilColorFromStepId(stepId(step)))) {
+    return currentPose;
+  }
 
   const lastDrive = getLastDriveInfo(segmentSteps);
-  let lineupStartPose = currentPose;
+  let lineActionStartPose = currentPose;
   let direction: 'forward' | 'backward' = 'forward';
   if (lastDrive) {
     const baseIndex = steps.length - segmentSteps.length;
     steps.splice(baseIndex + lastDrive.index);
 
-    lineupStartPose = simulateCommands(segmentStartPose, segmentSteps.slice(0, lastDrive.index));
+    lineActionStartPose = simulateCommands(segmentStartPose, segmentSteps.slice(0, lastDrive.index));
     direction = lastDrive.direction;
 
-    const approachOffset = getLineupApproachOffset(request, direction);
-    let trimmedDistance = Math.max(0, Math.round(lastDrive.distanceCm - approachOffset));
-
     const lineSegments = request.lineSegments ?? [];
-    const segmentEndPose = simulateCommand(lineupStartPose, segmentSteps[lastDrive.index]);
+    const segmentEndPose = simulateCommand(lineActionStartPose, segmentSteps[lastDrive.index]);
     const blockingDistance = typeof waypoint.lineupLineIndex === 'number'
       ? findLastBlockingDistanceOnSegment(
-        lineupStartPose,
+        lineActionStartPose,
         segmentEndPose,
         lineSegments,
         waypoint.lineupLineIndex
       )
       : null;
-    if (blockingDistance !== null) {
-      trimmedDistance = Math.max(trimmedDistance, Math.round(blockingDistance + 1));
-    }
 
     const targetLine = typeof waypoint.lineupLineIndex === 'number'
       ? lineSegments[waypoint.lineupLineIndex]
       : null;
     const targetDistance = targetLine
       ? segmentIntersectionDistance(
-        lineupStartPose.x,
-        lineupStartPose.y,
+        lineActionStartPose.x,
+        lineActionStartPose.y,
         segmentEndPose.x,
         segmentEndPose.y,
         targetLine.startX,
@@ -217,27 +214,33 @@ function appendLineupForWaypoint(
         targetLine.endY
       ) ?? lastDrive.distanceCm
       : lastDrive.distanceCm;
-    const maxBeforeTarget = Math.max(0, Math.round(targetDistance - 0.5));
-    trimmedDistance = Math.min(trimmedDistance, maxBeforeTarget);
 
     const detectDistance = getLineDetectDistance(request);
-    const lineupContext = targetLine
+    const lineActionContext = targetLine
       ? buildLineupContextForLine(request, targetLine, detectDistance)
       : buildLineupContext(request, lineSegments, detectDistance);
 
-    const contactDistance = lineupContext
-      ? findFirstLineContactDistance(lineupStartPose, targetDistance, direction, lineupContext)
+    const approachOffset = lineAction === 'lineup' ? getLineupApproachOffset(request, direction) : 0;
+    let trimmedDistance = Math.max(0, Math.round(targetDistance - approachOffset));
+    if (blockingDistance !== null) {
+      trimmedDistance = Math.max(trimmedDistance, Math.round(blockingDistance + 1));
+    }
+    const maxBeforeTarget = Math.max(0, Math.round(targetDistance - 0.5));
+    trimmedDistance = Math.min(trimmedDistance, maxBeforeTarget);
+
+    const contactDistance = lineActionContext
+      ? findFirstLineContactDistance(lineActionStartPose, targetDistance, direction, lineActionContext)
       : null;
     if (contactDistance !== null) {
       trimmedDistance = Math.min(trimmedDistance, Math.max(0, Math.round(contactDistance - 1)));
     }
 
-    if (trimmedDistance > 0 && lineupContext) {
+    if (trimmedDistance > 0 && lineActionContext) {
       let adjusted = trimmedDistance;
       let guard = 0;
       while (adjusted > 0 && guard < 300) {
-        const pose = simulateCommand(lineupStartPose, cloneDriveStep(segmentSteps[lastDrive.index], adjusted));
-        if (!isAnySensorOnLine(pose, lineupContext)) {
+        const pose = simulateCommand(lineActionStartPose, cloneDriveStep(segmentSteps[lastDrive.index], adjusted));
+        if (!isAnySensorOnLine(pose, lineActionContext)) {
           break;
         }
         adjusted = Math.max(0, adjusted - 1);
@@ -251,8 +254,28 @@ function appendLineupForWaypoint(
     if (trimmedDistance > 0) {
       const trimmedStep = cloneDriveStep(segmentSteps[lastDrive.index], trimmedDistance);
       steps.push(trimmedStep);
-      lineupStartPose = simulateCommand(lineupStartPose, trimmedStep);
+      lineActionStartPose = simulateCommand(lineActionStartPose, trimmedStep);
     }
+  }
+
+  if (lineAction === 'drive_until') {
+    steps.push(createDriveUntilStep('black'));
+
+    const finalLineSegments = request.lineSegments ?? [];
+    const finalDetectDistance = getLineDetectDistance(request);
+    const finalTargetLine = typeof waypoint.lineupLineIndex === 'number'
+      ? finalLineSegments[waypoint.lineupLineIndex]
+      : null;
+    const driveUntilContext = finalTargetLine
+      ? buildLineupContextForLine(request, finalTargetLine, finalDetectDistance)
+      : buildLineupContext(request, finalLineSegments, finalDetectDistance);
+    if (!driveUntilContext) return lineActionStartPose;
+
+    const drivePoses = simulateDriveUntilColor(lineActionStartPose, driveUntilContext, 'black');
+    if (drivePoses.length) {
+      return drivePoses[drivePoses.length - 1];
+    }
+    return lineActionStartPose;
   }
 
   steps.push(createLineupStep(direction, 'black'));
@@ -266,17 +289,17 @@ function appendLineupForWaypoint(
     ? buildLineupContextForLine(request, finalTargetLine, finalDetectDistance)
     : buildLineupContext(request, finalLineSegments, finalDetectDistance);
   const lineupContext = finalLineupContext;
-  if (!lineupContext) return lineupStartPose;
+  if (!lineupContext) return lineActionStartPose;
 
   const lineupPoses =
     direction === 'backward'
-      ? simulateBackwardLineupOnBlack(lineupStartPose, lineupContext)
-      : simulateForwardLineupOnBlack(lineupStartPose, lineupContext);
+      ? simulateBackwardLineupOnBlack(lineActionStartPose, lineupContext)
+      : simulateForwardLineupOnBlack(lineActionStartPose, lineupContext);
   if (lineupPoses.length) {
     return lineupPoses[lineupPoses.length - 1];
   }
 
-  return lineupStartPose;
+  return lineActionStartPose;
 }
 
 function getLastDriveInfo(
@@ -578,6 +601,17 @@ function createFollowLineStep(distanceCm: number | null): MissionStep {
   };
 }
 
+function createDriveUntilStep(color: 'black' | 'white'): MissionStep {
+  const functionName = color === 'white' ? FlowStepId.DriveUntilWhite : FlowStepId.DriveUntilBlack;
+  return {
+    step_type: functionName,
+    function_name: functionName,
+    arguments: [],
+    position: { x: 0, y: 0 },
+    children: [],
+  };
+}
+
 function buildOptimizationContextForRequest(
   request: AStarWorkerRequest,
   lineSegments: LineSegmentCm[],
@@ -821,7 +855,7 @@ function createLineupStep(direction: 'forward' | 'backward', color: 'black' | 'w
 }
 
 function shouldFollowLineTarget(
-  waypoint: { lineup?: boolean; lineupLineIndex?: number; lineSnapAction?: 'lineup' | 'follow' | 'drive' }
+  waypoint: { lineup?: boolean; lineupLineIndex?: number; lineSnapAction?: 'lineup' | 'follow' | 'drive' | 'drive_until' }
 ): boolean {
   if (!waypoint.lineup) return false;
   if (waypoint.lineSnapAction !== 'follow') return false;

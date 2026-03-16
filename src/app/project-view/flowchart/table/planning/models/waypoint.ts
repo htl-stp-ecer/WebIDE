@@ -14,7 +14,7 @@ export interface Waypoint {
   /** Line segment index to align to when lineup is enabled */
   lineupLineIndex?: number;
   /** Action to take when snapped to a line */
-  lineSnapAction?: 'lineup' | 'follow' | 'drive';
+  lineSnapAction?: 'lineup' | 'follow' | 'drive' | 'drive_until';
 }
 
 let waypointCounter = 0;
@@ -27,7 +27,7 @@ export function createWaypoint(
   y: number,
   lineup = false,
   lineupLineIndex?: number,
-  lineSnapAction?: 'lineup' | 'follow' | 'drive'
+  lineSnapAction?: 'lineup' | 'follow' | 'drive' | 'drive_until'
 ): Waypoint {
   return {
     id: `wp-${++waypointCounter}-${Date.now()}`,

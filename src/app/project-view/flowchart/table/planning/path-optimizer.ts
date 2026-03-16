@@ -7,6 +7,7 @@ import { lineupProximityCm } from './line-utils';
 import { FlowStepId, lineupStepId } from '../step-id';
 import {
   LineupSimulationContext,
+  simulateDriveUntilColor,
   simulateFollowLine,
   simulateForwardLineupOnBlack,
 } from '../simulation-path';
@@ -65,9 +66,10 @@ export function optimizeWaypointsToSteps(
       const dy = to.y - currentPose.y;
       const totalDistance = Math.sqrt(dx * dx + dy * dy);
 
-      const shouldLineup = !!to.lineup && to.lineSnapAction !== 'follow' && to.lineSnapAction !== 'drive';
+      const shouldLineup = !!to.lineup && to.lineSnapAction !== 'follow' && to.lineSnapAction !== 'drive' && to.lineSnapAction !== 'drive_until';
       const shouldFollowLine = shouldFollowLineSegment(to);
-      if (totalDistance < 0.1 && !shouldLineup && !shouldFollowLine) {
+      const shouldDriveUntil = shouldDriveUntilSegment(to);
+      if (totalDistance < 0.1 && !shouldLineup && !shouldFollowLine && !shouldDriveUntil) {
         break;
       }
 
@@ -187,6 +189,64 @@ export function optimizeWaypointsToSteps(
         break;
       }
 
+      if (shouldDriveUntil) {
+        const targetLine = typeof to.lineupLineIndex === 'number'
+          ? lineSegments[to.lineupLineIndex]
+          : null;
+        const targetDistance = targetLine
+          ? segmentIntersectionDistance(
+            currentPose.x,
+            currentPose.y,
+            to.x,
+            to.y,
+            targetLine.startX,
+            targetLine.startY,
+            targetLine.endX,
+            targetLine.endY
+          ) ?? totalDistance
+          : totalDistance;
+        const blockingDistance = findLastBlockingLineDistance(
+          currentPose.x,
+          currentPose.y,
+          to.x,
+          to.y,
+          lineSegments,
+          typeof to.lineupLineIndex === 'number' ? to.lineupLineIndex : null
+        );
+        let approachDistance = targetDistance;
+        if (blockingDistance !== null) {
+          approachDistance = Math.max(approachDistance, blockingDistance + 1);
+        }
+        approachDistance = Math.min(approachDistance, Math.max(0, targetDistance - 0.5));
+
+        const activeContext = targetLine
+          ? buildLineupContextForLine(context, targetLine, detectDistanceCm)
+          : lineupContext;
+        const contactDistance = activeContext
+          ? findFirstLineContactDistance(currentPose, targetDistance, activeContext)
+          : null;
+        if (contactDistance !== null) {
+          approachDistance = Math.min(approachDistance, Math.max(0, contactDistance - 1));
+        }
+        approachDistance = backoffApproachDistance(currentPose, approachDistance, activeContext);
+        approachDistance = Math.max(0, approachDistance - detectDistanceCm);
+
+        const roundedDistance = Math.round(approachDistance);
+        if (roundedDistance > 0) {
+          steps.push(createDriveStep(roundedDistance));
+          currentPose = forwardMove(currentPose, roundedDistance);
+        }
+
+        steps.push(createDriveUntilStep('black'));
+        if (activeContext) {
+          const drivePoses = simulateDriveUntilColor(currentPose, activeContext, 'black');
+          if (drivePoses.length) {
+            currentPose = drivePoses[drivePoses.length - 1];
+          }
+        }
+        break;
+      }
+
       if (totalDistance > 1) {
         const roundedDistance = Math.round(totalDistance);
         if (roundedDistance > 0) {
@@ -241,6 +301,18 @@ function createFollowLineStep(distanceCm: number | null): MissionStep {
   };
 }
 
+function createDriveUntilStep(color: 'black' | 'white'): MissionStep {
+  const functionName = color === 'white' ? FlowStepId.DriveUntilWhite : FlowStepId.DriveUntilBlack;
+
+  return {
+    step_type: functionName,
+    function_name: functionName,
+    arguments: [],
+    position: { x: 0, y: 0 },
+    children: [],
+  };
+}
+
 function createLineupStep(direction: 'forward' | 'backward', color: 'black' | 'white'): MissionStep {
   const functionName = lineupStepId(direction, color);
 
@@ -269,6 +341,12 @@ function buildLineupContext(context: OptimizationContext, maxDistanceCm?: number
 function shouldFollowLineSegment(to: Waypoint): boolean {
   if (!to.lineup) return false;
   if (to.lineSnapAction !== 'follow') return false;
+  return typeof to.lineupLineIndex === 'number';
+}
+
+function shouldDriveUntilSegment(to: Waypoint): boolean {
+  if (!to.lineup) return false;
+  if (to.lineSnapAction !== 'drive_until') return false;
   return typeof to.lineupLineIndex === 'number';
 }
 
