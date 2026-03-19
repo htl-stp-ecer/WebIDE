@@ -8,7 +8,7 @@ export function asStepFromPool(ms: MissionStep, pool: Step[]): Step {
     import: '',
     arguments: ms.arguments.map((a, i) => ({
       name: a.name || `arg${i}`,
-      type: a.type,
+      type: resolveMissionArgumentType(a.type, a.value),
       import: null as any,
       optional: false,
       default: a.value
@@ -27,7 +27,10 @@ export function initialArgsFromPool(ms: MissionStep, pool: Step[]): Record<strin
       return [sa.name, toVal(sa.type, source)];
     }));
   }
-  return Object.fromEntries(ms.arguments.map((a, i) => [a.name || `arg${i}`, toVal(a.type, a.value)]));
+  return Object.fromEntries(ms.arguments.map((a, i) => [
+    a.name || `arg${i}`,
+    toVal(resolveMissionArgumentType(a.type, a.value), a.value),
+  ]));
 }
 
 export function missionStepFromAdHoc(n: FlowNode): MissionStep {
@@ -51,6 +54,28 @@ export function missionStepFromAdHoc(n: FlowNode): MissionStep {
 const normalizeArgName = (name: string | undefined | null): string =>
   (name ?? '').trim().toLowerCase();
 
+const normalizeArgType = (type: string | undefined | null): string =>
+  (type ?? '').trim().toLowerCase();
+
+const isBindingArgType = (type: string | undefined | null): boolean => {
+  const normalized = normalizeArgType(type);
+  return normalized === 'keyword' || normalized === 'kw' || normalized === 'named' || normalized === 'named_argument' ||
+    normalized === 'positional' || normalized === 'pos' || normalized === 'position';
+};
+
+function resolveMissionArgumentType(type: string | undefined | null, value: unknown): string {
+  if (type && !isBindingArgType(type)) {
+    return type;
+  }
+  if (typeof value === 'boolean') {
+    return 'bool';
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return Number.isInteger(value) ? 'int' : 'float';
+  }
+  return 'str';
+}
+
 const ARG_NAME_ALIASES: string[][] = [
   ['cm', 'distance', 'distance_cm'],
   ['deg', 'degrees', 'angle_deg'],
@@ -69,27 +94,57 @@ const argNamesEquivalent = (left: string | undefined | null, right: string | und
   return ARG_NAME_ALIASES.some(group => group.includes(a) && group.includes(b));
 };
 
+const hasConcreteArgValue = (value: unknown): boolean => value !== null && value !== undefined && value !== '';
+
+function findBestStoredArgIndex(
+  sourceArgs: MissionStep['arguments'],
+  defName: string,
+  fallbackIndex: number,
+  usedIndices?: Set<number>
+): number {
+  let bestIndex = -1;
+  let bestScore = -1;
+  const normalizedDefName = normalizeArgName(defName);
+
+  sourceArgs.forEach((arg, index) => {
+    if (usedIndices?.has(index)) {
+      return;
+    }
+
+    const normalizedArgName = normalizeArgName(arg.name);
+    let score = -1;
+
+    if (argNamesEquivalent(arg.name, defName)) {
+      const isExactMatch = normalizedArgName === normalizedDefName;
+      score = isExactMatch ? 2 : 1;
+      if (hasConcreteArgValue(arg.value)) {
+        score += 3;
+      }
+    } else if (
+      fallbackIndex >= 0 &&
+      index === fallbackIndex &&
+      isGenericArgName(arg.name)
+    ) {
+      score = hasConcreteArgValue(arg.value) ? 1 : 0;
+    }
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestIndex = index;
+    }
+  });
+
+  return bestIndex;
+}
+
 function findStoredArg(
   sourceArgs: MissionStep['arguments'],
   defName: string,
   fallbackIndex: number,
   usedIndices?: Set<number>
 ): MissionStep['arguments'][number] | undefined {
-  const byName = sourceArgs.find((arg, index) =>
-    !(usedIndices?.has(index)) && argNamesEquivalent(arg.name, defName)
-  );
-  if (byName) {
-    return byName;
-  }
-  if (
-    fallbackIndex >= 0 &&
-    fallbackIndex < sourceArgs.length &&
-    !(usedIndices?.has(fallbackIndex)) &&
-    isGenericArgName(sourceArgs[fallbackIndex]?.name)
-  ) {
-    return sourceArgs[fallbackIndex];
-  }
-  return undefined;
+  const sourceIndex = findBestStoredArgIndex(sourceArgs, defName, fallbackIndex, usedIndices);
+  return sourceIndex !== -1 ? sourceArgs[sourceIndex] : undefined;
 }
 
 function toMissionArgValue(value: unknown): string | number | boolean | null {
@@ -111,17 +166,7 @@ export function canonicalizeMissionStepArguments(ms: MissionStep, pool: Step[]):
   const sourceArgs = ms.arguments ?? [];
   const usedIndices = new Set<number>();
   const canonicalArgs = match.arguments.flatMap((def, index) => {
-    let sourceIndex = sourceArgs.findIndex((arg, sourceIdx) =>
-      !usedIndices.has(sourceIdx) && argNamesEquivalent(arg.name, def.name)
-    );
-    if (
-      sourceIndex === -1 &&
-      index < sourceArgs.length &&
-      !usedIndices.has(index) &&
-      isGenericArgName(sourceArgs[index]?.name)
-    ) {
-      sourceIndex = index;
-    }
+    const sourceIndex = findBestStoredArgIndex(sourceArgs, def.name, index, usedIndices);
     if (sourceIndex !== -1) {
       usedIndices.add(sourceIndex);
     }
@@ -133,7 +178,10 @@ export function canonicalizeMissionStepArguments(ms: MissionStep, pool: Step[]):
     }];
   });
 
-  const remainingArgs = sourceArgs.filter((_, index) => !usedIndices.has(index));
+  const remainingArgs = sourceArgs.filter((arg, index) =>
+    !usedIndices.has(index) &&
+    !match.arguments.some(def => argNamesEquivalent(arg.name, def.name))
+  );
 
   return {
     ...ms,

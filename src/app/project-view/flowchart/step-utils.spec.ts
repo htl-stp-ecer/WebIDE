@@ -1,5 +1,5 @@
 import { MissionStep } from '../../entities/MissionStep';
-import { canonicalizeMissionStepArguments } from './step-utils';
+import { asStepFromPool, canonicalizeMissionStepArguments, initialArgsFromPool } from './step-utils';
 import { Step } from './models';
 
 describe('step-utils canonicalizeMissionStepArguments', () => {
@@ -71,5 +71,75 @@ describe('step-utils canonicalizeMissionStepArguments', () => {
       { name: 'right_sensor', value: 'front_right', type: 'IRSensor' },
       { name: 'distance_cm', value: 12, type: 'float' },
     ]);
+  });
+
+  it('prefers a populated alias over an empty duplicate when hydrating node args', () => {
+    const storedStep: MissionStep = {
+      step_type: '',
+      function_name: 'turn_cw',
+      arguments: [
+        { name: 'deg', value: null, type: 'float' },
+        { name: 'degrees', value: 90, type: 'float' },
+      ],
+      position: { x: 0, y: 0 },
+      children: [],
+    };
+    const pool: Step[] = [
+      {
+        name: 'turn_cw',
+        import: null,
+        file: '',
+        arguments: [
+          { name: 'deg', type: 'float', default: null },
+        ],
+      },
+    ];
+
+    expect(initialArgsFromPool(storedStep, pool)).toEqual({ deg: 90 });
+  });
+
+  it('drops stale alias duplicates when canonicalizing turn arguments', () => {
+    const storedStep: MissionStep = {
+      step_type: '',
+      function_name: 'turn_cw',
+      arguments: [
+        { name: 'deg', value: null, type: 'float' },
+        { name: 'degrees', value: 90, type: 'float' },
+      ],
+      position: { x: 0, y: 0 },
+      children: [],
+    };
+    const pool: Step[] = [
+      {
+        name: 'turn_cw',
+        import: null,
+        file: '',
+        arguments: [
+          { name: 'deg', type: 'float', default: null },
+        ],
+      },
+    ];
+
+    expect(canonicalizeMissionStepArguments(storedStep, pool).arguments).toEqual([
+      { name: 'deg', value: 90, type: 'float' },
+    ]);
+  });
+
+  it('infers numeric UI types for fallback mission arguments parsed as keyword bindings', () => {
+    const storedStep: MissionStep = {
+      step_type: '',
+      function_name: 'turn_ccw',
+      arguments: [
+        { name: 'deg', value: 13, type: 'keyword' },
+      ],
+      position: { x: 0, y: 0 },
+      children: [],
+    };
+
+    const fallbackStep = asStepFromPool(storedStep, []);
+    expect(fallbackStep.arguments[0].name).toBe('deg');
+    expect(fallbackStep.arguments[0].type).toBe('int');
+    expect(fallbackStep.arguments[0].default).toBe(13);
+    expect(initialArgsFromPool(storedStep, [])).toEqual({ deg: 13 });
   });
 });
