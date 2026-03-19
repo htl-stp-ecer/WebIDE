@@ -1,5 +1,7 @@
 import { optimizeWaypointsToSteps } from './path-optimizer';
 import { createPose, createSensorConfig, setSensor } from '../models';
+import { simulateCommands } from './pathfinding';
+import { FlowStepId, isClockwiseStepId, isCounterClockwiseStepId } from '../step-id';
 
 describe('path-optimizer integration', () => {
   const baseContext = {
@@ -106,5 +108,52 @@ describe('path-optimizer integration', () => {
 
     expect(steps[steps.length - 1].function_name).toBe('drive_until_black');
     expect(steps.some(step => step.function_name === 'drive_forward')).toBe(true);
+  });
+
+  it('reaches forward-left waypoints consistently across headings on an empty map', () => {
+    const context = {
+      lineSegments: [],
+      sensorConfig: createSensorConfig(),
+      isOnBlackLine: () => false,
+    };
+
+    const cases = [
+      { start: createPose(40, 40, 0), goal: { x: 30, y: 60 } },
+      { start: createPose(40, 40, 90), goal: { x: 20, y: 30 } },
+      { start: createPose(40, 40, 180), goal: { x: 50, y: 20 } },
+      { start: createPose(40, 40, -90), goal: { x: 60, y: 50 } },
+    ];
+
+    for (const { start, goal } of cases) {
+      const steps = optimizeWaypointsToSteps(
+        [
+          { id: 'start', x: start.x, y: start.y },
+          { id: 'goal', x: goal.x, y: goal.y },
+        ],
+        start,
+        context
+      );
+
+      const endPose = simulateCommands(start, steps);
+      expect(endPose.x).toBeCloseTo(goal.x, 0);
+      expect(endPose.y).toBeCloseTo(goal.y, 0);
+    }
+  });
+
+  it('treats turn_ccw as counter-clockwise during simulation', () => {
+    expect(isCounterClockwiseStepId(FlowStepId.TurnCcw)).toBe(true);
+    expect(isClockwiseStepId(FlowStepId.TurnCcw)).toBe(false);
+
+    const endPose = simulateCommands(createPose(0, 0, 0), [
+      {
+        step_type: FlowStepId.TurnCcw,
+        function_name: FlowStepId.TurnCcw,
+        arguments: [{ name: 'deg', value: 90, type: 'float' }],
+        position: { x: 0, y: 0 },
+        children: [],
+      },
+    ]);
+
+    expect(endPose.theta).toBeCloseTo(Math.PI / 2, 10);
   });
 });

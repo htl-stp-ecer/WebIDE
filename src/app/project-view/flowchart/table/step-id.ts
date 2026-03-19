@@ -144,8 +144,9 @@ export const isStepId = (id: string, expected: FlowStepId): boolean => id === ex
 
 export const isBackwardStepId = (id: string): boolean => id.includes('backward') || id.includes('reverse');
 export const isForwardStepId = (id: string): boolean => id.includes('forward');
-export const isClockwiseStepId = (id: string): boolean => id.includes('_cw') || id.endsWith('cw') || id.includes('right');
 export const isCounterClockwiseStepId = (id: string): boolean => id.includes('_ccw') || id.endsWith('ccw') || id.includes('left');
+export const isClockwiseStepId = (id: string): boolean =>
+  (id.includes('_cw') || id.endsWith('cw') || id.includes('right')) && !isCounterClockwiseStepId(id);
 export const isLeftStepId = (id: string): boolean => id.includes('left');
 export const isRightStepId = (id: string): boolean => id.includes('right');
 
