@@ -1,5 +1,5 @@
 import { optimizeWaypointsToSteps } from './path-optimizer';
-import { createPose, createSensorConfig } from '../models';
+import { createPose, createSensorConfig, setSensor } from '../models';
 
 describe('path-optimizer integration', () => {
   const baseContext = {
@@ -36,6 +36,59 @@ describe('path-optimizer integration', () => {
     expect(steps.length).toBe(1);
     expect(steps[0].function_name).toBe('follow_line');
     expect(steps[0].arguments[0].value).toBe(12);
+  });
+
+  it('creates intersection-stopping follow_line when a crossing appears before the waypoint', () => {
+    const steps = optimizeWaypointsToSteps(
+      [
+        { id: 'a', x: 0, y: 10 },
+        { id: 'b', x: 20, y: 10, lineup: true, lineSnapAction: 'follow', lineupLineIndex: 0 },
+      ],
+      createPose(0, 10, 0),
+      {
+        ...baseContext,
+        lineSegments: [
+          { startX: 0, startY: 10, endX: 30, endY: 10, isDiagonal: false },
+          { startX: 12, startY: 0, endX: 12, endY: 20, isDiagonal: false },
+        ],
+      }
+    );
+
+    expect(steps.length).toBe(1);
+    expect(steps[0].function_name).toBe('follow_line');
+    expect(steps[0].arguments.length).toBe(0);
+  });
+
+  it('plans the next waypoint from the crossing after intersection-stopping follow_line', () => {
+    const sensorConfig = createSensorConfig();
+    setSensor(sensorConfig, 0, 0, 1);
+    setSensor(sensorConfig, 1, 0, -1);
+
+    const steps = optimizeWaypointsToSteps(
+      [
+        { id: 'a', x: 0, y: 10 },
+        { id: 'b', x: 20, y: 10, lineup: true, lineSnapAction: 'follow', lineupLineIndex: 0 },
+        { id: 'c', x: 20, y: 5 },
+      ],
+      createPose(0, 10, 0),
+      {
+        lineSegments: [
+          { startX: 0, startY: 10, endX: 30, endY: 10, isDiagonal: false },
+          { startX: 12, startY: 0, endX: 12, endY: 20, isDiagonal: false },
+        ],
+        sensorConfig,
+        isOnBlackLine: (x: number, y: number) =>
+          (Math.abs(y - 10) <= 0.75 && x >= 0 && x <= 30) ||
+          (Math.abs(x - 12) <= 0.75 && y >= 0 && y <= 20),
+      }
+    );
+
+    expect(steps.length).toBe(3);
+    expect(steps[0].function_name).toBe('follow_line');
+    expect(steps[0].arguments.length).toBe(0);
+    expect(steps[1].function_name).toBe('turn_cw');
+    expect(Number(steps[1].arguments[0].value)).toBeLessThan(90);
+    expect(steps[2].function_name).toBe('drive_forward');
   });
 
   it('creates drive_until_black when waypoint requests drive until behavior', () => {

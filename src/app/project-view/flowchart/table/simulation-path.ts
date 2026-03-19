@@ -1,5 +1,8 @@
+import { Mission } from '../../../entities/Mission';
+import { MissionStep } from '../../../entities/MissionStep';
 import { MissionSimulationData, ProjectSimulationData, SimulationStepData } from '../../../entities/Simulation';
 import { LineSensor, Pose2D, applyLocalDelta, forwardMove, rotate } from './models';
+import { simulateCommand } from './planning/pathfinding';
 import {
   FlowStepId,
   driveUntilColorFromStepId,
@@ -105,6 +108,35 @@ function flattenSimulationSteps(steps: SimulationStepData[]): SimulationStepData
   return result;
 }
 
+function flattenMissionSteps(steps: MissionStep[]): MissionStep[] {
+  const result: MissionStep[] = [];
+  for (const step of steps ?? []) {
+    const children = step.children ?? [];
+    if (children.length) {
+      if (isParallelStep(step as unknown as SimulationStepData)) {
+        result.push(step);
+      } else {
+        result.push(...flattenMissionSteps(children));
+      }
+    } else {
+      result.push(step);
+    }
+  }
+  return result;
+}
+
+function missionStepArgumentNumber(step: MissionStep): number {
+  const raw = step.arguments?.[0]?.value;
+  if (typeof raw === 'number') {
+    return Number.isFinite(raw) ? raw : 0;
+  }
+  if (typeof raw === 'string') {
+    const parsed = Number.parseFloat(raw);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
+}
+
 function simulateStepPath(
   current: Pose2D,
   step: SimulationStepData,
@@ -158,6 +190,58 @@ function simulateStepPath(
   return moved || rotated ? [next] : [];
 }
 
+function simulateMissionStepPath(
+  current: Pose2D,
+  step: MissionStep,
+  options?: PathSimulationOptions
+): Pose2D[] {
+  const fn = stepId(step);
+  const lineupDirection = lineupDirectionFromStepId(fn);
+  const lineupColor = lineupColorFromStepId(fn);
+  if (lineupDirection && lineupColor && isLineupStepId(fn)) {
+    if (lineupDirection === 'forward' && lineupColor === 'black') {
+      return simulateForwardLineupOnBlack(current, options?.lineup);
+    }
+    if (lineupDirection === 'forward' && lineupColor === 'white') {
+      return simulateForwardLineupOnWhite(current, options?.lineup);
+    }
+    if (lineupDirection === 'backward' && lineupColor === 'black') {
+      return simulateBackwardLineupOnBlack(current, options?.lineup);
+    }
+    if (lineupDirection === 'backward' && lineupColor === 'white') {
+      return simulateBackwardLineupOnWhite(current, options?.lineup);
+    }
+    return [];
+  }
+
+  const driveUntilColor = driveUntilColorFromStepId(fn);
+  if (driveUntilColor) {
+    return simulateDriveUntilColor(current, options?.lineup, driveUntilColor);
+  }
+
+  if (isFollowLineStepId(fn)) {
+    const targetCm = missionStepArgumentNumber(step);
+    const stopOnIntersection = targetCm <= 0;
+    if (options?.lineup) {
+      const maxDistance = stopOnIntersection ? DEFAULT_FOLLOW_LINE_MAX_DISTANCE_CM : targetCm;
+      if (maxDistance > 0) {
+        return simulateFollowLine(current, options.lineup, maxDistance, stopOnIntersection);
+      }
+    }
+    if (!stopOnIntersection && targetCm > 0) {
+      return [forwardMove(current, targetCm)];
+    }
+    return [];
+  }
+
+  const next = simulateCommand(current, step);
+  const moved =
+    Math.abs(next.x - current.x) > EPSILON ||
+    Math.abs(next.y - current.y) > EPSILON ||
+    Math.abs(next.theta - current.theta) > EPSILON;
+  return moved ? [next] : [];
+}
+
 function pushTimedPoseFrame(frames: TimedPoseIndexFrame[], timeMs: number, poseIndex: number): void {
   const last = frames[frames.length - 1];
   if (last && Math.abs(last.timeMs - timeMs) <= EPSILON && last.poseIndex === poseIndex) {
@@ -177,6 +261,25 @@ export function buildPlannedPathFromSimulation(
   const steps = flattenSimulationSteps(simulation.steps ?? []);
   for (const step of steps) {
     const stepPath = simulateStepPath(current, step, options);
+    if (!stepPath.length) continue;
+    poses.push(...stepPath);
+    current = stepPath[stepPath.length - 1];
+  }
+
+  return poses;
+}
+
+export function buildPlannedPathFromMission(
+  startPose: Pose2D,
+  mission: Mission,
+  options?: PathSimulationOptions
+): Pose2D[] {
+  const poses: Pose2D[] = [startPose];
+  let current = startPose;
+
+  const steps = flattenMissionSteps(mission.steps ?? []);
+  for (const step of steps) {
+    const stepPath = simulateMissionStepPath(current, step, options);
     if (!stepPath.length) continue;
     poses.push(...stepPath);
     current = stepPath[stepPath.length - 1];
@@ -258,6 +361,41 @@ export function buildPlannedPathFromProjectSimulation(
     missionRanges.push({
       name: mission.name,
       order: mission.order,
+      startIndex,
+      endIndex,
+    });
+    current = missionPath[missionPath.length - 1] ?? current;
+  }
+
+  return { poses, missionEndIndices, missionRanges };
+}
+
+export function buildPlannedPathFromProjectSimulationWithMissionOverride(
+  startPose: Pose2D,
+  simulation: ProjectSimulationData,
+  missionOverride: Mission,
+  options?: PathSimulationOptions
+): PlannedProjectPath {
+  const missions = [...(simulation.missions ?? [])].sort((a, b) => a.order - b.order);
+  const poses: Pose2D[] = [startPose];
+  const missionEndIndices: number[] = [];
+  const missionRanges: MissionPlannedRange[] = [];
+  let current = startPose;
+
+  for (const mission of missions) {
+    const startIndex = poses.length - 1;
+    const missionPath = mission.name === missionOverride.name
+      ? buildPlannedPathFromMission(current, missionOverride, options)
+      : buildPlannedPathFromSimulation(current, mission, options);
+
+    if (missionPath.length > 1) {
+      poses.push(...missionPath.slice(1));
+    }
+    const endIndex = poses.length - 1;
+    missionEndIndices.push(endIndex);
+    missionRanges.push({
+      name: mission.name === missionOverride.name ? missionOverride.name : mission.name,
+      order: mission.name === missionOverride.name ? missionOverride.order : mission.order,
       startIndex,
       endIndex,
     });

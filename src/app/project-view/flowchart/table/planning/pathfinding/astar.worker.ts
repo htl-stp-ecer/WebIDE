@@ -498,7 +498,7 @@ function generateFollowLineSteps(
 
   const lineSegments = request.lineSegments ?? [];
   const detectDistance = getLineDetectDistance(request);
-  const stopOnIntersection = shouldStopOnIntersection(goal, lineSegments, lineIndex, detectDistance);
+  const stopOnIntersection = shouldStopOnIntersection(pose, goal, lineSegments, lineIndex, detectDistance);
   const roundedDistance = Math.round(distance);
   const maxDistance = Math.max(request.mapConfig.widthCm, request.mapConfig.heightCm);
   if (!stopOnIntersection && roundedDistance <= 0) {
@@ -508,9 +508,11 @@ function generateFollowLineSteps(
   steps.push(followStep);
 
   const targetLine = lineSegments[lineIndex];
-  const lineupContext = targetLine
-    ? buildLineupContextForLine(request, targetLine, detectDistance)
-    : buildLineupContext(request, lineSegments, detectDistance);
+  const lineupContext = stopOnIntersection
+    ? buildLineupContext(request, lineSegments, detectDistance)
+    : targetLine
+      ? buildLineupContextForLine(request, targetLine, detectDistance)
+      : buildLineupContext(request, lineSegments, detectDistance);
 
   if (lineupContext) {
     const followPoses = simulateFollowLine(
@@ -863,14 +865,32 @@ function shouldFollowLineTarget(
 }
 
 function shouldStopOnIntersection(
+  startPose: Pose2D,
   goal: { x: number; y: number },
   lineSegments: LineSegmentCm[],
   lineIndex: number,
   detectDistanceCm: number
 ): boolean {
+  const segmentLength = Math.sqrt(
+    (goal.x - startPose.x) * (goal.x - startPose.x) +
+    (goal.y - startPose.y) * (goal.y - startPose.y)
+  );
   for (let i = 0; i < lineSegments.length; i++) {
     if (i === lineIndex) continue;
     if (isPointOnLineSegment(goal.x, goal.y, lineSegments[i], detectDistanceCm)) {
+      return true;
+    }
+    const dist = segmentIntersectionDistance(
+      startPose.x,
+      startPose.y,
+      goal.x,
+      goal.y,
+      lineSegments[i].startX,
+      lineSegments[i].startY,
+      lineSegments[i].endX,
+      lineSegments[i].endY
+    );
+    if (dist !== null && dist > detectDistanceCm && dist < segmentLength - detectDistanceCm) {
       return true;
     }
   }

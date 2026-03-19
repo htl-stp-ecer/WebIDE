@@ -258,4 +258,5 @@ export function handleAddPlannedSteps(flow: Flowchart, steps: MissionStep[]): vo
   rebuildFromMission(flow, mission);
   flow.layoutFlags.needsAdjust = true;
   flow.historyManager.recordHistory('add-planned-steps');
+  flow.updatePlannedPathForMission?.(mission);
 }

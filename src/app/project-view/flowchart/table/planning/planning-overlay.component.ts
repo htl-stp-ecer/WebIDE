@@ -244,9 +244,13 @@ export class PlanningOverlayComponent implements OnInit, AfterViewInit, OnDestro
       this.renderAngleGuide(width, height, angleSnap);
     }
 
-    // Draw computed trajectory (orange) then the waypoint path
+    const hasComputedTrajectory = this.planningService.computedTrajectory().length >= 2;
+
+    // Show the raw waypoint guide only while no computed trajectory is available.
+    if (!hasComputedTrajectory) {
+      this.renderPathLines(width, height);
+    }
     this.renderActualPath(width, height);
-    this.renderPathLines(width, height);
 
     // Draw waypoint markers and ghost robot
     this.renderWaypoints(width, height);

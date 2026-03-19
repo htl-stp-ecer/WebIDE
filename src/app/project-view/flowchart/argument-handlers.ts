@@ -48,6 +48,10 @@ export function handleArgumentChange(flow: Flowchart, nodeId: string, argName: s
     }
     targetArg.value = resolvedValue;
     flow.historyManager.recordHistory('update-argument');
+    const mission = flow.missionState.currentMission();
+    if (mission) {
+      flow.updatePlannedPathForMission?.(mission);
+    }
     scheduleArgumentAutoSave(flow);
     return;
   }

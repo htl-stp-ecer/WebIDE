@@ -91,6 +91,7 @@ export function optimizeWaypointsToSteps(
       if (shouldFollowLine) {
         const lineIndex = to.lineupLineIndex;
         const stopOnIntersection = shouldStopOnIntersection(
+          currentPose,
           to,
           lineSegments,
           lineIndex,
@@ -99,9 +100,11 @@ export function optimizeWaypointsToSteps(
         const targetLine = typeof lineIndex === 'number'
           ? lineSegments[lineIndex]
           : null;
-        const activeContext = targetLine
-          ? buildLineupContextForLine(context, targetLine, detectDistanceCm)
-          : lineupContext;
+        const activeContext = stopOnIntersection
+          ? lineupContext
+          : targetLine
+            ? buildLineupContextForLine(context, targetLine, detectDistanceCm)
+            : lineupContext;
         const roundedDistance = Math.round(totalDistance);
         const maxDistance = activeContext?.maxDistanceCm ?? DEFAULT_FOLLOW_LINE_MAX_DISTANCE_CM;
         if (!stopOnIntersection && roundedDistance <= 0) {
@@ -351,15 +354,33 @@ function shouldDriveUntilSegment(to: Waypoint): boolean {
 }
 
 function shouldStopOnIntersection(
+  startPose: Pose2D,
   waypoint: Waypoint,
   lineSegments: LineSegmentCm[],
   lineIndex: number | undefined,
   detectDistanceCm: number
 ): boolean {
   if (typeof lineIndex !== 'number') return false;
+  const segmentLength = Math.sqrt(
+    (waypoint.x - startPose.x) * (waypoint.x - startPose.x) +
+    (waypoint.y - startPose.y) * (waypoint.y - startPose.y)
+  );
   for (let i = 0; i < lineSegments.length; i++) {
     if (i === lineIndex) continue;
     if (isPointOnLineSegment(waypoint.x, waypoint.y, lineSegments[i], detectDistanceCm)) {
+      return true;
+    }
+    const dist = segmentIntersectionDistance(
+      startPose.x,
+      startPose.y,
+      waypoint.x,
+      waypoint.y,
+      lineSegments[i].startX,
+      lineSegments[i].startY,
+      lineSegments[i].endX,
+      lineSegments[i].endY
+    );
+    if (dist !== null && dist > detectDistanceCm && dist < segmentLength - detectDistanceCm) {
       return true;
     }
   }
