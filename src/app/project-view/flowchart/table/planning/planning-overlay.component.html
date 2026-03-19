@@ -218,9 +218,10 @@
 
   @if (lineSnapMenu()) {
     <div
+      #lineSnapMenuElement
       class="line-snap-menu"
-      [style.left.px]="lineSnapMenu()!.screenX"
-      [style.top.px]="lineSnapMenu()!.screenY"
+      [style.left.px]="lineSnapMenu()!.left"
+      [style.top.px]="lineSnapMenu()!.top"
       (pointerdown)="$event.stopPropagation()">
       <div class="line-snap-title">{{ 'FLOWCHART.PLANNER_LINE_SNAP_TITLE' | translate }}</div>
       <button class="line-snap-btn" (click)="selectLineSnapAction('lineup')">{{ 'FLOWCHART.PLANNER_LINEUP' | translate }}</button>

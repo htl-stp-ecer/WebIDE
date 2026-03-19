@@ -32,13 +32,17 @@ import {
 import { MissionStep } from '../../../../entities/MissionStep';
 import { TableMapService, TableVisualizationService } from '../services';
 import { HttpService } from '../../../../services/http-service';
-import {CommonModule} from '@angular/common';
+import { CommonModule } from '@angular/common';
 
 /** Hit radius for waypoint markers in pixels */
 const WAYPOINT_HIT_RADIUS = 12;
 
 /** Visual radius for waypoint markers in pixels */
 const WAYPOINT_VISUAL_RADIUS = 8;
+
+/** Line snap menu placement constants */
+const LINE_SNAP_MENU_GAP = 8;
+const LINE_SNAP_MENU_VIEWPORT_PADDING = 8;
 
 /** Snap configuration constants */
 const SNAP_CONFIG = {
@@ -66,6 +70,29 @@ const STORAGE_KEYS = {
   allowStrafe: 'planning-allow-strafe',
 } as const;
 
+type LineSnapAction = 'lineup' | 'follow' | 'drive' | 'drive_until';
+
+interface PlannerWaypointSnapshot {
+  id: string;
+  x: number;
+  y: number;
+  lineup?: boolean;
+  lineupLineIndex?: number;
+  lineSnapAction?: LineSnapAction;
+}
+
+interface LineSnapMenuState {
+  x: number;
+  y: number;
+  lineIndex: number;
+  anchorScreenX: number;
+  anchorScreenY: number;
+  left: number;
+  top: number;
+  placement: 'top' | 'bottom';
+  waypointIndex?: number;
+}
+
 @Component({
   selector: 'app-planning-overlay',
   standalone: true,
@@ -83,6 +110,7 @@ const STORAGE_KEYS = {
 })
 export class PlanningOverlayComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('canvas') canvasRef!: ElementRef<HTMLCanvasElement>;
+  @ViewChild('lineSnapMenuElement') lineSnapMenuRef?: ElementRef<HTMLDivElement>;
 
   /** Parent canvas dimensions for coordinate conversion */
   readonly parentWidth = input<number>(0);
@@ -120,11 +148,11 @@ export class PlanningOverlayComponent implements OnInit, AfterViewInit, OnDestro
   private activeLineSnap = signal<{ startX: number; startY: number; endX: number; endY: number } | null>(null);
 
   // Undo/Redo history
-  private undoStack: { waypoints: { id: string; x: number; y: number; lineup?: boolean; lineupLineIndex?: number; lineSnapAction?: 'lineup' | 'follow' | 'drive' | 'drive_until' }[] }[] = [];
-  private redoStack: { waypoints: { id: string; x: number; y: number; lineup?: boolean; lineupLineIndex?: number; lineSnapAction?: 'lineup' | 'follow' | 'drive' | 'drive_until' }[] }[] = [];
+  private undoStack: { waypoints: PlannerWaypointSnapshot[] }[] = [];
+  private redoStack: { waypoints: PlannerWaypointSnapshot[] }[] = [];
 
   // Line snap action menu
-  readonly lineSnapMenu = signal<{ x: number; y: number; lineIndex: number; screenX: number; screenY: number; waypointIndex?: number } | null>(null);
+  readonly lineSnapMenu = signal<LineSnapMenuState | null>(null);
 
   private ctx!: CanvasRenderingContext2D;
   private animationFrameId: number | null = null;
@@ -978,6 +1006,68 @@ export class PlanningOverlayComponent implements OnInit, AfterViewInit, OnDestro
     this.activeLineSnap.set(null);
   }
 
+  private openLineSnapMenu(
+    menu: { x: number; y: number; lineIndex: number; waypointIndex?: number },
+    anchorScreenX: number,
+    anchorScreenY: number
+  ): void {
+    this.lineSnapMenu.set({
+      ...menu,
+      anchorScreenX,
+      anchorScreenY,
+      left: anchorScreenX - LINE_SNAP_MENU_GAP,
+      top: anchorScreenY - LINE_SNAP_MENU_GAP,
+      placement: 'bottom',
+    });
+
+    requestAnimationFrame(() => this.repositionLineSnapMenu());
+  }
+
+  private repositionLineSnapMenu(): void {
+    const menu = this.lineSnapMenu();
+    const menuElement = this.lineSnapMenuRef?.nativeElement;
+    if (!menu || !menuElement) return;
+
+    const rect = menuElement.getBoundingClientRect();
+    const maxLeft = Math.max(
+      LINE_SNAP_MENU_VIEWPORT_PADDING,
+      window.innerWidth - rect.width - LINE_SNAP_MENU_VIEWPORT_PADDING
+    );
+    const maxTop = Math.max(
+      LINE_SNAP_MENU_VIEWPORT_PADDING,
+      window.innerHeight - rect.height - LINE_SNAP_MENU_VIEWPORT_PADDING
+    );
+
+    const left = this.clamp(
+      menu.anchorScreenX - LINE_SNAP_MENU_GAP,
+      LINE_SNAP_MENU_VIEWPORT_PADDING,
+      maxLeft
+    );
+    const belowTop = menu.anchorScreenY - LINE_SNAP_MENU_GAP;
+    const aboveTop = menu.anchorScreenY - rect.height - LINE_SNAP_MENU_GAP;
+    const fitsBelow = belowTop + rect.height <= window.innerHeight - LINE_SNAP_MENU_VIEWPORT_PADDING;
+    const fitsAbove = aboveTop >= LINE_SNAP_MENU_VIEWPORT_PADDING;
+    const placement = fitsBelow || !fitsAbove ? 'bottom' : 'top';
+    const top = this.clamp(
+      placement === 'top' ? aboveTop : belowTop,
+      LINE_SNAP_MENU_VIEWPORT_PADDING,
+      maxTop
+    );
+
+    if (menu.left !== left || menu.top !== top || menu.placement !== placement) {
+      this.lineSnapMenu.set({
+        ...menu,
+        left,
+        top,
+        placement,
+      });
+    }
+  }
+
+  private clamp(value: number, min: number, max: number): number {
+    return Math.min(Math.max(value, min), max);
+  }
+
   // --- Event Handlers ---
 
   onPointerDown(event: PointerEvent): void {
@@ -1009,13 +1099,11 @@ export class PlanningOverlayComponent implements OnInit, AfterViewInit, OnDestro
       const waypoints = this.planningService.waypoints();
       const snapped = this.applySnap(tablePos.x, tablePos.y, waypoints.length);
       if (snapped.lineSnapped && typeof snapped.lineIndex === 'number') {
-        this.lineSnapMenu.set({
+        this.openLineSnapMenu({
           x: snapped.x,
           y: snapped.y,
           lineIndex: snapped.lineIndex,
-          screenX: event.clientX,
-          screenY: event.clientY,
-        });
+        }, event.clientX, event.clientY);
         this.clearSnapIndicators();
         return;
       }
@@ -1081,17 +1169,15 @@ export class PlanningOverlayComponent implements OnInit, AfterViewInit, OnDestro
       return;
     }
     this.planningService.selectWaypoint(hitIndex);
-    this.lineSnapMenu.set({
+    this.openLineSnapMenu({
       x: wp.x,
       y: wp.y,
       lineIndex: wp.lineupLineIndex,
-      screenX: event.clientX,
-      screenY: event.clientY,
       waypointIndex: hitIndex,
-    });
+    }, event.clientX, event.clientY);
   }
 
-  selectLineSnapAction(action: 'lineup' | 'follow' | 'drive' | 'drive_until'): void {
+  selectLineSnapAction(action: LineSnapAction): void {
     const pending = this.lineSnapMenu();
     if (!pending) return;
     this.saveUndoState();
@@ -1331,7 +1417,7 @@ export class PlanningOverlayComponent implements OnInit, AfterViewInit, OnDestro
     this.restoreWaypoints(nextState.waypoints);
   }
 
-  private restoreWaypoints(waypoints: { id: string; x: number; y: number; lineup?: boolean; lineupLineIndex?: number; lineSnapAction?: 'lineup' | 'follow' | 'drive' | 'drive_until' }[]): void {
+  private restoreWaypoints(waypoints: PlannerWaypointSnapshot[]): void {
     this.planningService.clear();
     for (const wp of waypoints) {
       this.planningService.addWaypoint(wp.x, wp.y, !!wp.lineup, wp.lineupLineIndex, wp.lineSnapAction);
@@ -1403,5 +1489,10 @@ export class PlanningOverlayComponent implements OnInit, AfterViewInit, OnDestro
       this.toggleSnapLines();
       return;
     }
+  }
+
+  @HostListener('window:resize')
+  onWindowResize(): void {
+    this.repositionLineSnapMenu();
   }
 }
