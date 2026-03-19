@@ -1,7 +1,9 @@
 import { createPose, Pose2D } from '../../project-view/flowchart/table/models';
+import { PathWithSegments } from '../../project-view/flowchart/table/physics';
 import { MapConfig, RobotConfig } from '../../project-view/flowchart/table/services';
+import { buildTimedPlannedPathFromSimulation } from '../../project-view/flowchart/table/simulation-path';
 import {
-  buildTimedPath,
+  buildTimedPathFromFrames,
   detectProjectCollisions,
   doRobotFootprintsOverlap,
   interpolatePoseAtTime,
@@ -37,23 +39,58 @@ describe('project collision utils', () => {
   });
 
   it('interpolates a timed path across mission duration', () => {
-    const timed = buildTimedPath(
-      [createPose(0, 0, 0), createPose(20, 0, 0)],
-      [{ name: 'MissionA', order: 0, startIndex: 0, endIndex: 1 }],
-      [{
-        name: 'MissionA',
-        is_setup: false,
-        is_shutdown: false,
-        order: 0,
-        steps: [],
-        total_duration_ms: 1000,
-        total_delta: { forward: 0, strafe: 0, angular: 0 },
-      }]
+    const adjusted: PathWithSegments = {
+      poses: [createPose(0, 0, 0), createPose(20, 0, 0)],
+      segments: [0],
+    };
+    const timed = buildTimedPathFromFrames(
+      [
+        { timeMs: 0, poseIndex: 0 },
+        { timeMs: 1000, poseIndex: 1 },
+      ],
+      adjusted,
+      2
     );
 
     const halfway = interpolatePoseAtTime(timed, 500);
     expect(halfway?.x).toBeCloseTo(10, 5);
     expect(halfway?.y).toBeCloseTo(0, 5);
+  });
+
+  it('keeps backend step durations when building timed simulation frames', () => {
+    const detail = buildTimedPlannedPathFromSimulation(
+      createPose(0, 0, 0),
+      {
+        name: 'MissionA',
+        is_setup: false,
+        is_shutdown: false,
+        order: 0,
+        total_duration_ms: 1000,
+        total_delta: { forward: 0.1, strafe: 0, angular: 0 },
+        steps: [
+          {
+            path: [1],
+            function_name: 'drive_forward',
+            step_type: 'step',
+            average_duration_ms: 200,
+            duration_stddev_ms: 10,
+            delta: { forward: 0.02, strafe: 0, angular: 0 },
+          },
+          {
+            path: [2],
+            function_name: 'drive_forward',
+            step_type: 'step',
+            average_duration_ms: 800,
+            duration_stddev_ms: 10,
+            delta: { forward: 0.08, strafe: 0, angular: 0 },
+          },
+        ],
+      }
+    );
+
+    expect(detail.frames.map(frame => frame.timeMs)).toEqual([0, 200, 1000]);
+    expect(detail.poses[1].x).toBeCloseTo(2, 5);
+    expect(detail.poses[2].x).toBeCloseTo(10, 5);
   });
 
   it('reports one collision event for a continuous overlap window', () => {

@@ -1,9 +1,10 @@
-import { ProjectSimulationData, MissionSimulationData } from '../../entities/Simulation';
+import { ProjectSimulationData } from '../../entities/Simulation';
 import { Pose2D, createPose, lerpPose } from '../../project-view/flowchart/table/models';
 import { LineSensor } from '../../project-view/flowchart/table/models';
 import {
-  buildPlannedPathFromProjectSimulation,
+  buildTimedPlannedPathFromProjectSimulation,
   MissionPlannedRange,
+  TimedPoseIndexFrame,
 } from '../../project-view/flowchart/table/simulation-path';
 import {
   applyWallPhysicsToPathWithSegments,
@@ -88,14 +89,14 @@ export function buildProjectComparisonData(
       }
     : null;
 
-  const planned = buildPlannedPathFromProjectSimulation(startPose, simulation, { lineup: lineupContext });
+  const planned = buildTimedPlannedPathFromProjectSimulation(startPose, simulation, { lineup: lineupContext });
   const adjusted = applyWallPhysicsToPathWithSegments(
     planned.poses,
     robotConfig,
     buildCollisionWalls(map.wallSegmentsCm, map.config)
   );
   const missionRanges = mapMissionRanges(planned.missionRanges, adjusted, planned.poses.length);
-  const timedPath = buildTimedPath(adjusted.poses, missionRanges, simulation.missions);
+  const timedPath = buildTimedPathFromFrames(planned.frames, adjusted, planned.poses.length);
 
   return {
     projectUuid: project.uuid,
@@ -110,53 +111,26 @@ export function buildProjectComparisonData(
   };
 }
 
-export function buildTimedPath(
-  poses: Pose2D[],
-  missionRanges: MissionPlannedRange[],
-  missions: MissionSimulationData[]
+export function buildTimedPathFromFrames(
+  frames: TimedPoseIndexFrame[],
+  adjusted: PathWithSegments,
+  rawPoseCount: number
 ): TimedProjectPath {
-  if (!poses.length) {
+  if (!adjusted.poses.length || !frames.length || rawPoseCount <= 0) {
     return { frames: [], totalDurationMs: 0 };
   }
 
-  const sortedMissions = [...(missions ?? [])].sort((a, b) => a.order - b.order);
-  const rangeLookup = new Map(missionRanges.map(range => [`${range.order}:${range.name}`, range]));
-  const frames: TimedPoseFrame[] = [{ timeMs: 0, pose: poses[0] }];
-  let currentTime = 0;
-
-  for (const mission of sortedMissions) {
-    const range = rangeLookup.get(`${mission.order}:${mission.name}`);
-    const durationMs = Math.max(0, mission.total_duration_ms ?? 0);
-    if (!range) {
-      currentTime += durationMs;
-      frames.push({ timeMs: currentTime, pose: poses[poses.length - 1] });
-      continue;
-    }
-
-    const startIndex = clamp(range.startIndex, 0, poses.length - 1);
-    const endIndex = clamp(range.endIndex, 0, poses.length - 1);
-    const transitionCount = Math.max(0, endIndex - startIndex);
-
-    if (transitionCount === 0) {
-      currentTime += durationMs;
-      pushFrame(frames, currentTime, poses[endIndex]);
-      continue;
-    }
-
-    const segmentDuration = durationMs / transitionCount;
-    for (let index = startIndex + 1; index <= endIndex; index++) {
-      currentTime += segmentDuration;
-      pushFrame(frames, currentTime, poses[index]);
-    }
-  }
-
-  if (frames.length === 1) {
-    pushFrame(frames, 0, poses[0]);
+  const rawToAdjusted = mapRawPoseIndicesToAdjusted(adjusted, rawPoseCount);
+  const timedFrames: TimedPoseFrame[] = [];
+  for (const frame of frames) {
+    const adjustedIndex = rawToAdjusted[clamp(frame.poseIndex, 0, rawPoseCount - 1)] ?? 0;
+    const pose = adjusted.poses[adjustedIndex] ?? adjusted.poses[adjusted.poses.length - 1];
+    pushFrame(timedFrames, frame.timeMs, pose);
   }
 
   return {
-    frames,
-    totalDurationMs: currentTime,
+    frames: timedFrames,
+    totalDurationMs: frames[frames.length - 1]?.timeMs ?? 0,
   };
 }
 
@@ -334,6 +308,24 @@ function mapMissionRanges(
     startIndex: mapIndex(range.startIndex),
     endIndex: mapIndex(range.endIndex),
   }));
+}
+
+function mapRawPoseIndicesToAdjusted(adjusted: PathWithSegments, rawPoseCount: number): number[] {
+  if (rawPoseCount <= 0 || !adjusted.poses.length) {
+    return [];
+  }
+
+  const rawToAdjusted = new Array<number>(rawPoseCount).fill(0);
+  if (rawPoseCount === 1) {
+    return rawToAdjusted;
+  }
+
+  const segmentEndIndex = buildSegmentEndIndex(adjusted, rawPoseCount - 1);
+  for (let poseIndex = 1; poseIndex < rawPoseCount; poseIndex++) {
+    rawToAdjusted[poseIndex] = segmentEndIndex[poseIndex - 1] ?? rawToAdjusted[poseIndex - 1];
+  }
+
+  return rawToAdjusted;
 }
 
 function buildSegmentEndIndex(adjusted: PathWithSegments, segmentCount: number): number[] {

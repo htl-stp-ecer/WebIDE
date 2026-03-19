@@ -45,6 +45,11 @@ export interface PathSimulationOptions {
   lineup?: LineupSimulationContext | null;
 }
 
+export interface TimedPoseIndexFrame {
+  timeMs: number;
+  poseIndex: number;
+}
+
 function parseDistanceCmFromLabel(label?: string): number | null {
   if (!label) return null;
   const cmMatch = label.match(LABEL_CM_PATTERN);
@@ -100,6 +105,67 @@ function flattenSimulationSteps(steps: SimulationStepData[]): SimulationStepData
   return result;
 }
 
+function simulateStepPath(
+  current: Pose2D,
+  step: SimulationStepData,
+  options?: PathSimulationOptions
+): Pose2D[] {
+  const fn = stepId(step);
+  const lineupDirection = lineupDirectionFromStepId(fn);
+  const lineupColor = lineupColorFromStepId(fn);
+  if (lineupDirection && lineupColor && isLineupStepId(fn)) {
+    if (lineupDirection === 'forward' && lineupColor === 'black') {
+      return simulateForwardLineupOnBlack(current, options?.lineup);
+    }
+    if (lineupDirection === 'forward' && lineupColor === 'white') {
+      return simulateForwardLineupOnWhite(current, options?.lineup);
+    }
+    if (lineupDirection === 'backward' && lineupColor === 'black') {
+      return simulateBackwardLineupOnBlack(current, options?.lineup);
+    }
+    if (lineupDirection === 'backward' && lineupColor === 'white') {
+      return simulateBackwardLineupOnWhite(current, options?.lineup);
+    }
+    return [];
+  }
+
+  const driveUntilColor = driveUntilColorFromStepId(fn);
+  if (driveUntilColor) {
+    return simulateDriveUntilColor(current, options?.lineup, driveUntilColor);
+  }
+
+  if (isFollowLineStepId(fn)) {
+    const targetCm = parseDistanceCmFromLabel(step.label) ?? (step.delta?.forward ?? 0) * 100;
+    if (options?.lineup) {
+      const stopOnIntersection = targetCm <= 0;
+      const maxDistance = stopOnIntersection ? DEFAULT_FOLLOW_LINE_MAX_DISTANCE_CM : targetCm;
+      if (maxDistance > 0) {
+        return simulateFollowLine(current, options.lineup, maxDistance, stopOnIntersection);
+      }
+    }
+    return [];
+  }
+
+  const delta = step.delta;
+  if (!delta) return [];
+
+  const { forwardCm, strafeCm } = normalizeStepDelta(step);
+  const angular = delta.angular;
+  const next = applyLocalDelta(current, forwardCm, -strafeCm, angular);
+  const moved = Math.abs(forwardCm) > EPSILON || Math.abs(strafeCm) > EPSILON;
+  const rotated = Math.abs(angular) > EPSILON;
+
+  return moved || rotated ? [next] : [];
+}
+
+function pushTimedPoseFrame(frames: TimedPoseIndexFrame[], timeMs: number, poseIndex: number): void {
+  const last = frames[frames.length - 1];
+  if (last && Math.abs(last.timeMs - timeMs) <= EPSILON && last.poseIndex === poseIndex) {
+    return;
+  }
+  frames.push({ timeMs, poseIndex });
+}
+
 export function buildPlannedPathFromSimulation(
   startPose: Pose2D,
   simulation: MissionSimulationData,
@@ -110,65 +176,10 @@ export function buildPlannedPathFromSimulation(
 
   const steps = flattenSimulationSteps(simulation.steps ?? []);
   for (const step of steps) {
-    const fn = stepId(step);
-    const lineupDirection = lineupDirectionFromStepId(fn);
-    const lineupColor = lineupColorFromStepId(fn);
-    if (lineupDirection && lineupColor && isLineupStepId(fn)) {
-      let lineupPoses: Pose2D[] = [];
-      if (lineupDirection === 'forward' && lineupColor === 'black') {
-        lineupPoses = simulateForwardLineupOnBlack(current, options?.lineup);
-      } else if (lineupDirection === 'forward' && lineupColor === 'white') {
-        lineupPoses = simulateForwardLineupOnWhite(current, options?.lineup);
-      } else if (lineupDirection === 'backward' && lineupColor === 'black') {
-        lineupPoses = simulateBackwardLineupOnBlack(current, options?.lineup);
-      } else if (lineupDirection === 'backward' && lineupColor === 'white') {
-        lineupPoses = simulateBackwardLineupOnWhite(current, options?.lineup);
-      }
-      if (lineupPoses.length) {
-        poses.push(...lineupPoses);
-        current = lineupPoses[lineupPoses.length - 1];
-      }
-      continue;
-    }
-    const driveUntilColor = driveUntilColorFromStepId(fn);
-    if (driveUntilColor) {
-      const drivePoses = simulateDriveUntilColor(current, options?.lineup, driveUntilColor);
-      if (drivePoses.length) {
-        poses.push(...drivePoses);
-        current = drivePoses[drivePoses.length - 1];
-      }
-      continue;
-    }
-    if (isFollowLineStepId(fn)) {
-      const targetCm = parseDistanceCmFromLabel(step.label) ?? (step.delta?.forward ?? 0) * 100;
-      if (options?.lineup) {
-        const stopOnIntersection = targetCm <= 0;
-        const maxDistance = stopOnIntersection ? DEFAULT_FOLLOW_LINE_MAX_DISTANCE_CM : targetCm;
-        if (maxDistance > 0) {
-          const followPoses = simulateFollowLine(current, options.lineup, maxDistance, stopOnIntersection);
-          if (followPoses.length) {
-            poses.push(...followPoses);
-            current = followPoses[followPoses.length - 1];
-            continue;
-          }
-        }
-      }
-    }
-    const delta = step.delta;
-    if (!delta) continue;
-
-    const { forwardCm, strafeCm } = normalizeStepDelta(step);
-    const angular = delta.angular;
-
-    // Simulation uses strafe > 0 = right; pose utils treat strafe > 0 = left.
-    const next = applyLocalDelta(current, forwardCm, -strafeCm, angular);
-
-    const moved = Math.abs(forwardCm) > EPSILON || Math.abs(strafeCm) > EPSILON;
-    const rotated = Math.abs(angular) > EPSILON;
-    current = next;
-    if (moved || rotated) {
-      poses.push(next);
-    }
+    const stepPath = simulateStepPath(current, step, options);
+    if (!stepPath.length) continue;
+    poses.push(...stepPath);
+    current = stepPath[stepPath.length - 1];
   }
 
   return poses;
@@ -185,6 +196,44 @@ export interface MissionPlannedRange {
   order: number;
   startIndex: number;
   endIndex: number;
+}
+
+export interface PlannedProjectPathDetail extends PlannedProjectPath {
+  frames: TimedPoseIndexFrame[];
+}
+
+export function buildTimedPlannedPathFromSimulation(
+  startPose: Pose2D,
+  simulation: MissionSimulationData,
+  options?: PathSimulationOptions
+): { poses: Pose2D[]; frames: TimedPoseIndexFrame[] } {
+  const poses: Pose2D[] = [startPose];
+  const frames: TimedPoseIndexFrame[] = [{ timeMs: 0, poseIndex: 0 }];
+  let current = startPose;
+  let elapsedMs = 0;
+
+  const steps = flattenSimulationSteps(simulation.steps ?? []);
+  for (const step of steps) {
+    const stepDurationMs = Math.max(0, step.average_duration_ms ?? 0);
+    const stepPath = simulateStepPath(current, step, options);
+    if (stepPath.length) {
+      const poseDurationMs = stepDurationMs / stepPath.length;
+      for (const pose of stepPath) {
+        poses.push(pose);
+        current = pose;
+        elapsedMs += poseDurationMs;
+        pushTimedPoseFrame(frames, elapsedMs, poses.length - 1);
+      }
+      continue;
+    }
+
+    if (stepDurationMs > 0) {
+      elapsedMs += stepDurationMs;
+      pushTimedPoseFrame(frames, elapsedMs, poses.length - 1);
+    }
+  }
+
+  return { poses, frames };
 }
 
 export function buildPlannedPathFromProjectSimulation(
@@ -216,6 +265,48 @@ export function buildPlannedPathFromProjectSimulation(
   }
 
   return { poses, missionEndIndices, missionRanges };
+}
+
+export function buildTimedPlannedPathFromProjectSimulation(
+  startPose: Pose2D,
+  simulation: ProjectSimulationData,
+  options?: PathSimulationOptions
+): PlannedProjectPathDetail {
+  const missions = [...(simulation.missions ?? [])].sort((a, b) => a.order - b.order);
+  const poses: Pose2D[] = [startPose];
+  const frames: TimedPoseIndexFrame[] = [{ timeMs: 0, poseIndex: 0 }];
+  const missionEndIndices: number[] = [];
+  const missionRanges: MissionPlannedRange[] = [];
+  let current = startPose;
+  let elapsedMs = 0;
+
+  for (const mission of missions) {
+    const startIndex = poses.length - 1;
+    const missionDetail = buildTimedPlannedPathFromSimulation(current, mission, options);
+    const poseOffset = poses.length - 1;
+    if (missionDetail.poses.length > 1) {
+      poses.push(...missionDetail.poses.slice(1));
+    }
+
+    for (const frame of missionDetail.frames.slice(1)) {
+      pushTimedPoseFrame(frames, elapsedMs + frame.timeMs, poseOffset + frame.poseIndex);
+    }
+
+    const missionDurationMs = missionDetail.frames[missionDetail.frames.length - 1]?.timeMs ?? 0;
+    elapsedMs += missionDurationMs;
+
+    const endIndex = poses.length - 1;
+    missionEndIndices.push(endIndex);
+    missionRanges.push({
+      name: mission.name,
+      order: mission.order,
+      startIndex,
+      endIndex,
+    });
+    current = missionDetail.poses[missionDetail.poses.length - 1] ?? current;
+  }
+
+  return { poses, frames, missionEndIndices, missionRanges };
 }
 
 export function simulateForwardLineupOnBlack(startPose: Pose2D, context?: LineupSimulationContext | null): Pose2D[] {
