@@ -4,7 +4,7 @@ import { MissionStep } from '../../entities/MissionStep';
 import { MissionComment } from '../../entities/MissionComment';
 import { MissionGroup } from '../../entities/MissionGroup';
 import { rebuildMissionView } from './mission-builder';
-import { asStepFromPool, initialArgsFromPool } from './step-utils';
+import { asStepFromPool, canonicalizeMissionStepArguments, initialArgsFromPool } from './step-utils';
 import { recomputeMergedView } from './view-merger';
 import { START_OUTPUT_ID } from './constants';
 import { FlowComment, FlowGroup, FlowNode } from './models';
@@ -251,9 +251,11 @@ export function handleAddPlannedSteps(flow: Flowchart, steps: MissionStep[]): vo
 
   const mission = flow.missionState.currentMission();
   if (!mission) return;
+  const pool = flow.stepsState.currentSteps() ?? [];
+  const normalizedSteps = steps.map(step => canonicalizeMissionStepArguments(step, pool));
 
   // Append steps to mission
-  mission.steps = [...(mission.steps ?? []), ...steps];
+  mission.steps = [...(mission.steps ?? []), ...normalizedSteps];
 
   rebuildFromMission(flow, mission);
   flow.layoutFlags.needsAdjust = true;

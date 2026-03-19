@@ -39,7 +39,7 @@ import { TableVisualizationPanel } from './table/table-visualization-panel';
 import { TimingPanel, type TimingViewMode } from './timing/timing-panel';
 import { RobotSettingsModal } from './robot-settings/robot-settings-modal';
 import { TableMapService, TableVisualizationService } from './table/services';
-import { buildPlannedPathFromProjectSimulation, buildPlannedPathFromProjectSimulationWithMissionOverride } from './table/simulation-path';
+import { buildPlannedPathFromProjectSimulationWithMissionOverride } from './table/simulation-path';
 import { PlanningModeService, PlanningOverlayComponent } from './table/planning';
 import { RunLogPanel } from './logs/run-log-panel';
 import { generateGuid } from '@foblex/utils';
@@ -741,10 +741,6 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
     const cachedSimulation = this.projectSimulationCache;
     if (cachedSimulation) {
       this.applyPlannedPathFromSimulation(mission, cachedSimulation);
-      if (this.historyManager.hasUnsavedChanges()) {
-        this.tableViz.setPlannedPathLoading(false);
-        return;
-      }
       this.simulationPathSub = this.http.getMissionSimulationData(this.projectUUID, mission.name).subscribe({
         next: data => {
           const merged = this.mergeMissionSimulation(cachedSimulation, data);
@@ -801,9 +797,7 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
           maxDistanceCm: Math.max(mapConfig.widthCm, mapConfig.heightCm),
         }
       : null;
-    const planned = this.historyManager.hasUnsavedChanges()
-      ? buildPlannedPathFromProjectSimulationWithMissionOverride(startPose, data, mission, { lineup: lineupContext })
-      : buildPlannedPathFromProjectSimulation(startPose, data, { lineup: lineupContext });
+    const planned = buildPlannedPathFromProjectSimulationWithMissionOverride(startPose, data, mission, { lineup: lineupContext });
     const highlightRange = planned.missionRanges.find(range => range.name === mission.name) ?? null;
     this.tableViz.setPlannedPath(planned.poses.length > 1 ? planned.poses : null);
     this.tableViz.setPlannedMissionEndIndices(planned.missionEndIndices.length ? planned.missionEndIndices : null);

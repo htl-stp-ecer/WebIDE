@@ -19,7 +19,7 @@ import {
 } from './step-id';
 
 const EPSILON = 1e-6;
-const LABEL_CM_PATTERN = /(?:^|[,(])\s*cm\s*=\s*([-+]?\d*\.?\d+)/i;
+const LABEL_CM_PATTERN = /(?:^|[,(])\s*(?:distance_cm|distance|cm)\s*=\s*([-+]?\d*\.?\d+)/i;
 const LABEL_FIRST_NUMBER_PATTERN = /\(([-+]?\d*\.?\d+)/;
 const DEFAULT_LINEUP_STEP_CM = 0.5;
 const DEFAULT_LINEUP_MAX_DISTANCE_CM = 200;
@@ -126,7 +126,13 @@ function flattenMissionSteps(steps: MissionStep[]): MissionStep[] {
 }
 
 function missionStepArgumentNumber(step: MissionStep): number {
-  const raw = step.arguments?.[0]?.value;
+  const distanceArg =
+    step.arguments?.find(arg => {
+      const name = (arg.name ?? '').trim().toLowerCase();
+      return name === 'distance_cm' || name === 'distance' || name === 'cm';
+    }) ??
+    step.arguments?.[0];
+  const raw = distanceArg?.value;
   if (typeof raw === 'number') {
     return Number.isFinite(raw) ? raw : 0;
   }
