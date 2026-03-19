@@ -30,7 +30,15 @@
       <h2 class="text-lg font-semibold text-slate-900 dark:text-white">
         {{ 'PROJECT_MENU.PROJECTS_HEADING' | translate }}
       </h2>
-      <div class="flex items-center gap-2">
+      <div class="flex items-center gap-2 flex-wrap justify-end">
+        <p-button
+          icon="pi pi-directions-alt"
+          severity="contrast"
+          [outlined]="true"
+          [disabled]="projectsLoading || projects.length < 2"
+          [label]="'LOCAL_PROJECTS.COMPARE_BUTTON' | translate"
+          (onClick)="openCompareDialog()">
+        </p-button>
         <label for="local-backend-port" class="text-xs text-slate-500 dark:text-slate-400">
           {{ 'LOCAL_PROJECTS.BACKEND_PORT_LABEL' | translate }}
         </label>
@@ -117,4 +125,9 @@
   </div>
 
   <p-confirmDialog></p-confirmDialog>
+  <app-project-collision-compare
+    [visible]="compareDialogVisible"
+    [projects]="projects"
+    (close)="closeCompareDialog()">
+  </app-project-collision-compare>
 </div>

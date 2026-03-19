@@ -4,6 +4,7 @@ export default defineConfig({
   test: {
     globals: true,
     include: [
+      'src/app/local-projects/project-collision-compare/project-collision-utils.spec.ts',
       'src/app/project-view/flowchart/table/models/pose2d.spec.ts',
       'src/app/project-view/flowchart/table/planning/line-utils.spec.ts',
       'src/app/project-view/flowchart/table/planning/path-to-steps.spec.ts',

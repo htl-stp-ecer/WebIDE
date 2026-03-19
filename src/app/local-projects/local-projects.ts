@@ -11,11 +11,12 @@ import { InputText } from 'primeng/inputtext';
 
 import { HttpService } from '../services/http-service';
 import { NotificationService } from '../services/NotificationService';
+import { ProjectCollisionCompareComponent } from './project-collision-compare/project-collision-compare';
 
 @Component({
   selector: 'app-local-projects',
   standalone: true,
-  imports: [Button, ConfirmDialog, TranslateModule, Skeleton, SlicePipe, FormsModule, InputText],
+  imports: [Button, ConfirmDialog, TranslateModule, Skeleton, SlicePipe, FormsModule, InputText, ProjectCollisionCompareComponent],
   templateUrl: './local-projects.html',
   styleUrl: './local-projects.scss',
   providers: [ConfirmationService]
@@ -24,6 +25,7 @@ export class LocalProjects implements OnInit {
   projectsLoading = true;
   projects: Project[] = [];
   localBackendPort = '';
+  compareDialogVisible = false;
 
   constructor(
     private router: Router,
@@ -107,5 +109,13 @@ export class LocalProjects implements OnInit {
     if (this.localBackendPort !== before) {
       this.loadProjects();
     }
+  }
+
+  openCompareDialog() {
+    this.compareDialogVisible = true;
+  }
+
+  closeCompareDialog() {
+    this.compareDialogVisible = false;
   }
 }

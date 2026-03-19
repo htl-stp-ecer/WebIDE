@@ -52,6 +52,6 @@ describe('path-optimizer integration', () => {
     );
 
     expect(steps[steps.length - 1].function_name).toBe('drive_until_black');
-    expect(steps.some(step => step.function_name === 'drive_forward')).toBeTrue();
+    expect(steps.some(step => step.function_name === 'drive_forward')).toBe(true);
   });
 });

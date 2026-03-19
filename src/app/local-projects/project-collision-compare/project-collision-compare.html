@@ -1,0 +1,161 @@
+<p-dialog
+  [header]="'LOCAL_PROJECTS.COMPARE_TITLE' | translate"
+  [(visible)]="dialogVisible"
+  [modal]="true"
+  [draggable]="false"
+  [resizable]="false"
+  [dismissableMask]="true"
+  [style]="{ width: 'min(95vw, 88rem)' }"
+  [contentStyle]="{ padding: '0', overflow: 'hidden' }"
+  (onHide)="onDialogHide()">
+  <div class="compare-shell">
+    <div class="compare-toolbar">
+      <div class="compare-field compare-projects">
+        <label for="compare-projects">{{ 'LOCAL_PROJECTS.COMPARE_PROJECTS_LABEL' | translate }}</label>
+        <p-multiselect
+          inputId="compare-projects"
+          [options]="projectOptions"
+          [(ngModel)]="selectedProjectIds"
+          optionLabel="label"
+          optionValue="value"
+          display="chip"
+          [showToggleAll]="false"
+          [maxSelectedLabels]="3"
+          [placeholder]="'LOCAL_PROJECTS.COMPARE_PROJECTS_PLACEHOLDER' | translate"
+          (ngModelChange)="onProjectSelectionChange($event)">
+        </p-multiselect>
+      </div>
+
+      <div class="compare-field compare-map">
+        <label for="compare-map">{{ 'LOCAL_PROJECTS.COMPARE_MAP_LABEL' | translate }}</label>
+        <p-select
+          inputId="compare-map"
+          [options]="mapOptions"
+          [(ngModel)]="selectedMapProjectId"
+          optionLabel="label"
+          optionValue="value"
+          [disabled]="mapOptions.length === 0"
+          [placeholder]="'LOCAL_PROJECTS.COMPARE_MAP_PLACEHOLDER' | translate"
+          (ngModelChange)="onMapSelectionChange()">
+        </p-select>
+      </div>
+    </div>
+
+    <div class="compare-status-row">
+      @for (projectId of selectedProjectIds; track projectId) {
+        <div class="project-pill" [class.loading]="projectStatus(projectId) === 'loading'" [class.error]="projectStatus(projectId) === 'error'">
+          <span class="project-dot" [style.background]="projectColor(projectId)"></span>
+          <span class="project-name">{{ projectName(projectId) }}</span>
+          @switch (projectStatus(projectId)) {
+            @case ('loading') {
+              <span class="project-state">{{ 'COMMON.LOADING' | translate }}</span>
+            }
+            @case ('error') {
+              <span class="project-state">{{ projectErrorKey(projectId) | translate }}</span>
+            }
+          }
+        </div>
+      }
+    </div>
+
+    <div class="compare-body">
+      <div class="compare-canvas-panel">
+        <div class="compare-canvas-toolbar">
+          <div>
+            <div class="canvas-title">{{ 'LOCAL_PROJECTS.COMPARE_PATHS_TITLE' | translate }}</div>
+            <div class="canvas-subtitle">{{ 'LOCAL_PROJECTS.COMPARE_PATHS_HINT' | translate }}</div>
+          </div>
+
+          @if (totalDurationMs > 0) {
+            <div class="preview-time">
+              <span>{{ 'LOCAL_PROJECTS.COMPARE_TIME_LABEL' | translate }}</span>
+              <strong>{{ formatSeconds(previewTimeMs) }}</strong>
+            </div>
+          }
+        </div>
+
+        <div class="compare-canvas-wrap">
+          <canvas #canvas class="compare-canvas"></canvas>
+
+          @if (!hasEnoughProjects) {
+            <div class="canvas-overlay">
+              <div class="overlay-card">
+                <h3>{{ 'LOCAL_PROJECTS.COMPARE_SELECT_MORE_TITLE' | translate }}</h3>
+                <p>{{ 'LOCAL_PROJECTS.COMPARE_SELECT_MORE_TEXT' | translate }}</p>
+              </div>
+            </div>
+          } @else if (isLoadingSelection && !hasLoadedComparison) {
+            <div class="canvas-overlay">
+              <div class="overlay-card">
+                <h3>{{ 'LOCAL_PROJECTS.COMPARE_LOADING_TITLE' | translate }}</h3>
+                <p>{{ 'LOCAL_PROJECTS.COMPARE_LOADING_TEXT' | translate }}</p>
+              </div>
+            </div>
+          }
+        </div>
+
+        <div class="timeline-controls">
+          <span>{{ 'LOCAL_PROJECTS.COMPARE_START_LABEL' | translate }}</span>
+          <p-slider
+            class="timeline-slider"
+            [(ngModel)]="previewTimeMs"
+            [min]="0"
+            [max]="totalDurationMs || 0"
+            [step]="50"
+            [disabled]="totalDurationMs <= 0"
+            (ngModelChange)="onPreviewTimeChange($event)">
+          </p-slider>
+          <span>{{ formatSeconds(totalDurationMs) }}</span>
+        </div>
+      </div>
+
+      <div class="compare-sidebar">
+        <div class="sidebar-card">
+          <div class="sidebar-title">{{ 'LOCAL_PROJECTS.COMPARE_SUMMARY_TITLE' | translate }}</div>
+
+          @if (!hasEnoughProjects) {
+            <p class="sidebar-copy">{{ 'LOCAL_PROJECTS.COMPARE_SUMMARY_NEEDS_MORE' | translate }}</p>
+          } @else if (!hasLoadedComparison && isLoadingSelection) {
+            <p class="sidebar-copy">{{ 'LOCAL_PROJECTS.COMPARE_SUMMARY_LOADING' | translate }}</p>
+          } @else if (collisionEvents.length === 0) {
+            <div class="summary-badge safe">{{ 'LOCAL_PROJECTS.COMPARE_NO_COLLISIONS' | translate }}</div>
+            <p class="sidebar-copy">{{ 'LOCAL_PROJECTS.COMPARE_NO_COLLISIONS_HINT' | translate }}</p>
+          } @else {
+            <div class="summary-badge danger">
+              {{ 'LOCAL_PROJECTS.COMPARE_COLLISION_COUNT' | translate:{ count: collisionEvents.length } }}
+            </div>
+            <p class="sidebar-copy">{{ 'LOCAL_PROJECTS.COMPARE_COLLISION_HINT' | translate }}</p>
+          }
+        </div>
+
+        <div class="sidebar-card">
+          <div class="sidebar-title">{{ 'LOCAL_PROJECTS.COMPARE_COLLISIONS_TITLE' | translate }}</div>
+
+          @if (collisionEvents.length === 0) {
+            <p class="sidebar-copy">{{ 'LOCAL_PROJECTS.COMPARE_COLLISIONS_EMPTY' | translate }}</p>
+          } @else {
+            <div class="collision-list">
+              @for (collision of collisionEvents; track collision.key) {
+                <button
+                  type="button"
+                  class="collision-item"
+                  [class.active]="collision.key === selectedCollisionKey"
+                  (click)="jumpToCollision(collision)">
+                  <div class="collision-time">{{ formatSeconds(collision.timeMs) }}</div>
+                  <div class="collision-projects">
+                    <span>{{ collision.projectAName }}</span>
+                    <span class="collision-separator">×</span>
+                    <span>{{ collision.projectBName }}</span>
+                  </div>
+                  <div class="collision-coords">
+                    X {{ collision.point.x | number:'1.0-1' }} cm, Y {{ collision.point.y | number:'1.0-1' }} cm
+                  </div>
+                </button>
+              }
+            </div>
+          }
+        </div>
+      </div>
+    </div>
+  </div>
+</p-dialog>
