@@ -22,6 +22,7 @@ import { SliderModule } from 'primeng/slider';
 import { HttpService } from '../../services/http-service';
 import { TableMapService } from '../../project-view/flowchart/table/services';
 import { Pose2D } from '../../project-view/flowchart/table/models';
+import { TypeDefinition } from '../../entities/TypeDefinition';
 import {
   buildProjectComparisonData,
   detectProjectCollisions,
@@ -244,14 +245,15 @@ export class ProjectCollisionCompareComponent implements OnChanges, AfterViewIni
     const request$ = forkJoin({
       info: this.http.getLocalDeviceInfo(project.uuid).pipe(catchError(() => of(null))),
       simulation: this.http.getProjectSimulationData(project.uuid),
+      typeDefinitions: this.http.getTypeDefinitions(project.uuid).pipe(catchError(() => of([] as TypeDefinition[]))),
       mapResponse: this.http.getLocalTableMap(project.uuid).pipe(catchError(() => of({ image: null }))),
     });
 
     const subscription = request$.subscribe({
-      next: async ({ info, simulation, mapResponse }) => {
+      next: async ({ info, simulation, typeDefinitions, mapResponse }) => {
         try {
           const map = await this.loadProjectMap(mapResponse.image);
-          const data = buildProjectComparisonData(project, simulation, info, map);
+          const data = buildProjectComparisonData(project, simulation, info, map, typeDefinitions);
           this.cache.set(project.uuid, data);
           this.errorMessages.delete(project.uuid);
         } catch (error) {

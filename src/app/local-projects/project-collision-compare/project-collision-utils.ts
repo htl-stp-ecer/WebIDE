@@ -1,4 +1,5 @@
 import { ProjectSimulationData } from '../../entities/Simulation';
+import { TypeDefinition } from '../../entities/TypeDefinition';
 import { Pose2D, createPose, lerpPose } from '../../project-view/flowchart/table/models';
 import { LineSensor } from '../../project-view/flowchart/table/models';
 import {
@@ -74,10 +75,11 @@ export function buildProjectComparisonData(
   project: Pick<Project, 'uuid' | 'name'>,
   simulation: ProjectSimulationData,
   info: ConnectionInfo | null | undefined,
-  map: ProjectMapGeometry
+  map: ProjectMapGeometry,
+  typeDefinitions: TypeDefinition[] = []
 ): ProjectComparisonData {
   const robotConfig = createRobotConfig(info);
-  const sensors = createLineSensors(info, robotConfig);
+  const sensors = createLineSensors(info, robotConfig, typeDefinitions);
   const startPose = createStartPose(info);
   const lineupContext = map.isLoaded && sensors.length >= 2
     ? {
@@ -261,10 +263,17 @@ function createRobotConfig(info: ConnectionInfo | null | undefined): RobotConfig
 
 function createLineSensors(
   info: ConnectionInfo | null | undefined,
-  robotConfig: RobotConfig
+  robotConfig: RobotConfig,
+  typeDefinitions: TypeDefinition[] = []
 ): LineSensor[] {
   const sensors = info?.sensors ?? [];
-  return sensors
+  const irDefs = typeDefinitions.filter(def => def.type === 'IRSensor');
+  const sensorLookup = new Map(sensors.map(sensor => [sensor.name, sensor]));
+  const orderedSensors = irDefs.length
+    ? irDefs.map(def => sensorLookup.get(def.name)).filter((sensor): sensor is DeviceSensorInfo => !!sensor)
+    : sensors;
+
+  return orderedSensors
     .filter(sensor => typeof sensor.x_cm === 'number' && typeof sensor.y_cm === 'number')
     .map((sensor, index) => ({
       index,
