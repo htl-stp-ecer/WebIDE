@@ -34,8 +34,87 @@ export class NotificationService {
     return this.translateService.instant(key) || fallbackMap[key];
   }
 
-  static showError(detail: string, summary?: string) {
-    this.ms.add({ severity: 'error', summary: summary ?? this.defaultSummary('COMMON.ERROR'), detail, life: 6000 });
+  private static normalizeDetail(detail: unknown): string {
+    if (typeof detail === 'string') {
+      return detail;
+    }
+
+    if (detail && typeof detail === 'object') {
+      const errorDetail = this.extractDetail(detail as Record<string, unknown>);
+      if (errorDetail) {
+        return errorDetail;
+      }
+    }
+
+    if (detail == null) {
+      return this.defaultSummary('COMMON.ERROR');
+    }
+
+    return String(detail);
+  }
+
+  private static extractDetail(value: Record<string, unknown>): string | null {
+    const directDetail = value['detail'];
+    if (typeof directDetail === 'string' && directDetail.trim()) {
+      return directDetail;
+    }
+
+    const nestedError = value['error'];
+    if (nestedError && typeof nestedError === 'object') {
+      return this.extractDetail(nestedError as Record<string, unknown>);
+    }
+
+    if (typeof nestedError === 'string' && nestedError.trim()) {
+      return nestedError;
+    }
+
+    const directMessage = value['message'];
+    if (typeof directMessage === 'string' && directMessage.trim() && !this.isHttpFailureMessage(directMessage)) {
+      return directMessage;
+    }
+
+    const httpFallback = this.formatHttpFailure(value);
+    if (httpFallback) {
+      return httpFallback;
+    }
+
+    return null;
+  }
+
+  private static isHttpFailureMessage(message: string): boolean {
+    return message.startsWith('Http failure response for ');
+  }
+
+  private static formatHttpFailure(value: Record<string, unknown>): string | null {
+    const status = typeof value['status'] === 'number' ? value['status'] : null;
+    const statusText = typeof value['statusText'] === 'string' ? value['statusText'].trim() : '';
+
+    if (status === 0) {
+      return 'Network request failed';
+    }
+
+    if (status && statusText && statusText !== 'Unknown Error') {
+      return `Request failed (${status} ${statusText})`;
+    }
+
+    if (status) {
+      return `Request failed (${status})`;
+    }
+
+    if (statusText && statusText !== 'Unknown Error') {
+      return statusText;
+    }
+
+    return null;
+  }
+
+  static showError(detail: unknown, summary?: string) {
+    this.ms.add({
+      severity: 'error',
+      summary: summary ?? this.defaultSummary('COMMON.ERROR'),
+      detail: this.normalizeDetail(detail),
+      life: 6000
+    });
   }
   static showSuccess(detail: string, summary?: string) {
     this.ms.add({ severity: 'success', summary: summary ?? this.defaultSummary('COMMON.SUCCESS'), detail, life: 4000 });
