@@ -215,6 +215,11 @@
   padding: 1rem;
 }
 
+.collision-card {
+  flex: 1;
+  min-height: 0;
+}
+
 .summary-badge {
   display: inline-flex;
   width: fit-content;
@@ -239,9 +244,13 @@
 .collision-list {
   display: flex;
   flex-direction: column;
+  flex: 1;
   gap: 0.7rem;
   overflow: auto;
   min-height: 0;
+  max-height: 100%;
+  padding-right: 0.25rem;
+  overscroll-behavior: contain;
 }
 
 .collision-item {
