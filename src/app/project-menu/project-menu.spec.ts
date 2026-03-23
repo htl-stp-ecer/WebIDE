@@ -6,6 +6,7 @@ import { ProjectMenu } from './project-menu';
 import { HttpService } from '../services/http-service';
 import { ConfirmationService } from 'primeng/api';
 import { TranslateService } from '@ngx-translate/core';
+import { NotificationService } from '../services/NotificationService';
 
 class MockTranslateService {
   instant(key: string) { return key; }
@@ -26,6 +27,10 @@ describe('ProjectMenu UI behavior', () => {
       { uuid: 'abc-12345', name: 'Alpha Project' },
       { uuid: 'def-67890', name: 'Beta Project' },
     ])),
+    createDeviceProject: jasmine.createSpy('createDeviceProject').and.returnValue(of({
+      uuid: 'ghi-24680',
+      name: 'Gamma Project',
+    })),
     changeHostname: jasmine.createSpy('changeHostname').and.returnValue(of({ hostname: 'Updated bot' })),
     deleteDeviceProject: jasmine.createSpy('deleteDeviceProject').and.returnValue(of({})),
   } as unknown as HttpService;
@@ -56,6 +61,21 @@ describe('ProjectMenu UI behavior', () => {
     fixture = TestBed.createComponent(ProjectMenu);
     component = fixture.componentInstance;
     fixture.detectChanges();
+
+    if (!jasmine.isSpy(NotificationService.showSuccess)) {
+      spyOn(NotificationService, 'showSuccess');
+    }
+    if (!jasmine.isSpy(NotificationService.showError)) {
+      spyOn(NotificationService, 'showError');
+    }
+
+    (NotificationService.showSuccess as jasmine.Spy).calls.reset();
+    (NotificationService.showError as jasmine.Spy).calls.reset();
+    (httpMock.createDeviceProject as jasmine.Spy).calls.reset();
+    (httpMock.changeHostname as jasmine.Spy).calls.reset();
+    (httpMock.deleteDeviceProject as jasmine.Spy).calls.reset();
+    confirmationMock.confirm.calls.reset();
+    routerMock.navigate.calls.reset();
   });
 
   it('should create', () => {
@@ -96,6 +116,40 @@ describe('ProjectMenu UI behavior', () => {
   it('routes back to home when back action is clicked', () => {
     component.backToProjects();
     expect(routerMock.navigate).toHaveBeenCalledWith(['/']);
+  });
+
+  it('shows and hides the create project form', () => {
+    component.startCreateProject();
+    expect(component.creatingProject).toBeTrue();
+
+    component.newProjectName = 'Temporary';
+    component.cancelCreateProject();
+
+    expect(component.creatingProject).toBeFalse();
+    expect(component.newProjectName).toBe('');
+  });
+
+  it('creates a project and prepends it to the list', () => {
+    component.startCreateProject();
+    component.newProjectName = 'Gamma Project';
+
+    component.createProject();
+
+    expect(httpMock.createDeviceProject).toHaveBeenCalledWith('Gamma Project');
+    expect(component.creatingProject).toBeFalse();
+    expect(component.creatingProjectPending).toBeFalse();
+    expect(component.newProjectName).toBe('');
+    expect(component.projects[0]).toEqual({ uuid: 'ghi-24680', name: 'Gamma Project' });
+  });
+
+  it('does not create an empty project', () => {
+    component.startCreateProject();
+    component.newProjectName = '   ';
+
+    component.createProject();
+
+    expect(httpMock.createDeviceProject).not.toHaveBeenCalled();
+    expect(component.creatingProject).toBeTrue();
   });
 
   it('marks projects loading complete when project fetch fails', () => {

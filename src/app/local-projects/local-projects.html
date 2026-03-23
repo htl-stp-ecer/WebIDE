@@ -60,6 +60,58 @@
 
     <!-- Projects Grid -->
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div class="h-40 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 bg-white/80 dark:bg-slate-900/80">
+        @if (!creatingProject) {
+          <button
+            class="group flex h-full w-full flex-col items-start justify-between p-5 text-left transition-colors hover:bg-slate-50 dark:hover:bg-slate-900"
+            (click)="startCreateProject()">
+            <div class="flex h-11 w-11 items-center justify-center rounded-full bg-slate-100 text-slate-500 transition-colors group-hover:bg-slate-900 group-hover:text-white dark:bg-slate-800 dark:text-slate-300 dark:group-hover:bg-slate-100 dark:group-hover:text-slate-950">
+              <i class="pi pi-plus text-base"></i>
+            </div>
+            <div>
+              <h3 class="font-semibold text-slate-900 dark:text-white mb-1">
+                {{ 'PROJECT_MENU.ADD_PROJECT' | translate }}
+              </h3>
+              <p class="text-sm text-slate-500 dark:text-slate-400">
+                {{ 'LOCAL_PROJECTS.CREATE_TILE_HINT' | translate }}
+              </p>
+            </div>
+          </button>
+        } @else {
+          <div class="flex h-full flex-col p-5">
+            <div class="mb-3">
+              <h3 class="font-semibold text-slate-900 dark:text-white">
+                {{ 'PROJECT_MENU.ADD_PROJECT' | translate }}
+              </h3>
+            </div>
+
+            <input
+              [(ngModel)]="newProjectName"
+              pInputText
+              class="w-full"
+              [disabled]="creatingProjectPending"
+              [placeholder]="'PROJECT_MENU.PROJECT_NAME_PLACEHOLDER' | translate"
+              (keydown.enter)="createProject()"
+              (keydown.escape)="cancelCreateProject()" />
+
+            <div class="mt-auto flex items-center gap-2 pt-4">
+              <p-button
+                [label]="'COMMON.CREATE' | translate"
+                size="small"
+                [loading]="creatingProjectPending"
+                (onClick)="createProject()">
+              </p-button>
+              <p-button
+                [label]="'COMMON.CANCEL' | translate"
+                size="small"
+                severity="secondary"
+                [disabled]="creatingProjectPending"
+                (onClick)="cancelCreateProject()">
+              </p-button>
+            </div>
+          </div>
+        }
+      </div>
 
       @if (projectsLoading) {
         @for (skeleton of [1, 2, 3]; track skeleton) {

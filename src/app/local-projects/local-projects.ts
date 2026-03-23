@@ -26,6 +26,9 @@ export class LocalProjects implements OnInit {
   projects: Project[] = [];
   localBackendPort = '';
   compareDialogVisible = false;
+  creatingProject = false;
+  creatingProjectPending = false;
+  newProjectName = '';
 
   constructor(
     private router: Router,
@@ -117,5 +120,54 @@ export class LocalProjects implements OnInit {
 
   closeCompareDialog() {
     this.compareDialogVisible = false;
+  }
+
+  startCreateProject() {
+    this.creatingProject = true;
+  }
+
+  cancelCreateProject() {
+    if (this.creatingProjectPending) {
+      return;
+    }
+    this.creatingProject = false;
+    this.newProjectName = '';
+  }
+
+  createProject() {
+    const name = this.newProjectName.trim();
+    if (!name) {
+      NotificationService.showError(
+        this.translate.instant('PROJECT_MENU.NAME_REQUIRED'),
+        this.translate.instant('COMMON.ERROR')
+      );
+      return;
+    }
+
+    if (this.creatingProjectPending) {
+      return;
+    }
+
+    this.creatingProjectPending = true;
+    this.http.createProject(name).subscribe({
+      next: project => {
+        NotificationService.showSuccess(
+          this.translate.instant('PROJECT_MENU.CREATE_SUCCESS'),
+          this.translate.instant('COMMON.SUCCESS')
+        );
+        this.projects = [project, ...this.projects.filter(entry => entry.uuid !== project.uuid)];
+        this.creatingProjectPending = false;
+        this.creatingProject = false;
+        this.newProjectName = '';
+      },
+      error: err => {
+        this.creatingProjectPending = false;
+        NotificationService.showError(
+          this.translate.instant('PROJECT_MENU.CREATE_ERROR'),
+          this.translate.instant('COMMON.ERROR')
+        );
+        console.error(err);
+      }
+    });
   }
 }

@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { BehaviorSubject, Observable } from 'rxjs';
+import { BehaviorSubject, map, Observable } from 'rxjs';
 import {Mission} from '../entities/Mission';
 import { TypeDefinition } from '../entities/TypeDefinition';
 import { MissionSimulationData, ProjectSimulationData } from '../entities/Simulation';
@@ -9,6 +9,18 @@ interface RunMissionOptions {
   simulate?: boolean;
   debug?: boolean;
   onSocket?: (socket: WebSocket | null) => void;
+}
+
+interface DeviceProjectPayload {
+  id?: string;
+  uuid?: string;
+  name: string;
+  connection?: Project['connection'];
+}
+
+interface DeviceProjectListPayload {
+  projects: DeviceProjectPayload[];
+  count: number;
 }
 
 @Injectable({
@@ -235,7 +247,15 @@ export class HttpService {
   }
 
   getDeviceProjects() {
-    return this.http.get<Project[]>(this.deviceApi('/api/v1/projects'));
+    return this.http
+      .get<Project[] | DeviceProjectListPayload>(this.deviceApi('/api/v1/projects'))
+      .pipe(map(response => this.normalizeDeviceProjects(response)));
+  }
+
+  createDeviceProject(name: string) {
+    return this.http
+      .post<Project | DeviceProjectPayload>(this.deviceApi('/api/v1/projects'), { name })
+      .pipe(map(project => this.normalizeDeviceProject(project)));
   }
 
   deleteDeviceProject(uuid: string) {
@@ -315,6 +335,22 @@ export class HttpService {
     return this.http.post(this.localApi(`/missions/${projectUUID}`), {
       name: name
     });
+  }
+
+  private normalizeDeviceProjects(response: Project[] | DeviceProjectListPayload): Project[] {
+    if (Array.isArray(response)) {
+      return response.map(project => this.normalizeDeviceProject(project));
+    }
+    return (response.projects ?? []).map(project => this.normalizeDeviceProject(project));
+  }
+
+  private normalizeDeviceProject(project: Project | DeviceProjectPayload): Project {
+    const legacyId = 'id' in project ? project.id : undefined;
+    return {
+      name: project.name,
+      uuid: project.uuid ?? legacyId ?? '',
+      connection: project.connection,
+    };
   }
 
   updateMissionOrder(projectUUID: string, mission: Mission) {

@@ -24,6 +24,9 @@ export class ProjectMenu implements OnInit {
   connectionInfo: ConnectionInfo | undefined;
   tempName: string = "";
   editingName = false;
+  creatingProject = false;
+  creatingProjectPending = false;
+  newProjectName: string = "";
 
   loading = true;
   projectsLoading = true;
@@ -61,15 +64,7 @@ export class ProjectMenu implements OnInit {
       }
     });
 
-    this.http.getDeviceProjects().subscribe({
-      next: projects => {
-        this.projects = projects;
-        this.projectsLoading = false;
-      },
-      error: () => {
-        this.projectsLoading = false;
-      }
-    });
+    this.loadProjects();
   }
 
   // Name editing
@@ -124,6 +119,55 @@ export class ProjectMenu implements OnInit {
     });
   }
 
+  startCreateProject() {
+    this.creatingProject = true;
+  }
+
+  cancelCreateProject() {
+    if (this.creatingProjectPending) {
+      return;
+    }
+    this.creatingProject = false;
+    this.newProjectName = "";
+  }
+
+  createProject() {
+    const name = this.newProjectName.trim();
+    if (!name) {
+      NotificationService.showError(
+        this.translate.instant('PROJECT_MENU.NAME_REQUIRED'),
+        this.translate.instant('COMMON.ERROR')
+      );
+      return;
+    }
+
+    if (this.creatingProjectPending) {
+      return;
+    }
+
+    this.creatingProjectPending = true;
+    this.http.createDeviceProject(name).subscribe({
+      next: project => {
+        NotificationService.showSuccess(
+          this.translate.instant('PROJECT_MENU.CREATE_SUCCESS'),
+          this.translate.instant('COMMON.SUCCESS')
+        );
+        this.projects = [project, ...this.projects.filter(entry => entry.uuid !== project.uuid)];
+        this.creatingProject = false;
+        this.creatingProjectPending = false;
+        this.newProjectName = "";
+      },
+      error: err => {
+        this.creatingProjectPending = false;
+        NotificationService.showError(
+          this.translate.instant('PROJECT_MENU.CREATE_ERROR'),
+          this.translate.instant('COMMON.ERROR')
+        );
+        console.error(err);
+      }
+    });
+  }
+
   private deleteProject(uuid: string) {
     this.http.deleteDeviceProject(uuid).subscribe({
       next: () => {
@@ -145,5 +189,17 @@ export class ProjectMenu implements OnInit {
 
   backToProjects() {
     this.router.navigate(['/']);
+  }
+
+  private loadProjects() {
+    this.http.getDeviceProjects().subscribe({
+      next: projects => {
+        this.projects = projects;
+        this.projectsLoading = false;
+      },
+      error: () => {
+        this.projectsLoading = false;
+      }
+    });
   }
 }
