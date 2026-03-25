@@ -350,7 +350,7 @@ function resolveFallbackArgName(ms: MissionStep, explicitName: string | undefine
 }
 
 function parseBuilderChain(functionName: string, terminalArgs: MissionStep['arguments']): BuilderChain | null {
-  const trimmed = functionName.trim();
+  const trimmed = stripPythonComments(functionName).trim();
   if (!trimmed.includes('.')) {
     return null;
   }
@@ -944,6 +944,54 @@ function parseBuilderValueExpression(raw: string): string | number | boolean | n
     return Number.isInteger(numeric) ? Math.trunc(numeric) : numeric;
   }
   return trimmed;
+}
+
+function stripPythonComments(input: string): string {
+  let result = '';
+  let quote: '\'' | '"' | null = null;
+  let escape = false;
+  let inComment = false;
+
+  for (const char of input) {
+    if (inComment) {
+      if (char === '\n') {
+        inComment = false;
+        result += char;
+      }
+      continue;
+    }
+
+    if (quote) {
+      result += char;
+      if (escape) {
+        escape = false;
+        continue;
+      }
+      if (char === '\\') {
+        escape = true;
+        continue;
+      }
+      if (char === quote) {
+        quote = null;
+      }
+      continue;
+    }
+
+    if (char === '\'' || char === '"') {
+      quote = char;
+      result += char;
+      continue;
+    }
+
+    if (char === '#') {
+      inComment = true;
+      continue;
+    }
+
+    result += char;
+  }
+
+  return result;
 }
 
 function splitTopLevel(input: string, separator: string): string[] {

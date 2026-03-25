@@ -249,6 +249,37 @@ kp=0.5, kd=0.1,
     });
   });
 
+  it('ignores inline python comments inside multiline builder calls', () => {
+    const storedStep: MissionStep = {
+      step_type: `strafe_follow_line_single(Defs.front.right, #drive to line
+speed=-1,
+side=LineSide.RIGHT,
+kp=0.4, kd=0.1,
+).until`,
+      function_name: `strafe_follow_line_single(Defs.front.right, #drive to line
+speed=-1,
+side=LineSide.RIGHT,
+kp=0.4, kd=0.1,
+).until`,
+      arguments: [
+        { name: null as any, value: 'on_black(Defs.front.left)', type: 'positional' },
+      ],
+      position: { x: 0, y: 0 },
+      children: [],
+    };
+
+    const fallbackStep = asStepFromPool(storedStep, []);
+    expect(fallbackStep.name).toBe('strafe_follow_line_single_until_black');
+    expect(initialArgsFromPool(storedStep, [])).toEqual({
+      arg0: 'Defs.front.right',
+      speed: -1,
+      side: 'LineSide.RIGHT',
+      kp: 0.4,
+      kd: 0.1,
+      condition: 'on_black(Defs.front.left)',
+    });
+  });
+
   it('allows recursive chain selection from catalog metadata', () => {
     const editable = prepareStepForFlowEditor({
       name: 'drive_forward',
