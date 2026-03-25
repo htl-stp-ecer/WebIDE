@@ -2,7 +2,13 @@ import type { Flowchart } from './flowchart';
 import type { FlowNode } from './models';
 import type { MissionStep } from '../../entities/MissionStep';
 import { isMultiSensorType, serializeMultiSensorSelection } from './models';
-import { applyBuilderStepArgsToMissionStep, isBuilderDerivedStep } from './step-utils';
+import {
+  applyBuilderStepArgsToMissionStep,
+  isBuilderDerivedStep,
+  rebuildBuilderArgState,
+  resolveBuilderDisplayName,
+  setBuilderChainMethodSelection,
+} from './step-utils';
 import { handleSave } from './save-handlers';
 
 type ArgPrimitive = string | number | boolean | null;
@@ -80,6 +86,48 @@ export function handleArgumentChange(flow: Flowchart, nodeId: string, argName: s
   if (idx !== -1) {
     adHocNodes[idx].args = { ...(adHocNodes[idx].args ?? {}), [argKey]: resolvedValue };
   }
+  flow.historyManager.recordHistory('update-argument');
+}
+
+export function handleChainMethodChange(flow: Flowchart, nodeId: string, level: number, methodName: string | null | undefined): void {
+  const node = findNode(flow, nodeId);
+  if (!node?.step || !isBuilderDerivedStep(node.step)) {
+    return;
+  }
+
+  const currentMethod = node.step.chainSelections?.[level]?.methodName ?? null;
+  const nextMethod = (methodName ?? '').trim() || null;
+  if (currentMethod === nextMethod) {
+    return;
+  }
+
+  const nextArgs = setBuilderChainMethodSelection(node.step, node.args ?? {}, level, nextMethod);
+  node.args = rebuildBuilderArgState(node.step, nextArgs);
+  node.text = resolveBuilderDisplayName(node.step, node.args);
+  if (flow.layoutFlags) {
+    flow.layoutFlags.needsAdjust = true;
+  }
+
+  const missionStep = flow.lookups.nodeIdToStep.get(nodeId);
+  if (missionStep) {
+    applyBuilderStepArgsToMissionStep(missionStep, node.step, node.args);
+    flow.historyManager.recordHistory('update-argument');
+    const mission = flow.missionState.currentMission();
+    if (mission) {
+      flow.updatePlannedPathForMission?.(mission);
+    }
+    scheduleArgumentAutoSave(flow);
+    return;
+  }
+
+  const adHocNodes = flow.adHocNodes();
+  const index = adHocNodes.findIndex(entry => entry.id === nodeId);
+  if (index !== -1) {
+    adHocNodes[index].step = node.step;
+    adHocNodes[index].args = node.args;
+    adHocNodes[index].text = node.text;
+  }
+
   flow.historyManager.recordHistory('update-argument');
 }
 

@@ -43,8 +43,20 @@ import { buildPlannedPathFromProjectSimulation, buildPlannedPathFromProjectSimul
 import { PlanningModeService, PlanningOverlayComponent } from './table/planning';
 import { RunLogPanel } from './logs/run-log-panel';
 import { generateGuid } from '@foblex/utils';
+import {
+  availableBuilderChainMethods,
+  builderBaseArguments,
+  builderChainArguments,
+  builderChainSelections,
+  isBuilderDerivedStep,
+} from './step-utils';
 
 interface DefinitionOption {
+  label: string;
+  value: string;
+}
+
+interface ChainMethodOption {
   label: string;
   value: string;
 }
@@ -1410,6 +1422,44 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
 
   isMultiSensorArgType(type?: string | null): boolean {
     return isMultiSensorType(type);
+  }
+
+  argLabel(arg: { name: string; label?: string }): string {
+    return (arg.label ?? arg.name).trim() || arg.name;
+  }
+
+  usesBuilderChainEditor(step?: Step | null): boolean {
+    return isBuilderDerivedStep(step);
+  }
+
+  builderBaseArgs(node: FlowNode): import('./models').StepArgDef[] {
+    return builderBaseArguments(node.step);
+  }
+
+  builderChainEditorLevels(step?: Step | null): number[] {
+    if (!step || !isBuilderDerivedStep(step)) {
+      return [];
+    }
+
+    const selections = builderChainSelections(step);
+    const levels = selections.length;
+    const hasAnother = availableBuilderChainMethods(step, levels).length > 0;
+    return Array.from({ length: levels + (hasAnother ? 1 : 0) }, (_, index) => index);
+  }
+
+  builderChainMethodValue(step: Step | null | undefined, level: number): string | null {
+    return builderChainSelections(step)[level]?.methodName ?? null;
+  }
+
+  builderChainMethodOptions(step: Step | null | undefined, level: number): ChainMethodOption[] {
+    return availableBuilderChainMethods(step, level).map(method => ({
+      label: method.name,
+      value: method.name,
+    }));
+  }
+
+  builderMethodArgs(step: Step | null | undefined, level: number): import('./models').StepArgDef[] {
+    return builderChainArguments(step, level);
   }
 
   isBooleanArgType(type?: string | null): boolean {

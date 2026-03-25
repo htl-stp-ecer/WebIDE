@@ -235,51 +235,162 @@
                 <div class="node-timing__elapsed">{{ (timing.elapsedMs / 1000) | number:'1.2-2' }}s</div>
               </div>
             }
-            @if (node.step.arguments.length) {
+            @if (node.step.arguments.length || usesBuilderChainEditor(node.step)) {
               <div class="node-args">
-                @for (arg of node.step.arguments; track arg.name; let idx = $index) {
-                  <div class="arg">
-                    <label class="arg-label" pTooltip="{{arg.name}} ({{arg.type}})" tooltipPosition="top" [showDelay]="150" [hideDelay]="50" tooltipStyleClass="!max-w-[24rem] !break-words">{{ arg.name }}</label>
-                    <div class="arg-control">
-                      @let options = definitionOptionsForArg(arg.type, node.args[arg.name]);
-                      @if (isBooleanArgType(arg.type)) {
-                        <p-checkbox [(ngModel)]="node.args[arg.name]" [binary]="true" (ngModelChange)="actions.onArgumentChange(node.id, arg.name, idx, $event)"></p-checkbox>
-                      } @else if (isStringArgType(arg.type)) {
-                        <input pInputText [(ngModel)]="node.args[arg.name]" class="arg-input" [placeholder]="arg.default || ('FLOWCHART.ENTER_VALUE'|translate:{value:arg.name})" (ngModelChange)="actions.onArgumentChange(node.id, arg.name, idx, $event)" />
-                      } @else if (isIntegerArgType(arg.type) || isImplicitIntegerArgType(arg.type, arg.name, node.args[arg.name], arg.default)) {
-                        <p-inputNumber [(ngModel)]="node.args[arg.name]" mode="decimal" [minFractionDigits]="0" [maxFractionDigits]="0" styleClass="arg-number" inputStyleClass="arg-input" [placeholder]="'FLOWCHART.ENTER_VALUE'|translate:{value:arg.name}" (ngModelChange)="actions.onArgumentChange(node.id, arg.name, idx, $event)"></p-inputNumber>
-                      } @else if (isFloatArgType(arg.type) || isImplicitFloatArgType(arg.type, arg.name, node.args[arg.name], arg.default)) {
-                        <p-inputNumber [(ngModel)]="node.args[arg.name]" mode="decimal" [minFractionDigits]="1" [maxFractionDigits]="2" styleClass="arg-number" inputStyleClass="arg-input" [placeholder]="'FLOWCHART.ENTER_VALUE'|translate:{value:arg.name}" (ngModelChange)="actions.onArgumentChange(node.id, arg.name, idx, $event)"></p-inputNumber>
-                      } @else if (isMultiSensorArgType(arg.type)) {
-                        <p-multiselect
-                          [ngModel]="selectedMultiSensors(node.args[arg.name])"
-                          [options]="options"
-                          optionLabel="label"
-                          optionValue="value"
-                          [appendTo]="'body'"
-                          styleClass="arg-dropdown"
-                          [showClear]="true"
-                          display="chip"
-                          [disabled]="!options.length"
-                          [placeholder]="options.length ? ('FLOWCHART.SELECT_TYPE_DEFINITION'|translate:{type:arg.type}) : ('FLOWCHART.NO_TYPE_DEFINITIONS'|translate:{type:arg.type})"
-                          (ngModelChange)="actions.onArgumentChange(node.id, arg.name, idx, $event)">
-                        </p-multiselect>
-                      } @else {
-                        <p-select
-                          [(ngModel)]="node.args[arg.name]"
-                          [options]="options"
-                          optionLabel="label"
-                          optionValue="value"
-                          [appendTo]="'body'"
-                          styleClass="arg-dropdown"
-                          [showClear]="true"
-                          [disabled]="!options.length"
-                          [placeholder]="options.length ? ('FLOWCHART.SELECT_TYPE_DEFINITION'|translate:{type:arg.type}) : ('FLOWCHART.NO_TYPE_DEFINITIONS'|translate:{type:arg.type})"
-                          (ngModelChange)="actions.onArgumentChange(node.id, arg.name, idx, $event)">
-                        </p-select>
-                      }
+                @if (usesBuilderChainEditor(node.step)) {
+                  @for (arg of builderBaseArgs(node); track arg.name; let idx = $index) {
+                    <div class="arg">
+                      <label class="arg-label" pTooltip="{{argLabel(arg)}} ({{arg.type}})" tooltipPosition="top" [showDelay]="150" [hideDelay]="50" tooltipStyleClass="!max-w-[24rem] !break-words">{{ argLabel(arg) }}</label>
+                      <div class="arg-control">
+                        @let options = definitionOptionsForArg(arg.type, node.args[arg.name]);
+                        @if (isBooleanArgType(arg.type)) {
+                          <p-checkbox [(ngModel)]="node.args[arg.name]" [binary]="true" (ngModelChange)="actions.onArgumentChange(node.id, arg.name, idx, $event)"></p-checkbox>
+                        } @else if (isStringArgType(arg.type)) {
+                          <input pInputText [(ngModel)]="node.args[arg.name]" class="arg-input" [placeholder]="arg.default || ('FLOWCHART.ENTER_VALUE'|translate:{value:argLabel(arg)})" (ngModelChange)="actions.onArgumentChange(node.id, arg.name, idx, $event)" />
+                        } @else if (isIntegerArgType(arg.type) || isImplicitIntegerArgType(arg.type, arg.name, node.args[arg.name], arg.default)) {
+                          <p-inputNumber [(ngModel)]="node.args[arg.name]" mode="decimal" [minFractionDigits]="0" [maxFractionDigits]="0" styleClass="arg-number" inputStyleClass="arg-input" [placeholder]="'FLOWCHART.ENTER_VALUE'|translate:{value:argLabel(arg)}" (ngModelChange)="actions.onArgumentChange(node.id, arg.name, idx, $event)"></p-inputNumber>
+                        } @else if (isFloatArgType(arg.type) || isImplicitFloatArgType(arg.type, arg.name, node.args[arg.name], arg.default)) {
+                          <p-inputNumber [(ngModel)]="node.args[arg.name]" mode="decimal" [minFractionDigits]="1" [maxFractionDigits]="2" styleClass="arg-number" inputStyleClass="arg-input" [placeholder]="'FLOWCHART.ENTER_VALUE'|translate:{value:argLabel(arg)}" (ngModelChange)="actions.onArgumentChange(node.id, arg.name, idx, $event)"></p-inputNumber>
+                        } @else if (isMultiSensorArgType(arg.type)) {
+                          <p-multiselect
+                            [ngModel]="selectedMultiSensors(node.args[arg.name])"
+                            [options]="options"
+                            optionLabel="label"
+                            optionValue="value"
+                            [appendTo]="'body'"
+                            styleClass="arg-dropdown"
+                            [showClear]="true"
+                            display="chip"
+                            [disabled]="!options.length"
+                            [placeholder]="options.length ? ('FLOWCHART.SELECT_TYPE_DEFINITION'|translate:{type:arg.type}) : ('FLOWCHART.NO_TYPE_DEFINITIONS'|translate:{type:arg.type})"
+                            (ngModelChange)="actions.onArgumentChange(node.id, arg.name, idx, $event)">
+                          </p-multiselect>
+                        } @else {
+                          <p-select
+                            [(ngModel)]="node.args[arg.name]"
+                            [options]="options"
+                            optionLabel="label"
+                            optionValue="value"
+                            [appendTo]="'body'"
+                            styleClass="arg-dropdown"
+                            [showClear]="true"
+                            [disabled]="!options.length"
+                            [placeholder]="options.length ? ('FLOWCHART.SELECT_TYPE_DEFINITION'|translate:{type:arg.type}) : ('FLOWCHART.NO_TYPE_DEFINITIONS'|translate:{type:arg.type})"
+                            (ngModelChange)="actions.onArgumentChange(node.id, arg.name, idx, $event)">
+                          </p-select>
+                        }
+                      </div>
                     </div>
-                  </div>
+                  }
+
+                  @for (level of builderChainEditorLevels(node.step); track level) {
+                    <div class="arg arg-chain-select">
+                      <label class="arg-label">chain</label>
+                      <div class="arg-control">
+                        <p-select
+                          [ngModel]="builderChainMethodValue(node.step, level)"
+                          [options]="builderChainMethodOptions(node.step, level)"
+                          optionLabel="label"
+                          optionValue="value"
+                          [appendTo]="'body'"
+                          styleClass="arg-dropdown"
+                          [showClear]="true"
+                          [placeholder]="'Select chain method'"
+                          (ngModelChange)="actions.onChainMethodChange(node.id, level, $event)">
+                        </p-select>
+                      </div>
+                    </div>
+
+                    @for (arg of builderMethodArgs(node.step, level); track arg.name; let idx = $index) {
+                      <div class="arg">
+                        <label class="arg-label" pTooltip="{{argLabel(arg)}} ({{arg.type}})" tooltipPosition="top" [showDelay]="150" [hideDelay]="50" tooltipStyleClass="!max-w-[24rem] !break-words">{{ argLabel(arg) }}</label>
+                        <div class="arg-control">
+                          @let options = definitionOptionsForArg(arg.type, node.args[arg.name]);
+                          @if (isBooleanArgType(arg.type)) {
+                            <p-checkbox [(ngModel)]="node.args[arg.name]" [binary]="true" (ngModelChange)="actions.onArgumentChange(node.id, arg.name, idx, $event)"></p-checkbox>
+                          } @else if (isStringArgType(arg.type)) {
+                            <input pInputText [(ngModel)]="node.args[arg.name]" class="arg-input" [placeholder]="arg.default || ('FLOWCHART.ENTER_VALUE'|translate:{value:argLabel(arg)})" (ngModelChange)="actions.onArgumentChange(node.id, arg.name, idx, $event)" />
+                          } @else if (isIntegerArgType(arg.type) || isImplicitIntegerArgType(arg.type, arg.name, node.args[arg.name], arg.default)) {
+                            <p-inputNumber [(ngModel)]="node.args[arg.name]" mode="decimal" [minFractionDigits]="0" [maxFractionDigits]="0" styleClass="arg-number" inputStyleClass="arg-input" [placeholder]="'FLOWCHART.ENTER_VALUE'|translate:{value:argLabel(arg)}" (ngModelChange)="actions.onArgumentChange(node.id, arg.name, idx, $event)"></p-inputNumber>
+                          } @else if (isFloatArgType(arg.type) || isImplicitFloatArgType(arg.type, arg.name, node.args[arg.name], arg.default)) {
+                            <p-inputNumber [(ngModel)]="node.args[arg.name]" mode="decimal" [minFractionDigits]="1" [maxFractionDigits]="2" styleClass="arg-number" inputStyleClass="arg-input" [placeholder]="'FLOWCHART.ENTER_VALUE'|translate:{value:argLabel(arg)}" (ngModelChange)="actions.onArgumentChange(node.id, arg.name, idx, $event)"></p-inputNumber>
+                          } @else if (isMultiSensorArgType(arg.type)) {
+                            <p-multiselect
+                              [ngModel]="selectedMultiSensors(node.args[arg.name])"
+                              [options]="options"
+                              optionLabel="label"
+                              optionValue="value"
+                              [appendTo]="'body'"
+                              styleClass="arg-dropdown"
+                              [showClear]="true"
+                              display="chip"
+                              [disabled]="!options.length"
+                              [placeholder]="options.length ? ('FLOWCHART.SELECT_TYPE_DEFINITION'|translate:{type:arg.type}) : ('FLOWCHART.NO_TYPE_DEFINITIONS'|translate:{type:arg.type})"
+                              (ngModelChange)="actions.onArgumentChange(node.id, arg.name, idx, $event)">
+                            </p-multiselect>
+                          } @else {
+                            <p-select
+                              [(ngModel)]="node.args[arg.name]"
+                              [options]="options"
+                              optionLabel="label"
+                              optionValue="value"
+                              [appendTo]="'body'"
+                              styleClass="arg-dropdown"
+                              [showClear]="true"
+                              [disabled]="!options.length"
+                              [placeholder]="options.length ? ('FLOWCHART.SELECT_TYPE_DEFINITION'|translate:{type:arg.type}) : ('FLOWCHART.NO_TYPE_DEFINITIONS'|translate:{type:arg.type})"
+                              (ngModelChange)="actions.onArgumentChange(node.id, arg.name, idx, $event)">
+                            </p-select>
+                          }
+                        </div>
+                      </div>
+                    }
+                  }
+                } @else {
+                  @for (arg of node.step.arguments; track arg.name; let idx = $index) {
+                    <div class="arg">
+                      <label class="arg-label" pTooltip="{{argLabel(arg)}} ({{arg.type}})" tooltipPosition="top" [showDelay]="150" [hideDelay]="50" tooltipStyleClass="!max-w-[24rem] !break-words">{{ argLabel(arg) }}</label>
+                      <div class="arg-control">
+                        @let options = definitionOptionsForArg(arg.type, node.args[arg.name]);
+                        @if (isBooleanArgType(arg.type)) {
+                          <p-checkbox [(ngModel)]="node.args[arg.name]" [binary]="true" (ngModelChange)="actions.onArgumentChange(node.id, arg.name, idx, $event)"></p-checkbox>
+                        } @else if (isStringArgType(arg.type)) {
+                          <input pInputText [(ngModel)]="node.args[arg.name]" class="arg-input" [placeholder]="arg.default || ('FLOWCHART.ENTER_VALUE'|translate:{value:argLabel(arg)})" (ngModelChange)="actions.onArgumentChange(node.id, arg.name, idx, $event)" />
+                        } @else if (isIntegerArgType(arg.type) || isImplicitIntegerArgType(arg.type, arg.name, node.args[arg.name], arg.default)) {
+                          <p-inputNumber [(ngModel)]="node.args[arg.name]" mode="decimal" [minFractionDigits]="0" [maxFractionDigits]="0" styleClass="arg-number" inputStyleClass="arg-input" [placeholder]="'FLOWCHART.ENTER_VALUE'|translate:{value:argLabel(arg)}" (ngModelChange)="actions.onArgumentChange(node.id, arg.name, idx, $event)"></p-inputNumber>
+                        } @else if (isFloatArgType(arg.type) || isImplicitFloatArgType(arg.type, arg.name, node.args[arg.name], arg.default)) {
+                          <p-inputNumber [(ngModel)]="node.args[arg.name]" mode="decimal" [minFractionDigits]="1" [maxFractionDigits]="2" styleClass="arg-number" inputStyleClass="arg-input" [placeholder]="'FLOWCHART.ENTER_VALUE'|translate:{value:argLabel(arg)}" (ngModelChange)="actions.onArgumentChange(node.id, arg.name, idx, $event)"></p-inputNumber>
+                        } @else if (isMultiSensorArgType(arg.type)) {
+                          <p-multiselect
+                            [ngModel]="selectedMultiSensors(node.args[arg.name])"
+                            [options]="options"
+                            optionLabel="label"
+                            optionValue="value"
+                            [appendTo]="'body'"
+                            styleClass="arg-dropdown"
+                            [showClear]="true"
+                            display="chip"
+                            [disabled]="!options.length"
+                            [placeholder]="options.length ? ('FLOWCHART.SELECT_TYPE_DEFINITION'|translate:{type:arg.type}) : ('FLOWCHART.NO_TYPE_DEFINITIONS'|translate:{type:arg.type})"
+                            (ngModelChange)="actions.onArgumentChange(node.id, arg.name, idx, $event)">
+                          </p-multiselect>
+                        } @else {
+                          <p-select
+                            [(ngModel)]="node.args[arg.name]"
+                            [options]="options"
+                            optionLabel="label"
+                            optionValue="value"
+                            [appendTo]="'body'"
+                            styleClass="arg-dropdown"
+                            [showClear]="true"
+                            [disabled]="!options.length"
+                            [placeholder]="options.length ? ('FLOWCHART.SELECT_TYPE_DEFINITION'|translate:{type:arg.type}) : ('FLOWCHART.NO_TYPE_DEFINITIONS'|translate:{type:arg.type})"
+                            (ngModelChange)="actions.onArgumentChange(node.id, arg.name, idx, $event)">
+                          </p-select>
+                        }
+                      </div>
+                    </div>
+                  }
                 }
               </div>
             }

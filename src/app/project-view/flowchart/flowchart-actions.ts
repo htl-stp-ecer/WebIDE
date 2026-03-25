@@ -8,7 +8,7 @@ import { handleUndo, handleRedo } from './history-handlers';
 import { handleNodeMoved, handleAddPlannedSteps } from './mission-handlers';
 import { MissionStep } from '../../entities/MissionStep';
 import { handleCreateNode, deleteNode as removeNode } from './node-handlers';
-import { handleArgumentChange } from './argument-handlers';
+import { handleArgumentChange, handleChainMethodChange } from './argument-handlers';
 import { handleAddBreakpoint, handleAddConnection, handleNodeIntersected as handleSplitConnection, handleRemoveBreakpoint } from './connection-handlers';
 import {
   handleCanvasContextMenu,
@@ -84,6 +84,7 @@ export interface FlowchartActions {
   stopRun(): void;
   continueDebug(): void;
   onArgumentChange(nodeId: string, argName: string, index: number, value: unknown): void;
+  onChainMethodChange(nodeId: string, level: number, methodName: string | null | undefined): void;
   addPlannedSteps(steps: MissionStep[]): void;
 }
 
@@ -145,6 +146,7 @@ export function createFlowchartActions(flow: Flowchart): FlowchartActions {
     stopRun: () => handleStop(flow),
     continueDebug: () => handleContinueDebug(flow),
     onArgumentChange: (nodeId, argName, index, value) => handleArgumentChange(flow, nodeId, argName, index, value),
+    onChainMethodChange: (nodeId, level, methodName) => handleChainMethodChange(flow, nodeId, level, methodName),
     addPlannedSteps: steps => handleAddPlannedSteps(flow, steps),
   };
 }

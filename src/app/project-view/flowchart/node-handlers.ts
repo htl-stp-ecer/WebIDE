@@ -8,9 +8,10 @@ import { MissionStep } from '../../entities/MissionStep';
 import { Mission } from '../../entities/Mission';
 import { rebuildFromMission } from './mission-handlers';
 import { removeNodeFromGroups } from './group-handlers';
+import { prepareStepForFlowEditor } from './step-utils';
 
 export function handleCreateNode(flow: Flowchart, event: FCreateNodeEvent): void {
-  const step = event.data as Step;
+  const step = prepareStepForFlowEditor(event.data as Step);
   const args: Record<string, boolean | string | number | null> = {};
   step?.arguments?.forEach(arg => {
     args[arg.name] = toVal(arg.type, arg.default ?? '');

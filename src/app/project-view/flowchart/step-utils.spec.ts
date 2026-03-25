@@ -1,5 +1,13 @@
 import { MissionStep } from '../../entities/MissionStep';
-import { asStepFromPool, canonicalizeMissionStepArguments, initialArgsFromPool } from './step-utils';
+import {
+  asStepFromPool,
+  availableBuilderChainMethods,
+  canonicalizeMissionStepArguments,
+  initialArgsFromPool,
+  missionStepFromAdHoc,
+  prepareStepForFlowEditor,
+  setBuilderChainMethodSelection,
+} from './step-utils';
 import { Step } from './models';
 
 describe('step-utils canonicalizeMissionStepArguments', () => {
@@ -239,5 +247,64 @@ kp=0.5, kd=0.1,
       kd: 0.1,
       distance_cm: 15,
     });
+  });
+
+  it('allows recursive chain selection from catalog metadata', () => {
+    const editable = prepareStepForFlowEditor({
+      name: 'drive_forward',
+      import: null,
+      file: '',
+      arguments: [],
+      chainMethods: [
+        {
+          name: 'until',
+          arguments: [{ name: 'condition', type: 'str', default: null }],
+        },
+      ],
+    } as Step);
+
+    let args = setBuilderChainMethodSelection(editable, {}, 0, 'until');
+    expect(availableBuilderChainMethods(editable, 1).map(method => method.name)).toEqual(['until']);
+    expect(editable.chainSelections?.map(selection => selection.methodName)).toEqual(['until']);
+    expect(editable.chainSelections?.[0]?.arguments[0]?.label).toBe('condition');
+
+    args = { ...args, condition: 'on_black(Defs.front.left)' };
+    args = setBuilderChainMethodSelection(editable, args, 1, 'until');
+
+    expect(editable.chainSelections?.map(selection => selection.methodName)).toEqual(['until', 'until']);
+    expect(editable.chainSelections?.[1]?.arguments[0]?.label).toBe('condition');
+    expect(editable.chainSelections?.[1]?.arguments[0]?.name).not.toBe('condition');
+  });
+
+  it('serializes recursive chain selections back into backend mission shape', () => {
+    const editable = prepareStepForFlowEditor({
+      name: 'drive_forward',
+      import: null,
+      file: '',
+      arguments: [],
+      chainMethods: [
+        {
+          name: 'until',
+          arguments: [{ name: 'condition', type: 'str', default: null }],
+        },
+      ],
+    } as Step);
+
+    let args = setBuilderChainMethodSelection(editable, {}, 0, 'until');
+    args['condition'] = 'on_black(Defs.front.left)';
+    args = setBuilderChainMethodSelection(editable, args, 1, 'until');
+    const secondConditionKey = editable.chainSelections?.[1]?.arguments[0]?.name as string;
+    args[secondConditionKey] = 'after_cm(12)';
+
+    const missionStep = missionStepFromAdHoc({
+      id: 'node-1',
+      text: editable.name,
+      position: { x: 0, y: 0 },
+      step: editable,
+      args,
+    });
+
+    expect(missionStep.function_name).toBe('drive_forward().until(on_black(Defs.front.left)).until');
+    expect(missionStep.arguments).toEqual([{ name: '', value: 'after_cm(12)', type: 'positional' }]);
   });
 });

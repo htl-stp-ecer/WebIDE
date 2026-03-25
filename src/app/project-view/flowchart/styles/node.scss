@@ -136,6 +136,11 @@
   min-width: 0;
 }
 
+.arg.arg-chain-select {
+  padding-top: 0.25rem;
+  border-top: 1px solid rgba(56, 56, 56, 0.12);
+}
+
 .arg-control {
   min-width: 0;
   display: flex;
@@ -214,6 +219,11 @@
   border-color: #4b5563;
   background: #1f2937;
   color: #eee;
+}
+
+:host-context(.dark) .arg.arg-chain-select,
+:host-context(.p-dark) .arg.arg-chain-select {
+  border-top-color: rgba(238, 229, 233, 0.12);
 }
 
 :host-context(.dark) .node-timing,

@@ -47,11 +47,26 @@ export type FlowOrientation = 'vertical' | 'horizontal';
 // We declare a minimal shape here to keep helpers typed.
 export interface StepArgDef {
   name: string;
+  label?: string;
   type: string;
   default?: unknown;
   builderSource?: 'base' | 'method';
   builderBinding?: 'keyword' | 'positional';
   builderRawName?: string | null;
+  builderChainIndex?: number;
+  builderMethodName?: string;
+}
+
+export interface StepChainMethod {
+  name: string;
+  arguments: StepArgDef[];
+  chainMethods?: StepChainMethod[];
+  chain_methods?: StepChainMethod[];
+}
+
+export interface StepChainSelection {
+  methodName: string;
+  arguments: StepArgDef[];
 }
 
 export interface Step {
@@ -61,9 +76,18 @@ export interface Step {
   optional?: boolean;
   arguments: StepArgDef[];
   tags?: string[];
+  chainMethods?: StepChainMethod[];
+  chain_methods?: StepChainMethod[];
+  chainSelections?: StepChainSelection[];
   builderBaseName?: string;
   builderMethodName?: string;
 }
+
+export const stepChainMethods = (step?: Step | null): StepChainMethod[] =>
+  step?.chainMethods ?? step?.chain_methods ?? [];
+
+export const chainMethodChildren = (method?: StepChainMethod | null): StepChainMethod[] =>
+  method?.chainMethods ?? method?.chain_methods ?? [];
 
 const normalizedArgType = (type?: string | null) => (type ?? '').replace(/\s+/g, '').toLowerCase();
 
