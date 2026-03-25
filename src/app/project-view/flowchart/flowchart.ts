@@ -39,7 +39,7 @@ import { TableVisualizationPanel } from './table/table-visualization-panel';
 import { TimingPanel, type TimingViewMode } from './timing/timing-panel';
 import { RobotSettingsModal } from './robot-settings/robot-settings-modal';
 import { TableMapService, TableVisualizationService } from './table/services';
-import { buildPlannedPathFromProjectSimulationWithMissionOverride } from './table/simulation-path';
+import { buildPlannedPathFromProjectSimulation, buildPlannedPathFromProjectSimulationWithMissionOverride } from './table/simulation-path';
 import { PlanningModeService, PlanningOverlayComponent } from './table/planning';
 import { RunLogPanel } from './logs/run-log-panel';
 import { generateGuid } from '@foblex/utils';
@@ -723,6 +723,10 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
     }, 0);
   }
 
+  invalidateProjectSimulationCache(): void {
+    this.projectSimulationCache = null;
+  }
+
   updatePlannedPathForMission(mission: Mission | null): void {
     this.simulationPathSub?.unsubscribe();
     this.simulationPathSub = undefined;
@@ -797,7 +801,9 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
           maxDistanceCm: Math.max(mapConfig.widthCm, mapConfig.heightCm),
         }
       : null;
-    const planned = buildPlannedPathFromProjectSimulationWithMissionOverride(startPose, data, mission, { lineup: lineupContext });
+    const planned = this.historyManager.hasUnsavedChanges()
+      ? buildPlannedPathFromProjectSimulationWithMissionOverride(startPose, data, mission, { lineup: lineupContext })
+      : buildPlannedPathFromProjectSimulation(startPose, data, { lineup: lineupContext });
     const highlightRange = planned.missionRanges.find(range => range.name === mission.name) ?? null;
     this.tableViz.setPlannedPath(planned.poses.length > 1 ? planned.poses : null);
     this.tableViz.setPlannedMissionEndIndices(planned.missionEndIndices.length ? planned.missionEndIndices : null);

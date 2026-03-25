@@ -12,6 +12,7 @@ export function handleSave(flow: Flowchart): void {
     next: () => {
       flow.historyManager.markSaved();
       flow.setSaveStatus('saved');
+      flow.invalidateProjectSimulationCache?.();
       flow.updatePlannedPathForMission?.(mission);
     },
     error: error => {
