@@ -259,6 +259,7 @@ kp=0.5, kd=0.1,
         {
           name: 'until',
           arguments: [{ name: 'condition', type: 'str', default: null }],
+          recursive: true,
         },
       ],
     } as Step);
@@ -286,6 +287,7 @@ kp=0.5, kd=0.1,
         {
           name: 'until',
           arguments: [{ name: 'condition', type: 'str', default: null }],
+          recursive: true,
         },
       ],
     } as Step);
@@ -306,5 +308,24 @@ kp=0.5, kd=0.1,
 
     expect(missionStep.function_name).toBe('drive_forward().until(on_black(Defs.front.left)).until');
     expect(missionStep.arguments).toEqual([{ name: '', value: 'after_cm(12)', type: 'positional' }]);
+  });
+
+  it('does not offer further chain methods when the selected method is not recursive and has no children', () => {
+    const editable = prepareStepForFlowEditor({
+      name: 'strafe_follow_line_single',
+      import: null,
+      file: '',
+      arguments: [],
+      chainMethods: [
+        {
+          name: 'distance_cm',
+          arguments: [{ name: 'distance_cm', type: 'float', default: null }],
+        },
+      ],
+    } as Step);
+
+    setBuilderChainMethodSelection(editable, {}, 0, 'distance_cm');
+
+    expect(availableBuilderChainMethods(editable, 1)).toEqual([]);
   });
 });

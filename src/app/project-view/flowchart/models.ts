@@ -60,6 +60,7 @@ export interface StepArgDef {
 export interface StepChainMethod {
   name: string;
   arguments: StepArgDef[];
+  recursive?: boolean;
   chainMethods?: StepChainMethod[];
   chain_methods?: StepChainMethod[];
 }

@@ -189,7 +189,7 @@ export function availableBuilderChainMethods(step: Step | null | undefined, leve
     }
 
     const children = chainMethodChildren(matched);
-    methods = children.length ? children : rootMethods;
+    methods = nextChainMethodsForMethod(matched);
   }
 
   return cloneChainMethods(methods);
@@ -557,7 +557,7 @@ function buildChainSelections(
 
     if (matched) {
       const children = chainMethodChildren(matched);
-      methods = children.length ? children : rootMethods;
+      methods = nextChainMethodsForMethod(matched);
     } else {
       methods = [];
     }
@@ -791,6 +791,21 @@ function cloneChainMethods(methods: StepChainMethod[]): StepChainMethod[] {
     arguments: cloneArgDefs(method.arguments),
     chainMethods: cloneChainMethods(chainMethodChildren(method)),
   }));
+}
+
+function nextChainMethodsForMethod(method: StepChainMethod): StepChainMethod[] {
+  const children = chainMethodChildren(method);
+  if (children.length) {
+    return children;
+  }
+  if (method.recursive) {
+    return [{
+      ...method,
+      arguments: cloneArgDefs(method.arguments),
+      chainMethods: cloneChainMethods(chainMethodChildren(method)),
+    }];
+  }
+  return [];
 }
 
 function serializeBuilderStep(

@@ -4,6 +4,7 @@ interface Step {
   tags?: string[];
   chain_methods?: {
     name: string;
+    recursive?: boolean;
     arguments: {
       name: string;
       label?: string;
