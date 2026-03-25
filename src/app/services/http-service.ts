@@ -285,17 +285,16 @@ export class HttpService {
   }
 
   refreshStepIndex(forceClear: boolean = false) {
-    const deviceUrl = this.deviceBase;
-    if (!deviceUrl) {
-      throw new Error('Device not connected - cannot refresh step index');
-    }
     const params = new URLSearchParams();
-    params.set('device_url', deviceUrl);
+    if (this.deviceBase) {
+      params.set('device_url', this.deviceBase);
+    }
     if (forceClear) {
       params.set('force_clear', '1');
     }
+    const query = params.toString();
     return this.http.post<{ status: string; count?: number; last_indexed_at?: string; error?: string }>(
-      this.localApi(`/steps/index/refresh?${params.toString()}`),
+      this.localApi(query ? `/steps/index/refresh?${query}` : '/steps/index/refresh'),
       {}
     );
   }

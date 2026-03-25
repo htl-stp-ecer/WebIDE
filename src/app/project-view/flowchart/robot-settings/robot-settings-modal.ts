@@ -322,6 +322,7 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
   }
 
   refreshStepIndex(forceClear: boolean = false) {
+    const previousStatus = this.stepIndexStatus ? { ...this.stepIndexStatus } : undefined;
     this.stepIndexRefreshing = true;
     // Mark current status as indexing so the polling logic knows to trigger refresh when done
     if (this.stepIndexStatus) {
@@ -340,6 +341,8 @@ export class RobotSettingsModal implements OnInit, OnChanges, AfterViewChecked {
       },
       error: () => {
         this.stepIndexRefreshing = false;
+        this.stepIndexStatus = previousStatus;
+        this.loadStepIndexStatus();
       }
     });
   }
