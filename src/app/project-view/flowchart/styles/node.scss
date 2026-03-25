@@ -8,6 +8,11 @@
   max-width: 24rem;
   padding: 1rem;
   text-align: left;
+  --node-field-border: #d1d5db;
+  --node-field-bg: #fff;
+  --node-field-color: #131217;
+  --node-field-focus: #3b82f6;
+  --node-field-focus-ring: rgba(59, 130, 246, 0.2);
   background: #eee5e9;
   border: 1px solid transparent;
   border-radius: 0.75rem;
@@ -167,11 +172,21 @@
   max-width: 100%;
   padding: 0.25rem;
   border-radius: 0.25rem;
-  border: 1px solid #d1d5db;
-  background: #fff;
+  border: 1px solid transparent;
+  background: var(--node-field-bg);
+  color: var(--node-field-color);
   font-size: 0.875rem;
   overflow: hidden;
   text-overflow: ellipsis;
+  box-shadow: inset 0 0 0 1px var(--node-field-border);
+}
+
+.arg-input:focus,
+.arg-input:focus-visible {
+  outline: none;
+  box-shadow:
+    inset 0 0 0 1px var(--node-field-focus),
+    0 0 0 2px var(--node-field-focus-ring);
 }
 
 :host ::ng-deep .node .p-inputtext.arg-input,
@@ -180,12 +195,58 @@
   max-width: 100%;
 }
 
+:host ::ng-deep .node .p-inputtext.arg-input {
+  appearance: none;
+  -webkit-appearance: none;
+  border: 1px solid transparent !important;
+  background: var(--node-field-bg) !important;
+  background-image: none !important;
+  background-origin: padding-box !important;
+  background-clip: padding-box;
+  color: var(--node-field-color);
+  box-shadow: inset 0 0 0 1px var(--node-field-border) !important;
+}
+
+:host ::ng-deep .node .p-inputtext.arg-input:enabled:hover {
+  border-color: transparent !important;
+  background: var(--node-field-bg) !important;
+  background-image: none !important;
+  box-shadow: inset 0 0 0 1px var(--node-field-border) !important;
+}
+
+:host ::ng-deep .node .p-inputtext.arg-input:enabled:focus,
+:host ::ng-deep .node .p-inputtext.arg-input:enabled:focus-visible {
+  outline: none;
+  border-color: transparent !important;
+  background: var(--node-field-bg) !important;
+  background-image: none !important;
+  box-shadow:
+    inset 0 0 0 1px var(--node-field-focus),
+    0 0 0 2px var(--node-field-focus-ring) !important;
+}
+
 :host ::ng-deep .node .p-select.arg-dropdown {
   width: 100%;
+  border: 1px solid transparent;
+  background: var(--node-field-bg);
+  color: var(--node-field-color);
+  box-shadow: inset 0 0 0 1px var(--node-field-border);
 }
 
 :host ::ng-deep .node .p-multiselect.arg-dropdown {
   width: 100%;
+  border: 1px solid transparent;
+  background: var(--node-field-bg);
+  color: var(--node-field-color);
+  box-shadow: inset 0 0 0 1px var(--node-field-border);
+}
+
+:host ::ng-deep .node .p-inputnumber.arg-number.p-inputwrapper-focus .p-inputtext.arg-input,
+:host ::ng-deep .node .p-select.arg-dropdown.p-focus,
+:host ::ng-deep .node .p-multiselect.arg-dropdown.p-focus {
+  box-shadow:
+    inset 0 0 0 1px var(--node-field-focus),
+    0 0 0 2px var(--node-field-focus-ring);
 }
 
 :host ::ng-deep .node .p-checkbox {
@@ -194,6 +255,11 @@
 
 :host-context(.dark) .node,
 :host-context(.p-dark) .node {
+  --node-field-border: #4b5563;
+  --node-field-bg: #1f2937;
+  --node-field-color: #eee;
+  --node-field-focus: #60a5fa;
+  --node-field-focus-ring: rgba(96, 165, 250, 0.24);
   background: #131217;
   box-shadow:
     inset 0 0 0 1px #383838,
@@ -212,13 +278,6 @@
 :host-context(.dark) .port,
 :host-context(.p-dark) .port {
   background: #EEE5E9;
-}
-
-:host-context(.dark) .arg-input,
-:host-context(.p-dark) .arg-input {
-  border-color: #4b5563;
-  background: #1f2937;
-  color: #eee;
 }
 
 :host-context(.dark) .arg.arg-chain-select,
