@@ -2,6 +2,7 @@ import type { Flowchart } from './flowchart';
 import type { FlowNode } from './models';
 import type { MissionStep } from '../../entities/MissionStep';
 import { isMultiSensorType, serializeMultiSensorSelection } from './models';
+import { applyBuilderStepArgsToMissionStep, isBuilderDerivedStep } from './step-utils';
 import { handleSave } from './save-handlers';
 
 type ArgPrimitive = string | number | boolean | null;
@@ -38,6 +39,20 @@ export function handleArgumentChange(flow: Flowchart, nodeId: string, argName: s
   const missionStep = flow.lookups.nodeIdToStep.get(nodeId);
 
   if (missionStep) {
+    if (node?.step && isBuilderDerivedStep(node.step)) {
+      if (!changed) {
+        return;
+      }
+      applyBuilderStepArgsToMissionStep(missionStep, node.step, node.args ?? {});
+      flow.historyManager.recordHistory('update-argument');
+      const mission = flow.missionState.currentMission();
+      if (mission) {
+        flow.updatePlannedPathForMission?.(mission);
+      }
+      scheduleArgumentAutoSave(flow);
+      return;
+    }
+
     const targetArg = ensureMissionArgument(missionStep, argIndex, storedName, argType);
     if (!changed) {
       const storedValue = resolveControlValue(targetArg.value, argType);

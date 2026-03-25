@@ -49,6 +49,9 @@ export interface StepArgDef {
   name: string;
   type: string;
   default?: unknown;
+  builderSource?: 'base' | 'method';
+  builderBinding?: 'keyword' | 'positional';
+  builderRawName?: string | null;
 }
 
 export interface Step {
@@ -58,6 +61,8 @@ export interface Step {
   optional?: boolean;
   arguments: StepArgDef[];
   tags?: string[];
+  builderBaseName?: string;
+  builderMethodName?: string;
 }
 
 const normalizedArgType = (type?: string | null) => (type ?? '').replace(/\s+/g, '').toLowerCase();

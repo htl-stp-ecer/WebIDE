@@ -129,4 +129,55 @@ describe('handleArgumentChange', () => {
     handleArgumentChange(flow, nodeId, 'Arg', 0, 300);
     expect(missionStep.arguments[0].value).toBe(300);
   });
+
+  it('re-serializes derived builder arguments back into the raw mission step shape', () => {
+    missionStep = {
+      step_type: 'strafe_follow_line_single(Defs.front.right, speed=-1, side=LineSide.RIGHT, kp=0.4, kd=0.1).distance_cm',
+      function_name: 'strafe_follow_line_single(Defs.front.right, speed=-1, side=LineSide.RIGHT, kp=0.4, kd=0.1).distance_cm',
+      arguments: [{ name: '', value: 15, type: 'positional' }],
+      children: [],
+    };
+    mission.steps = [missionStep];
+
+    const flowNode: FlowNode = {
+      id: nodeId,
+      text: 'strafe_follow_line_single.distance_cm',
+      position: { x: 0, y: 0 },
+      step: {
+        name: 'strafe_follow_line_single.distance_cm',
+        builderBaseName: 'strafe_follow_line_single',
+        builderMethodName: 'distance_cm',
+        arguments: [
+          { name: 'arg0', type: 'str', builderSource: 'base', builderBinding: 'positional', builderRawName: null },
+          { name: 'speed', type: 'int', builderSource: 'base', builderBinding: 'keyword', builderRawName: 'speed' },
+          { name: 'side', type: 'str', builderSource: 'base', builderBinding: 'keyword', builderRawName: 'side' },
+          { name: 'kp', type: 'float', builderSource: 'base', builderBinding: 'keyword', builderRawName: 'kp' },
+          { name: 'kd', type: 'float', builderSource: 'base', builderBinding: 'keyword', builderRawName: 'kd' },
+          { name: 'distance_cm', type: 'int', builderSource: 'method', builderBinding: 'positional', builderRawName: null },
+        ],
+      },
+      args: {
+        arg0: 'Defs.front.right',
+        speed: -1,
+        side: 'LineSide.RIGHT',
+        kp: 0.4,
+        kd: 0.1,
+        distance_cm: 15,
+      },
+    };
+
+    const nodesSignal = createSignal([flowNode]);
+    (flow as any).nodes = nodesSignal as any;
+    (flow as any).lookups = {
+      nodeIdToStep: new Map([[nodeId, missionStep]]),
+      stepToNodeId: new Map([[missionStep, nodeId]]),
+    } as any;
+
+    handleArgumentChange(flow, nodeId, 'distance_cm', 5, 22);
+
+    expect(missionStep.function_name).toBe(
+      'strafe_follow_line_single(Defs.front.right, speed=-1, side=LineSide.RIGHT, kp=0.4, kd=0.1).distance_cm'
+    );
+    expect(missionStep.arguments).toEqual([{ name: '', value: 22, type: 'positional' }]);
+  });
 });

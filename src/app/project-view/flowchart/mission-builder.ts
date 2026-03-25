@@ -150,18 +150,19 @@ export function rebuildMissionView(
       }
 
       const id = oldStepToNodeId.get(s) ?? generateGuid();
+      const step = asStep(s);
       stepToNodeId.set(s, id);
       nodeIdToStep.set(id, s);
       const inputId = `${id}-input`;
       const outputId = `${id}-output`;
       nodes.push({
         id,
-        text: s.function_name,
+        text: step.name || s.function_name,
         position: {
           x: s.position?.x ?? 0,
           y: s.position?.y ?? 0,
         },
-        step: asStep(s),
+        step,
         args: initialArgs(s),
         path,
       });

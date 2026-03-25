@@ -142,4 +142,102 @@ describe('step-utils canonicalizeMissionStepArguments', () => {
     expect(fallbackStep.arguments[0].default).toBe(13);
     expect(initialArgsFromPool(storedStep, [])).toEqual({ deg: 13 });
   });
+
+  it('normalizes packingbot until-builder step names for fallback rendering', () => {
+    const storedStep: MissionStep = {
+      step_type: 'strafe_right().until',
+      function_name: 'strafe_right().until',
+      arguments: [
+        { name: null as any, value: 'on_black(Defs.rear.right)', type: 'positional' },
+      ],
+      position: { x: 0, y: 0 },
+      children: [],
+    };
+
+    const fallbackStep = asStepFromPool(storedStep, []);
+    expect(fallbackStep.name).toBe('strafe_right_until_black');
+    expect(fallbackStep.arguments[0].name).toBe('condition');
+    expect(fallbackStep.arguments[0].type).toBe('str');
+    expect(initialArgsFromPool(storedStep, [])).toEqual({ condition: 'on_black(Defs.rear.right)' });
+  });
+
+  it('derives a display name from compound until-builder conditions', () => {
+    const storedStep: MissionStep = {
+      step_type: 'drive_forward().until',
+      function_name: 'drive_forward().until',
+      arguments: [
+        { name: null as any, value: 'after_cm(125) & on_black(Defs.front.left)', type: 'positional' },
+      ],
+      position: { x: 0, y: 0 },
+      children: [],
+    };
+
+    const fallbackStep = asStepFromPool(storedStep, []);
+    expect(fallbackStep.name).toBe('drive_forward_until_black');
+    expect(initialArgsFromPool(storedStep, [])).toEqual({
+      condition: 'after_cm(125) & on_black(Defs.front.left)',
+    });
+  });
+
+  it('extracts inline builder arguments from chained distance setters', () => {
+    const storedStep: MissionStep = {
+      step_type: 'strafe_follow_line_single(Defs.front.right, speed=-1, side=LineSide.RIGHT, kp=0.4, kd=0.1).distance_cm',
+      function_name: 'strafe_follow_line_single(Defs.front.right, speed=-1, side=LineSide.RIGHT, kp=0.4, kd=0.1).distance_cm',
+      arguments: [
+        { name: null as any, value: 15, type: 'positional' },
+      ],
+      position: { x: 0, y: 0 },
+      children: [],
+    };
+
+    const fallbackStep = asStepFromPool(storedStep, []);
+    expect(fallbackStep.name).toBe('strafe_follow_line_single.distance_cm');
+    expect(fallbackStep.arguments.map(arg => arg.name)).toEqual([
+      'arg0',
+      'speed',
+      'side',
+      'kp',
+      'kd',
+      'distance_cm',
+    ]);
+    expect(initialArgsFromPool(storedStep, [])).toEqual({
+      arg0: 'Defs.front.right',
+      speed: -1,
+      side: 'LineSide.RIGHT',
+      kp: 0.4,
+      kd: 0.1,
+      distance_cm: 15,
+    });
+  });
+
+  it('parses multiline chained builder setters from the backend formatter', () => {
+    const storedStep: MissionStep = {
+      step_type: `strafe_follow_line_single(
+Defs.front.left, speed=1.0,
+side=LineSide.LEFT,
+kp=0.5, kd=0.1,
+).distance_cm`,
+      function_name: `strafe_follow_line_single(
+Defs.front.left, speed=1.0,
+side=LineSide.LEFT,
+kp=0.5, kd=0.1,
+).distance_cm`,
+      arguments: [
+        { name: null as any, value: 15, type: 'positional' },
+      ],
+      position: { x: 0, y: 0 },
+      children: [],
+    };
+
+    const fallbackStep = asStepFromPool(storedStep, []);
+    expect(fallbackStep.name).toBe('strafe_follow_line_single.distance_cm');
+    expect(initialArgsFromPool(storedStep, [])).toEqual({
+      arg0: 'Defs.front.left',
+      speed: 1,
+      side: 'LineSide.LEFT',
+      kp: 0.5,
+      kd: 0.1,
+      distance_cm: 15,
+    });
+  });
 });
