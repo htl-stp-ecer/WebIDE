@@ -135,7 +135,7 @@
     }
     <f-flow class="flow-root" fDraggable fEmitOnNodeIntersect (fNodeIntersectedWithConnections)="actions.onNodeIntersected($event)" (fDropToGroup)="actions.onDropToGroup($event)" (fLoaded)="actions.onLoaded()" (fCreateNode)="actions.onCreateNode($event)" (fCreateConnection)="actions.addConnection($event)" (fDragEnded)="actions.onSave()">
       <f-background class="flow-bg"><f-circle-pattern color="#4a5565"></f-circle-pattern></f-background>
-      <f-canvas fZoom class="flow-canvas" [debounceTime]="0" (fCanvasChange)="onCanvasChange()">
+      <f-canvas fZoom class="flow-canvas" (fCanvasChange)="onCanvasChange()">
         <f-connection-for-create fBehavior="fixed" fType="segment" [fStartColor]="isDarkMode() ? '#EEE5E9' : '#131217'" [fEndColor]="isDarkMode() ? '#EEE5E9' : '#131217'"></f-connection-for-create>
         <f-snap-connection [fSnapThreshold]="50" fBehavior="fixed" fType="segment" [fStartColor]="isDarkMode() ? '#EEE5E9' : '#131217'" [fEndColor]="isDarkMode() ? '#EEE5E9' : '#131217'"></f-snap-connection>
 
