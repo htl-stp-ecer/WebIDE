@@ -9,10 +9,13 @@
   padding: 1rem;
   text-align: left;
   background: #eee5e9;
-  border: 1px solid #383838;
+  border: 1px solid transparent;
   border-radius: 0.75rem;
   color: #131217;
-  box-shadow: 0 1px 2px rgba(0,0,0,.08);
+  background-clip: padding-box;
+  box-shadow:
+    inset 0 0 0 1px #383838,
+    0 1px 2px rgba(0,0,0,.08);
   box-sizing: border-box;
   * { box-sizing: border-box; }
 }
@@ -23,8 +26,10 @@
 }
 
 .node.node-completed {
-  border-color: #22c55e;
-  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.35);
+  box-shadow:
+    inset 0 0 0 1px #22c55e,
+    0 1px 2px rgba(0,0,0,.08),
+    0 0 0 2px rgba(34, 197, 94, 0.35);
 }
 
 .node.node-junction {
@@ -185,14 +190,18 @@
 :host-context(.dark) .node,
 :host-context(.p-dark) .node {
   background: #131217;
-  border-color: #383838;
+  box-shadow:
+    inset 0 0 0 1px #383838,
+    0 1px 2px rgba(0,0,0,.18);
   color: #EEE5E9;
 }
 
 :host-context(.dark) .node.node-completed,
 :host-context(.p-dark) .node.node-completed {
-  border-color: #4ade80;
-  box-shadow: 0 0 0 2px rgba(74, 222, 128, 0.45);
+  box-shadow:
+    inset 0 0 0 1px #4ade80,
+    0 1px 2px rgba(0,0,0,.22),
+    0 0 0 2px rgba(74, 222, 128, 0.45);
 }
 
 :host-context(.dark) .port,
