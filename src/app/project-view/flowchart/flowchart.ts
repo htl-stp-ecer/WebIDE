@@ -97,6 +97,7 @@ const OFFSCREEN_INDICATOR_HORIZONTAL_THRESHOLD_PX = 340;
 const OFFSCREEN_INDICATOR_VERTICAL_THRESHOLD_PX = 220;
 const OFFSCREEN_INDICATOR_EDGE_PADDING_PX = 40;
 const OFFSCREEN_INDICATOR_BOUNDS_PADDING_PX = 64;
+const OFFSCREEN_INDICATOR_CANVAS_DEBOUNCE_MS = 80;
 
 @Component({
   selector: 'app-flowchart',
@@ -183,6 +184,7 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
     | { startX: number; startY: number; surfaceRect: DOMRect; moved: boolean }
     | null = null;
   private offscreenIndicatorFrame: number | null = null;
+  private offscreenIndicatorTimeout?: ReturnType<typeof setTimeout>;
   private liveCanvasTrackingFrame: number | null = null;
   private liveCanvasTrackingActive = false;
   private recenterTrackingTimeout?: ReturnType<typeof setTimeout>;
@@ -297,6 +299,10 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
     if (this.offscreenIndicatorFrame !== null && typeof cancelAnimationFrame === 'function') {
       cancelAnimationFrame(this.offscreenIndicatorFrame);
       this.offscreenIndicatorFrame = null;
+    }
+    if (this.offscreenIndicatorTimeout) {
+      clearTimeout(this.offscreenIndicatorTimeout);
+      this.offscreenIndicatorTimeout = undefined;
     }
     if (this.recenterTrackingTimeout) {
       clearTimeout(this.recenterTrackingTimeout);
@@ -428,7 +434,7 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
   }
 
   onCanvasChange(): void {
-    this.scheduleOffscreenIndicatorUpdate();
+    this.scheduleOffscreenIndicatorUpdateDebounced();
   }
 
   recenterFlowchart(): void {
@@ -499,6 +505,10 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
   }
 
   private scheduleOffscreenIndicatorUpdate(): void {
+    if (this.offscreenIndicatorTimeout) {
+      clearTimeout(this.offscreenIndicatorTimeout);
+      this.offscreenIndicatorTimeout = undefined;
+    }
     if (this.offscreenIndicatorFrame !== null) {
       return;
     }
@@ -510,6 +520,20 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
       this.offscreenIndicatorFrame = null;
       this.updateOffscreenIndicator();
     });
+  }
+
+  private scheduleOffscreenIndicatorUpdateDebounced(): void {
+    if (this.liveCanvasTrackingActive) {
+      this.scheduleOffscreenIndicatorUpdate();
+      return;
+    }
+    if (this.offscreenIndicatorTimeout) {
+      clearTimeout(this.offscreenIndicatorTimeout);
+    }
+    this.offscreenIndicatorTimeout = setTimeout(() => {
+      this.offscreenIndicatorTimeout = undefined;
+      this.scheduleOffscreenIndicatorUpdate();
+    }, OFFSCREEN_INDICATOR_CANVAS_DEBOUNCE_MS);
   }
 
   private startLiveCanvasTracking(): void {
