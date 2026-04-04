@@ -1,4 +1,5 @@
 import { Injectable, signal, computed } from '@angular/core';
+import { TABLE_WIDTH_CM, TABLE_HEIGHT_CM, MAP_WIDTH, MAP_HEIGHT } from '../models/editor-state';
 
 export interface MapConfig {
   widthCm: number;
@@ -6,9 +7,9 @@ export interface MapConfig {
   pixelsPerCm: number;
 }
 
-/** Constants: 79px width maps to 200 cm, 40px height maps to 100 cm */
-export const CM_PER_PIXEL_X = 200 / 79;
-export const CM_PER_PIXEL_Y = 100 / 40;
+/** Constants: 79px width maps to TABLE_WIDTH_CM, 40px height maps to TABLE_HEIGHT_CM */
+export const CM_PER_PIXEL_X = TABLE_WIDTH_CM / MAP_WIDTH;
+export const CM_PER_PIXEL_Y = TABLE_HEIGHT_CM / MAP_HEIGHT;
 const CM_PER_PIXEL_AVG = (CM_PER_PIXEL_X + CM_PER_PIXEL_Y) / 2;
 
 /** Line segment in table coordinates (cm) */
@@ -80,10 +81,10 @@ export class TableMapService {
   private readonly _vectorLineSegmentsCm = signal<LineSegmentCm[] | null>(null);
   private readonly _vectorWallSegmentsCm = signal<WallSegmentCm[] | null>(null);
   private readonly _isLoading = signal<boolean>(false);
-  // Default dimensions: 79x40 pixels mapped to 200x100 cm
+  // Default dimensions: 79x40 pixels mapped to TABLE_WIDTH_CM x TABLE_HEIGHT_CM
   private readonly _config = signal<MapConfig>({
-    widthCm: 79 * CM_PER_PIXEL_X,  // 200 cm
-    heightCm: 40 * CM_PER_PIXEL_Y, // 100 cm
+    widthCm: MAP_WIDTH * CM_PER_PIXEL_X,   // ≈ 236.42 cm (93.08")
+    heightCm: MAP_HEIGHT * CM_PER_PIXEL_Y, // ≈ 105.92 cm (41.70")
     pixelsPerCm: 1 / CM_PER_PIXEL_AVG,
   });
 
@@ -192,8 +193,8 @@ export class TableMapService {
     this._mapImage.set(null);
     this._imageData.set(null);
     this._config.set({
-      widthCm: 79 * CM_PER_PIXEL_X,
-      heightCm: 40 * CM_PER_PIXEL_Y,
+      widthCm: MAP_WIDTH * CM_PER_PIXEL_X,
+      heightCm: MAP_HEIGHT * CM_PER_PIXEL_Y,
       pixelsPerCm: 1 / CM_PER_PIXEL_AVG,
     });
   }

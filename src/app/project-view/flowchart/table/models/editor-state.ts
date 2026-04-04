@@ -26,8 +26,9 @@ export interface GuideLine {
   kind: 'axis' | 'alignment' | 'endpoint' | 'angle';
 }
 
-export const TABLE_WIDTH_CM = 200;
-export const TABLE_HEIGHT_CM = 100;
+/** Botball game table: 93.08" × 41.70" */
+export const TABLE_WIDTH_CM = 93.08 * 2.54;   // ≈ 236.42 cm
+export const TABLE_HEIGHT_CM = 41.70 * 2.54;  // ≈ 105.92 cm
 
 /** Raster export size used by backend persistence. */
 export const MAP_WIDTH = 79;
