@@ -47,7 +47,55 @@ $collapsed-width: 40px;
 
 .panel-center {
   flex: 1 1 auto;
-  padding: 1rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.center-toggle-bar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 8px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #f9fafb;
+}
+
+.center-toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  font-size: 12px;
+  cursor: pointer;
+  color: #6b7280;
+  transition: background 0.1s, color 0.1s;
+
+  i { font-size: 12px; }
+
+  &:hover {
+    background: #f3f4f6;
+    color: #374151;
+  }
+
+  &.active {
+    background: #fff;
+    border-color: #d1d5db;
+    color: #1d4ed8;
+    font-weight: 500;
+  }
+}
+
+.center-content {
+  flex: 1 1 auto;
+  overflow: hidden;
+  min-height: 0;
+  padding: 0;
 }
 
 .panel-right {
@@ -80,11 +128,24 @@ $collapsed-width: 40px;
   user-select: none;
 }
 
-:host-context(.dark) .panel-left,
-:host-context(.dark) .panel-right,
-:host-context(.p-dark) .panel-left,
-:host-context(.p-dark) .panel-right {
-  border-color: #4b5563;
+:host-context(.dark),
+:host-context(.p-dark) {
+  .panel-left,
+  .panel-right {
+    border-color: #4b5563;
+  }
+
+  .center-toggle-bar {
+    background: #1f2937;
+    border-color: #374151;
+  }
+
+  .center-toggle-btn {
+    color: #9ca3af;
+
+    &:hover { background: #374151; color: #e5e7eb; }
+    &.active { background: #374151; border-color: #4b5563; color: #93c5fd; }
+  }
 }
 
 // Panel toggle buttons

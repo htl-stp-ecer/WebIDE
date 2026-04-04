@@ -1,0 +1,224 @@
+:host {
+  display: block;
+  height: 100%;
+  overflow: hidden;
+}
+
+.code-view-root {
+  display: flex;
+  height: 100%;
+  overflow: hidden;
+  gap: 0;
+}
+
+// ─── File sidebar ────────────────────────────────────────────────────────────
+
+.file-sidebar {
+  flex: 0 0 200px;
+  min-width: 0;
+  overflow-y: auto;
+  border-right: 1px solid #d1d5db;
+  display: flex;
+  flex-direction: column;
+  background: #f9fafb;
+
+  scrollbar-width: thin;
+  &::-webkit-scrollbar { width: 4px; }
+  &::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 2px; }
+}
+
+.sidebar-header {
+  padding: 8px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #6b7280;
+  border-bottom: 1px solid #e5e7eb;
+  flex-shrink: 0;
+}
+
+.file-dir {
+  padding: 6px 12px 2px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.file-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 5px 12px 5px 16px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  font-size: 13px;
+  color: #374151;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: background 0.1s;
+
+  &:hover {
+    background: #f3f4f6;
+  }
+
+  &.active {
+    background: #eff6ff;
+    color: #1d4ed8;
+    font-weight: 500;
+
+    .file-icon { color: #3b82f6; }
+  }
+}
+
+.file-icon {
+  font-size: 12px;
+  flex-shrink: 0;
+  color: #9ca3af;
+}
+
+.file-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar-error,
+.sidebar-empty {
+  padding: 12px;
+  font-size: 12px;
+  color: #9ca3af;
+  text-align: center;
+}
+
+.sidebar-error { color: #ef4444; }
+
+// ─── Editor area ─────────────────────────────────────────────────────────────
+
+.editor-area {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.editor-toolbar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 12px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #f9fafb;
+  min-height: 36px;
+}
+
+.file-path {
+  font-size: 12px;
+  color: #6b7280;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.dirty-dot {
+  margin-left: 4px;
+  color: #f59e0b;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.no-file {
+  color: #d1d5db;
+}
+
+.save-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 5px;
+  background: #fff;
+  font-size: 12px;
+  cursor: pointer;
+  color: #374151;
+  flex-shrink: 0;
+  margin-left: 8px;
+  transition: background 0.1s, border-color 0.1s;
+
+  &:hover:not(:disabled) {
+    background: #f3f4f6;
+    border-color: #9ca3af;
+  }
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+}
+
+.editor-wrapper {
+  flex: 1 1 auto;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.editor-placeholder {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #9ca3af;
+  font-size: 13px;
+
+  &.error { color: #ef4444; }
+
+  i { margin-right: 6px; }
+}
+
+// ─── Dark mode ───────────────────────────────────────────────────────────────
+
+:host-context(.dark),
+:host-context(.p-dark) {
+  .file-sidebar {
+    background: #1f2937;
+    border-color: #374151;
+  }
+
+  .sidebar-header {
+    border-color: #374151;
+    color: #6b7280;
+  }
+
+  .file-item {
+    color: #d1d5db;
+
+    &:hover { background: #374151; }
+    &.active { background: #1e3a5f; color: #93c5fd; .file-icon { color: #60a5fa; } }
+  }
+
+  .editor-toolbar {
+    background: #1f2937;
+    border-color: #374151;
+  }
+
+  .file-path { color: #9ca3af; }
+
+  .save-btn {
+    background: #374151;
+    border-color: #4b5563;
+    color: #d1d5db;
+
+    &:hover:not(:disabled) { background: #4b5563; }
+  }
+}

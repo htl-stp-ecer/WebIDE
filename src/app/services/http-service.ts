@@ -470,6 +470,25 @@ export class HttpService {
     return this.http.put(this.localApi(`/missions/${projectUUID}/update`), mission);
   }
 
+  // File editor API
+  listProjectFiles(projectUuid: string): Observable<{ path: string; name: string }[]> {
+    return this.http.get<{ path: string; name: string }[]>(this.localApi(`/files/${projectUuid}`));
+  }
+
+  getProjectFileContent(projectUuid: string, path: string): Observable<{ path: string; content: string }> {
+    return this.http.get<{ path: string; content: string }>(
+      this.localApi(`/files/${projectUuid}/content`),
+      { params: { path } }
+    );
+  }
+
+  updateProjectFileContent(projectUuid: string, path: string, content: string): Observable<{ success: boolean; path: string }> {
+    return this.http.put<{ success: boolean; path: string }>(
+      this.localApi(`/files/${projectUuid}/content`),
+      { path, content }
+    );
+  }
+
   // Table Map API
   saveTableMap(mapData: TableMapFileV1) {
     return this.http.put<{ success: boolean }>(this.deviceApi('/api/v1/device/table-map'), mapData);

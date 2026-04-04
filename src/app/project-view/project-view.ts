@@ -2,6 +2,7 @@ import {Component, ElementRef, OnDestroy, signal, ViewChild} from '@angular/core
 import {MissionPanel} from './mission-panel/mission-panel';
 import {Flowchart} from './flowchart/flowchart';
 import {StepPanel} from './step-panel/step-panel';
+import {CodeView} from './code-view/code-view';
 import { ActivatedRoute } from '@angular/router';
 import { HttpService } from '../services/http-service';
 
@@ -22,12 +23,15 @@ interface ResizeState {
   containerWidth: number;
 }
 
+export type CenterView = 'flowchart' | 'code';
+
 @Component({
   selector: 'app-project-view',
   imports: [
     MissionPanel,
     Flowchart,
-    StepPanel
+    StepPanel,
+    CodeView,
   ],
   templateUrl: './project-view.html',
   styleUrl: './project-view.scss'
@@ -46,6 +50,12 @@ export class ProjectView implements OnDestroy {
 
   leftCollapsed = signal(this.loadCollapsedState('left'));
   rightCollapsed = signal(this.loadCollapsedState('right'));
+  centerView = signal<CenterView>('flowchart');
+  projectUUID = '';
+
+  toggleCenterView(): void {
+    this.centerView.set(this.centerView() === 'flowchart' ? 'code' : 'flowchart');
+  }
 
   constructor(
     private route: ActivatedRoute,
@@ -56,6 +66,7 @@ export class ProjectView implements OnDestroy {
       this.http.clearDeviceBase();
       return;
     }
+    this.projectUUID = projectUUID;
 
     this.http.getProject(projectUUID).subscribe({
       next: project => {

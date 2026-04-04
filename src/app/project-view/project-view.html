@@ -19,7 +19,35 @@
 
   <!-- Center Content -->
   <div class="panel panel-center">
-    <app-flowchart></app-flowchart>
+    <!-- View toggle bar -->
+    <div class="center-toggle-bar">
+      <button
+        type="button"
+        class="center-toggle-btn"
+        [class.active]="centerView() === 'flowchart'"
+        (click)="centerView.set('flowchart')"
+        aria-label="Flowchart view">
+        <i class="pi pi-share-alt"></i>
+        <span>Flow</span>
+      </button>
+      <button
+        type="button"
+        class="center-toggle-btn"
+        [class.active]="centerView() === 'code'"
+        (click)="centerView.set('code')"
+        aria-label="Code editor">
+        <i class="pi pi-code"></i>
+        <span>Code</span>
+      </button>
+    </div>
+
+    <div class="center-content">
+      @if (centerView() === 'flowchart') {
+        <app-flowchart></app-flowchart>
+      } @else {
+        <app-code-view [projectUuid]="projectUUID"></app-code-view>
+      }
+    </div>
   </div>
 
   <!-- Right Panel -->

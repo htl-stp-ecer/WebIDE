@@ -1,0 +1,75 @@
+<div class="code-view-root">
+  <!-- File sidebar -->
+  <aside class="file-sidebar">
+    <div class="sidebar-header">Files</div>
+    @if (loadError() && files().length === 0) {
+      <div class="sidebar-error">{{ loadError() }}</div>
+    }
+    @for (group of fileTree; track group.dir) {
+      @if (group.dir) {
+        <div class="file-dir">{{ group.dir }}</div>
+      }
+      @for (file of group.files; track file.path) {
+        <button
+          type="button"
+          class="file-item"
+          [class.active]="selectedFile()?.path === file.path"
+          (click)="openFile(file)"
+          [title]="file.path">
+          <i class="pi pi-file-edit file-icon"></i>
+          <span class="file-name">{{ file.name }}</span>
+        </button>
+      }
+    }
+    @if (files().length === 0 && !loadError()) {
+      <div class="sidebar-empty">No files found</div>
+    }
+  </aside>
+
+  <!-- Editor area -->
+  <div class="editor-area">
+    <!-- Editor toolbar -->
+    <div class="editor-toolbar">
+      <span class="file-path">
+        @if (selectedFile()) {
+          {{ selectedFile()!.path }}
+          @if (isDirty()) { <span class="dirty-dot" title="Unsaved changes">●</span> }
+        } @else {
+          <span class="no-file">No file open</span>
+        }
+      </span>
+      <button
+        type="button"
+        class="save-btn"
+        [disabled]="!isDirty() || isSaving()"
+        (click)="saveFile()"
+        title="Save (Ctrl+S)">
+        @if (isSaving()) {
+          <i class="pi pi-spin pi-spinner"></i>
+        } @else {
+          <i class="pi pi-save"></i>
+        }
+        Save
+      </button>
+    </div>
+
+    <!-- Loading / error states -->
+    @if (isLoading()) {
+      <div class="editor-placeholder">
+        <i class="pi pi-spin pi-spinner"></i>
+      </div>
+    } @else if (loadError() && selectedFile()) {
+      <div class="editor-placeholder error">{{ loadError() }}</div>
+    } @else if (!selectedFile()) {
+      <div class="editor-placeholder">Select a file to edit</div>
+    } @else {
+      <div class="editor-wrapper">
+        <app-code-editor
+          [content]="fileContent()"
+          [dark]="dark"
+          (contentChange)="onContentChange($event)">
+        </app-code-editor>
+      </div>
+    }
+  </div>
+</div>
