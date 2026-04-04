@@ -124,8 +124,8 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
 
       request$.subscribe({
         next: (response) => {
-          if (response.image) {
-            this.mapService.loadMapFromBase64(response.image);
+          if (response.map) {
+            this.mapService.loadFromFtmap(response.map);
           }
         },
         error: (err) => {

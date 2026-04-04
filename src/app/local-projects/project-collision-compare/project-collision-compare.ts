@@ -19,7 +19,7 @@ import { MultiSelect } from 'primeng/multiselect';
 import { Select } from 'primeng/select';
 import { SliderModule } from 'primeng/slider';
 
-import { HttpService } from '../../services/http-service';
+import { HttpService, type TableMapFileV1 } from '../../services/http-service';
 import { TableMapService } from '../../project-view/flowchart/table/services';
 import { Pose2D } from '../../project-view/flowchart/table/models';
 import { TypeDefinition } from '../../entities/TypeDefinition';
@@ -246,13 +246,13 @@ export class ProjectCollisionCompareComponent implements OnChanges, AfterViewIni
       info: this.http.getLocalDeviceInfo(project.uuid).pipe(catchError(() => of(null))),
       simulation: this.http.getProjectSimulationData(project.uuid),
       typeDefinitions: this.http.getTypeDefinitions(project.uuid).pipe(catchError(() => of([] as TypeDefinition[]))),
-      mapResponse: this.http.getLocalTableMap(project.uuid).pipe(catchError(() => of({ image: null }))),
+      mapResponse: this.http.getLocalTableMap(project.uuid).pipe(catchError(() => of({ map: null }))),
     });
 
     const subscription = request$.subscribe({
       next: async ({ info, simulation, typeDefinitions, mapResponse }) => {
         try {
-          const map = await this.loadProjectMap(mapResponse.image);
+          const map = this.loadProjectMap(mapResponse.map);
           const data = buildProjectComparisonData(project, simulation, info, map, typeDefinitions);
           this.cache.set(project.uuid, data);
           this.errorMessages.delete(project.uuid);
@@ -275,10 +275,10 @@ export class ProjectCollisionCompareComponent implements OnChanges, AfterViewIni
     this.subscriptions.add(subscription);
   }
 
-  private async loadProjectMap(base64: string | null): Promise<ProjectMapGeometry> {
+  private loadProjectMap(mapData: TableMapFileV1 | null): ProjectMapGeometry {
     const service = new TableMapService();
-    if (base64) {
-      await service.loadMapFromBase64(base64);
+    if (mapData) {
+      service.loadFromFtmap(mapData);
     }
 
     const config = service.config();

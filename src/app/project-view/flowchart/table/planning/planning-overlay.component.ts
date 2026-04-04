@@ -199,8 +199,8 @@ export class PlanningOverlayComponent implements OnInit, AfterViewInit, OnDestro
 
       request$.subscribe({
         next: (response) => {
-          if (response.image) {
-            this.mapService.loadMapFromBase64(response.image);
+          if (response.map) {
+            this.mapService.loadFromFtmap(response.map);
           }
         },
         error: (err) => {

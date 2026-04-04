@@ -1293,6 +1293,7 @@ export class TableEditorView implements AfterViewInit, OnDestroy {
   }
 
   async loadMap(): Promise<void> {
+    const mapPayload = this.buildMapFilePayload();
     const base64 = this.exportRasterBase64();
 
     try {
@@ -1313,9 +1314,9 @@ export class TableEditorView implements AfterViewInit, OnDestroy {
     try {
       const projectUuid = this.projectUuid();
       if (projectUuid) {
-        await this.http.saveLocalTableMap(projectUuid, base64).toPromise();
+        await this.http.saveLocalTableMap(projectUuid, mapPayload).toPromise();
       } else {
-        await this.http.saveTableMap(base64).toPromise();
+        await this.http.saveTableMap(mapPayload).toPromise();
       }
 
       this.message.set(
@@ -1601,8 +1602,8 @@ export class TableEditorView implements AfterViewInit, OnDestroy {
 
       request$.subscribe({
         next: response => {
-          if (!response.image) return;
-          void this.loadSavedImage(response.image);
+          if (!response.map) return;
+          this.loadSavedVectorMap(response.map);
         },
         error: () => {
           // Silently ignore when there is no stored map.
@@ -1613,9 +1614,18 @@ export class TableEditorView implements AfterViewInit, OnDestroy {
     }
   }
 
-  private async loadSavedImage(base64: string): Promise<void> {
+  private loadSavedVectorMap(mapData: TableMapFileV1): void {
     try {
-      await this.importMapFromBase64(base64);
+      const content = JSON.stringify(mapData);
+      const lines = this.parseMapFile(content);
+      this.lines.set(lines);
+      this.selectedLineId.set(null);
+      this.clearDraft();
+
+      const lineSegments = this.toServiceLineSegments(lines.filter(l => l.kind === 'line'));
+      const wallSegments = this.toServiceWallSegments(lines.filter(l => l.kind === 'wall'));
+      this.mapService.setVectorMap(lineSegments, wallSegments);
+
       this.message.set(
         this.translate.instant('FLOWCHART.TABLE_MESSAGE_LOADED', {
           width: MAP_WIDTH,

@@ -1,5 +1,6 @@
 import { Injectable, signal, computed } from '@angular/core';
 import { TABLE_WIDTH_CM, TABLE_HEIGHT_CM, MAP_WIDTH, MAP_HEIGHT } from '../models/editor-state';
+import type { TableMapFileV1 } from '../../../../services/http-service';
 
 export interface MapConfig {
   widthCm: number;
@@ -197,6 +198,35 @@ export class TableMapService {
       heightCm: MAP_HEIGHT * CM_PER_PIXEL_Y,
       pixelsPerCm: 1 / CM_PER_PIXEL_AVG,
     });
+  }
+
+  /**
+   * Load map from a vector ftmap payload (as stored in project config).
+   * Converts ftmap lines into LineSegmentCm / WallSegmentCm and sets the vector map.
+   */
+  loadFromFtmap(mapData: TableMapFileV1): void {
+    const lineSegments: LineSegmentCm[] = [];
+    const wallSegments: WallSegmentCm[] = [];
+
+    for (const line of mapData.lines) {
+      const seg = {
+        startX: line.startX,
+        startY: TABLE_HEIGHT_CM - line.startY,
+        endX: line.endX,
+        endY: TABLE_HEIGHT_CM - line.endY,
+        thickness: line.widthCm,
+      };
+
+      if (line.kind === 'wall') {
+        wallSegments.push(seg);
+      } else {
+        const dx = line.endX - line.startX;
+        const dy = line.endY - line.startY;
+        lineSegments.push({ ...seg, isDiagonal: dx !== 0 && dy !== 0 });
+      }
+    }
+
+    this.setVectorMap(lineSegments, wallSegments);
   }
 
   cacheVectorMapForBase64(base64: string, lineSegments: LineSegmentCm[], wallSegments: WallSegmentCm[] = []): void {

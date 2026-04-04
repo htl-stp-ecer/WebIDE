@@ -5,6 +5,20 @@ import {Mission} from '../entities/Mission';
 import { TypeDefinition } from '../entities/TypeDefinition';
 import { MissionSimulationData, ProjectSimulationData } from '../entities/Simulation';
 
+export interface TableMapFileV1 {
+  format: 'flowchart-table-map';
+  version: 1;
+  table: { widthCm: number; heightCm: number };
+  lines: Array<{
+    kind: 'line' | 'wall';
+    startX: number;
+    startY: number;
+    endX: number;
+    endY: number;
+    widthCm: number;
+  }>;
+}
+
 interface RunMissionOptions {
   simulate?: boolean;
   debug?: boolean;
@@ -229,13 +243,11 @@ export class HttpService {
   }
 
   getLocalTableMap(projectUuid: string) {
-    return this.http.get<{ image: string | null }>(this.localApi(`/device/${projectUuid}/table-map`));
+    return this.http.get<{ map: TableMapFileV1 | null }>(this.localApi(`/device/${projectUuid}/table-map`));
   }
 
-  saveLocalTableMap(projectUuid: string, base64Image: string) {
-    return this.http.put<{ success: boolean }>(this.localApi(`/device/${projectUuid}/table-map`), {
-      image: base64Image,
-    });
+  saveLocalTableMap(projectUuid: string, mapData: TableMapFileV1) {
+    return this.http.put<{ success: boolean }>(this.localApi(`/device/${projectUuid}/table-map`), mapData);
   }
 
   getAllProjects() {
@@ -459,13 +471,11 @@ export class HttpService {
   }
 
   // Table Map API
-  saveTableMap(base64Image: string) {
-    return this.http.put<{ success: boolean }>(this.deviceApi('/api/v1/device/table-map'), {
-      image: base64Image,
-    });
+  saveTableMap(mapData: TableMapFileV1) {
+    return this.http.put<{ success: boolean }>(this.deviceApi('/api/v1/device/table-map'), mapData);
   }
 
   getTableMap() {
-    return this.http.get<{ image: string | null }>(this.deviceApi('/api/v1/device/table-map'));
+    return this.http.get<{ map: TableMapFileV1 | null }>(this.deviceApi('/api/v1/device/table-map'));
   }
 }
