@@ -143,6 +143,10 @@ export class HttpService {
   }
 
   private defaultFrontendPort() {
+    // In development (npm run dev on port 4300), backend is on 4200
+    if (window.location.port === '4300') {
+      return '4200';
+    }
     return window.location.port || '';
   }
 
