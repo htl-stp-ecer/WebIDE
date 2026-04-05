@@ -1,53 +1,53 @@
-<div class="navbar border-b border-gray-300 dark:border-gray-600">
-  <a routerLink="/" routerLinkActive>
-    <div class="navbar-title">R A C C O O N</div>
+<header class="navbar-root">
+
+  <a routerLink="/" class="navbar-brand" routerLinkActive>
+    <img class="navbar-logo" src="assets/raccoon-logo.svg" alt="Raccoon">
+    <span class="navbar-wordmark">RACCOON</span>
   </a>
 
   @if (deviceBase) {
-    <div class="text-base dark:text-gray-200 text-gray-800">
-      {{ deviceInfo?.hostname || ('COMMON.UNNAMED_DEVICE' | translate) }}
-      <span class="text-sm text-gray-400">
-        {{ deviceBase }}
-      </span>
-      <span class="ml-5">
-        @if (deviceInfoLoading) {
-          {{ 'COMMON.LOADING' | translate }}
-          <span class="inline-block w-3 h-3 bg-yellow-400 rounded-full ml-2 align-middle mb-1"></span>
-        } @else if (deviceInfo?.battery_voltage_v != null || deviceInfo?.battery_percent != null) {
-          {{ 'COMMON.ONLINE' | translate }}
-          <span class="inline-block w-3 h-3 bg-green-500 rounded-full ml-1 align-middle mb-1"></span>
-          @if (deviceInfo?.battery_voltage_v != null) {
-            <span class="text-sm text-gray-400 ml-2">
-              {{ deviceInfo!.battery_voltage_v | number:'1.2-2' }} V
-            </span>
-          } @else {
-            <span class="text-sm text-gray-400 ml-2">
-              {{ deviceInfo!.battery_percent | number:'1.0-1' }} %
-            </span>
-          }
-        } @else {
-          {{ 'COMMON.OFFLINE' | translate }}
-          <span class="inline-block w-3 h-3 bg-red-500 rounded-full ml-2 align-middle mb-1"></span>
-        }
-      </span>
+    <div class="navbar-device">
+      <span class="device-name">{{ deviceInfo?.hostname || ('COMMON.UNNAMED_DEVICE' | translate) }}</span>
+      <span class="device-sep">/</span>
+      <span class="device-ip">{{ deviceBase }}</span>
 
+      @if (deviceInfoLoading) {
+        <span class="status-pill loading">
+          <span class="status-dot"></span>
+          {{ 'COMMON.LOADING' | translate }}
+        </span>
+      } @else if (deviceInfo?.battery_voltage_v != null || deviceInfo?.battery_percent != null) {
+        <span class="status-pill online">
+          <span class="status-dot"></span>
+          {{ 'COMMON.ONLINE' | translate }}
+        </span>
+        <span class="device-battery">
+          @if (deviceInfo?.battery_voltage_v != null) {
+            {{ deviceInfo!.battery_voltage_v | number:'1.1-1' }}<span class="battery-unit">V</span>
+          } @else {
+            {{ deviceInfo!.battery_percent | number:'1.0-0' }}<span class="battery-unit">%</span>
+          }
+        </span>
+      } @else {
+        <span class="status-pill offline">
+          <span class="status-dot"></span>
+          {{ 'COMMON.OFFLINE' | translate }}
+        </span>
+      }
     </div>
   }
 
-  <div class="navbar-actions">
-    <p-select
-      [options]="languages"
-      [(ngModel)]="selectedLanguage"
-      optionLabel="label"
-      optionValue="value"
-      (onChange)="changeLanguage($event.value)"
-      class="language-selector"
-      [attr.aria-label]="'NAVBAR.LANGUAGE_SELECTOR' | translate">
-    </p-select>
-
-    <p-button
-      (onClick)="toggleDarkMode()"
-      [icon]="iconClass()">
-    </p-button>
+  <div class="navbar-end">
+    <div class="lang-toggle" [attr.aria-label]="'NAVBAR.LANGUAGE_SELECTOR' | translate">
+      @for (lang of languages; track lang.value) {
+        <button
+          class="lang-btn"
+          [class.active]="selectedLanguage === lang.value"
+          (click)="changeLanguage(lang.value)">
+          {{ lang.label }}
+        </button>
+      }
+    </div>
   </div>
-</div>
+
+</header>

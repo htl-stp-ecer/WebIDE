@@ -1,72 +1,102 @@
-<div class="project-layout" #layoutRoot>
-  <!-- Left Panel -->
-  <div class="panel panel-left" [class.collapsed]="leftCollapsed()" #leftPanel>
-    @if (leftCollapsed()) {
-      <button class="panel-toggle-btn" (click)="toggleLeftPanel()" aria-label="Expand mission panel">
-        <i class="pi pi-chevron-right"></i>
-      </button>
-    } @else {
-      <button class="panel-toggle-btn collapse-btn" (click)="toggleLeftPanel()" aria-label="Collapse mission panel">
-        <i class="pi pi-chevron-left"></i>
-      </button>
-      <app-mission-panel></app-mission-panel>
-    }
-  </div>
-
-  @if (!leftCollapsed()) {
-    <div class="panel-resizer" (pointerdown)="startResize($event, 'left')" aria-label="Resize mission panel"></div>
-  }
-
-  <!-- Center Content -->
-  <div class="panel panel-center">
-    <!-- View toggle bar -->
-    <div class="center-toggle-bar">
-      <button
-        type="button"
-        class="center-toggle-btn"
-        [class.active]="centerView() === 'flowchart'"
-        (click)="centerView.set('flowchart')"
-        aria-label="Flowchart view">
-        <i class="pi pi-share-alt"></i>
-        <span>Flow</span>
-      </button>
-      <button
-        type="button"
-        class="center-toggle-btn"
-        [class.active]="centerView() === 'code'"
-        (click)="centerView.set('code')"
-        aria-label="Code editor">
-        <i class="pi pi-code"></i>
-        <span>Code</span>
-      </button>
-    </div>
-
-    <div class="center-content">
-      @if (centerView() === 'flowchart') {
-        <app-flowchart></app-flowchart>
+<div class="project-shell">
+  <div class="project-layout" #layoutRoot>
+    <!-- Left Panel -->
+    <aside class="panel panel-left" [class.collapsed]="leftCollapsed()" #leftPanel>
+      @if (leftCollapsed()) {
+        <button class="tool-stripe-btn" (click)="toggleLeftPanel()" title="Missions">
+          <i class="pi pi-list"></i>
+          <span class="tool-stripe-label">Missions</span>
+        </button>
       } @else {
-        <app-code-view [projectUuid]="projectUUID"></app-code-view>
+        <div class="tool-window-header">
+          <span class="tool-window-title">
+            <i class="pi pi-list"></i>
+            Missions
+          </span>
+          <button class="tool-window-hide" (click)="toggleLeftPanel()" title="Hide">
+            <i class="pi pi-minus"></i>
+          </button>
+        </div>
+        <app-mission-panel></app-mission-panel>
       }
-    </div>
-  </div>
+    </aside>
 
-  <!-- Right Panel -->
-  @if (!rightCollapsed()) {
-    <div class="panel-resizer" (pointerdown)="startResize($event, 'right')" aria-label="Resize step panel"></div>
-  }
-
-  <div class="panel panel-right" [class.collapsed]="rightCollapsed()" #rightPanel>
-    @if (rightCollapsed()) {
-      <button class="panel-toggle-btn" (click)="toggleRightPanel()" aria-label="Expand step panel">
-        <i class="pi pi-chevron-left"></i>
-      </button>
-    } @else {
-      <button class="panel-toggle-btn collapse-btn" (click)="toggleRightPanel()" aria-label="Collapse step panel">
-        <i class="pi pi-chevron-right"></i>
-      </button>
-      <div class="panel-scroll no-scrollbar mt-7">
-        <app-step-panel></app-step-panel>
-      </div>
+    @if (!leftCollapsed()) {
+      <div class="panel-resizer" (pointerdown)="startResize($event, 'left')" aria-label="Resize mission panel"></div>
     }
+
+    <!-- Center Content -->
+    <div class="panel panel-center">
+      <div class="center-tab-bar">
+        <button
+          type="button"
+          class="center-tab"
+          [class.active]="centerView() === 'flowchart'"
+          (click)="centerView.set('flowchart')"
+          aria-label="Flowchart view">
+          <i class="pi pi-share-alt"></i>
+          <span>Flow</span>
+        </button>
+        <button
+          type="button"
+          class="center-tab"
+          [class.active]="centerView() === 'code'"
+          (click)="centerView.set('code')"
+          aria-label="Code editor">
+          <i class="pi pi-code"></i>
+          <span>Code</span>
+        </button>
+      </div>
+
+      <div class="center-content">
+        @if (centerView() === 'flowchart') {
+          <app-flowchart></app-flowchart>
+        } @else {
+          <app-code-view [projectUuid]="projectUUID"></app-code-view>
+        }
+      </div>
+    </div>
+
+    @if (!rightCollapsed()) {
+      <div class="panel-resizer" (pointerdown)="startResize($event, 'right')" aria-label="Resize step panel"></div>
+    }
+
+    <!-- Right Panel -->
+    <aside class="panel panel-right" [class.collapsed]="rightCollapsed()" #rightPanel>
+      @if (rightCollapsed()) {
+        <button class="tool-stripe-btn" (click)="toggleRightPanel()" title="Steps">
+          <i class="pi pi-th-large"></i>
+          <span class="tool-stripe-label">Steps</span>
+        </button>
+      } @else {
+        <div class="tool-window-header">
+          <span class="tool-window-title">
+            <i class="pi pi-th-large"></i>
+            Steps
+          </span>
+          <button class="tool-window-hide" (click)="toggleRightPanel()" title="Hide">
+            <i class="pi pi-minus"></i>
+          </button>
+        </div>
+        <div class="panel-scroll no-scrollbar">
+          <app-step-panel></app-step-panel>
+        </div>
+      }
+    </aside>
   </div>
+
+  <!-- Status Bar -->
+  <footer class="status-bar">
+    <div class="status-left">
+      <span class="status-item">
+        <i class="pi pi-folder"></i>
+        Project
+      </span>
+    </div>
+    <div class="status-right">
+      <span class="status-item">
+        {{ centerView() === 'flowchart' ? 'Flowchart' : 'Code' }}
+      </span>
+    </div>
+  </footer>
 </div>

@@ -3,3 +3,244 @@
 @plugin "tailwindcss-primeui";
 
 @variant dark (.dark &);
+
+/* ═══════════════════════════════════════════════════════════
+   RaccoonOS Design Tokens — Warm Raccoon Palette
+   (matches documentation site & brand identity)
+═══════════════════════════════════════════════════════════ */
+@theme {
+  --color-rc-bg:       #2A2421;
+  --color-rc-shell:    #1E1A17;
+  --color-rc-surface:  #3A322C;
+  --color-rc-elevated: #4A4038;
+  --color-rc-border:   #4A4038;
+  --color-rc-text:     #F5EBDC;
+  --color-rc-muted:    #C8B9A5;
+  --color-rc-dim:      #8A7A6A;
+  --color-rc-accent:   #DAA03E;
+  --color-rc-accent-dim: rgba(218,160,62,0.12);
+  --color-rc-green:    #6A994E;
+  --color-rc-blue:     #78A0BE;
+  --color-rc-purple:   #945A78;
+  --color-rc-orange:   #BA643C;
+  --color-rc-yellow:   #DAA03E;
+  --color-rc-red:      #BA643C;
+  --font-sans: 'Space Grotesk', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'Cascadia Code', monospace;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   CSS Custom Properties (for use in non-Tailwind SCSS)
+═══════════════════════════════════════════════════════════ */
+:root {
+  /* Warm raccoon palette — from RaccoonOS documentation */
+  --rc-bg:            #2A2421;   /* content-bg */
+  --rc-shell:         #1E1A17;   /* sidebar-bg / navbar */
+  --rc-surface:       #3A322C;   /* bg-med — panels, cards */
+  --rc-elevated:      #4A4038;   /* bg-warm — hover, elevated */
+  --rc-border:        #4A4038;   /* structural borders */
+  --rc-border-subtle: rgba(218, 160, 62, 0.12);
+  --rc-text:          #F5EBDC;   /* cream — primary text */
+  --rc-muted:         #C8B9A5;   /* dim — secondary text */
+  --rc-dim:           #8A7A6A;   /* very dim — placeholders */
+  --rc-accent:        #DAA03E;   /* amber — primary accent */
+  --rc-accent-glow:   rgba(218, 160, 62, 0.18);
+  --rc-accent-dim:    rgba(218, 160, 62, 0.10);
+  --rc-green:         #6A994E;   /* online / success */
+  --rc-blue:          #78A0BE;   /* sky — info */
+  --rc-red:           #BA643C;   /* rust — error */
+  --rc-orange:        #BA643C;   /* rust — warning */
+  --rc-yellow:        #DAA03E;   /* same as amber */
+  --rc-berry:         #945A78;   /* secondary accent */
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Base
+═══════════════════════════════════════════════════════════ */
+@layer base {
+  *, *::before, *::after {
+    box-sizing: border-box;
+  }
+
+  html, body {
+    font-family: 'Space Grotesk', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    margin: 0;
+    padding: 0;
+  }
+
+  /* Dark mode base */
+  html.dark,
+  html.dark body {
+    background-color: var(--rc-bg);
+    color: var(--rc-text);
+  }
+
+  /* App root fills screen */
+  app-root {
+    display: block;
+    height: 100vh;
+  }
+
+  /* App shell background in dark mode */
+  .dark app-root > div,
+  .dark .flex.flex-col.h-screen {
+    background-color: var(--rc-bg);
+  }
+
+  /* Scrollbar */
+  .dark ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .dark ::-webkit-scrollbar-track {
+    background: var(--rc-surface);
+  }
+  .dark ::-webkit-scrollbar-thumb {
+    background: var(--rc-border);
+    border-radius: 3px;
+  }
+  .dark ::-webkit-scrollbar-thumb:hover {
+    background: var(--rc-dim);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   PrimeNG Global Overrides — Warm Raccoon Theme
+═══════════════════════════════════════════════════════════ */
+.dark .p-button {
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+.dark .p-inputtext {
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  background: var(--rc-surface);
+  border-color: var(--rc-border);
+  color: var(--rc-text);
+  border-radius: 6px;
+}
+
+.dark .p-inputtext:focus,
+.dark .p-inputtext:enabled:focus {
+  border-color: var(--rc-accent);
+  box-shadow: 0 0 0 2px var(--rc-accent-glow);
+  outline: none;
+}
+
+.dark .p-inputtext::placeholder {
+  color: var(--rc-dim);
+}
+
+.dark .p-card {
+  background: var(--rc-surface);
+  border: 1px solid var(--rc-border);
+  border-radius: 10px;
+  color: var(--rc-text);
+}
+
+.dark .p-card .p-card-body {
+  padding: 1rem;
+}
+
+.dark .p-select {
+  background: var(--rc-surface);
+  border-color: var(--rc-border);
+  color: var(--rc-text);
+  border-radius: 6px;
+}
+
+.dark .p-select:focus,
+.dark .p-select.p-focus {
+  border-color: var(--rc-accent);
+  box-shadow: 0 0 0 2px var(--rc-accent-glow);
+}
+
+.dark .p-skeleton {
+  background: var(--rc-elevated);
+}
+
+.dark .p-skeleton::after {
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(218, 160, 62, 0.04),
+    transparent
+  );
+}
+
+.dark .p-dialog {
+  background: var(--rc-surface);
+  border: 1px solid var(--rc-border);
+  border-radius: 12px;
+  color: var(--rc-text);
+}
+
+.dark .p-dialog .p-dialog-header {
+  background: var(--rc-surface);
+  border-bottom: 1px solid var(--rc-border);
+  color: var(--rc-text);
+  border-radius: 12px 12px 0 0;
+  padding: 1rem 1.25rem;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+}
+
+.dark .p-dialog .p-dialog-content {
+  background: var(--rc-surface);
+  padding: 1.25rem;
+}
+
+.dark .p-dialog .p-dialog-footer {
+  background: var(--rc-surface);
+  border-top: 1px solid var(--rc-border);
+  border-radius: 0 0 12px 12px;
+  padding: 0.75rem 1.25rem;
+}
+
+.dark .p-contextmenu {
+  background: var(--rc-elevated);
+  border: 1px solid var(--rc-border);
+  border-radius: 8px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+}
+
+.dark .p-contextmenu .p-menuitem-link {
+  color: var(--rc-text);
+  border-radius: 4px;
+  font-size: 0.875rem;
+  font-family: 'Space Grotesk', sans-serif;
+}
+
+.dark .p-contextmenu .p-menuitem-link:hover {
+  background: var(--rc-border);
+  color: var(--rc-text);
+}
+
+.dark .p-confirmdialog .p-confirmdialog-icon {
+  color: var(--rc-accent);
+}
+
+.dark .p-timeline .p-timeline-event-marker {
+  border-color: var(--rc-border);
+  background: var(--rc-surface);
+}
+
+.dark .p-timeline .p-timeline-event-connector {
+  background: var(--rc-border);
+}
+
+.dark .p-toast .p-toast-message {
+  background: var(--rc-elevated);
+  border: 1px solid var(--rc-border);
+  color: var(--rc-text);
+  border-radius: 8px;
+}
+
+.dark .p-overlaypanel {
+  background: var(--rc-elevated);
+  border: 1px solid var(--rc-border);
+  border-radius: 8px;
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.45);
+}

@@ -4,10 +4,10 @@
   width: 100%;
   height: 100%;
   padding: 0.5rem;
-  border-radius: 0.9rem;
-  background: rgba(34, 197, 94, 0.08);
-  border: 2px dashed rgba(34, 197, 94, 0.45);
-  box-shadow: 0 10px 18px rgba(15, 23, 42, 0.08);
+  border-radius: 10px;
+  background: rgba(218, 160, 62, 0.03);
+  border: 2px dashed rgba(218, 160, 62, 0.22);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.25);
   box-sizing: border-box;
   z-index: 5;
   pointer-events: none !important;
@@ -24,16 +24,9 @@
 }
 
 .group-node.selection-group {
-  background: rgba(59, 130, 246, 0.06);
-  border-color: rgba(59, 130, 246, 0.5);
-  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.12);
-}
-
-:host-context(.dark) .group-node.selection-group,
-:host-context(.p-dark) .group-node.selection-group {
-  background: rgba(59, 130, 246, 0.1);
-  border-color: rgba(59, 130, 246, 0.65);
-  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.35);
+  background: rgba(218, 160, 62, 0.05);
+  border-color: rgba(218, 160, 62, 0.4);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.3);
 }
 
 .is-collapsed {
@@ -55,7 +48,6 @@
   opacity: 0;
 }
 
-/* Place handles slightly outside so nodes don't block them. */
 $edge-thickness: 12px;
 $edge-offset: 7px;
 $corner-size: 18px;
@@ -135,15 +127,16 @@ $corner-offset: 9px;
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.35rem 0.55rem;
-  border-radius: 0.7rem;
-  background: rgba(255, 255, 255, 0.75);
-  border: 1px solid rgba(148, 163, 184, 0.4);
-  color: #111827;
+  padding: 0.3rem 0.5rem;
+  border-radius: 6px;
+  background: rgba(30, 26, 23, 0.88);
+  border: 1px solid rgba(218, 160, 62, 0.25);
+  color: var(--rc-text, #F5EBDC);
   cursor: grab;
   user-select: none;
   touch-action: none;
   pointer-events: auto !important;
+  backdrop-filter: blur(4px);
 }
 
 .group-header:active {
@@ -153,11 +146,14 @@ $corner-offset: 9px;
 .group-title {
   flex: 1 1 auto;
   min-width: 0;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
   font-weight: 700;
-  font-size: 0.9rem;
+  font-size: 0.8rem;
+  letter-spacing: -0.01em;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: var(--rc-accent, #DAA03E);
 }
 
 .group-collapse-btn {
@@ -165,38 +161,19 @@ $corner-offset: 9px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 1.65rem;
-  width: 1.65rem;
-  border-radius: 0.55rem;
-  border: 1px solid rgba(148, 163, 184, 0.65);
-  background: rgba(255, 255, 255, 0.85);
-  color: inherit;
+  height: 1.5rem;
+  width: 1.5rem;
+  border-radius: 4px;
+  border: 1px solid rgba(218, 160, 62, 0.2);
+  background: rgba(30, 26, 23, 0.6);
+  color: var(--rc-muted, #C8B9A5);
   cursor: pointer;
   pointer-events: auto !important;
   touch-action: manipulation;
+  transition: border-color 0.12s ease, color 0.12s ease;
 }
 
 .group-collapse-btn:hover {
-  border-color: rgba(34, 197, 94, 0.75);
-}
-
-:host-context(.dark) .group-node,
-:host-context(.p-dark) .group-node {
-  background: rgba(34, 197, 94, 0.06);
-  border-color: rgba(74, 222, 128, 0.45);
-  box-shadow: 0 10px 18px rgba(0, 0, 0, 0.35);
-}
-
-:host-context(.dark) .group-header,
-:host-context(.p-dark) .group-header {
-  background: rgba(17, 24, 39, 0.72);
-  border-color: rgba(148, 163, 184, 0.35);
-  color: #e2e8f0;
-}
-
-:host-context(.dark) .group-collapse-btn,
-:host-context(.p-dark) .group-collapse-btn {
-  background: rgba(15, 23, 42, 0.7);
-  border-color: rgba(100, 116, 139, 0.75);
-  color: #e2e8f0;
+  border-color: rgba(218, 160, 62, 0.5);
+  color: var(--rc-accent, #DAA03E);
 }

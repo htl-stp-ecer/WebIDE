@@ -11,83 +11,212 @@
   height: 100%;
 }
 
-.project-layout {
-  --left-panel-width: clamp(220px, 20vw, 360px);
-  --right-panel-width: clamp(220px, 20vw, 360px);
-  --resizer-width: 6px;
+/* ═══════════════════════════════════════════════════════
+   Project Shell — column layout: IDE viewport + status bar
+═══════════════════════════════════════════════════════ */
+.project-shell {
   display: flex;
+  flex-direction: column;
   height: 100%;
+  background: var(--rc-bg, #121218);
+}
+
+/* ═══════════════════════════════════════════════════════
+   IDE Layout — horizontal three-panel flex
+═══════════════════════════════════════════════════════ */
+.project-layout {
+  --left-panel-width: clamp(220px, 20vw, 340px);
+  --right-panel-width: clamp(220px, 20vw, 340px);
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
   width: 100%;
   overflow: hidden;
+  background: var(--rc-bg, #121218);
 }
 
 .panel {
   min-width: 0;
   overflow: hidden;
   box-sizing: border-box;
+  background: var(--rc-bg, #121218);
 }
 
-$collapsed-width: 40px;
+$collapsed-width: 36px;
 
+/* ═══════════════════════════════════════════════════════
+   Tool Window Stripe — collapsed panel (vertical label)
+   JetBrains-style: icon + rotated text on the edge
+═══════════════════════════════════════════════════════ */
+.tool-stripe-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 12px 0;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--rc-dim, #5A5A6A);
+  transition: color 0.12s ease, background 0.12s ease;
+
+  &:hover {
+    background: var(--rc-elevated, #252838);
+    color: var(--rc-text, #F0F0F5);
+  }
+
+  i {
+    font-size: 0.875rem;
+  }
+}
+
+.tool-stripe-label {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+/* ═══════════════════════════════════════════════════════
+   Tool Window Header — expanded panel title bar
+   JetBrains-style: icon + title | hide button
+═══════════════════════════════════════════════════════ */
+.tool-window-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 32px;
+  padding: 0 8px 0 10px;
+  border-bottom: 1px solid var(--rc-border, #2E3044);
+  background: var(--rc-bg, #121218);
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.tool-window-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--rc-muted, #A0A0AF);
+  letter-spacing: 0.01em;
+
+  i {
+    font-size: 0.75rem;
+    color: var(--rc-dim, #5A5A6A);
+  }
+}
+
+.tool-window-hide {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  background: transparent;
+  border: none;
+  border-radius: 3px;
+  color: var(--rc-dim, #5A5A6A);
+  cursor: pointer;
+  padding: 0;
+  transition: color 0.1s ease, background 0.1s ease;
+
+  &:hover {
+    background: var(--rc-elevated, #252838);
+    color: var(--rc-muted, #A0A0AF);
+  }
+
+  i {
+    font-size: 0.55rem;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════
+   Left Panel
+═══════════════════════════════════════════════════════ */
 .panel-left {
   flex: 0 0 var(--left-panel-width);
-  padding: 1rem;
-  border-right: 1px solid #d1d5db;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--rc-border, #2E3044);
   position: relative;
-  transition: flex-basis 0.2s ease;
+  transition: flex-basis 0.15s ease;
 
   &.collapsed {
     flex: 0 0 $collapsed-width;
-    padding: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+  }
+
+  &:not(.collapsed) > app-mission-panel {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
   }
 }
 
+/* ═══════════════════════════════════════════════════════
+   Center Panel
+═══════════════════════════════════════════════════════ */
 .panel-center {
   flex: 1 1 auto;
-  padding: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  min-width: 0;
 }
 
-.center-toggle-bar {
+/* ─── Tab Bar — JetBrains-style underline tabs ──────── */
+.center-tab-bar {
   flex-shrink: 0;
   display: flex;
-  align-items: center;
-  gap: 2px;
-  padding: 4px 8px;
-  border-bottom: 1px solid #e5e7eb;
-  background: #f9fafb;
+  align-items: stretch;
+  border-bottom: 1px solid var(--rc-border, #2E3044);
+  background: var(--rc-bg, #121218);
+  height: 34px;
 }
 
-.center-toggle-btn {
+.center-tab {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 5px;
-  padding: 4px 10px;
-  border: 1px solid transparent;
-  border-radius: 5px;
+  padding: 0 14px;
+  border: none;
   background: transparent;
-  font-size: 12px;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--rc-dim, #5A5A6A);
   cursor: pointer;
-  color: #6b7280;
-  transition: background 0.1s, color 0.1s;
+  transition: color 0.1s ease, background 0.1s ease;
+  white-space: nowrap;
 
-  i { font-size: 12px; }
+  i { font-size: 0.7rem; }
 
   &:hover {
-    background: #f3f4f6;
-    color: #374151;
+    color: var(--rc-muted, #A0A0AF);
+    background: rgba(255, 255, 255, 0.03);
   }
 
   &.active {
-    background: #fff;
-    border-color: #d1d5db;
-    color: #1d4ed8;
-    font-weight: 500;
+    color: var(--rc-text, #F0F0F5);
+
+    /* JetBrains-style underline indicator */
+    &::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 4px;
+      right: 4px;
+      height: 2px;
+      background: var(--rc-accent, #DAA03E);
+      border-radius: 2px 2px 0 0;
+    }
   }
 }
 
@@ -95,106 +224,92 @@ $collapsed-width: 40px;
   flex: 1 1 auto;
   overflow: hidden;
   min-height: 0;
-  padding: 0;
 }
 
+/* ═══════════════════════════════════════════════════════
+   Right Panel
+═══════════════════════════════════════════════════════ */
 .panel-right {
   flex: 0 0 var(--right-panel-width);
-  padding: 1rem;
-  border-left: 1px solid #d1d5db;
   display: flex;
   flex-direction: column;
+  border-left: 1px solid var(--rc-border, #2E3044);
   position: relative;
-  transition: flex-basis 0.2s ease;
+  transition: flex-basis 0.15s ease;
 
   &.collapsed {
     flex: 0 0 $collapsed-width;
-    padding: 0;
-    align-items: center;
-    justify-content: center;
   }
 }
 
 .panel-scroll {
   flex: 1 1 auto;
   overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--rc-border, #2E3044) transparent;
 }
 
+/* ═══════════════════════════════════════════════════════
+   Panel Resizer — thin JetBrains-style (1px + hit area)
+═══════════════════════════════════════════════════════ */
 .panel-resizer {
-  flex: 0 0 var(--resizer-width);
+  flex: 0 0 1px;
   cursor: col-resize;
   position: relative;
   touch-action: none;
   user-select: none;
-}
+  background: var(--rc-border, #2E3044);
+  transition: background 0.12s ease;
+  z-index: 5;
 
-:host-context(.dark),
-:host-context(.p-dark) {
-  .panel-left,
-  .panel-right {
-    border-color: #4b5563;
+  /* Wide hit area for easy grabbing */
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: -3px;
+    right: -3px;
+    z-index: 1;
   }
 
-  .center-toggle-bar {
-    background: #1f2937;
-    border-color: #374151;
-  }
-
-  .center-toggle-btn {
-    color: #9ca3af;
-
-    &:hover { background: #374151; color: #e5e7eb; }
-    &.active { background: #374151; border-color: #4b5563; color: #93c5fd; }
+  &:hover {
+    background: var(--rc-accent, #DAA03E);
   }
 }
 
-// Panel toggle buttons
-.panel-toggle-btn {
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  padding: 8px;
-  border-radius: 4px;
-  color: #6b7280;
+/* ═══════════════════════════════════════════════════════
+   Status Bar — IDE bottom bar
+═══════════════════════════════════════════════════════ */
+.status-bar {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
-  justify-content: center;
-  transition: background-color 0.15s ease, color 0.15s ease;
+  justify-content: space-between;
+  height: 24px;
+  padding: 0 10px;
+  background: var(--rc-shell, #1E1A17);
+  border-top: 1px solid var(--rc-border, #2E3044);
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-size: 0.6875rem;
+  color: var(--rc-dim, #5A5A6A);
+  user-select: none;
+}
 
-  &:hover {
-    background: rgba(0, 0, 0, 0.08);
-    color: #374151;
-  }
+.status-left,
+.status-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.status-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
 
   i {
-    font-size: 1rem;
-  }
-
-  // Collapse button positioned in corner when panel is expanded
-  &.collapse-btn {
-    position: absolute;
-    top: 8px;
-    z-index: 10;
-  }
-}
-
-// Left panel collapse button on the right side
-.panel-left:not(.collapsed) .collapse-btn {
-  right: 8px;
-}
-
-// Right panel collapse button on the left side
-.panel-right:not(.collapsed) .collapse-btn {
-  left: 8px;
-}
-
-// Dark mode support for toggle buttons
-:host-context(.dark) .panel-toggle-btn,
-:host-context(.p-dark) .panel-toggle-btn {
-  color: #9ca3af;
-
-  &:hover {
-    background: rgba(255, 255, 255, 0.1);
-    color: #e5e7eb;
+    font-size: 0.6rem;
   }
 }

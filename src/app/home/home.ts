@@ -1,11 +1,7 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
-import { InputGroup } from 'primeng/inputgroup';
-import { InputText } from 'primeng/inputtext';
-import { Button } from 'primeng/button';
+import { DecimalPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Card } from 'primeng/card';
 import { HttpService } from '../services/http-service';
-import { ProgressSpinner } from 'primeng/progressspinner';
 import { Router } from '@angular/router';
 import { NotificationService } from '../services/NotificationService';
 import { interval, Subscription, timeout } from 'rxjs';
@@ -15,12 +11,8 @@ import { encodeRouteIp } from '../services/route-ip-serializer';
 @Component({
   selector: 'app-home',
   imports: [
-    InputGroup,
-    InputText,
-    Button,
+    DecimalPipe,
     FormsModule,
-    Card,
-    ProgressSpinner,
     TranslateModule,
   ],
   templateUrl: './home.html',

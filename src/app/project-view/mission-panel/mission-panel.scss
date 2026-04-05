@@ -1,5 +1,5 @@
 :host ::ng-deep .p-timeline-event-opposite {
-  flex: 0 0 auto; /* Don’t let it take up big space */
+  flex: 0 0 auto;
   padding: 0 !important;
 }
 :host ::ng-deep .p-timeline-event {
@@ -8,17 +8,43 @@
 :host ::ng-deep .p-timeline-event-content {
   flex: 1 1 auto;
   min-width: 0;
-  margin-left: 0 !important; /* Pull content closer */
+  margin-left: 0 !important;
+}
+
+:host ::ng-deep .p-timeline .p-timeline-event-marker {
+  width: 8px;
+  height: 8px;
+  border: 1px solid var(--rc-border, #2E3044);
+  background: var(--rc-surface, #1C1E2A);
+}
+
+:host ::ng-deep .p-timeline .p-timeline-event-connector {
+  background: var(--rc-border, #2E3044);
+  width: 1px;
 }
 
 .mission-row {
   width: 100%;
   min-width: 0;
+  border-radius: 6px;
+  transition: background 0.1s ease;
+
+  &:hover {
+    background: var(--rc-elevated, #252838);
+  }
+
+  &.active-mission {
+    background: rgba(218, 160, 62, 0.08);
+    border: 1px solid rgba(218, 160, 62, 0.25);
+  }
 }
 
 .mission-order,
 .mission-icon {
   flex: 0 0 auto;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.7rem;
+  color: var(--rc-dim, #5A5A6A);
 }
 
 .mission-name {
@@ -27,4 +53,131 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--rc-text, #F0F0F5);
+}
+
+/* Back button area */
+.back-to-projects-wrap {
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--rc-border, #2E3044);
+  margin-bottom: 0.5rem;
+}
+
+/* Add mission section */
+.add-mission-wrap {
+  padding: 0.75rem 0 0;
+  border-top: 1px solid var(--rc-border, #2E3044);
+  margin-top: auto;
+}
+
+.add-mission-card {
+  border: 1px dashed rgba(218, 160, 62, 0.2);
+  border-radius: 8px;
+  background: rgba(218, 160, 62, 0.02);
+  transition: border-color 0.15s ease;
+
+  &:hover {
+    border-color: rgba(218, 160, 62, 0.4);
+  }
+}
+
+.add-mission-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.75rem;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--rc-muted, #A0A0AF);
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  transition: color 0.12s ease;
+
+  i {
+    font-size: 0.875rem;
+    color: var(--rc-accent, #DAA03E);
+    opacity: 0.7;
+  }
+
+  &:hover {
+    color: var(--rc-text, #F0F0F5);
+
+    i { opacity: 1; }
+  }
+}
+
+.add-mission-form {
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+}
+
+.mission-input {
+  width: 100%;
+  height: 32px;
+  padding: 0 0.625rem;
+  background: var(--rc-bg, #121218);
+  border: 1px solid var(--rc-border, #2E3044);
+  border-radius: 5px;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-size: 0.8125rem;
+  color: var(--rc-text, #F0F0F5);
+  outline: none;
+
+  &:focus {
+    border-color: var(--rc-accent, #DAA03E);
+    box-shadow: 0 0 0 2px rgba(218, 160, 62, 0.1);
+  }
+
+  &::placeholder {
+    color: var(--rc-dim, #5A5A6A);
+  }
+}
+
+.form-actions {
+  display: flex;
+  gap: 0.4rem;
+  justify-content: flex-end;
+}
+
+.save-btn {
+  height: 28px;
+  padding: 0 0.75rem;
+  background: var(--rc-accent, #DAA03E);
+  border: none;
+  border-radius: 4px;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #1E1A17;
+  cursor: pointer;
+
+  &:hover {
+    background: #E8B54A;
+  }
+}
+
+.cancel-btn {
+  height: 28px;
+  padding: 0 0.75rem;
+  background: transparent;
+  border: 1px solid var(--rc-border, #2E3044);
+  border-radius: 4px;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--rc-muted, #A0A0AF);
+  cursor: pointer;
+
+  &:hover {
+    color: var(--rc-text, #F0F0F5);
+    border-color: var(--rc-dim, #5A5A6A);
+  }
 }

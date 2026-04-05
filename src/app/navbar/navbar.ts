@@ -1,7 +1,5 @@
-import { Component, computed, OnInit, signal, OnDestroy } from '@angular/core';
+import { Component, OnInit, OnDestroy } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
-import { Button } from "primeng/button";
-import { Select } from "primeng/select";
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink, RouterLinkActive } from '@angular/router';
@@ -12,8 +10,6 @@ import { enTranslations, deTranslations } from '../i18n/translations';
 @Component({
   selector: 'app-navbar',
   imports: [
-    Button,
-    Select,
     FormsModule,
     RouterLink,
     RouterLinkActive,
@@ -25,11 +21,8 @@ import { enTranslations, deTranslations } from '../i18n/translations';
 })
 export class Navbar implements OnInit, OnDestroy {
   deviceBase: string | null = null;
-  isDarkMode = signal(false);
   deviceInfo: ConnectionInfo | undefined;
   deviceInfoLoading = false;
-
-  iconClass = computed(() => this.isDarkMode() ? 'pi pi-sun' : 'pi pi-moon');
 
   languages = [
     { label: 'EN', value: 'en' },
@@ -53,11 +46,6 @@ export class Navbar implements OnInit, OnDestroy {
     const savedLang = localStorage.getItem('selectedLanguage') || 'en';
     this.selectedLanguage = savedLang;
     translate.use(savedLang);
-
-    const savedDarkMode = localStorage.getItem('selectedDarkMode') || 'light';
-    if (savedDarkMode === 'dark') {
-      this.toggleDarkMode();
-    }
   }
 
   ngOnInit() {
@@ -96,7 +84,6 @@ export class Navbar implements OnInit, OnDestroy {
           }
         });
 
-      //first polling
       if (!this.deviceInfo) {
         this.deviceInfoLoading = true;
       }
@@ -118,15 +105,6 @@ export class Navbar implements OnInit, OnDestroy {
     this.pollingSub?.unsubscribe();
     this.destroy$.next();
     this.destroy$.complete();
-  }
-
-  toggleDarkMode() {
-    const element = document.querySelector('html');
-    if (element) {
-      const isDark = element.classList.toggle('dark');
-      this.isDarkMode.set(isDark);
-      localStorage.setItem("selectedDarkMode", this.isDarkMode() ? "dark" : "light");
-    }
   }
 
   changeLanguage(lang: string) {

@@ -1,20 +1,214 @@
-.navbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.5rem 1rem;
-}
-
-.navbar-title {
-  font-weight: bold;
-  font-size: 1.25rem;
-}
-
-.navbar-actions {
+.navbar-root {
   display: flex;
   align-items: center;
+  height: 44px;
+  padding: 0 1rem;
+  background: var(--rc-shell, #1E1A17);
+  border-bottom: 1px solid var(--rc-border, #2E3044);
+  gap: 1.25rem;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  user-select: none;
 }
 
-.language-selector {
-  margin-right: 1rem;
+/* Brand */
+.navbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  text-decoration: none;
+  flex-shrink: 0;
+}
+
+.navbar-logo {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  border-radius: 4px;
+  object-fit: cover;
+}
+
+.navbar-wordmark {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  color: var(--rc-accent, #00E5FF);
+  line-height: 1;
+}
+
+/* Device Status */
+.navbar-device {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.device-name {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--rc-text, #F0F0F5);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 160px;
+}
+
+.device-sep {
+  color: var(--rc-dim, #5A5A6A);
+  font-size: 0.75rem;
+  flex-shrink: 0;
+}
+
+.device-ip {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.75rem;
+  color: var(--rc-muted, #A0A0AF);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid;
+  flex-shrink: 0;
+
+  &.online {
+    color: var(--rc-green, #4CAF50);
+    border-color: rgba(76, 175, 80, 0.35);
+    background: rgba(76, 175, 80, 0.08);
+  }
+
+  &.offline {
+    color: var(--rc-red, #FF5252);
+    border-color: rgba(255, 82, 82, 0.35);
+    background: rgba(255, 82, 82, 0.08);
+  }
+
+  &.loading {
+    color: var(--rc-yellow, #FFD600);
+    border-color: rgba(255, 214, 0, 0.35);
+    background: rgba(255, 214, 0, 0.08);
+  }
+}
+
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+
+  .online & {
+    background: var(--rc-green, #4CAF50);
+    box-shadow: 0 0 5px rgba(76, 175, 80, 0.7);
+  }
+
+  .offline & {
+    background: var(--rc-red, #FF5252);
+  }
+
+  .loading & {
+    background: var(--rc-yellow, #FFD600);
+    animation: pulse-dot 1.2s ease-in-out infinite;
+  }
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+.device-battery {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--rc-muted, #A0A0AF);
+  flex-shrink: 0;
+}
+
+.battery-unit {
+  font-size: 0.65rem;
+  opacity: 0.7;
+  margin-left: 1px;
+}
+
+/* End Controls */
+.navbar-end {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.lang-toggle {
+  display: flex;
+  align-items: center;
+  background: var(--rc-surface, #1C1E2A);
+  border: 1px solid var(--rc-border, #2E3044);
+  border-radius: 5px;
+  overflow: hidden;
+  height: 26px;
+}
+
+.lang-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0.6rem;
+  height: 100%;
+  background: transparent;
+  border: none;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: var(--rc-muted, #A0A0AF);
+  cursor: pointer;
+  transition: color 0.1s ease, background 0.1s ease;
+
+  &:hover:not(.active) {
+    color: var(--rc-text, #F0F0F5);
+    background: var(--rc-elevated, #252838);
+  }
+
+  &.active {
+    color: var(--rc-accent, #DAA03E);
+    background: rgba(218, 160, 62, 0.12);
+  }
+
+  &:not(:last-child) {
+    border-right: 1px solid var(--rc-border, #2E3044);
+  }
+}
+
+.icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: var(--rc-surface, #1C1E2A);
+  border: 1px solid var(--rc-border, #2E3044);
+  border-radius: 5px;
+  color: var(--rc-muted, #A0A0AF);
+  cursor: pointer;
+  transition: color 0.1s ease, border-color 0.1s ease, background 0.1s ease;
+  font-size: 0.8rem;
+
+  &:hover {
+    color: var(--rc-text, #F0F0F5);
+    border-color: var(--rc-dim, #5A5A6A);
+    background: var(--rc-elevated, #252838);
+  }
 }

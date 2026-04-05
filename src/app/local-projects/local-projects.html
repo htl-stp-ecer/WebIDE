@@ -1,177 +1,134 @@
-<div class="min-h-[calc(100vh-64px)] bg-slate-50 dark:bg-slate-950">
+<div class="local-root">
 
-  <!-- Header -->
-  <div class="border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
-    <div class="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
-      <div class="flex items-center gap-4">
-        <p-button
-          icon="pi pi-arrow-left"
-          [text]="true"
-          severity="secondary"
-          [rounded]="true"
-          (onClick)="backToProjects()">
-        </p-button>
-
+  <!-- Page Header -->
+  <div class="page-header">
+    <div class="page-header-inner">
+      <div class="page-header-left">
+        <button class="back-btn" (click)="backToProjects()" aria-label="Back">
+          <i class="pi pi-arrow-left"></i>
+        </button>
         <div>
-          <h1 class="text-xl font-semibold text-slate-900 dark:text-white">
-            {{ 'LOCAL_PROJECTS.HEADING' | translate }}
-          </h1>
-          <p class="text-sm text-slate-500 dark:text-slate-400">
-            {{ 'LOCAL_PROJECTS.SUBHEADING' | translate }}
-          </p>
+          <h1 class="page-title">{{ 'LOCAL_PROJECTS.HEADING' | translate }}</h1>
+          <p class="page-subtitle">{{ 'LOCAL_PROJECTS.SUBHEADING' | translate }}</p>
         </div>
       </div>
-    </div>
-  </div>
-
-  <!-- Projects Section -->
-  <div class="max-w-5xl mx-auto px-6 py-8">
-    <div class="flex items-center justify-between mb-3 gap-4">
-      <h2 class="text-lg font-semibold text-slate-900 dark:text-white">
-        {{ 'PROJECT_MENU.PROJECTS_HEADING' | translate }}
-      </h2>
-      <div class="flex items-center gap-2 flex-wrap justify-end">
-        <p-button
-          icon="pi pi-directions-alt"
-          severity="contrast"
-          [outlined]="true"
-          [disabled]="projectsLoading || projects.length < 2"
-          [label]="'LOCAL_PROJECTS.COMPARE_BUTTON' | translate"
-          (onClick)="openCompareDialog()">
-        </p-button>
-        <label for="local-backend-port" class="text-xs text-slate-500 dark:text-slate-400">
+      <div class="page-header-right">
+        <label class="port-label" for="local-backend-port">
           {{ 'LOCAL_PROJECTS.BACKEND_PORT_LABEL' | translate }}
         </label>
         <input
           id="local-backend-port"
-          pInputText
+          class="port-input"
           inputmode="numeric"
           pattern="[0-9]*"
-          class="w-24 text-sm"
           [(ngModel)]="localBackendPort"
           [placeholder]="'LOCAL_PROJECTS.BACKEND_PORT_PLACEHOLDER' | translate"
           (keydown.enter)="applyLocalBackendPort()"
           (blur)="applyLocalBackendPort()">
+        <button
+          class="action-btn"
+          [disabled]="projectsLoading || projects.length < 2"
+          (click)="openCompareDialog()">
+          <i class="pi pi-directions-alt"></i>
+          {{ 'LOCAL_PROJECTS.COMPARE_BUTTON' | translate }}
+        </button>
       </div>
     </div>
-    <p class="text-sm text-slate-500 dark:text-slate-400 mb-6">
-      {{ 'LOCAL_PROJECTS.CREATE_HINT' | translate }}
-    </p>
+  </div>
 
-    <!-- Projects Grid -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-      <div class="h-40 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 bg-white/80 dark:bg-slate-900/80">
+  <!-- Projects Area -->
+  <div class="projects-area">
+    <p class="area-hint">{{ 'LOCAL_PROJECTS.CREATE_HINT' | translate }}</p>
+
+    <div class="projects-grid">
+
+      <!-- Create new project tile -->
+      <div class="project-tile create-tile">
         @if (!creatingProject) {
-          <button
-            class="group flex h-full w-full flex-col items-start justify-between p-5 text-left transition-colors hover:bg-slate-50 dark:hover:bg-slate-900"
-            (click)="startCreateProject()">
-            <div class="flex h-11 w-11 items-center justify-center rounded-full bg-slate-100 text-slate-500 transition-colors group-hover:bg-slate-900 group-hover:text-white dark:bg-slate-800 dark:text-slate-300 dark:group-hover:bg-slate-100 dark:group-hover:text-slate-950">
-              <i class="pi pi-plus text-base"></i>
+          <button class="create-idle" (click)="startCreateProject()">
+            <div class="create-plus">
+              <i class="pi pi-plus"></i>
             </div>
             <div>
-              <h3 class="font-semibold text-slate-900 dark:text-white mb-1">
-                {{ 'PROJECT_MENU.ADD_PROJECT' | translate }}
-              </h3>
-              <p class="text-sm text-slate-500 dark:text-slate-400">
-                {{ 'LOCAL_PROJECTS.CREATE_TILE_HINT' | translate }}
-              </p>
+              <h3 class="create-title">{{ 'PROJECT_MENU.ADD_PROJECT' | translate }}</h3>
+              <p class="create-hint">{{ 'LOCAL_PROJECTS.CREATE_TILE_HINT' | translate }}</p>
             </div>
           </button>
         } @else {
-          <div class="flex h-full flex-col p-5">
-            <div class="mb-3">
-              <h3 class="font-semibold text-slate-900 dark:text-white">
-                {{ 'PROJECT_MENU.ADD_PROJECT' | translate }}
-              </h3>
-            </div>
-
+          <div class="create-form">
+            <h3 class="create-title">{{ 'PROJECT_MENU.ADD_PROJECT' | translate }}</h3>
             <input
+              class="create-input"
               [(ngModel)]="newProjectName"
-              pInputText
-              class="w-full"
               [disabled]="creatingProjectPending"
               [placeholder]="'PROJECT_MENU.PROJECT_NAME_PLACEHOLDER' | translate"
               (keydown.enter)="createProject()"
-              (keydown.escape)="cancelCreateProject()" />
-
-            <div class="mt-auto flex items-center gap-2 pt-4">
-              <p-button
-                [label]="'COMMON.CREATE' | translate"
-                size="small"
-                [loading]="creatingProjectPending"
-                (onClick)="createProject()">
-              </p-button>
-              <p-button
-                [label]="'COMMON.CANCEL' | translate"
-                size="small"
-                severity="secondary"
-                [disabled]="creatingProjectPending"
-                (onClick)="cancelCreateProject()">
-              </p-button>
+              (keydown.escape)="cancelCreateProject()">
+            <div class="create-actions">
+              <button class="primary-btn" [disabled]="creatingProjectPending" (click)="createProject()">
+                @if (creatingProjectPending) {
+                  <span class="btn-spinner"></span>
+                }
+                {{ 'COMMON.CREATE' | translate }}
+              </button>
+              <button class="ghost-btn" [disabled]="creatingProjectPending" (click)="cancelCreateProject()">
+                {{ 'COMMON.CANCEL' | translate }}
+              </button>
             </div>
           </div>
         }
       </div>
 
+      <!-- Loading skeletons -->
       @if (projectsLoading) {
         @for (skeleton of [1, 2, 3]; track skeleton) {
-          <div class="h-40 p-5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
-            <p-skeleton width="60%" height="1.25rem" styleClass="mb-3"></p-skeleton>
-            <p-skeleton width="40%" height="0.875rem"></p-skeleton>
+          <div class="project-tile skeleton-tile">
+            <div class="skeleton-line wide"></div>
+            <div class="skeleton-line narrow"></div>
+            <div class="skeleton-line medium"></div>
           </div>
         }
       }
 
-      <!-- Project Cards -->
+      <!-- Project cards -->
       @for (project of projects; track project.uuid) {
         <div
-          class="group relative h-40 p-5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-600 hover:shadow-lg hover:shadow-slate-200/50 dark:hover:shadow-slate-900/50 transition-all duration-200 cursor-pointer"
+          class="project-tile"
           (click)="redirectToProject(project.uuid)">
-
-          <!-- Project Info -->
-          <div class="flex flex-col h-full">
-            <div class="flex-1">
-              <h3 class="font-semibold text-slate-900 dark:text-white mb-1 line-clamp-2">
-                {{ project.name }}
-              </h3>
-              <p class="text-xs font-mono text-slate-400" [title]="project.uuid">
-                {{ project.uuid | slice:0:8 }}
-              </p>
-              <p class="text-xs text-slate-500 dark:text-slate-400 mt-2">
+          <div class="project-inner">
+            <div class="project-info">
+              <h3 class="project-name">{{ project.name }}</h3>
+              <span class="project-uuid">{{ project.uuid | slice:0:8 }}</span>
+              <span class="project-addr">
                 {{ 'LOCAL_PROJECTS.PI_ADDRESS_LABEL' | translate }}:
-                <span class="font-mono">{{ formatPiAddress(project) }}</span>
-              </p>
-            </div>
-
-            <!-- Footer with arrow -->
-            <div class="flex items-center justify-between mt-auto pt-3">
-              <span class="text-xs text-slate-400">
-                {{ 'PROJECT_MENU.CLICK_TO_OPEN' | translate }}
+                <span class="mono">{{ formatPiAddress(project) }}</span>
               </span>
-              <i class="pi pi-arrow-right text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-300 group-hover:translate-x-1 transition-all"></i>
+            </div>
+            <div class="project-footer">
+              <span class="project-open-hint">{{ 'PROJECT_MENU.CLICK_TO_OPEN' | translate }}</span>
+              <i class="pi pi-arrow-right project-arrow"></i>
             </div>
           </div>
-
-          <!-- Delete Button -->
           <button
+            class="project-delete"
             (click)="confirmDelete(project.uuid); $event.stopPropagation()"
-            class="absolute top-3 right-3 p-2 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-all duration-150"
             [attr.aria-label]="('COMMON.DELETE' | translate) + ' ' + project.name"
             [title]="'COMMON.DELETE' | translate">
-            <i class="pi pi-trash text-sm"></i>
+            <i class="pi pi-trash"></i>
           </button>
         </div>
       }
+
     </div>
 
-    <!-- Empty State -->
+    <!-- Empty state -->
     @if (!projectsLoading && projects.length === 0) {
-      <div class="text-center py-12">
-        <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
-          <i class="pi pi-folder-open text-2xl text-slate-400"></i>
+      <div class="empty-state">
+        <div class="empty-icon">
+          <i class="pi pi-folder-open"></i>
         </div>
-        <h3 class="text-lg font-medium text-slate-900 dark:text-white mb-1">{{ 'PROJECT_MENU.NO_PROJECTS' | translate }}</h3>
-        <p class="text-sm text-slate-500 dark:text-slate-400">{{ 'PROJECT_MENU.CREATE_FIRST_PROJECT' | translate }}</p>
+        <h3 class="empty-title">{{ 'PROJECT_MENU.NO_PROJECTS' | translate }}</h3>
+        <p class="empty-hint">{{ 'PROJECT_MENU.CREATE_FIRST_PROJECT' | translate }}</p>
       </div>
     }
   </div>
