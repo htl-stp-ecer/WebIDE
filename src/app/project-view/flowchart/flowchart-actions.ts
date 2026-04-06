@@ -2,7 +2,7 @@ import type { Flowchart } from './flowchart';
 import type { FlowOrientation } from './models';
 import type { IPoint } from '@foblex/2d';
 import type { FCreateConnectionEvent, FCreateNodeEvent, FDropToGroupEvent, FNodeIntersectedWithConnections } from '@foblex/flow';
-import { handleLoaded, startNodePosition } from './layout-handlers';
+import { handleLoaded, startNodePosition, endNodePosition } from './layout-handlers';
 import { handleOrientationChange, isVerticalOrientation } from './orientation-handlers';
 import { handleUndo, handleRedo } from './history-handlers';
 import { handleNodeMoved, handleAddPlannedSteps } from './mission-handlers';
@@ -44,6 +44,7 @@ export interface FlowchartActions {
   onOrientationChange(value: FlowOrientation | null): void;
   isVertical(): boolean;
   startNodePosition(): { x: number; y: number };
+  endNodePosition(): { x: number; y: number };
   undo(): void;
   redo(): void;
   onNodeMoved(id: string, pos: IPoint): void;
@@ -94,17 +95,34 @@ export function createFlowchartActions(flow: Flowchart): FlowchartActions {
     onOrientationChange: value => handleOrientationChange(flow, value),
     isVertical: () => isVerticalOrientation(flow),
     startNodePosition: () => startNodePosition(flow),
+    endNodePosition: () => endNodePosition(flow),
     undo: () => handleUndo(flow),
     redo: () => handleRedo(flow),
     onNodeMoved: (id, pos) => handleNodeMoved(flow, id, pos),
     onCreateNode: event => {
-      handleCreateNode(flow, event);
       const step = event.data as import('./models').Step | undefined;
-      if (step) {
-        flow.keybindingsService.trackStepUsage(step);
+      if (!step) return;
+
+      // Check if the drop landed on a plus button (connection insert point)
+      // Use bounding rect hit-test since elementsFromPoint is blocked by the foblex preview overlay
+      const dropX = event.fDropPosition?.x ?? (event.rect.x + event.rect.width / 2);
+      const dropY = event.fDropPosition?.y ?? (event.rect.y + event.rect.height / 2);
+      const buttons = document.querySelectorAll('.connection-add-btn');
+      for (const btn of buttons) {
+        const rect = btn.getBoundingClientRect();
+        if (dropX >= rect.left && dropX <= rect.right && dropY >= rect.top && dropY <= rect.bottom) {
+          const connectionEl = btn.closest('f-connection');
+          const connectionId = connectionEl?.getAttribute('data-connection-id');
+          if (connectionId) {
+            flow.insertStepAtConnection(connectionId, step);
+            return;
+          }
+        }
       }
+
+      flow.createNodeFromStep(step);
     },
-    addConnection: event => handleAddConnection(flow, event),
+    addConnection: () => { /* Manual connection drawing disabled */ },
     onNodeIntersected: event => handleSplitConnection(flow, event),
     onConnectionRightClick: (event, connectionId) => handleConnectionContextMenu(flow, event, connectionId),
     onCanvasContextMenu: event => handleCanvasContextMenu(flow, event),

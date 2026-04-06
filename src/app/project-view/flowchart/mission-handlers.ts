@@ -3,7 +3,7 @@ import { Mission } from '../../entities/Mission';
 import { MissionStep } from '../../entities/MissionStep';
 import { MissionComment } from '../../entities/MissionComment';
 import { MissionGroup } from '../../entities/MissionGroup';
-import { rebuildMissionView } from './mission-builder';
+import { rebuildMissionView, ParallelGroupInfo } from './mission-builder';
 import { asStepFromPool, canonicalizeMissionStepArguments, initialArgsFromPool } from './step-utils';
 import { recomputeMergedView } from './view-merger';
 import { START_OUTPUT_ID } from './constants';
@@ -182,6 +182,60 @@ export function computeStepPaths(flow: Flowchart, mission: Mission | null): void
   visit(mission.steps, []);
 }
 
+const PARALLEL_GROUP_PREFIX = 'parallel-auto-';
+const PARALLEL_GROUP_PADDING = 24;
+const PARALLEL_GROUP_HEADER_HEIGHT = 40;
+
+function buildAutoParallelGroups(
+  parallelGroups: ParallelGroupInfo[],
+  nodes: FlowNode[],
+): FlowGroup[] {
+  const byId = new Map(nodes.map(n => [n.id, n]));
+  const result: FlowGroup[] = [];
+
+  for (const pg of parallelGroups) {
+    const allGroupNodes = pg.nodeIds
+      .map(id => byId.get(id))
+      .filter((n): n is FlowNode => !!n);
+    if (!allGroupNodes.length) continue;
+
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const n of allGroupNodes) {
+      const isJunction = n.step?.name === '__junction__';
+      if (isJunction) {
+        minX = Math.min(minX, n.position.x);
+        minY = Math.min(minY, n.position.y);
+        maxX = Math.max(maxX, n.position.x);
+        maxY = Math.max(maxY, n.position.y);
+      } else {
+        minX = Math.min(minX, n.position.x);
+        minY = Math.min(minY, n.position.y);
+        maxX = Math.max(maxX, n.position.x + 240);
+        maxY = Math.max(maxY, n.position.y + 80);
+      }
+    }
+
+    result.push({
+      id: `${PARALLEL_GROUP_PREFIX}${pg.pathKey}`,
+      title: 'Parallel',
+      position: {
+        x: minX - PARALLEL_GROUP_PADDING,
+        y: minY - PARALLEL_GROUP_PADDING - PARALLEL_GROUP_HEADER_HEIGHT,
+      },
+      size: {
+        width: maxX - minX + PARALLEL_GROUP_PADDING * 2,
+        height: maxY - minY + PARALLEL_GROUP_PADDING * 2 + PARALLEL_GROUP_HEADER_HEIGHT,
+      },
+      collapsed: false,
+      nodeIds: pg.nodeIds.filter(id => byId.has(id)),
+      stepPaths: [],
+      expandedSize: null,
+    });
+  }
+
+  return result;
+}
+
 export function rebuildFromMission(flow: Flowchart, mission: Mission): void {
   computeStepPaths(flow, mission);
 
@@ -205,14 +259,23 @@ export function rebuildFromMission(flow: Flowchart, mission: Mission): void {
   const flowComments = toFlowComments(mission.comments);
   flow.comments.set(flowComments);
   mission.comments = toMissionComments(flowComments);
-  const existingGroups = flow.groups();
-  const missionGroups = toFlowGroups(flow, mission.groups);
+
+  // Build auto-groups for parallel steps
+  const autoGroups = buildAutoParallelGroups(result.parallelGroups, result.nodes);
+  const autoGroupIds = new Set(autoGroups.map(g => g.id));
+
+  // Merge with user-created groups (filter out old auto-groups)
+  const existingGroups = flow.groups().filter(g => !g.id.startsWith(PARALLEL_GROUP_PREFIX));
+  const missionGroups = toFlowGroups(flow, mission.groups).filter(g => !g.id.startsWith(PARALLEL_GROUP_PREFIX));
   const loadedGroups = normalizeFlowGroups(existingGroups.length ? existingGroups : missionGroups);
   const mergedGroups = mergeGroupStepPaths(loadedGroups, missionGroups);
   const hydratedGroups = hydrateGroupNodeIds(flow, mergedGroups, mission.groups);
   const refreshedGroups = refreshGroupStepPaths(flow, hydratedGroups);
-  flow.groups.set(refreshedGroups);
-  mission.groups = toMissionGroups(refreshedGroups);
+
+  // Combine user groups + auto parallel groups
+  flow.groups.set([...refreshedGroups, ...autoGroups]);
+  flow.rebuildParallelGroupLookup();
+  mission.groups = toMissionGroups(refreshedGroups); // Only persist user groups
   recomputeMergedView(flow);
   flow.runManager.clearRunVisuals();
 }

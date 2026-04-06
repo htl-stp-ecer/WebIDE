@@ -36,7 +36,7 @@ export function deleteNode(flow: Flowchart): void {
   const selected = flow.selectedNodeIds();
   const fallbackId = flow.contextMenu.selectedNodeId;
   const ids = selected.size ? Array.from(selected) : (fallbackId ? [fallbackId] : []);
-  const targetIds = ids.filter(id => id && id !== 'start-node');
+  const targetIds = ids.filter(id => id && id !== 'start-node' && id !== 'end-node');
   if (!targetIds.length) {
     return;
   }

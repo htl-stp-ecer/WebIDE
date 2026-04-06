@@ -2,7 +2,12 @@ import { Mission } from '../../entities/Mission';
 import { MissionStep } from '../../entities/MissionStep';
 import { generateGuid } from '@foblex/utils';
 import { Connection, FlowNode, Step, baseId, isBreakpoint, isType } from './models';
-import { START_NODE_ID } from './constants';
+import { START_NODE_ID, END_NODE_ID, END_INPUT_ID } from './constants';
+
+export interface ParallelGroupInfo {
+  pathKey: string;
+  nodeIds: string[];
+}
 
 export function rebuildMissionView(
   mission: Mission,
@@ -18,6 +23,7 @@ export function rebuildMissionView(
   nodeIdToStep: Map<string, MissionStep>;
   pathToNodeId: Map<string, string>;
   pathToConnectionIds: Map<string, string[]>;
+  parallelGroups: ParallelGroupInfo[];
 } {
   const nodes: FlowNode[] = [];
   const conns: Connection[] = [];
@@ -26,6 +32,7 @@ export function rebuildMissionView(
   const pathToNodeId = new Map<string, string>();
   const pathToConnectionIds = new Map<string, string[]>();
   const visitedSteps = new Set<MissionStep>();
+  const parallelGroups: ParallelGroupInfo[] = [];
 
   type ExitRef = { id: string; breakpointPathKey?: string | null };
   const toPathKey = (path?: number[]) => (path && path.length ? path.join('.') : null);
@@ -131,11 +138,35 @@ export function rebuildMissionView(
       }
       if (isType(s, 'parallel')) {
         const children = s.children ?? [];
-        const useJoinSplitJunction = parentExits.length > 1 && children.length > 1;
-        const bridgeExits = useJoinSplitJunction ? [createParallelJunction(parentExits)] : parentExits;
-        const r = build(children, bridgeExits);
-        if (r.entryRefs.length) entries.push(...r.entryRefs);
-        exits.push(...(r.exitRefs.length ? r.exitRefs : bridgeExits));
+        if (children.length > 1) {
+          // Create fork junction: single entry point for the parallel
+          const forkExit = createParallelJunction(parentExits);
+          const forkId = baseId(forkExit.id, 'output');
+          const nodesBefore = nodes.length;
+          const r = build(children, [forkExit]);
+          // Create join junction: single exit point for the parallel
+          const childExits = r.exitRefs.length ? r.exitRefs : [forkExit];
+          const joinExit = createParallelJunction(childExits);
+          const joinId = baseId(joinExit.id, 'output');
+          // Collect all nodes (including fork/join) for auto-grouping
+          if (pathKey) {
+            const groupNodeIds: string[] = [forkId];
+            for (let ni = nodesBefore; ni < nodes.length; ni++) {
+              if (nodes[ni].id !== forkId) {
+                groupNodeIds.push(nodes[ni].id);
+              }
+            }
+            if (!groupNodeIds.includes(joinId)) groupNodeIds.push(joinId);
+            parallelGroups.push({ pathKey, nodeIds: groupNodeIds });
+          }
+          if (r.entryRefs.length) entries.push(...r.entryRefs);
+          exits.push(joinExit);
+        } else {
+          // Single child: no fork/join needed
+          const r = build(children, parentExits);
+          if (r.entryRefs.length) entries.push(...r.entryRefs);
+          exits.push(...(r.exitRefs.length ? r.exitRefs : parentExits));
+        }
         continue;
       }
       if (isBreakpoint(s)) {
@@ -184,5 +215,10 @@ export function rebuildMissionView(
   let exits: ExitRef[] = [{ id: startOutputId }];
   for (const top of mission.steps ?? []) exits = build([top], exits).exitRefs;
 
-  return { nodes, connections: conns, stepToNodeId, nodeIdToStep, pathToNodeId, pathToConnectionIds };
+  // Connect all final exits to the end node
+  for (const exit of exits) {
+    pushConnection(exit, END_INPUT_ID, END_NODE_ID, null);
+  }
+
+  return { nodes, connections: conns, stepToNodeId, nodeIdToStep, pathToNodeId, pathToConnectionIds, parallelGroups };
 }

@@ -7,6 +7,7 @@ import {
   inject,
   effect,
   input,
+  signal,
   EventEmitter,
   Output,
 } from '@angular/core';
@@ -29,6 +30,11 @@ const WALL_THICKNESS_CM = 2.54;
 /** Wall color */
 const WALL_COLOR = '#6b7280';
 const HIGHLIGHT_COLOR = '#3b82f6';
+
+/** Zoom/pan constants */
+const MIN_ZOOM = 0.5;
+const MAX_ZOOM = 10;
+const ZOOM_STEP = 0.15;
 
 @Component({
   selector: 'app-table-visualization-panel',
@@ -61,6 +67,12 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
   private adjustedComputedPath: ComputedPath | null = null;
   private adjustedPlannedMissionEnds: Pose2D[] | null = null;
   private adjustedPlannedHighlightRange: { startIndex: number; endIndex: number } | null = null;
+
+  // Zoom & pan state
+  readonly zoom = signal(1);
+  readonly panOffset = signal({ x: 0, y: 0 });
+  private isPanning = false;
+  private panStartPos = { x: 0, y: 0 };
 
   constructor() {
     effect(() => {
@@ -175,6 +187,10 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
 
     this.ctx.clearRect(0, 0, width, height);
 
+    // Dark canvas background
+    this.ctx.fillStyle = '#0f0f17';
+    this.ctx.fillRect(0, 0, width, height);
+
     // Draw map (white surface with vector lines)
     this.renderMap(width, height);
 
@@ -201,25 +217,7 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
     const lineSegments = this.mapService.lineSegmentsCm();
     const wallSegments = this.mapService.wallSegmentsCm();
     const isLoaded = this.mapService.isLoaded();
-
-    // Calculate aspect-fit dimensions
-    const config = this.mapService.config();
-    const mapAspect = config.widthCm / config.heightCm;
-    const canvasAspect = width / height;
-
-    let drawWidth: number, drawHeight: number, offsetX: number, offsetY: number;
-
-    if (canvasAspect > mapAspect) {
-      drawHeight = height;
-      drawWidth = height * mapAspect;
-      offsetX = (width - drawWidth) / 2;
-      offsetY = 0;
-    } else {
-      drawWidth = width;
-      drawHeight = width / mapAspect;
-      offsetX = 0;
-      offsetY = (height - drawHeight) / 2;
-    }
+    const { drawWidth, drawHeight, offsetX, offsetY, scaleX, scaleY } = this.getDrawParams(width, height);
 
     // Draw white background (table surface)
     this.ctx.fillStyle = '#ffffff';
@@ -230,11 +228,7 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
     this.ctx.lineWidth = 1;
     this.ctx.strokeRect(offsetX, offsetY, drawWidth, drawHeight);
 
-    const scaleX = drawWidth / config.widthCm;
-    const scaleY = drawHeight / config.heightCm;
-
     if (!isLoaded) {
-      // Draw "No Map Loaded" hint at bottom
       this.ctx.fillStyle = 'rgba(148, 163, 184, 0.5)';
       this.ctx.font = '500 12px system-ui, -apple-system, sans-serif';
       this.ctx.textAlign = 'center';
@@ -307,20 +301,27 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
     const config = this.mapService.config();
     const mapAspect = config.widthCm / config.heightCm;
     const canvasAspect = width / height;
+    const z = this.zoom();
+    const pan = this.panOffset();
 
-    let drawWidth: number, drawHeight: number, offsetX: number, offsetY: number;
-
+    // Base aspect-fit (zoom=1)
+    let baseWidth: number, baseHeight: number, baseOffsetX: number, baseOffsetY: number;
     if (canvasAspect > mapAspect) {
-      drawHeight = height;
-      drawWidth = height * mapAspect;
-      offsetX = (width - drawWidth) / 2;
-      offsetY = 0;
+      baseHeight = height;
+      baseWidth = height * mapAspect;
+      baseOffsetX = (width - baseWidth) / 2;
+      baseOffsetY = 0;
     } else {
-      drawWidth = width;
-      drawHeight = width / mapAspect;
-      offsetX = 0;
-      offsetY = (height - drawHeight) / 2;
+      baseWidth = width;
+      baseHeight = width / mapAspect;
+      baseOffsetX = 0;
+      baseOffsetY = (height - baseHeight) / 2;
     }
+
+    const drawWidth = baseWidth * z;
+    const drawHeight = baseHeight * z;
+    const offsetX = baseOffsetX * z + pan.x;
+    const offsetY = baseOffsetY * z + pan.y;
 
     const scaleX = drawWidth / config.widthCm;
     const scaleY = drawHeight / config.heightCm;
@@ -694,7 +695,39 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
     return segmentEndIndex;
   }
 
+  // --- Zoom & Pan ---
+
+  onWheel(event: WheelEvent): void {
+    event.preventDefault();
+    const oldZoom = this.zoom();
+    const delta = event.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP;
+    const newZoom = Math.round(Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, oldZoom + delta)) * 100) / 100;
+    if (newZoom === oldZoom) return;
+
+    const canvas = this.canvasRef.nativeElement;
+    const rect = canvas.getBoundingClientRect();
+    const mouseX = event.clientX - rect.left;
+    const mouseY = event.clientY - rect.top;
+    const pan = this.panOffset();
+    const zoomRatio = newZoom / oldZoom;
+
+    this.panOffset.set({
+      x: mouseX - (mouseX - pan.x) * zoomRatio,
+      y: mouseY - (mouseY - pan.y) * zoomRatio,
+    });
+    this.zoom.set(newZoom);
+  }
+
   onCanvasPointerDown(event: PointerEvent): void {
+    // Middle mouse → pan
+    if (event.button === 1) {
+      event.preventDefault();
+      this.isPanning = true;
+      this.panStartPos = { x: event.clientX, y: event.clientY };
+      this.canvasRef.nativeElement.setPointerCapture(event.pointerId);
+      return;
+    }
+
     if (!this.allowStartPoseEdit() || event.button !== 0) return;
     const canvas = this.canvasRef.nativeElement;
     const rect = canvas.getBoundingClientRect();
@@ -711,6 +744,30 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
     };
     this.vizService.setStartPose(nextPose.x, nextPose.y, thetaToDegrees(nextPose.theta));
     this.startPoseChange.emit(nextPose);
+  }
+
+  onCanvasPointerMove(event: PointerEvent): void {
+    if (!this.isPanning) return;
+    const dx = event.clientX - this.panStartPos.x;
+    const dy = event.clientY - this.panStartPos.y;
+    this.panStartPos = { x: event.clientX, y: event.clientY };
+    this.panOffset.update(p => ({ x: p.x + dx, y: p.y + dy }));
+  }
+
+  onCanvasPointerUp(event: PointerEvent): void {
+    if (this.isPanning) {
+      this.isPanning = false;
+      this.canvasRef.nativeElement.releasePointerCapture(event.pointerId);
+    }
+  }
+
+  onDoubleClick(): void {
+    this.fitToView();
+  }
+
+  fitToView(): void {
+    this.zoom.set(1);
+    this.panOffset.set({ x: 0, y: 0 });
   }
 
   // --- Planning Mode ---

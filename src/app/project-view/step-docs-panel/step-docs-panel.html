@@ -1,0 +1,129 @@
+<div class="docs-panel">
+  <!-- Search -->
+  <div class="docs-search-container">
+    <div class="docs-search-wrap">
+      <i class="pi pi-search docs-search-icon"></i>
+      <input
+        type="text"
+        class="docs-search-input"
+        placeholder="Search steps by name, tag, or description..."
+        [ngModel]="searchQuery()"
+        (ngModelChange)="searchQuery.set($event)"
+        (keydown.escape)="clearSearch()"
+      />
+      @if (searchQuery()) {
+        <button type="button" class="docs-clear-btn" (click)="clearSearch()">
+          <i class="pi pi-times"></i>
+        </button>
+      }
+    </div>
+  </div>
+
+  <!-- Tag Chips -->
+  @if (allTags().length > 0) {
+    <div class="docs-chips">
+      @for (t of allTags(); track t.tag) {
+        <button
+          type="button"
+          class="docs-chip"
+          [ngClass]="[t.cls, activeTag() === t.tag ? 'active' : '']"
+          (click)="toggleTag(t.tag)">
+          {{ t.tag }} &middot; {{ t.count }}
+        </button>
+      }
+    </div>
+  }
+
+  <!-- Count -->
+  <div class="docs-count">{{ countLabel() }}</div>
+
+  <!-- Content -->
+  <div class="docs-list no-scrollbar">
+    @if (loading()) {
+      @for (i of [1, 2, 3, 4]; track i) {
+        <div class="docs-skeleton-card">
+          <p-skeleton width="60%" height="0.9rem" styleClass="mb-1"></p-skeleton>
+          <p-skeleton width="90%" height="0.7rem"></p-skeleton>
+        </div>
+      }
+    } @else if (visibleSteps().length === 0) {
+      <div class="docs-empty">No steps match this filter.</div>
+    } @else {
+      @for (group of groupedSteps(); track group.key) {
+        @if (group.key) {
+          <div class="docs-group-header">
+            <span class="docs-group-bar"></span>
+            <span class="docs-group-name">{{ group.key }}</span>
+            <span class="docs-group-count">{{ group.steps.length }}</span>
+          </div>
+        }
+        <div class="docs-group-steps">
+          @for (step of group.steps; track step.name) {
+            <div class="docs-card" [ngClass]="{ open: isExpanded(step.name) }">
+              <!-- Summary (always visible) -->
+              <button type="button" class="docs-card-summary" (click)="toggleStep(step.name)">
+                <div class="docs-card-sig-wrap">
+                  <code class="docs-card-sig" [innerHTML]="compactSigHtml(step.signature)"></code>
+                  @if (!isExpanded(step.name)) {
+                    <span class="docs-card-brief">{{ step.brief }}</span>
+                  }
+                </div>
+                <div class="docs-card-meta">
+                  @for (tag of step.tags; track tag) {
+                    <span class="docs-tag" [ngClass]="tagClass(tag)">{{ tag }}</span>
+                  }
+                  <span class="docs-expand-arrow" [ngClass]="{ rotated: isExpanded(step.name) }">
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                      <path d="M3 5L7 9L11 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                  </span>
+                </div>
+              </button>
+
+              <!-- Body (expanded) -->
+              @if (isExpanded(step.name)) {
+                <div class="docs-card-body">
+                  <!-- Full signature -->
+                  <pre class="docs-full-sig" [innerHTML]="fullSigHtml(step.signature)"></pre>
+
+                  <!-- Docstring sections -->
+                  @for (section of getDocSections(step); track $index) {
+                    @if (section.type === 'text') {
+                      <div class="docs-card-doc">{{ section.content }}</div>
+                    } @else if (section.type === 'args' && section.args) {
+                      <div class="docs-args">
+                        <div class="docs-section-label">Args</div>
+                        @for (arg of section.args; track arg.name) {
+                          <div class="docs-arg-row">
+                            <span class="docs-arg-name">{{ arg.name }}</span>
+                            <span class="docs-arg-type-wrap">
+                              @if (arg.type) {
+                                <span class="docs-arg-type">{{ arg.type }}</span>
+                              }
+                              @if (arg.dflt !== null) {
+                                <span class="docs-arg-dflt"> = {{ arg.dflt }}</span>
+                              }
+                            </span>
+                            <span class="docs-arg-desc">{{ arg.desc }}</span>
+                          </div>
+                        }
+                      </div>
+                    } @else if (section.type === 'returns') {
+                      <div class="docs-section">
+                        <div class="docs-section-label">Returns</div>
+                        <div class="docs-section-body">{{ section.content }}</div>
+                      </div>
+                    }
+                  }
+
+                  <!-- Module path -->
+                  <div class="docs-card-module">{{ step.module }}</div>
+                </div>
+              }
+            </div>
+          }
+        </div>
+      }
+    }
+  </div>
+</div>

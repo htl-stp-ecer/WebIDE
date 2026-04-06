@@ -1,4 +1,5 @@
-<div class="run-log-panel" [class.is-fullscreen]="fullscreen">
+<div class="run-log-panel" [class.is-fullscreen]="fullscreen" [class.is-embedded]="embedded">
+  @if (!embedded) {
   <div class="run-log-header panel-drag-handle">
     <div class="run-log-title">
       <svg class="run-log-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -23,6 +24,7 @@
       </button>
     </div>
   </div>
+  }
 
   <div class="run-log-body" #logScroll (scroll)="onScroll()">
     @if (!entries.length) {

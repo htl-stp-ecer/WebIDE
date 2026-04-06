@@ -90,7 +90,7 @@ export function handleAddConnection(flow: Flowchart, event: FCreateConnectionEve
 export function handleNodeIntersected(flow: Flowchart, event: FNodeIntersectedWithConnections): void {
   const nodeId = event.fNodeId;
   const hitId = event.fConnectionIds?.[0];
-  if (!hitId || nodeId === START_NODE_ID) return;
+  if (!hitId || nodeId === START_NODE_ID || nodeId === 'end-node') return;
 
   const adHoc = flow.adHocConnections();
   const index = adHoc.findIndex(c => c.id === hitId);

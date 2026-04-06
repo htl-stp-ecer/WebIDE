@@ -1,4 +1,4 @@
-import { AfterViewChecked, AfterViewInit, Component, ElementRef, HostListener, OnDestroy, OnInit, QueryList, Signal, ViewChild, ViewChildren, effect, signal, viewChild } from '@angular/core';
+import { AfterViewChecked, AfterViewInit, Component, ElementRef, HostListener, OnDestroy, OnInit, QueryList, Signal, ViewChild, ViewChildren, computed, effect, signal, viewChild } from '@angular/core';
 import { EFMarkerType, FCanvasComponent, FFlowComponent, FFlowModule } from '@foblex/flow';
 import { ContextMenu, ContextMenuModule } from 'primeng/contextmenu';
 import type { MenuItem } from 'primeng/api';
@@ -18,7 +18,9 @@ import { KeybindingsService } from '../../services/keybindings-service';
 import { FlowHistory } from '../../entities/flow-history';
 import { Mission } from '../../entities/Mission';
 import { MissionSimulationData, ProjectSimulationData } from '../../entities/Simulation';
-import { Connection, FlowComment, FlowGroup, FlowNode, FlowOrientation, Step, isMultiSensorType, parseMultiSensorSelection, resolveDefinitionType, toVal } from './models';
+import { Connection, FlowComment, FlowGroup, FlowNode, FlowOrientation, Step, baseId, isMultiSensorType, parseMultiSensorSelection, resolveDefinitionType, toVal } from './models';
+import { insertBetween, attachChildSequentially, detachEverywhere } from './mission-utils';
+import { MissionStep } from '../../entities/MissionStep';
 import { FlowchartHistoryManager } from './flowchart-history-manager';
 import { FlowchartRunManager } from './flowchart-run-manager';
 import { createHistoryManager, createRunManager } from './manager-factories';
@@ -29,6 +31,7 @@ import { persistViewToggleState, readDarkMode, readStoredAutoLayout, readStoredV
 import { initializeFlowchart } from './flowchart-init';
 import { handleAfterViewChecked } from './layout-handlers';
 import { recomputeMergedView } from './view-merger';
+import { rebuildFromMission } from './mission-handlers';
 import { createFlowchartActions, FlowchartActions } from './flowchart-actions';
 import { TypeDefinition } from '../../entities/TypeDefinition';
 import { Select } from 'primeng/select';
@@ -42,6 +45,7 @@ import { TableMapService, TableVisualizationService } from './table/services';
 import { buildPlannedPathFromProjectSimulation, buildPlannedPathFromProjectSimulationWithMissionOverride } from './table/simulation-path';
 import { PlanningModeService, PlanningOverlayComponent } from './table/planning';
 import { RunLogPanel } from './logs/run-log-panel';
+import { StepPickerModal } from './step-picker/step-picker-modal';
 import { generateGuid } from '@foblex/utils';
 import {
   availableBuilderChainMethods,
@@ -101,7 +105,7 @@ const OFFSCREEN_INDICATOR_CANVAS_DEBOUNCE_MS = 80;
 
 @Component({
   selector: 'app-flowchart',
-  imports: [FFlowComponent, FFlowModule, InputNumberModule, CheckboxModule, InputTextModule, ContextMenuModule, Tooltip, SelectButtonModule, FormsModule, TranslateModule, Select, MultiSelect, DecimalPipe, ProgressSpinner, TableVisualizationPanel, PlanningOverlayComponent, TimingPanel, RobotSettingsModal, RunLogPanel],
+  imports: [FFlowComponent, FFlowModule, InputNumberModule, CheckboxModule, InputTextModule, ContextMenuModule, Tooltip, SelectButtonModule, FormsModule, TranslateModule, Select, MultiSelect, DecimalPipe, ProgressSpinner, TableVisualizationPanel, PlanningOverlayComponent, TimingPanel, RobotSettingsModal, RunLogPanel, StepPickerModal],
   templateUrl: './flowchart.html',
   styleUrl: './flowchart.scss',
   providers: [FlowHistory],
@@ -148,6 +152,24 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
   readonly robotSettingsInitialTab = signal<'project' | 'robot' | 'start' | 'map' | 'keybindings' | null>(null);
   readonly saveStatus = signal<'idle' | 'saving' | 'saved'>('idle');
   readonly logsFullscreen = signal<boolean>(false);
+  readonly selectedConnectionId = signal<string | null>(null);
+  readonly externalDragActive = signal<boolean>(false);
+  readonly stepPickerVisible = signal<boolean>(false);
+  readonly stepPickerPos = signal<{ x: number; y: number }>({ x: 0, y: 0 });
+  readonly stepPickerConnectionId = signal<string | null>(null);
+  readonly nextMissionName = computed(() => {
+    const current = this.missionState.currentMission();
+    const all = this.missionState.allMissions();
+    if (!current || !all.length) return null;
+    const sorted = all.slice().sort((a, b) => {
+      if (a.is_setup !== b.is_setup) return a.is_setup ? -1 : 1;
+      if (a.is_shutdown !== b.is_shutdown) return a.is_shutdown ? 1 : -1;
+      return (a.order ?? 0) - (b.order ?? 0);
+    });
+    const idx = sorted.findIndex(m => m.name === current.name);
+    if (idx < 0 || idx >= sorted.length - 1) return null;
+    return sorted[idx + 1].name;
+  });
   viewportInitialized = false;
   private saveStatusTimeout?: ReturnType<typeof setTimeout>;
   actions!: FlowchartActions;
@@ -382,6 +404,32 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
       return;
     }
 
+    // Escape - deselect
+    if (event.key === 'Escape') {
+      this.clearNodeSelection();
+      this.selectedConnectionId.set(null);
+      return;
+    }
+
+    // Arrow keys - navigate the flowchart graph
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp' ||
+        event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+      event.preventDefault();
+      if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+        this.navigateFlowSibling(event.key === 'ArrowRight' ? 'next' : 'prev');
+      } else {
+        this.navigateFlow(event.key === 'ArrowDown' ? 'next' : 'prev');
+      }
+      return;
+    }
+
+    // Tab - cycle forward/backward through nodes only
+    if (event.key === 'Tab') {
+      event.preventDefault();
+      this.navigateFlow(event.shiftKey ? 'prev' : 'next');
+      return;
+    }
+
     // Check for custom step keybindings
     const keybind = this.keybindingsService.parseKeyEvent(event);
     const stepBinding = this.keybindingsService.getStepForKeybinding(keybind);
@@ -401,31 +449,287 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
   }
 
   createNodeFromStep(step: Step): void {
-    const args: Record<string, boolean | string | number | null> = {};
-    step?.arguments?.forEach(arg => {
-      args[arg.name] = toVal(arg.type, arg.default ?? '');
-    });
+    // If a connection is selected, insert at that connection
+    const connId = this.selectedConnectionId();
+    if (connId) {
+      this.insertStepAtConnection(connId, step);
+      return;
+    }
+    // If a node is selected, insert after it
+    const selectedIds = this.selectedNodeIds();
+    if (selectedIds.size === 1) {
+      const nodeId = Array.from(selectedIds)[0];
+      if (nodeId !== 'start-node' && nodeId !== 'end-node') {
+        this.insertStepAfterNode(nodeId, step);
+        return;
+      }
+    }
+    // Fallback: insert at end (before end node)
+    this.insertStepAtEnd(step);
+  }
 
-    // Get canvas center for node placement
-    const canvas = this.fCanvas();
-    const position = canvas
-      ? { x: -canvas.transform.position.x + 200, y: -canvas.transform.position.y + 200 }
-      : { x: 200, y: 200 };
+  onConnectionAddClick(event: Event, connectionId: string): void {
+    event.stopPropagation();
+    this.selectedConnectionId.set(connectionId);
+    this.clearNodeSelection();
+    const mouseEvent = event as MouseEvent;
+    this.stepPickerConnectionId.set(connectionId);
+    this.stepPickerPos.set({ x: mouseEvent.clientX, y: mouseEvent.clientY });
+    this.stepPickerVisible.set(true);
+  }
 
-    this.adHocNodes.set([
-      ...this.adHocNodes(),
-      {
-        id: generateGuid(),
-        text: step?.name ?? this.translate.instant('FLOWCHART.NEW_NODE'),
-        position,
-        step,
-        args,
-      },
-    ]);
-    recomputeMergedView(this);
+  onStepPickerSelect(step: Step): void {
+    const connId = this.stepPickerConnectionId();
+    if (connId) {
+      this.insertStepAtConnection(connId, step);
+    }
+    this.closeStepPicker();
+  }
+
+  closeStepPicker(): void {
+    this.stepPickerVisible.set(false);
+    this.stepPickerConnectionId.set(null);
+    this.selectedConnectionId.set(null);
+  }
+
+  onDragStarted(event: any): void {
+    if (event?.fEventType === 'external-item') {
+      this.externalDragActive.set(true);
+    }
+  }
+
+  onDragEnded(): void {
+    this.externalDragActive.set(false);
+    this.actions.onSave();
+  }
+
+
+  insertStepAtConnection(connectionId: string, step: Step): void {
+    const mission = this.missionState.currentMission();
+    if (!mission) return;
+
+    const connection = this.missionConnections().find(c => c.id === connectionId);
+    if (!connection) return;
+
+    const parentNodeId = connection.sourceNodeId ?? (connection.outputId ? baseId(connection.outputId, 'output') : null);
+    const childNodeId = connection.targetNodeId ?? (connection.inputId ? baseId(connection.inputId, 'input') : null);
+
+    const parentStep = parentNodeId && parentNodeId !== 'start-node'
+      ? this.lookups.nodeIdToStep.get(parentNodeId) ?? null
+      : null;
+    const childStep = childNodeId && childNodeId !== 'end-node'
+      ? this.lookups.nodeIdToStep.get(childNodeId) ?? null
+      : null;
+
+    const missionStep = this.createMissionStepFromStep(step);
+
+    if (childStep) {
+      detachEverywhere(mission, missionStep);
+      insertBetween(mission, parentStep, childStep, missionStep);
+    } else {
+      // Inserting before end node — append to mission
+      if (parentStep) {
+        attachChildSequentially(mission, parentStep, missionStep);
+      } else {
+        (mission.steps ??= []).push(missionStep);
+      }
+    }
+
+    rebuildFromMission(this, mission);
     this.layoutFlags.needsAdjust = true;
-    this.historyManager.recordHistory('create-node');
+    this.historyManager.recordHistory('insert-step');
+    this.selectedConnectionId.set(null);
     this.keybindingsService.trackStepUsage(step);
+  }
+
+  insertStepAfterNode(nodeId: string, step: Step): void {
+    const mission = this.missionState.currentMission();
+    if (!mission) return;
+
+    const parentStep = this.lookups.nodeIdToStep.get(nodeId);
+    if (!parentStep) return;
+
+    const missionStep = this.createMissionStepFromStep(step);
+    attachChildSequentially(mission, parentStep, missionStep);
+
+    rebuildFromMission(this, mission);
+    this.layoutFlags.needsAdjust = true;
+    this.historyManager.recordHistory('insert-step-after');
+    this.keybindingsService.trackStepUsage(step);
+  }
+
+  private insertStepAtEnd(step: Step): void {
+    const mission = this.missionState.currentMission();
+    if (!mission) return;
+
+    const missionStep = this.createMissionStepFromStep(step);
+    (mission.steps ??= []).push(missionStep);
+
+    rebuildFromMission(this, mission);
+    this.layoutFlags.needsAdjust = true;
+    this.historyManager.recordHistory('insert-step-end');
+    this.keybindingsService.trackStepUsage(step);
+  }
+
+  private createMissionStepFromStep(step: Step): MissionStep {
+    return {
+      step_type: step.name,
+      function_name: step.name,
+      arguments: (step.arguments ?? []).map(arg => ({
+        name: arg.name,
+        value: (arg.default as string | number | boolean | null) ?? null,
+        type: arg.type,
+      })),
+      position: { x: 0, y: 0 },
+      children: [],
+    };
+  }
+
+  /**
+   * Build a navigation graph that resolves through junction nodes transparently.
+   * Returns adjacency helpers for forward/backward/sibling navigation.
+   */
+  private buildNavGraph() {
+    const connections = this.missionConnections();
+    const allNodes = this.nodes();
+    const realNodes = allNodes.filter(
+      n => n.step?.name !== '__junction__' && n.id !== 'start-node' && n.id !== 'end-node'
+    );
+    if (!realNodes.length) return null;
+
+    const nodeSet = new Set(realNodes.map(n => n.id));
+    const junctionIds = new Set(
+      allNodes.filter(n => n.step?.name === '__junction__').map(n => n.id)
+    );
+
+    const connSrc = (c: Connection) => c.sourceNodeId ?? baseId(c.outputId, 'output');
+    const connTgt = (c: Connection) => c.targetNodeId ?? baseId(c.inputId, 'input');
+
+    // Outgoing and incoming adjacency by node/junction/start/end ID
+    const outgoing = new Map<string, Connection[]>();
+    const incoming = new Map<string, Connection[]>();
+    for (const c of connections) {
+      const src = connSrc(c);
+      const tgt = connTgt(c);
+      (outgoing.get(src) ?? (outgoing.set(src, []), outgoing.get(src)!)).push(c);
+      (incoming.get(tgt) ?? (incoming.set(tgt, []), incoming.get(tgt)!)).push(c);
+    }
+
+    // Resolve through junctions forward: real targets reachable from sourceId
+    const resolveForward = (sourceId: string): string[] => {
+      const targets: string[] = [];
+      const seen = new Set<string>();
+      const explore = (id: string) => {
+        for (const c of outgoing.get(id) ?? []) {
+          const tgt = connTgt(c);
+          if (tgt === 'end-node' || nodeSet.has(tgt)) {
+            targets.push(tgt);
+          } else if (junctionIds.has(tgt) && !seen.has(tgt)) {
+            seen.add(tgt);
+            explore(tgt);
+          }
+        }
+      };
+      explore(sourceId);
+      return targets;
+    };
+
+    // Resolve through junctions backward: real sources that reach targetId
+    const resolveBackward = (targetId: string): string[] => {
+      const sources: string[] = [];
+      const seen = new Set<string>();
+      const explore = (id: string) => {
+        for (const c of incoming.get(id) ?? []) {
+          const src = connSrc(c);
+          if (src === 'start-node' || nodeSet.has(src)) {
+            sources.push(src);
+          } else if (junctionIds.has(src) && !seen.has(src)) {
+            seen.add(src);
+            explore(src);
+          }
+        }
+      };
+      explore(targetId);
+      return sources;
+    };
+
+    // Find connection ID for the first hop from fromId toward toId
+    const findConnectionId = (fromId: string, toId: string): string | null => {
+      const direct = (outgoing.get(fromId) ?? []).find(c => connTgt(c) === toId);
+      if (direct) return direct.id;
+      for (const c of outgoing.get(fromId) ?? []) {
+        const tgt = connTgt(c);
+        if (junctionIds.has(tgt)) {
+          const reachable = resolveForward(tgt);
+          if (reachable.includes(toId)) return c.id;
+        }
+      }
+      return null;
+    };
+
+    return { nodeSet, resolveForward, resolveBackward, findConnectionId };
+  }
+
+  /** ArrowDown / ArrowUp: move forward or backward along the current branch */
+  navigateFlow(direction: 'next' | 'prev'): void {
+    const nav = this.buildNavGraph();
+    if (!nav) return;
+
+    const currentNodeId = this.selectedNodeIds().size === 1
+      ? Array.from(this.selectedNodeIds())[0] : null;
+
+    if (direction === 'next') {
+      // From a node, go to its first forward target
+      const sourceId = currentNodeId ?? 'start-node';
+      const targets = nav.resolveForward(sourceId);
+      const nextId = targets.find(t => t !== 'end-node') ?? targets[0] ?? null;
+      if (nextId && nextId !== 'end-node' && nav.nodeSet.has(nextId)) {
+        this.selectNode(nextId);
+      }
+    } else {
+      // From a node, go to its first backward source
+      if (!currentNodeId) return;
+      const sources = nav.resolveBackward(currentNodeId);
+      // Prefer a real node; if only start-node, do nothing
+      const prevId = sources.find(s => s !== 'start-node') ?? null;
+      if (prevId && nav.nodeSet.has(prevId)) {
+        this.selectNode(prevId);
+      }
+    }
+  }
+
+  /** ArrowLeft / ArrowRight: switch between sibling branches at a fork */
+  navigateFlowSibling(direction: 'next' | 'prev'): void {
+    const nav = this.buildNavGraph();
+    if (!nav) return;
+
+    const currentNodeId = this.selectedNodeIds().size === 1
+      ? Array.from(this.selectedNodeIds())[0] : null;
+    if (!currentNodeId) return;
+
+    // Find what feeds into this node (its parents), then find siblings
+    // = other nodes that share a parent with the current node
+    const parents = nav.resolveBackward(currentNodeId);
+    for (const parentId of parents) {
+      const siblings = nav.resolveForward(parentId)
+        .filter(id => id !== 'end-node' && nav.nodeSet.has(id));
+      if (siblings.length <= 1) continue;
+
+      const idx = siblings.indexOf(currentNodeId);
+      if (idx < 0) continue;
+
+      const nextIdx = direction === 'next'
+        ? (idx + 1) % siblings.length
+        : (idx - 1 + siblings.length) % siblings.length;
+      this.selectNode(siblings[nextIdx]);
+      return;
+    }
+  }
+
+  private selectNode(nodeId: string): void {
+    this.selectedNodeIds.set(new Set([nodeId]));
+    this.selectedConnectionId.set(null);
+    this.syncSelectionGroup();
   }
 
   openKeybindingsSettings(): void {
@@ -687,6 +991,7 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
       this.missionListSub?.unsubscribe();
       this.missionListSub = this.http.getAllMissions(projectUUID).subscribe({
         next: missions => {
+          this.missionState.setAllMissions(missions);
           if (this.missionState.currentMission()) {
             return;
           }
@@ -986,6 +1291,10 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
     return nodeId.startsWith('junction-');
   }
 
+  isParallelAutoGroup(groupId: string): boolean {
+    return groupId.startsWith('parallel-auto-');
+  }
+
   clearNodeSelection(): void {
     if (this.selectedNodeIds().size) {
       this.selectedNodeIds.set(new Set());
@@ -1271,7 +1580,7 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
     }
     const nodeEl = target?.closest<HTMLElement>('.node[data-node-id]');
     const nodeId = nodeEl?.getAttribute('data-node-id');
-    if (nodeId && nodeId !== 'start-node' && !this.isSyntheticJunctionNodeId(nodeId)) {
+    if (nodeId && nodeId !== 'start-node' && nodeId !== 'end-node' && !this.isSyntheticJunctionNodeId(nodeId)) {
       if (!this.selectedNodeIds().has(nodeId)) {
         this.selectedNodeIds.set(new Set([nodeId]));
       }
@@ -1377,7 +1686,7 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
     const selected = new Set<string>();
     nodes.forEach(node => {
       const id = node.getAttribute('data-node-id');
-      if (!id || id === 'start-node' || this.isSyntheticJunctionNodeId(id)) return;
+      if (!id || id === 'start-node' || id === 'end-node' || this.isSyntheticJunctionNodeId(id)) return;
       const rect = node.getBoundingClientRect();
       const intersects =
         rect.left <= maxX &&
@@ -1394,7 +1703,7 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
 
   syncSelectionGroup(): void {
     const selected = Array.from(this.selectedNodeIds()).filter(
-      id => id !== 'start-node' && !this.isSyntheticJunctionNodeId(id),
+      id => id !== 'start-node' && id !== 'end-node' && !this.isSyntheticJunctionNodeId(id),
     );
     if (selected.length < 2) {
       this.selectionGroup.set(null);
@@ -1433,15 +1742,30 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
     this.selectionGroup.set(group);
   }
 
+  private parallelGroupLookup = new Map<string, string>();
+
+  rebuildParallelGroupLookup(): void {
+    this.parallelGroupLookup.clear();
+    for (const group of this.groups()) {
+      if (group.id.startsWith('parallel-auto-')) {
+        for (const nodeId of group.nodeIds) {
+          this.parallelGroupLookup.set(nodeId, group.id);
+        }
+      }
+    }
+  }
+
   getSelectionParentId(nodeId: string): string | null {
-    if (nodeId === 'start-node') {
+    if (nodeId === 'start-node' || nodeId === 'end-node') {
       return null;
     }
-    const group = this.selectionGroup();
-    if (!group) {
-      return null;
+    // Selection group takes priority
+    const selection = this.selectionGroup();
+    if (selection && this.selectedNodeIds().has(nodeId)) {
+      return selection.id;
     }
-    return this.selectedNodeIds().has(nodeId) ? group.id : null;
+    // Then parallel auto-groups
+    return this.parallelGroupLookup.get(nodeId) ?? null;
   }
 
   isMultiSensorArgType(type?: string | null): boolean {

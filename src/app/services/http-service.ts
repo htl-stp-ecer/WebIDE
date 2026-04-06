@@ -368,10 +368,10 @@ export class HttpService {
     };
   }
 
-  updateMissionOrder(projectUUID: string, mission: Mission) {
+  updateMissionOrder(projectUUID: string, missionName: string, position: number) {
     return this.http.put(this.localApi(`/missions/${projectUUID}/order`), {
-      mission_name: mission.name,
-      order: mission.order,
+      mission_name: missionName,
+      order: position,
     });
   }
 

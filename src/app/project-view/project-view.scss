@@ -22,17 +22,32 @@
 }
 
 /* ═══════════════════════════════════════════════════════
-   IDE Layout — horizontal three-panel flex
+   IDE Layout — horizontal: tool-stripe | main-column
 ═══════════════════════════════════════════════════════ */
 .project-layout {
   --left-panel-width: clamp(220px, 20vw, 340px);
   --right-panel-width: clamp(220px, 20vw, 340px);
+  --bottom-panel-height: 200px;
   display: flex;
+  flex-direction: row;
   flex: 1 1 auto;
   min-height: 0;
   width: 100%;
   overflow: hidden;
   background: var(--rc-bg, #121218);
+}
+
+/* ═══════════════════════════════════════════════════════
+   Main Column — vertical stack: top-area + bottom panel
+   Excludes tool-stripe so bottom panel spans full width
+═══════════════════════════════════════════════════════ */
+.main-column {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .panel {
@@ -42,44 +57,7 @@
   background: var(--rc-bg, #121218);
 }
 
-$collapsed-width: 36px;
-
-/* ═══════════════════════════════════════════════════════
-   Tool Window Stripe — collapsed panel (vertical label)
-   JetBrains-style: icon + rotated text on the edge
-═══════════════════════════════════════════════════════ */
-.tool-stripe-btn {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 12px 0;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  color: var(--rc-dim, #5A5A6A);
-  transition: color 0.12s ease, background 0.12s ease;
-
-  &:hover {
-    background: var(--rc-elevated, #252838);
-    color: var(--rc-text, #F0F0F5);
-  }
-
-  i {
-    font-size: 0.875rem;
-  }
-}
-
-.tool-stripe-label {
-  writing-mode: vertical-rl;
-  transform: rotate(180deg);
-  font-family: 'Space Grotesk', system-ui, sans-serif;
-  font-size: 0.6875rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  white-space: nowrap;
-}
+$collapsed-width: 40px;
 
 /* ═══════════════════════════════════════════════════════
    Tool Window Header — expanded panel title bar
@@ -113,6 +91,63 @@ $collapsed-width: 36px;
   }
 }
 
+.tool-window-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.tool-window-action-sep {
+  width: 1px;
+  height: 14px;
+  background: var(--rc-border, #2E3044);
+  margin: 0 3px;
+  flex-shrink: 0;
+}
+
+.tool-window-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  background: transparent;
+  border: none;
+  border-radius: 3px;
+  color: var(--rc-dim, #5A5A6A);
+  cursor: pointer;
+  padding: 0;
+  transition: color 0.1s ease, background 0.1s ease;
+
+  &:hover {
+    background: var(--rc-elevated, #252838);
+    color: var(--rc-muted, #A0A0AF);
+  }
+
+  &.active {
+    color: var(--rc-accent, #DAA03E);
+    background: rgba(218, 160, 62, 0.15);
+  }
+
+  i {
+    font-size: 0.65rem;
+  }
+
+  &--add {
+    color: var(--rc-accent, #DAA03E);
+
+    i {
+      font-size: 0.7rem;
+      font-weight: 900;
+    }
+
+    &:hover {
+      background: rgba(218, 160, 62, 0.15);
+      color: var(--rc-accent, #DAA03E);
+    }
+  }
+}
+
 .tool-window-hide {
   display: flex;
   align-items: center;
@@ -138,25 +173,97 @@ $collapsed-width: 36px;
 }
 
 /* ═══════════════════════════════════════════════════════
-   Left Panel
+   Tool Stripe (Vertical Icon Bar on Far Left)
+═══════════════════════════════════════════════════════ */
+.tool-stripe {
+  flex: 0 0 40px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  background: var(--rc-bg, #121218);
+  border-right: 1px solid var(--rc-border, #2E3044);
+  padding: 4px 0;
+}
+
+.tool-stripe-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0 4px;
+
+  &.top {
+    align-items: center;
+  }
+
+  &.bottom {
+    align-items: center;
+  }
+}
+
+.tool-stripe-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: var(--rc-dim, #5A5A6A);
+  cursor: pointer;
+  transition: color 0.12s ease, background 0.12s ease;
+
+  i {
+    font-size: 0.875rem;
+  }
+
+  &:hover {
+    color: var(--rc-muted, #A0A0AF);
+    background: rgba(255, 255, 255, 0.05);
+  }
+
+  &.active {
+    color: var(--rc-accent, #DAA03E);
+    background: rgba(218, 160, 62, 0.15);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════
+   Left Panel (Tool Content Area)
 ═══════════════════════════════════════════════════════ */
 .panel-left {
-  flex: 0 0 var(--left-panel-width);
+  --left-panel-width: 280px;
+  flex: 0 0 0px;
   display: flex;
   flex-direction: column;
   border-right: 1px solid var(--rc-border, #2E3044);
   position: relative;
-  transition: flex-basis 0.15s ease;
+  transition: flex-basis 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
+  min-width: 0;
 
-  &.collapsed {
-    flex: 0 0 $collapsed-width;
+  &.visible {
+    flex: 0 0 var(--left-panel-width);
   }
+}
 
-  &:not(.collapsed) > app-mission-panel {
-    flex: 1 1 auto;
-    min-height: 0;
-    overflow: hidden;
-  }
+.tool-panel-content {
+  flex: 1 1 auto;
+  overflow: hidden;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ═══════════════════════════════════════════════════════
+   Top Area — horizontal row: left panel + center + right
+═══════════════════════════════════════════════════════ */
+.top-area {
+  flex: 1 1 auto;
+  display: flex;
+  min-height: 0;
+  overflow: hidden;
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -227,18 +334,20 @@ $collapsed-width: 36px;
 }
 
 /* ═══════════════════════════════════════════════════════
-   Right Panel
+   Right Panel (mirrors left panel pattern)
 ═══════════════════════════════════════════════════════ */
 .panel-right {
-  flex: 0 0 var(--right-panel-width);
+  flex: 0 0 0px;
   display: flex;
   flex-direction: column;
   border-left: 1px solid var(--rc-border, #2E3044);
   position: relative;
-  transition: flex-basis 0.15s ease;
+  transition: flex-basis 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
+  min-width: 0;
 
-  &.collapsed {
-    flex: 0 0 $collapsed-width;
+  &.visible {
+    flex: 0 0 var(--right-panel-width);
   }
 }
 
@@ -247,6 +356,31 @@ $collapsed-width: 36px;
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: var(--rc-border, #2E3044) transparent;
+}
+
+/* ═══════════════════════════════════════════════════════
+   Right Tool Stripe (mirrors left tool stripe)
+═══════════════════════════════════════════════════════ */
+.tool-stripe-right {
+  border-right: none;
+  border-left: 1px solid var(--rc-border, #2E3044);
+}
+
+/* ═══════════════════════════════════════════════════════
+   Bottom Panel
+═══════════════════════════════════════════════════════ */
+.panel-bottom {
+  flex: 0 0 var(--bottom-panel-height);
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--rc-border, #2E3044);
+  overflow: hidden;
+  min-height: 0;
+
+  .tool-panel-content > * {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -275,6 +409,17 @@ $collapsed-width: 36px;
 
   &:hover {
     background: var(--rc-accent, #DAA03E);
+  }
+
+  &.panel-resizer-bottom {
+    cursor: row-resize;
+
+    &::before {
+      top: -3px;
+      bottom: -3px;
+      left: 0;
+      right: 0;
+    }
   }
 }
 

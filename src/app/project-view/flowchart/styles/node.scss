@@ -47,6 +47,61 @@
     0 4px 16px rgba(0, 0, 0, 0.45);
 }
 
+// Start node: accent/gold pill shape — same width as regular nodes for alignment
+.node[data-node-id="start-node"] {
+  padding: 0.5rem 1.25rem;
+  border-radius: 9999px;
+  background: var(--rc-accent, #DAA03E);
+  color: #0A0A10;
+  box-shadow:
+    0 0 0 2px rgba(218, 160, 62, 0.25),
+    0 4px 12px rgba(0, 0, 0, 0.35);
+  text-align: center;
+
+  .node-title {
+    color: #0A0A10;
+    font-weight: 800;
+    font-size: 0.8125rem;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+  }
+}
+
+// End node: next-mission indicator — same width as regular nodes for alignment
+.node.node-end {
+  padding: 0.5rem 1.25rem;
+  border-radius: 9999px;
+  background: var(--rc-surface, #1C1E2A);
+  border: 2px dashed var(--rc-muted, #A0A0AF);
+  box-shadow:
+    0 4px 12px rgba(0, 0, 0, 0.25);
+  text-align: center;
+
+  .node-title {
+    color: var(--rc-muted, #A0A0AF);
+    font-weight: 600;
+    font-size: 0.75rem;
+    letter-spacing: 0.01em;
+  }
+}
+
+// Terminal end node (last mission): solid red/stop style
+.node.node-end.node-terminal {
+  border: 2px solid var(--rc-red, #EF4444);
+  background: rgba(239, 68, 68, 0.1);
+  box-shadow:
+    0 0 0 2px rgba(239, 68, 68, 0.15),
+    0 4px 12px rgba(0, 0, 0, 0.35);
+
+  .node-title {
+    color: var(--rc-red, #EF4444);
+    font-weight: 800;
+    font-size: 0.8125rem;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+  }
+}
+
 .node.node-junction {
   width: 0;
   min-width: 0;
@@ -115,11 +170,18 @@
   transition: background 0.12s ease, box-shadow 0.12s ease;
 }
 
-.node:hover .port {
+.port.port-hidden {
+  width: 0;
+  height: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.node:hover .port:not(.port-hidden) {
   background: var(--rc-muted, #A0A0AF);
 }
 
-.node.node-selected .port {
+.node.node-selected .port:not(.port-hidden) {
   background: var(--rc-accent, #DAA03E);
   box-shadow: 0 0 6px rgba(218, 160, 62, 0.5);
 }

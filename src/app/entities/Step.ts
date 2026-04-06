@@ -25,4 +25,7 @@ interface Step {
   }[]
 
   file: string;
+
+  docstring?: string;
+  signature?: string;
 }

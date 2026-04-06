@@ -1,3 +1,6 @@
+/* ═══════════════════════════════════════════════════════
+   Table Editor View — themed with --rc-* tokens
+═══════════════════════════════════════════════════════ */
 :host {
   display: flex;
   flex-direction: column;
@@ -9,17 +12,14 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: #f1f5f9;
+  background: var(--rc-bg, #121218);
 }
 
 .canvas-wrapper {
   flex: 1 1 auto;
   position: relative;
   overflow: hidden;
-  background:
-    radial-gradient(circle at 12% 15%, rgba(14, 165, 233, 0.1) 0, transparent 34%),
-    radial-gradient(circle at 88% 78%, rgba(56, 189, 248, 0.11) 0, transparent 40%),
-    linear-gradient(to bottom, #eef4ff, #dbeafe);
+  background: #0f0f17;
 
   &.draw-mode {
     cursor: crosshair;
@@ -40,8 +40,8 @@
   left: 0;
   transform-origin: 0 0;
   box-shadow:
-    0 0 0 1px rgba(148, 163, 184, 0.45),
-    0 10px 26px rgba(15, 23, 42, 0.12);
+    0 0 0 1px var(--rc-border, #2E3044),
+    0 10px 26px rgba(0, 0, 0, 0.3);
 }
 
 .map-svg {
@@ -55,25 +55,28 @@
   fill: #ffffff;
 }
 
+/* ─── Grid ────────────────────────────────────────────── */
 .grid-layer line {
-  stroke: rgba(100, 116, 139, 0.32);
+  stroke: rgba(100, 116, 139, 0.28);
   stroke-width: 0.12;
 
   &.grid-major {
-    stroke: rgba(71, 85, 105, 0.5);
+    stroke: rgba(100, 116, 139, 0.45);
   }
 
   &.grid-minor {
-    stroke: rgba(148, 163, 184, 0.3);
+    stroke: rgba(148, 163, 184, 0.22);
   }
 }
 
+/* ─── Guides ──────────────────────────────────────────── */
 .guide-layer line {
   stroke-width: 0.28;
   stroke-dasharray: 1 0.9;
   opacity: 0.95;
 }
 
+/* ─── Lines ───────────────────────────────────────────── */
 .line-layer line {
   stroke-linecap: round;
   stroke-linejoin: round;
@@ -81,7 +84,7 @@
 }
 
 .selected-line {
-  filter: drop-shadow(0 0 0.5px rgba(14, 165, 233, 0.95));
+  filter: drop-shadow(0 0 0.5px rgba(218, 160, 62, 0.9));
 }
 
 .canvas-wrapper.select-mode .line-layer line {
@@ -94,18 +97,19 @@
 }
 
 .endpoint-handle {
-  fill: #ffffff;
-  stroke: #0ea5e9;
+  fill: var(--rc-bg, #121218);
+  stroke: var(--rc-accent, #DAA03E);
   stroke-width: 0.45;
   pointer-events: all;
   cursor: grab;
-  filter: drop-shadow(0 0 0.45px rgba(14, 165, 233, 0.85));
+  filter: drop-shadow(0 0 0.45px rgba(218, 160, 62, 0.8));
 
   &:active {
     cursor: grabbing;
   }
 }
 
+/* ─── Labels ──────────────────────────────────────────── */
 .line-label {
   font: 500 2.6px 'SF Mono', 'Consolas', monospace;
   text-anchor: middle;
@@ -126,44 +130,45 @@
   stroke-width: 0.5;
 }
 
+/* ─── Measurement ─────────────────────────────────────── */
 .measure-layer {
   pointer-events: none;
 }
 
 .measure-dot {
-  fill: #f97316;
-  stroke: #fff;
+  fill: var(--rc-accent, #DAA03E);
+  stroke: var(--rc-bg, #121218);
   stroke-width: 0.3;
 }
 
 .measure-dim {
-  stroke: #f97316;
+  stroke: var(--rc-accent, #DAA03E);
   stroke-width: 0.3;
 }
 
 .measure-tick {
-  stroke: #f97316;
+  stroke: var(--rc-accent, #DAA03E);
   stroke-width: 0.25;
 }
 
 .measure-elbow {
-  stroke: rgba(249, 115, 22, 0.3);
+  stroke: rgba(218, 160, 62, 0.3);
   stroke-width: 0.18;
   stroke-dasharray: 0.8 0.5;
 }
 
 .measure-direct {
-  stroke: rgba(249, 115, 22, 0.5);
+  stroke: rgba(218, 160, 62, 0.5);
   stroke-width: 0.2;
   stroke-dasharray: 1 0.6;
 }
 
 .measure-label {
   font: 600 2.2px 'SF Mono', 'Consolas', monospace;
-  fill: #f97316;
+  fill: var(--rc-accent, #DAA03E);
   text-anchor: middle;
   paint-order: stroke;
-  stroke: rgba(255, 255, 255, 0.9);
+  stroke: rgba(18, 18, 24, 0.85);
   stroke-width: 0.4;
 }
 
@@ -171,18 +176,23 @@
   text-anchor: end;
 }
 
+.measure-status {
+  color: var(--rc-accent, #DAA03E);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+/* ─── Length/Property Editor Popup ─────────────────────── */
 .length-editor {
   position: absolute;
   display: flex;
   flex-direction: column;
   gap: 0.2rem;
   padding: 0.45rem 0.55rem;
-  border-radius: 8px;
-  border: 1px solid rgba(14, 165, 233, 0.45);
-  background: rgba(255, 255, 255, 0.95);
-  color: #0f172a;
-  backdrop-filter: blur(6px);
-  box-shadow: 0 10px 22px rgba(2, 6, 23, 0.4);
+  border-radius: 6px;
+  border: 1px solid var(--rc-border, #2E3044);
+  background: var(--rc-bg, #121218);
+  color: var(--rc-text, #F0F0F5);
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.5);
   z-index: 5;
 }
 
@@ -195,7 +205,7 @@
 
 .origin-label {
   font-size: 10px;
-  color: rgba(51, 65, 85, 0.75);
+  color: var(--rc-dim, #5A5A6A);
   text-transform: uppercase;
   letter-spacing: 0.3px;
 }
@@ -209,9 +219,9 @@
 .origin-btn {
   width: 20px;
   height: 16px;
-  border: 1px solid rgba(148, 163, 184, 0.3);
-  background: rgba(248, 250, 252, 0.8);
-  color: #64748b;
+  border: 1px solid var(--rc-border, #2E3044);
+  background: var(--rc-elevated, #252838);
+  color: var(--rc-dim, #5A5A6A);
   font-size: 10px;
   cursor: pointer;
   padding: 0;
@@ -223,20 +233,15 @@
   &:last-child { border-radius: 0 0 3px 0; }
 
   &.active {
-    background: rgba(14, 165, 233, 0.18);
-    border-color: rgba(14, 165, 233, 0.5);
-    color: #0284c7;
+    background: rgba(218, 160, 62, 0.15);
+    border-color: rgba(218, 160, 62, 0.4);
+    color: var(--rc-accent, #DAA03E);
     font-weight: 700;
   }
 
   &:hover:not(.active) {
-    background: rgba(148, 163, 184, 0.15);
+    background: rgba(160, 160, 175, 0.1);
   }
-}
-
-.measure-status {
-  color: #f97316;
-  font-family: 'SF Mono', 'Consolas', monospace;
 }
 
 .editor-section {
@@ -246,7 +251,7 @@
 
   label {
     font-size: 10px;
-    color: rgba(51, 65, 85, 0.75);
+    color: var(--rc-dim, #5A5A6A);
     text-transform: uppercase;
     letter-spacing: 0.3px;
   }
@@ -260,28 +265,28 @@
   input {
     width: 64px;
     height: 26px;
-    border: 1px solid rgba(148, 163, 184, 0.35);
-    border-radius: 5px;
-    background: rgba(248, 250, 252, 0.95);
-    color: #0f172a;
+    border: 1px solid var(--rc-border, #2E3044);
+    border-radius: 4px;
+    background: var(--rc-elevated, #252838);
+    color: var(--rc-text, #F0F0F5);
     padding: 0 0.35rem;
-    font: 500 11px 'SF Mono', 'Consolas', monospace;
+    font: 500 11px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
     &:focus {
       outline: none;
-      border-color: rgba(56, 189, 248, 0.7);
+      border-color: var(--rc-accent, #DAA03E);
     }
   }
 
   .coord-label {
-    font: 600 10px 'SF Mono', 'Consolas', monospace;
-    color: #64748b;
+    font: 600 10px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    color: var(--rc-dim, #5A5A6A);
     min-width: 10px;
   }
 
   .coord-unit {
     font-size: 11px;
-    color: #475569;
+    color: var(--rc-dim, #5A5A6A);
     margin-left: 0.1rem;
   }
 }
@@ -294,148 +299,57 @@
   input {
     width: 90px;
     height: 26px;
-    border: 1px solid rgba(148, 163, 184, 0.35);
-    border-radius: 5px;
-    background: rgba(248, 250, 252, 0.95);
-    color: #0f172a;
+    border: 1px solid var(--rc-border, #2E3044);
+    border-radius: 4px;
+    background: var(--rc-elevated, #252838);
+    color: var(--rc-text, #F0F0F5);
     padding: 0 0.5rem;
-    font: 500 11px 'SF Mono', 'Consolas', monospace;
+    font: 500 11px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
     &:focus {
       outline: none;
-      border-color: rgba(56, 189, 248, 0.7);
+      border-color: var(--rc-accent, #DAA03E);
     }
   }
 
   span {
     font-size: 11px;
-    color: #475569;
+    color: var(--rc-dim, #5A5A6A);
     min-width: 24px;
   }
 }
 
+/* ─── Status Bar ──────────────────────────────────────── */
 .status-bar {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  padding: 0.5rem 1rem;
-  background: rgba(255, 255, 255, 0.94);
-  border-top: 1px solid rgba(148, 163, 184, 0.25);
-  font-size: 12px;
-  color: #475569;
+  padding: 0.35rem 0.75rem;
+  background: var(--rc-shell, #1E1A17);
+  border-top: 1px solid var(--rc-border, #2E3044);
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-size: 0.6875rem;
+  color: var(--rc-dim, #5A5A6A);
   user-select: none;
 }
 
 .coords,
 .zoom-level {
-  font-family: 'SF Mono', 'Consolas', monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
 .coords-placeholder {
-  color: rgba(148, 163, 184, 0.55);
+  color: rgba(90, 90, 106, 0.5);
 }
 
 .divider {
-  color: rgba(148, 163, 184, 0.42);
+  color: var(--rc-border, #2E3044);
 }
 
 .dimensions {
-  color: #64748b;
+  color: var(--rc-dim, #5A5A6A);
 }
 
 .message {
-  color: #38bdf8;
-}
-
-:host-context(.dark),
-:host-context(.p-dark) {
-  .editor-container {
-    background: #0f172a;
-  }
-
-  .canvas-wrapper {
-    background:
-      radial-gradient(circle at 15% 20%, rgba(56, 189, 248, 0.08) 0, transparent 35%),
-      radial-gradient(circle at 85% 80%, rgba(2, 132, 199, 0.07) 0, transparent 42%),
-      linear-gradient(to bottom, #0f172a, #172235);
-  }
-
-  .map-stage {
-    box-shadow:
-      0 0 0 1px rgba(148, 163, 184, 0.35),
-      0 12px 30px rgba(2, 6, 23, 0.4);
-  }
-
-  .length-editor {
-    background: rgba(15, 23, 42, 0.95);
-    color: #e2e8f0;
-
-    .origin-label {
-      color: rgba(226, 232, 240, 0.55);
-    }
-
-    .origin-btn {
-      background: rgba(30, 41, 59, 0.8);
-      border-color: rgba(148, 163, 184, 0.2);
-      color: rgba(148, 163, 184, 0.7);
-
-      &.active {
-        background: rgba(14, 165, 233, 0.15);
-        border-color: rgba(14, 165, 233, 0.4);
-        color: #38bdf8;
-      }
-
-      &:hover:not(.active) {
-        background: rgba(148, 163, 184, 0.1);
-      }
-    }
-
-    .editor-section label {
-      color: rgba(226, 232, 240, 0.65);
-    }
-
-    .coord-editor-row {
-      input {
-        background: rgba(15, 23, 42, 0.6);
-        color: #e2e8f0;
-      }
-
-      .coord-label {
-        color: rgba(148, 163, 184, 0.9);
-      }
-
-      .coord-unit {
-        color: rgba(148, 163, 184, 0.9);
-      }
-    }
-
-    .length-editor-row {
-      input {
-        background: rgba(15, 23, 42, 0.6);
-        color: #e2e8f0;
-      }
-
-      span {
-        color: rgba(148, 163, 184, 0.9);
-      }
-    }
-  }
-
-  .status-bar {
-    background: rgba(15, 23, 42, 0.95);
-    border-top-color: rgba(148, 163, 184, 0.15);
-    color: rgba(226, 232, 240, 0.74);
-  }
-
-  .coords-placeholder {
-    color: rgba(148, 163, 184, 0.4);
-  }
-
-  .divider {
-    color: rgba(148, 163, 184, 0.28);
-  }
-
-  .dimensions {
-    color: rgba(148, 163, 184, 0.66);
-  }
+  color: var(--rc-accent, #DAA03E);
 }

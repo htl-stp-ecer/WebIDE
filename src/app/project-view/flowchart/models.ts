@@ -171,7 +171,7 @@ export const mk = (t: 'parallel' | 'seq'): MissionStep => ({
   position: { x: 0, y: 0 },
   children: [],
 });
-export const baseId = (id: string, kind: 'input' | 'output') => kind === 'output' ? (id === 'start-node-output' ? 'start-node' : id.replace(/-output$/, '')) : id.replace(/-input$/, '');
+export const baseId = (id: string, kind: 'input' | 'output') => kind === 'output' ? (id === 'start-node-output' ? 'start-node' : id.replace(/-output$/, '')) : (id === 'end-node-input' ? 'end-node' : id.replace(/-input$/, ''));
 const toNumber = (input: unknown) => {
   if (typeof input === 'number') {
     return Number.isFinite(input) ? input : null;

@@ -334,11 +334,16 @@ export function handleGroupPositionChanged(flow: Flowchart, groupId: string, pos
   if (index === -1) {
     return;
   }
+
   const updated = groups.slice();
   updated[index] = { ...updated[index], position: { x: pos.x, y: pos.y } };
-  const withAutoGrouped = applyAutoAssignNodesToGroup(flow, updated, groupId, true);
+  const withAutoGrouped = groupId.startsWith('parallel-auto-')
+    ? updated
+    : applyAutoAssignNodesToGroup(flow, updated, groupId, true);
   flow.groups.set(withAutoGrouped);
-  syncMissionGroups(flow, withAutoGrouped);
+  if (!groupId.startsWith('parallel-auto-')) {
+    syncMissionGroups(flow, withAutoGrouped);
+  }
   flow.historyManager.recordHistory('move-group');
 }
 
@@ -497,7 +502,7 @@ export function handleDropToGroup(flow: Flowchart, event: FDropToGroupEvent): vo
   const targetGroupId = event.fTargetNode;
   const groups = flow.groups();
   const targetIndex = groups.findIndex(g => g.id === targetGroupId);
-  if (targetIndex === -1) {
+  if (targetIndex === -1 || targetGroupId.startsWith('parallel-auto-')) {
     return;
   }
 
@@ -572,7 +577,7 @@ export function getVisibleConnections(flow: Flowchart): Connection[] {
     const sourceNodeId = baseId(conn.outputId, 'output');
     const targetNodeId = baseId(conn.inputId, 'input');
     const sourceOk = sourceNodeId === 'start-node' || visibleNodeIds.has(sourceNodeId);
-    const targetOk = visibleNodeIds.has(targetNodeId);
+    const targetOk = targetNodeId === 'end-node' || visibleNodeIds.has(targetNodeId);
     return sourceOk && targetOk;
   });
 
@@ -601,7 +606,7 @@ export function getVisibleConnections(flow: Flowchart): Connection[] {
           incomingOutputIds.add(conn.outputId);
         }
       } else if (sourceInGroup && !targetInGroup) {
-        const targetOk = visibleNodeIds.has(targetNodeId);
+        const targetOk = targetNodeId === 'end-node' || visibleNodeIds.has(targetNodeId);
         if (targetOk) {
           outgoingInputIds.add(conn.inputId);
         }

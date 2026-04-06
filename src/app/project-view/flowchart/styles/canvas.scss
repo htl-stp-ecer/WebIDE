@@ -38,6 +38,53 @@
   display: none;
 }
 
+/* Selected connection */
+:host ::ng-deep f-connection.connection-selected path {
+  stroke: var(--rc-accent, #DAA03E);
+  stroke-width: 3;
+  filter: drop-shadow(0 0 4px rgba(218, 160, 62, 0.4));
+}
+
+/* Add step button on connections */
+:host ::ng-deep .connection-add-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 9999px;
+  border: 2px solid var(--rc-border, #2E3044);
+  background: var(--rc-surface, #1C1E2A);
+  color: var(--rc-muted, #A0A0AF);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease, background 0.12s ease, border-color 0.12s ease, transform 0.12s ease;
+  pointer-events: auto;
+  font-size: 0.8rem;
+  z-index: 10;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+:host ::ng-deep f-connection:hover .connection-add-btn,
+:host ::ng-deep f-connection.connection-selected .connection-add-btn,
+:host ::ng-deep f-flow.external-drag-active .connection-add-btn {
+  opacity: 1;
+}
+
+:host ::ng-deep .connection-add-btn:hover {
+  background: var(--rc-accent, #DAA03E);
+  border-color: var(--rc-accent, #DAA03E);
+  color: #0A0A10;
+  transform: scale(1.15);
+}
+
+/* Enlarge plus buttons during external drag for easier drop targeting */
+:host ::ng-deep f-flow.external-drag-active .connection-add-btn {
+  width: 36px;
+  height: 36px;
+  font-size: 1rem;
+}
+
 /* Breakpoint indicator */
 :host ::ng-deep .connection-breakpoint-indicator {
   width: 10px;

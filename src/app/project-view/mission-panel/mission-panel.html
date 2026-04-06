@@ -1,17 +1,32 @@
-<div class="h-full flex flex-col" style="font-family: 'Space Grotesk', system-ui, sans-serif;">
-  <!-- Back button -->
-  <div class="back-to-projects-wrap">
-    <button
-      class="back-btn flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-sm font-semibold cursor-pointer transition-colors"
-      style="background: transparent; border: none; color: var(--rc-muted); font-family: inherit;"
-      (click)="backToProjects()">
-      <i class="pi pi-arrow-left" style="font-size: 0.7rem;"></i>
-      <span>{{ 'MISSION.BACK_TO_PROJECTS' | translate }}</span>
-    </button>
-  </div>
-
+<div class="mission-panel">
   <p-contextMenu #missionMenu [model]="contextMenuItems"></p-contextMenu>
   <p-confirmDialog></p-confirmDialog>
+
+  <!-- Add Mission dialog -->
+  <p-dialog
+    [header]="'MISSION.ADD_MISSION' | translate"
+    [(visible)]="addingMission"
+    [modal]="true"
+    [closable]="false"
+    [draggable]="false"
+    [resizable]="false"
+    [style]="{ width: '28rem' }"
+  >
+    <div class="flex flex-col gap-3">
+      <label for="newMissionInput" class="text-sm" style="color: var(--rc-muted);">{{ 'MISSION.RENAME_NEW_NAME_LABEL' | translate }}</label>
+      <input
+        id="newMissionInput"
+        class="mission-input"
+        [(ngModel)]="newMissionName"
+        [placeholder]="'MISSION.NEW_MISSION_PLACEHOLDER' | translate" />
+    </div>
+    <ng-template pTemplate="footer">
+      <div class="flex justify-end gap-2 w-full">
+        <button class="cancel-btn" (click)="cancelAddMission()">{{ 'COMMON.CANCEL' | translate }}</button>
+        <button class="save-btn" (click)="createMission()">{{ 'COMMON.SAVE' | translate }}</button>
+      </div>
+    </ng-template>
+  </p-dialog>
 
   <!-- Rename dialog -->
   <p-dialog
@@ -40,90 +55,74 @@
   </p-dialog>
 
   <!-- Mission list -->
-  <div class="flex-1 min-h-0 overflow-y-auto overflow-x-hidden select-none" style="scrollbar-width: thin; scrollbar-color: var(--rc-border) transparent;" (pointerdown)="clearSelection()">
+  <div class="mission-scroll" (pointerdown)="clearSelection()">
+    <div class="mission-spacer"></div>
+
     @if (missionsLoading) {
-      <div class="p-3 flex flex-col gap-2">
+      <div class="mission-skeleton">
         @for (i of [1, 2, 3, 4, 5]; track i) {
-          <div class="flex items-center gap-2 px-2 py-1.5">
-            <div class="w-5 h-5 rounded-full animate-pulse" style="background: var(--rc-elevated);"></div>
-            <div class="h-3 rounded animate-pulse" style="width: 70%; background: var(--rc-elevated);"></div>
+          <div class="skeleton-row">
+            <div class="skeleton-order"></div>
+            <div class="skeleton-name"></div>
           </div>
         }
       </div>
     } @else {
-      <!-- Fixed Top (setups) -->
-      <p-timeline [value]="topMissions" layout="vertical" class="px-3 pt-2">
-        <ng-template let-item pTemplate="content">
-          <div
-            class="mission-row flex items-center gap-2 cursor-pointer px-2 py-1"
-            [class.active-mission]="currentMission?.name === item.name"
-            (click)="getDetailedMission(item.name)">
-            <span class="mission-order">{{ item.order }}</span>
-            <span class="mission-name">{{ item.name }}</span>
-            <i class="pi pi-lock mission-icon ml-auto"></i>
-          </div>
-        </ng-template>
-      </p-timeline>
+      <!-- Fixed Top (setup) -->
+      @if (topMissions.length) {
+        <div class="mission-section">
+          @for (item of topMissions; track item.name) {
+            <div
+              class="mission-row"
+              [class.active]="currentMission?.name === item.name"
+              (click)="getDetailedMission(item.name)">
+              <span class="mission-order">{{ item.order }}</span>
+              <span class="mission-name">{{ item.name }}</span>
+              <i class="pi pi-lock mission-lock"></i>
+            </div>
+          }
+        </div>
+      }
 
       <!-- Reorderable Middle -->
-      <p-timeline
-        cdkDropList
-        [cdkDropListData]="middleMissions"
-        (cdkDropListDropped)="dropMiddle($event)"
-        [value]="middleMissions"
-        layout="vertical"
-        class="px-3">
-        <ng-template let-item pTemplate="content">
-          <div
-            cdkDrag
-            class="mission-row flex items-center gap-2 cursor-pointer px-2 py-1"
-            [class.active-mission]="currentMission?.name === item.name"
-            (click)="getDetailedMission(item.name)"
-            (contextmenu)="onRightClickMission($event, item)"
-            (cdkDragStarted)="clearSelection()">
-            <span class="mission-order">{{ item.order }}</span>
-            <span class="mission-name">{{ item.name }}</span>
-            <i class="pi pi-bars mission-icon ml-auto"></i>
-          </div>
-        </ng-template>
-      </p-timeline>
+      @if (middleMissions.length) {
+        <div
+          class="mission-section"
+          cdkDropList
+          [cdkDropListData]="middleMissions"
+          (cdkDropListDropped)="dropMiddle($event)">
+          @for (item of middleMissions; track item.name) {
+            <div
+              cdkDrag
+              class="mission-row"
+              [class.active]="currentMission?.name === item.name"
+              (click)="getDetailedMission(item.name)"
+              (contextmenu)="onRightClickMission($event, item)"
+              (cdkDragStarted)="clearSelection()">
+              <span class="mission-order">{{ item.order }}</span>
+              <span class="mission-name">{{ item.name }}</span>
+              <i class="pi pi-bars mission-drag"></i>
+            </div>
+          }
+        </div>
+      }
 
       <!-- Fixed Bottom (shutdown) -->
-      <p-timeline [value]="bottomMissions" layout="vertical" class="px-3 pb-2">
-        <ng-template let-item pTemplate="content">
-          <div
-            class="mission-row flex items-center gap-2 cursor-pointer px-2 py-1"
-            [class.active-mission]="currentMission?.name === item.name"
-            (click)="getDetailedMission(item.name)">
-            <span class="mission-order">{{ item.order }}</span>
-            <span class="mission-name">{{ item.name }}</span>
-            <i class="pi pi-lock mission-icon ml-auto"></i>
-          </div>
-        </ng-template>
-      </p-timeline>
+      @if (bottomMissions.length) {
+        <div class="mission-section">
+          @for (item of bottomMissions; track item.name) {
+            <div
+              class="mission-row"
+              [class.active]="currentMission?.name === item.name"
+              (click)="getDetailedMission(item.name)">
+              <span class="mission-order">{{ item.order }}</span>
+              <span class="mission-name">{{ item.name }}</span>
+              <i class="pi pi-lock mission-lock"></i>
+            </div>
+          }
+        </div>
+      }
     }
   </div>
 
-  <!-- Add Mission -->
-  <div class="add-mission-wrap">
-    @if (!addingMission) {
-      <div class="add-mission-card" (click)="enableAddMission()">
-        <button class="add-mission-btn">
-          <i class="pi pi-plus"></i>
-          {{ 'MISSION.ADD_MISSION' | translate }}
-        </button>
-      </div>
-    } @else {
-      <div class="add-mission-form" style="background: var(--rc-surface); border: 1px solid var(--rc-border); border-radius: 8px;">
-        <input
-          class="mission-input"
-          [(ngModel)]="newMissionName"
-          [placeholder]="'MISSION.NEW_MISSION_PLACEHOLDER' | translate" />
-        <div class="form-actions">
-          <button class="cancel-btn" (click)="cancelAddMission()">{{ 'COMMON.CANCEL' | translate }}</button>
-          <button class="save-btn" (click)="createMission()">{{ 'COMMON.SAVE' | translate }}</button>
-        </div>
-      </div>
-    }
-  </div>
 </div>

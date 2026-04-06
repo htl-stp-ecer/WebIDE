@@ -10,7 +10,6 @@ import type { MenuItem } from 'primeng/api';
 import { FormsModule } from '@angular/forms';
 import { InputText } from 'primeng/inputtext';
 import { Button } from 'primeng/button';
-import { Timeline } from 'primeng/timeline';
 import { CdkDragDrop, DragDropModule, moveItemInArray } from '@angular/cdk/drag-drop';
 import {NgClass} from '@angular/common';
 import {MissionStateService} from '../../services/mission-sate-service';
@@ -23,7 +22,7 @@ import { Skeleton } from 'primeng/skeleton';
 @Component({
   selector: 'app-mission-panel',
   standalone: true,
-  imports: [Card, PrimeTemplate, FormsModule, InputText, Button, Timeline, DragDropModule, NgClass, ContextMenu, ConfirmDialog, Dialog, TranslateModule, Skeleton],
+  imports: [Card, PrimeTemplate, FormsModule, InputText, Button, DragDropModule, NgClass, ContextMenu, ConfirmDialog, Dialog, TranslateModule],
   templateUrl: './mission-panel.html',
   styleUrl: './mission-panel.scss',
   providers: [ConfirmationService]
@@ -110,6 +109,7 @@ export class MissionPanel implements OnInit {
     this.http.getAllMissions(this.projectUUID!).subscribe({
       next: result => {
         this.missions = result;
+        this.missionState.setAllMissions(result);
         this.updateTimelineData();
         this.missionsLoading = false;
         if (result.length) {
@@ -207,48 +207,25 @@ export class MissionPanel implements OnInit {
   }
 
   dropMiddle(event: CdkDragDrop<any[]>) {
-    // Snapshot previous orders for middle missions by name
-    const prevOrderByName = new Map<string, number | undefined>(
-      this.middleMissions.map(m => [m.name, m.order])
-    );
+    if (event.previousIndex === event.currentIndex) return;
 
-    // Reorder only within the middle list (non-setup, non-shutdown)
+    const mission = this.middleMissions[event.previousIndex];
+
+    // Optimistic local update
     moveItemInArray(this.middleMissions, event.previousIndex, event.currentIndex);
 
-    // Keep the exact set of order values that middle missions already had
-    const middleOrderValues = this.middleMissions
-      .map(m => m.order ?? 0)
-      .sort((a, b) => a - b);
-
-    // Assign those order values to the new sequence
-    const updatedMiddle = this.middleMissions.map((mission, idx) => ({
-      ...mission,
-      order: middleOrderValues[idx]
-    }));
-
-    // Only update missions whose order actually changed
-    const toUpdate = updatedMiddle.filter(m => prevOrderByName.get(m.name) !== m.order);
-
-    Promise.all(toUpdate.map(m => {
-      if (!m.is_setup && !m.is_shutdown)
-      this.http.updateMissionOrder(this.projectUUID!, m).toPromise()
-    }))
-      .then(() => {
-        // Apply updates locally after success without touching setup/shutdown
-        this.middleMissions = updatedMiddle;
-        this.missionTimelineData = [...this.topMissions, ...this.middleMissions, ...this.bottomMissions];
-        NotificationService.showSuccess(
-          this.translate.instant('MISSION.ORDER_UPDATE_SUCCESS'),
-          this.translate.instant('COMMON.SUCCESS')
-        );
-      })
-      .catch(err => {
+    this.http.updateMissionOrder(this.projectUUID!, mission.name, event.currentIndex).subscribe({
+      next: () => this.getMissions(),
+      error: err => {
+        // Revert local state on failure
+        moveItemInArray(this.middleMissions, event.currentIndex, event.previousIndex);
         NotificationService.showError(
           this.translate.instant('MISSION.ORDER_UPDATE_ERROR'),
           this.translate.instant('COMMON.ERROR')
         );
         console.error(err);
-      });
+      }
+    });
   }
 
   private missionComparator = (a: Mission, b: Mission): number => {

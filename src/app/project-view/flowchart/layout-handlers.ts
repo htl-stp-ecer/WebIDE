@@ -1,6 +1,6 @@
 import type { Flowchart } from './flowchart';
 import type { FlowNode } from './models';
-import { LAYOUT_SPACING, START_NODE_ID } from './constants';
+import { LAYOUT_SPACING, START_NODE_ID, END_NODE_ID } from './constants';
 import { computeAutoLayout } from './layout-utils';
 import { isVerticalOrientation } from './orientation-handlers';
 import { baseId } from './models';
@@ -44,6 +44,51 @@ export function startNodePosition(flow: Flowchart): { x: number; y: number } {
   }
   const height = getNodeHeight(flow, START_NODE_ID);
   return { x: 0, y: 300 - height / 2 };
+}
+
+export function endNodePosition(flow: Flowchart): { x: number; y: number } {
+  const nodes = flow.nodes();
+  const connections = flow.connections();
+  const vertical = isVerticalOrientation(flow);
+
+  // Find nodes that connect to the end node
+  const endIncoming = connections.filter(c => c.inputId === 'end-node-input');
+  const sourceNodeIds = endIncoming
+    .map(c => c.sourceNodeId ?? baseId(c.outputId, 'output'))
+    .filter(id => id !== START_NODE_ID);
+
+  const sourceNodes = sourceNodeIds
+    .map(id => nodes.find(n => n.id === id))
+    .filter((n): n is FlowNode => !!n);
+
+  if (!sourceNodes.length) {
+    // Fallback: position below/right of start node
+    const start = startNodePosition(flow);
+    return vertical ? { x: start.x, y: start.y + 180 } : { x: start.x + 350, y: start.y };
+  }
+
+  const isJunction = (n: FlowNode) => n.id.startsWith('junction-') || n.step?.name === '__junction__';
+  // Junctions are 0-width and positioned at center; regular nodes are 240px wide positioned at left edge
+  const nodeWidth = DEFAULT_NODE_WIDTH;
+
+  if (vertical) {
+    const centerXs = sourceNodes.map(n => isJunction(n) ? n.position.x : n.position.x + nodeWidth / 2);
+    const avgCenterX = centerXs.reduce((a, b) => a + b, 0) / centerXs.length;
+    const maxY = Math.max(...sourceNodes.map(n => {
+      const h = isJunction(n) ? 0 : (flow.lookups.lastNodeHeights.get(n.id) ?? 80);
+      return n.position.y + h;
+    }));
+    // Position end node so its center aligns with avgCenterX
+    return { x: avgCenterX - nodeWidth / 2, y: maxY + 75 };
+  } else {
+    const centerYs = sourceNodes.map(n => {
+      const h = isJunction(n) ? 0 : (flow.lookups.lastNodeHeights.get(n.id) ?? 80);
+      return isJunction(n) ? n.position.y : n.position.y + h / 2;
+    });
+    const avgCenterY = centerYs.reduce((a, b) => a + b, 0) / centerYs.length;
+    const maxX = Math.max(...sourceNodes.map(n => isJunction(n) ? n.position.x : n.position.x + nodeWidth));
+    return { x: maxX + 110, y: avgCenterY - 20 };
+  }
 }
 
 export function getNodeHeight(flow: Flowchart, nodeId: string, fallback = 80): number {
@@ -96,6 +141,66 @@ export function runAutoLayout(flow: Flowchart): void {
   const withCollapsedOffsets = applyCollapsedGroupOffsets(flow, laidOut, heights);
   const withJunctions = repositionSyntheticJunctions(flow, withCollapsedOffsets, heights);
   flow.nodes.set(withJunctions);
+  repositionParallelAutoGroups(flow, withJunctions, heights);
+}
+
+const PARALLEL_GROUP_PADDING = 24;
+const PARALLEL_GROUP_HEADER_HEIGHT = 32;
+
+function repositionParallelAutoGroups(
+  flow: Flowchart,
+  nodes: FlowNode[],
+  heights: Map<string, number>,
+): void {
+  const groups = flow.groups();
+  const autoGroups = groups.filter(g => g.id.startsWith('parallel-auto-'));
+  if (!autoGroups.length) return;
+
+  const byId = new Map(nodes.map(n => [n.id, n]));
+  let changed = false;
+
+  const updated = groups.map(group => {
+    if (!group.id.startsWith('parallel-auto-')) return group;
+
+    const memberNodes = group.nodeIds
+      .map(id => byId.get(id))
+      .filter((n): n is FlowNode => !!n);
+    if (!memberNodes.length) return group;
+
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const n of memberNodes) {
+      const isJunction = n.id.startsWith('junction-') || n.step?.name === '__junction__';
+      if (isJunction) {
+        // Junctions are 0-size points — just include their center
+        minX = Math.min(minX, n.position.x);
+        minY = Math.min(minY, n.position.y);
+        maxX = Math.max(maxX, n.position.x);
+        maxY = Math.max(maxY, n.position.y);
+      } else {
+        const h = heights.get(n.id) ?? flow.lookups.lastNodeHeights.get(n.id) ?? DEFAULT_NODE_HEIGHT;
+        minX = Math.min(minX, n.position.x);
+        minY = Math.min(minY, n.position.y);
+        maxX = Math.max(maxX, n.position.x + DEFAULT_NODE_WIDTH);
+        maxY = Math.max(maxY, n.position.y + h);
+      }
+    }
+
+    const newPos = {
+      x: minX - PARALLEL_GROUP_PADDING,
+      y: minY - PARALLEL_GROUP_PADDING - PARALLEL_GROUP_HEADER_HEIGHT,
+    };
+    const newSize = {
+      width: maxX - minX + PARALLEL_GROUP_PADDING * 2,
+      height: maxY - minY + PARALLEL_GROUP_PADDING * 2 + PARALLEL_GROUP_HEADER_HEIGHT,
+    };
+
+    changed = true;
+    return { ...group, position: newPos, size: newSize };
+  });
+
+  if (changed) {
+    flow.groups.set(updated);
+  }
 }
 
 const DEFAULT_NODE_HEIGHT = 80;

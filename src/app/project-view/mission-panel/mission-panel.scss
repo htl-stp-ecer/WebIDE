@@ -1,49 +1,70 @@
-:host ::ng-deep .p-timeline-event-opposite {
-  flex: 0 0 auto;
-  padding: 0 !important;
+.mission-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
 }
-:host ::ng-deep .p-timeline-event {
-  min-width: 0;
-}
-:host ::ng-deep .p-timeline-event-content {
+
+/* ── Scroll container ──────────────────────────────── */
+.mission-scroll {
   flex: 1 1 auto;
-  min-width: 0;
-  margin-left: 0 !important;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  scrollbar-width: thin;
+  scrollbar-color: var(--rc-border) transparent;
 }
 
-:host ::ng-deep .p-timeline .p-timeline-event-marker {
-  width: 8px;
-  height: 8px;
-  border: 1px solid var(--rc-border, #2E3044);
-  background: var(--rc-surface, #1C1E2A);
+.mission-spacer {
+  flex: 1 1 auto;
 }
 
-:host ::ng-deep .p-timeline .p-timeline-event-connector {
-  background: var(--rc-border, #2E3044);
-  width: 1px;
+/* ── Sections (setup / middle / shutdown) ──────────── */
+.mission-section {
+  padding: 2px 0;
+
+  & + & {
+    border-top: 1px solid var(--rc-border, #2E3044);
+  }
 }
 
+/* ── Individual row ────────────────────────────────── */
 .mission-row {
-  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 8px 5px 10px;
+  cursor: pointer;
+  border-left: 2px solid transparent;
   min-width: 0;
-  border-radius: 6px;
   transition: background 0.1s ease;
 
   &:hover {
     background: var(--rc-elevated, #252838);
+
+    .mission-drag {
+      opacity: 1;
+    }
   }
 
-  &.active-mission {
-    background: rgba(218, 160, 62, 0.08);
-    border: 1px solid rgba(218, 160, 62, 0.25);
+  &.active {
+    background: rgba(218, 160, 62, 0.06);
+    border-left-color: var(--rc-accent, #DAA03E);
+
+    .mission-name {
+      color: var(--rc-text, #F0F0F5);
+    }
   }
 }
 
-.mission-order,
-.mission-icon {
+.mission-order {
   flex: 0 0 auto;
+  width: 16px;
+  text-align: right;
   font-family: 'JetBrains Mono', monospace;
-  font-size: 0.7rem;
+  font-size: 0.65rem;
   color: var(--rc-dim, #5A5A6A);
 }
 
@@ -53,72 +74,62 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 0.8125rem;
+  font-size: 0.8rem;
   font-weight: 500;
-  color: var(--rc-text, #F0F0F5);
+  color: var(--rc-muted, #A0A0AF);
 }
 
-/* Back button area */
-.back-to-projects-wrap {
-  padding-bottom: 0.75rem;
-  border-bottom: 1px solid var(--rc-border, #2E3044);
-  margin-bottom: 0.5rem;
+.mission-lock {
+  flex: 0 0 auto;
+  font-size: 0.6rem;
+  color: var(--rc-dim, #5A5A6A);
+  opacity: 0.6;
 }
 
-/* Add mission section */
-.add-mission-wrap {
-  padding: 0.75rem 0 0;
-  border-top: 1px solid var(--rc-border, #2E3044);
-  margin-top: auto;
+.mission-drag {
+  flex: 0 0 auto;
+  font-size: 0.6rem;
+  color: var(--rc-dim, #5A5A6A);
+  opacity: 0;
+  cursor: grab;
+  transition: opacity 0.1s ease;
 }
 
-.add-mission-card {
-  border: 1px dashed rgba(218, 160, 62, 0.2);
-  border-radius: 8px;
-  background: rgba(218, 160, 62, 0.02);
-  transition: border-color 0.15s ease;
-
-  &:hover {
-    border-color: rgba(218, 160, 62, 0.4);
-  }
+/* ── Skeleton loading ──────────────────────────────── */
+.mission-skeleton {
+  padding: 4px 0;
 }
 
-.add-mission-btn {
+.skeleton-row {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  width: 100%;
-  padding: 0.75rem;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  color: var(--rc-muted, #A0A0AF);
-  font-family: 'Space Grotesk', system-ui, sans-serif;
-  font-size: 0.8125rem;
-  font-weight: 600;
-  transition: color 0.12s ease;
-
-  i {
-    font-size: 0.875rem;
-    color: var(--rc-accent, #DAA03E);
-    opacity: 0.7;
-  }
-
-  &:hover {
-    color: var(--rc-text, #F0F0F5);
-
-    i { opacity: 1; }
-  }
+  gap: 7px;
+  padding: 6px 10px;
 }
 
-.add-mission-form {
-  padding: 0.75rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.625rem;
+.skeleton-order {
+  flex: 0 0 16px;
+  height: 8px;
+  border-radius: 3px;
+  background: var(--rc-elevated, #252838);
+  animation: pulse 1.4s ease-in-out infinite;
 }
 
+.skeleton-name {
+  height: 9px;
+  width: 65%;
+  border-radius: 3px;
+  background: var(--rc-elevated, #252838);
+  animation: pulse 1.4s ease-in-out infinite;
+  animation-delay: 0.1s;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.8; }
+}
+
+/* ── Dialog inputs / actions ───────────────────────── */
 .mission-input {
   width: 100%;
   height: 32px;
@@ -159,9 +170,7 @@
   color: #1E1A17;
   cursor: pointer;
 
-  &:hover {
-    background: #E8B54A;
-  }
+  &:hover { background: #E8B54A; }
 }
 
 .cancel-btn {

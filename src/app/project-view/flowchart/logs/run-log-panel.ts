@@ -15,6 +15,7 @@ export class RunLogPanel implements AfterViewInit, OnChanges {
   @Input() entries: RunLogEntry[] = [];
   @Input() isRunning = false;
   @Input() fullscreen = false;
+  @Input() embedded = false;
   @Output() fullscreenToggle = new EventEmitter<void>();
 
   @ViewChild('logScroll') logScroll?: ElementRef<HTMLDivElement>;

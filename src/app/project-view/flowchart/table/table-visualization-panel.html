@@ -27,7 +27,12 @@
       class="viz-canvas"
       [class.viz-canvas-editable]="allowStartPoseEdit()"
       [class.viz-canvas-loading]="mapService.isLoading() || vizService.plannedPathLoading()"
-      (pointerdown)="onCanvasPointerDown($event)"></canvas>
+      (wheel)="onWheel($event)"
+      (pointerdown)="onCanvasPointerDown($event)"
+      (pointermove)="onCanvasPointerMove($event)"
+      (pointerup)="onCanvasPointerUp($event)"
+      (dblclick)="onDoubleClick()"
+      (contextmenu)="$event.preventDefault()"></canvas>
 
     @if (mapService.isLoading() || vizService.plannedPathLoading()) {
       <div class="viz-loading-overlay">

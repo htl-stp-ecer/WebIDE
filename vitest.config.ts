@@ -9,7 +9,9 @@ export default defineConfig({
       'src/app/project-view/flowchart/table/planning/line-utils.spec.ts',
       'src/app/project-view/flowchart/table/planning/path-to-steps.spec.ts',
       'src/app/project-view/flowchart/table/planning/path-optimizer.spec.ts',
+      'src/app/project-view/flowchart/navigate-flow.spec.ts',
     ],
+
     environment: 'node',
     coverage: {
       provider: 'v8',

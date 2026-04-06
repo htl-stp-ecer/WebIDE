@@ -177,3 +177,37 @@ $corner-offset: 9px;
   border-color: rgba(218, 160, 62, 0.5);
   color: var(--rc-accent, #DAA03E);
 }
+
+// Auto-generated parallel groups
+.group-node.parallel-auto-group {
+  background: rgba(99, 102, 241, 0.04);
+  border: 1.5px dashed rgba(99, 102, 241, 0.25);
+  box-shadow: none;
+  pointer-events: none !important;
+}
+
+.parallel-group-label {
+  position: relative;
+  z-index: 8;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.15rem 0.55rem;
+  border-radius: 4px;
+  background: rgba(99, 102, 241, 0.12);
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  color: rgba(99, 102, 241, 0.7);
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-weight: 600;
+  font-size: 0.7rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  user-select: none;
+  pointer-events: auto !important;
+  cursor: grab;
+  touch-action: none;
+}
+
+.parallel-group-label:active {
+  cursor: grabbing;
+}
