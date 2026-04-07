@@ -278,10 +278,6 @@ export class HttpService {
     return this.http.delete(this.deviceApi(`/api/v1/projects/${uuid}`));
   }
 
-  getDeviceSteps() {
-    return this.http.get<Step[]>(this.deviceApi('/api/v1/steps'));
-  }
-
   deleteProject(uuid: string) {
     return this.http.delete(this.localApi(`/projects/${uuid}`));
   }
@@ -301,16 +297,9 @@ export class HttpService {
   }
 
   refreshStepIndex(forceClear: boolean = false) {
-    const params = new URLSearchParams();
-    if (this.deviceBase) {
-      params.set('device_url', this.deviceBase);
-    }
-    if (forceClear) {
-      params.set('force_clear', '1');
-    }
-    const query = params.toString();
+    const query = forceClear ? '?force_clear=1' : '';
     return this.http.post<{ status: string; count?: number; last_indexed_at?: string; error?: string }>(
-      this.localApi(query ? `/steps/index/refresh?${query}` : '/steps/index/refresh'),
+      this.localApi(`/steps/index/refresh${query}`),
       {}
     );
   }
@@ -319,13 +308,6 @@ export class HttpService {
     return this.http.post<{ status: string; count?: number; last_indexed_at?: string; error?: string }>(
       this.localApi('/steps/index/clear'),
       {}
-    );
-  }
-
-  importStepIndex(steps: Step[]) {
-    return this.http.post<{ status: string; count?: number; last_indexed_at?: string; error?: string }>(
-      this.localApi('/steps/index/import'),
-      { steps }
     );
   }
 

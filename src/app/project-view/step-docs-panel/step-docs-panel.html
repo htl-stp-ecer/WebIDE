@@ -38,7 +38,7 @@
   <div class="docs-count">{{ countLabel() }}</div>
 
   <!-- Content -->
-  <div class="docs-list no-scrollbar">
+  <div class="docs-list">
     @if (loading()) {
       @for (i of [1, 2, 3, 4]; track i) {
         <div class="docs-skeleton-card">
@@ -86,34 +86,38 @@
                   <!-- Full signature -->
                   <pre class="docs-full-sig" [innerHTML]="fullSigHtml(step.signature)"></pre>
 
-                  <!-- Docstring sections -->
-                  @for (section of getDocSections(step); track $index) {
-                    @if (section.type === 'text') {
-                      <div class="docs-card-doc">{{ section.content }}</div>
-                    } @else if (section.type === 'args' && section.args) {
-                      <div class="docs-args">
-                        <div class="docs-section-label">Args</div>
-                        @for (arg of section.args; track arg.name) {
-                          <div class="docs-arg-row">
-                            <span class="docs-arg-name">{{ arg.name }}</span>
-                            <span class="docs-arg-type-wrap">
-                              @if (arg.type) {
-                                <span class="docs-arg-type">{{ arg.type }}</span>
-                              }
-                              @if (arg.dflt !== null) {
-                                <span class="docs-arg-dflt"> = {{ arg.dflt }}</span>
-                              }
-                            </span>
-                            <span class="docs-arg-desc">{{ arg.desc }}</span>
-                          </div>
-                        }
-                      </div>
-                    } @else if (section.type === 'returns') {
-                      <div class="docs-section">
-                        <div class="docs-section-label">Returns</div>
-                        <div class="docs-section-body">{{ section.content }}</div>
-                      </div>
+                  @if (step.docstring) {
+                    <!-- Docstring sections -->
+                    @for (section of getDocSections(step); track $index) {
+                      @if (section.type === 'text') {
+                        <div class="docs-card-doc">{{ section.content }}</div>
+                      } @else if (section.type === 'args' && section.args) {
+                        <div class="docs-args">
+                          <div class="docs-section-label">Args</div>
+                          @for (arg of section.args; track arg.name) {
+                            <div class="docs-arg-row">
+                              <span class="docs-arg-name">{{ arg.name }}</span>
+                              <span class="docs-arg-type-wrap">
+                                @if (arg.type) {
+                                  <span class="docs-arg-type">{{ arg.type }}</span>
+                                }
+                                @if (arg.dflt !== null) {
+                                  <span class="docs-arg-dflt"> = {{ arg.dflt }}</span>
+                                }
+                              </span>
+                              <span class="docs-arg-desc">{{ arg.desc }}</span>
+                            </div>
+                          }
+                        </div>
+                      } @else if (section.type === 'returns') {
+                        <div class="docs-section">
+                          <div class="docs-section-label">Returns</div>
+                          <div class="docs-section-body">{{ section.content }}</div>
+                        </div>
+                      }
                     }
+                  } @else {
+                    <div class="docs-no-docs">No documentation available.</div>
                   }
 
                   <!-- Module path -->

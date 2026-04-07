@@ -226,11 +226,12 @@ function repositionSyntheticJunctions(
   const orientation = isVerticalOrientation(flow) ? 'vertical' : 'horizontal';
   const connections = flow.connections();
 
+  const nodeH = (node: FlowNode): number =>
+    isSyntheticJunctionNode(node) ? 0 : (heights.get(node.id) ?? flow.lookups.lastNodeHeights.get(node.id) ?? DEFAULT_NODE_HEIGHT);
   const getCenterX = (node: FlowNode): number => node.position.x + (isSyntheticJunctionNode(node) ? 0 : DEFAULT_NODE_WIDTH / 2);
-  const getCenterY = (node: FlowNode): number => node.position.y + (heights.get(node.id) ?? flow.lookups.lastNodeHeights.get(node.id) ?? DEFAULT_NODE_HEIGHT) / 2;
+  const getCenterY = (node: FlowNode): number => node.position.y + nodeH(node) / 2;
   const getTopY = (node: FlowNode): number => node.position.y;
-  const getBottomY = (node: FlowNode): number =>
-    node.position.y + (heights.get(node.id) ?? flow.lookups.lastNodeHeights.get(node.id) ?? DEFAULT_NODE_HEIGHT);
+  const getBottomY = (node: FlowNode): number => node.position.y + nodeH(node);
   const getLeftX = (node: FlowNode): number => node.position.x;
   const getRightX = (node: FlowNode): number => node.position.x + (isSyntheticJunctionNode(node) ? 0 : DEFAULT_NODE_WIDTH);
 
@@ -258,10 +259,15 @@ function repositionSyntheticJunctions(
     }
 
     if (orientation === 'vertical') {
-      const xCandidates = [
-        ...incomingNodes.map(getCenterX),
-        ...outgoingNodes.map(getCenterX),
-      ];
+      const isFork = outgoing.length > incoming.length;
+      // Center fork junctions over outgoing branches, join junctions over incoming branches
+      const xCandidates = isFork
+        ? outgoingNodes.map(getCenterX)
+        : incomingNodes.map(getCenterX);
+      // Fallback to all connected nodes if the preferred side has none
+      if (!xCandidates.length) {
+        xCandidates.push(...incomingNodes.map(getCenterX), ...outgoingNodes.map(getCenterX));
+      }
       const incomingBottoms = incomingNodes.map(getBottomY);
       if (incoming.some(conn => (conn.sourceNodeId ?? baseId(conn.outputId, 'output')) === START_NODE_ID)) {
         incomingBottoms.push(startPos.y + startHeight);
@@ -272,39 +278,49 @@ function repositionSyntheticJunctions(
         ? xCandidates.reduce((sum, value) => sum + value, 0) / xCandidates.length
         : junction.position.x;
       let y = junction.position.y;
-      if (incomingBottoms.length && outgoingTops.length) {
-        y = (Math.max(...incomingBottoms) + Math.min(...outgoingTops)) / 2;
+      const JUNCTION_GAP = 38;
+      const isFork = outgoing.length > incoming.length;
+      if (isFork && outgoingTops.length) {
+        // Fork: position just above the branches it fans out to
+        y = Math.min(...outgoingTops) - JUNCTION_GAP;
       } else if (incomingBottoms.length) {
-        y = Math.max(...incomingBottoms) + 40;
+        // Join: position just below the tallest incoming branch
+        y = Math.max(...incomingBottoms) + JUNCTION_GAP;
       } else if (outgoingTops.length) {
-        y = Math.min(...outgoingTops) - 40;
+        y = Math.min(...outgoingTops) - JUNCTION_GAP;
       }
       updates.set(junction.id, { x, y });
+      byId.set(junction.id, { ...junction, position: { x, y } });
       return;
     }
 
-    const yCandidates = [
-      ...incomingNodes.map(getCenterY),
-      ...outgoingNodes.map(getCenterY),
-    ];
+    const isFork = outgoing.length > incoming.length;
+    const yCandidates = isFork
+      ? outgoingNodes.map(getCenterY)
+      : incomingNodes.map(getCenterY);
+    if (!yCandidates.length) {
+      yCandidates.push(...incomingNodes.map(getCenterY), ...outgoingNodes.map(getCenterY));
+    }
     const incomingRights = incomingNodes.map(getRightX);
     if (incoming.some(conn => (conn.sourceNodeId ?? baseId(conn.outputId, 'output')) === START_NODE_ID)) {
       incomingRights.push(startPos.x + DEFAULT_NODE_WIDTH);
     }
     const outgoingLefts = outgoingNodes.map(getLeftX);
 
+    const JUNCTION_GAP = 38;
     let x = junction.position.x;
-    if (incomingRights.length && outgoingLefts.length) {
-      x = (Math.max(...incomingRights) + Math.min(...outgoingLefts)) / 2;
+    if (isFork && outgoingLefts.length) {
+      x = Math.min(...outgoingLefts) - JUNCTION_GAP;
     } else if (incomingRights.length) {
-      x = Math.max(...incomingRights) + 40;
+      x = Math.max(...incomingRights) + JUNCTION_GAP;
     } else if (outgoingLefts.length) {
-      x = Math.min(...outgoingLefts) - 40;
+      x = Math.min(...outgoingLefts) - JUNCTION_GAP;
     }
     const y = yCandidates.length
       ? yCandidates.reduce((sum, value) => sum + value, 0) / yCandidates.length
       : junction.position.y;
     updates.set(junction.id, { x, y });
+    byId.set(junction.id, { ...junction, position: { x, y } });
   });
 
   if (!updates.size) {

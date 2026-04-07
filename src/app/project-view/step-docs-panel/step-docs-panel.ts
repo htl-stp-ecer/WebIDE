@@ -336,14 +336,13 @@ export class StepDocsPanel implements OnInit, OnDestroy {
     this.http.getAllSteps(this.projectUUID).subscribe({
       next: (steps) => {
         const docSteps: DocStep[] = steps
-          .filter(s => s.docstring && s.signature)
           .map(s => ({
             name: s.name,
             tags: s.tags ?? [],
-            signature: s.signature!,
-            docstring: s.docstring!,
+            signature: s.signature || `${s.name}(${s.arguments.map(a => a.name).join(', ')})`,
+            docstring: s.docstring || '',
             module: s.import,
-            brief: firstSentence(s.docstring!),
+            brief: s.docstring ? firstSentence(s.docstring) : '',
           }));
         docSteps.sort((a, b) => {
           const tagCmp = (a.tags[0] || 'zzz').localeCompare(b.tags[0] || 'zzz');

@@ -1,5 +1,6 @@
 import { AfterViewChecked, AfterViewInit, Component, ElementRef, HostListener, OnDestroy, OnInit, QueryList, Signal, ViewChild, ViewChildren, computed, effect, signal, viewChild } from '@angular/core';
-import { EFMarkerType, FCanvasComponent, FFlowComponent, FFlowModule } from '@foblex/flow';
+import { EFMarkerType, F_CONNECTION_BUILDERS, FCanvasComponent, FFlowComponent, FFlowModule } from '@foblex/flow';
+import { ElbowPathBuilder } from './elbow-path-builder';
 import { ContextMenu, ContextMenuModule } from 'primeng/contextmenu';
 import type { MenuItem } from 'primeng/api';
 import { CheckboxModule } from 'primeng/checkbox';
@@ -108,7 +109,7 @@ const OFFSCREEN_INDICATOR_CANVAS_DEBOUNCE_MS = 80;
   imports: [FFlowComponent, FFlowModule, InputNumberModule, CheckboxModule, InputTextModule, ContextMenuModule, Tooltip, SelectButtonModule, FormsModule, TranslateModule, Select, MultiSelect, DecimalPipe, ProgressSpinner, TableVisualizationPanel, PlanningOverlayComponent, TimingPanel, RobotSettingsModal, RunLogPanel, StepPickerModal],
   templateUrl: './flowchart.html',
   styleUrl: './flowchart.scss',
-  providers: [FlowHistory],
+  providers: [FlowHistory, { provide: F_CONNECTION_BUILDERS, useValue: { elbow: new ElbowPathBuilder() } }],
   standalone: true,
 })
 export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, OnInit {
@@ -1203,17 +1204,10 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
       return;
     }
     this.libstpIndexTriggered = true;
-    this.http.getDeviceSteps().subscribe({
-      next: steps => {
-        this.http.importStepIndex(steps).subscribe({
-          next: () => {
-            this.refreshLocalSteps();
-            this.libstpIndexTriggered = false;
-          },
-          error: () => {
-            this.libstpIndexTriggered = false;
-          },
-        });
+    this.http.refreshStepIndex().subscribe({
+      next: () => {
+        this.refreshLocalSteps();
+        this.libstpIndexTriggered = false;
       },
       error: () => {
         this.libstpIndexTriggered = false;

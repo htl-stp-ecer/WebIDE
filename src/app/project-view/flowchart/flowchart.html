@@ -204,11 +204,11 @@
 
         <div fNode [fNodeId]="'start-node'" [fNodePosition]="actions.startNodePosition()" class="node" [attr.data-node-id]="'start-node'" #nodeElement>
           <div class="node-title">{{'FLOWCHART.START_NODE'|translate}}</div>
-          <div fNodeOutput [fOutputId]="'start-node-output'" [fOutputMultiple]="true" class="port port-hidden" [class.port-bottom]="actions.isVertical()" [class.port-right]="!actions.isVertical()"></div>
+          <div fNodeOutput [fOutputId]="'start-node-output'" [fOutputMultiple]="true" [fOutputConnectableSide]="actions.isVertical() ? 'bottom' : 'right'" class="port port-hidden" [class.port-bottom]="actions.isVertical()" [class.port-right]="!actions.isVertical()"></div>
         </div>
 
         @for (connection of actions.visibleConnections(); track connection.id) {
-          <f-connection [fConnectionId]="connection.id" [fReassignDisabled]="true" fBehavior="fixed" fType="segment" [fOutputId]="connection.outputId" [fInputId]="connection.inputId" [fStartColor]="isDarkMode() ? '#EEE5E9' : '#131217'" [fEndColor]="isDarkMode() ? '#EEE5E9' : '#131217'" [class.connection-completed]="actions.isConnectionCompleted(connection.id)" [class.connection-collapsed]="connection.id.startsWith('collapsed-')" [class.connection-selected]="selectedConnectionId() === connection.id" [attr.data-connection-id]="connection.id" (contextmenu)="actions.onConnectionRightClick($event, connection.id)">
+          <f-connection [fConnectionId]="connection.id" [fReassignDisabled]="true" fBehavior="fixed" fType="elbow" [fOutputId]="connection.outputId" [fInputId]="connection.inputId" [fStartColor]="isDarkMode() ? '#EEE5E9' : '#131217'" [fEndColor]="isDarkMode() ? '#EEE5E9' : '#131217'" [class.connection-completed]="actions.isConnectionCompleted(connection.id)" [class.connection-collapsed]="connection.id.startsWith('collapsed-')" [class.connection-selected]="selectedConnectionId() === connection.id" [attr.data-connection-id]="connection.id" (contextmenu)="actions.onConnectionRightClick($event, connection.id)">
             @if (connection.hasBreakpoint) {
               <div fConnectionCenter class="connection-breakpoint-indicator"></div>
             }
@@ -239,7 +239,7 @@
             (contextmenu)="actions.onRightClick($event, node.id)"
             (fNodePositionChange)="actions.onNodeMoved(node.id, $event)"
             #nodeElement>
-            <div fNodeInput [fInputId]="node.id + '-input'" class="port port-hidden" [class.port-top]="actions.isVertical()" [class.port-left]="!actions.isVertical()"></div>
+            <div fNodeInput [fInputId]="node.id + '-input'" [fInputConnectableSide]="actions.isVertical() ? 'top' : 'left'" class="port port-hidden" [class.port-top]="actions.isVertical()" [class.port-left]="!actions.isVertical()"></div>
             <div class="node-title">{{ node.text }}</div>
             @if (isToggleEnabled('timestamps') ? runManager.getNodeTiming(node.id) : null; as timing) {
               <div class="node-timing" [pTooltip]="timing.label || timing.path || ('FLOWCHART.STEP'|translate)" tooltipPosition="top" [showDelay]="120" [hideDelay]="50">
@@ -406,7 +406,7 @@
                 }
               </div>
             }
-            <div fNodeOutput [fOutputId]="node.id + '-output'" [fOutputMultiple]="true" class="port port-hidden" [class.port-bottom]="actions.isVertical()" [class.port-right]="!actions.isVertical()"></div>
+            <div fNodeOutput [fOutputId]="node.id + '-output'" [fOutputMultiple]="true" [fOutputConnectableSide]="actions.isVertical() ? 'bottom' : 'right'" class="port port-hidden" [class.port-bottom]="actions.isVertical()" [class.port-right]="!actions.isVertical()"></div>
           </div>
         }
 

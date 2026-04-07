@@ -58,7 +58,13 @@ export function computeAutoLayout(
         return;
       }
       if (isType(s, 'parallel')) {
-        if (s.children?.length) maxY = Math.max(maxY, layout(s.children, { x, y: start.y }, w, gap).maxY);
+        if (s.children?.length) {
+          // Reserve vertical space for fork/join junctions + group header/padding
+          // Needs room for: junction gap (38) + group padding (24) + group header (32)
+          const junctionSpace = s.children.length > 1 ? 80 : 0;
+          const result = layout(s.children, { x, y: start.y + junctionSpace }, w, gap);
+          maxY = Math.max(maxY, result.maxY + junctionSpace);
+        }
         return;
       }
       if (isBreakpoint(s)) {
