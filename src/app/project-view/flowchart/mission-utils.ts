@@ -3,6 +3,7 @@ export {
   ensureParallelAfter,
   attachToStartWithParallel,
   attachChildWithParallel,
+  makeSiblingInParallel,
 } from './mission-parallel-utils';
 
 export {

@@ -87,7 +87,7 @@
 
 :host ::ng-deep f-connection:hover .connection-add-btn,
 :host ::ng-deep f-connection.connection-selected .connection-add-btn,
-:host ::ng-deep f-flow.external-drag-active .connection-add-btn {
+:host ::ng-deep f-flow.any-drag-active .connection-add-btn {
   opacity: 1;
 }
 
@@ -98,8 +98,8 @@
   transform: scale(1.15);
 }
 
-/* Enlarge plus buttons during external drag for easier drop targeting */
-:host ::ng-deep f-flow.external-drag-active .connection-add-btn {
+/* Enlarge plus buttons during any drag for easier drop targeting */
+:host ::ng-deep f-flow.any-drag-active .connection-add-btn {
   width: 36px;
   height: 36px;
   font-size: 1rem;

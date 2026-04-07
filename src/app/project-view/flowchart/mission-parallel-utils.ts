@@ -1,7 +1,7 @@
 import { Mission } from '../../entities/Mission';
 import { MissionStep } from '../../entities/MissionStep';
 import { isType, mk } from './models';
-import { detachEverywhere, findParentAndIndex } from './mission-tree-utils';
+import { detachEverywhere, findParentAndIndex, normalize } from './mission-tree-utils';
 
 export function ensureTopLevelParallel(mission: Mission): MissionStep {
   mission.steps ??= [];
@@ -153,6 +153,41 @@ export function attachChildWithParallel(mission: Mission, parent: MissionStep, c
     detachEverywhere(mission, child);
     if (!par.children.includes(child)) par.children.push(child);
   }
+
+  return true;
+}
+
+/**
+ * Place `newStep` as a sibling of `target` inside a parallel container.
+ * If `target` is already inside a parallel, `newStep` is added as another branch.
+ * Otherwise, `target` is wrapped in a new parallel with `newStep` as the second branch.
+ */
+export function makeSiblingInParallel(mission: Mission, target: MissionStep, newStep: MissionStep): boolean {
+  if (target === newStep) return false;
+
+  detachEverywhere(mission, newStep);
+
+  const loc = findParentAndIndex(mission, target);
+  if (!loc) return false;
+
+  const { parent, container, index } = loc;
+
+  // If target is already directly inside a parallel, just add a new branch
+  if (parent && isType(parent, 'parallel')) {
+    if (!parent.children!.includes(newStep)) {
+      parent.children!.push(newStep);
+    }
+    return true;
+  }
+
+  // Otherwise, wrap target in a new parallel container
+  const par = mk('parallel');
+  par.children = [target, newStep];
+  container.splice(index, 1, par);
+
+  // Clean up degenerate wrappers
+  normalize(mission, 'parallel');
+  normalize(mission, 'seq');
 
   return true;
 }

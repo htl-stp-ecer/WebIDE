@@ -5,6 +5,7 @@ import { FormsModule } from '@angular/forms';
 import { RouterLink, RouterLinkActive } from '@angular/router';
 import { Subscription, interval, switchMap, takeUntil, Subject } from 'rxjs';
 import { HttpService } from '../services/http-service';
+import { RunActionService } from '../services/run-action-service';
 import { enTranslations, deTranslations } from '../i18n/translations';
 
 @Component({
@@ -36,7 +37,8 @@ export class Navbar implements OnInit, OnDestroy {
 
   constructor(
     private translate: TranslateService,
-    private http: HttpService
+    private http: HttpService,
+    readonly runAction: RunActionService
   ) {
     translate.setTranslation('en', enTranslations, true);
     translate.setTranslation('de', deTranslations, true);

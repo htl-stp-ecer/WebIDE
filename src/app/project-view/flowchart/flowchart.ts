@@ -16,11 +16,12 @@ import { MissionStateService } from '../../services/mission-sate-service';
 import { StepsStateService } from '../../services/steps-state-service';
 import { HttpService } from '../../services/http-service';
 import { KeybindingsService } from '../../services/keybindings-service';
+import { RunActionService } from '../../services/run-action-service';
 import { FlowHistory } from '../../entities/flow-history';
 import { Mission } from '../../entities/Mission';
 import { MissionSimulationData, ProjectSimulationData } from '../../entities/Simulation';
 import { Connection, FlowComment, FlowGroup, FlowNode, FlowOrientation, Step, baseId, isMultiSensorType, parseMultiSensorSelection, resolveDefinitionType, toVal } from './models';
-import { insertBetween, attachChildSequentially, detachEverywhere } from './mission-utils';
+import { insertBetween, attachChildSequentially, makeSiblingInParallel, detachEverywhere } from './mission-utils';
 import { MissionStep } from '../../entities/MissionStep';
 import { FlowchartHistoryManager } from './flowchart-history-manager';
 import { FlowchartRunManager } from './flowchart-run-manager';
@@ -155,9 +156,14 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
   readonly logsFullscreen = signal<boolean>(false);
   readonly selectedConnectionId = signal<string | null>(null);
   readonly externalDragActive = signal<boolean>(false);
+  readonly internalDragActive = signal<boolean>(false);
+  readonly draggedNodeId = signal<string | null>(null);
+  readonly dragOriginalPosition = signal<{ x: number; y: number } | null>(null);
+  readonly anyDragActive = computed(() => this.externalDragActive() || this.internalDragActive());
   readonly stepPickerVisible = signal<boolean>(false);
   readonly stepPickerPos = signal<{ x: number; y: number }>({ x: 0, y: 0 });
   readonly stepPickerConnectionId = signal<string | null>(null);
+  readonly stepPickerParallelNodeId = signal<string | null>(null);
   readonly nextMissionName = computed(() => {
     const current = this.missionState.currentMission();
     const all = this.missionState.allMissions();
@@ -193,7 +199,7 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
   private stepsSub?: Subscription;
   private missionListSub?: Subscription;
   private missionDetailSub?: Subscription;
-  private _useAutoLayout = readStoredAutoLayout();
+  private _useAutoLayout = true; // Always auto-layout
   private activePanelDrag: PanelDragState | null = null;
   private deviceInfo: ConnectionInfo | null = null;
   private loadingDeviceInfo = false;
@@ -231,12 +237,18 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
     readonly tableViz: TableVisualizationService,
     readonly tableMap: TableMapService,
     readonly planningService: PlanningModeService,
-    readonly keybindingsService: KeybindingsService
+    readonly keybindingsService: KeybindingsService,
+    private readonly runActionService: RunActionService
   ) {
     this.historyManager = createHistoryManager(this);
     this.runManager = createRunManager(this);
     this.actions = createFlowchartActions(this);
     initializeFlowchart(this);
+
+    effect(() => {
+      this.runActionService.isRunActive.set(this.isRunActive());
+      this.runActionService.debugState.set(this.debugState());
+    });
 
     effect(() => {
       const isOpen = this.robotSettingsVisible();
@@ -263,24 +275,21 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
   }
 
   ngOnInit(): void {
+    this.runActionService.register({
+      onRun: mode => this.actions.onRun(mode),
+      onStop: () => this.actions.stopRun(),
+      onContinueDebug: () => this.actions.continueDebug(),
+    });
     this.loadTypeDefinitions();
     this.preloadMissionAndSteps();
   }
 
   get useAutoLayout(): boolean {
-    return this._useAutoLayout;
+    return true;
   }
 
-  set useAutoLayout(value: boolean) {
-    if (this._useAutoLayout === value) return;
-    this._useAutoLayout = value;
-    persistAutoLayout(value);
-    if (value) {
-      this.layoutFlags.needsAdjust = true;
-      this.layoutFlags.pendingViewportReset = true;
-    } else {
-      recomputeMergedView(this);
-    }
+  set useAutoLayout(_value: boolean) {
+    // Auto-layout is always enabled — nodes are positioned automatically
   }
 
   ngAfterViewChecked(): void {
@@ -297,6 +306,7 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
   }
 
   ngOnDestroy(): void {
+    this.runActionService.unregister();
     this.actions.stopRun();
     this.stopPanelDrag();
     this.stopSelectionDrag();
@@ -479,10 +489,22 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
     this.stepPickerVisible.set(true);
   }
 
+  onParallelAddClick(event: Event, nodeId: string): void {
+    event.stopPropagation();
+    const mouseEvent = event as MouseEvent;
+    this.stepPickerParallelNodeId.set(nodeId);
+    this.stepPickerConnectionId.set(null);
+    this.stepPickerPos.set({ x: mouseEvent.clientX, y: mouseEvent.clientY });
+    this.stepPickerVisible.set(true);
+  }
+
   onStepPickerSelect(step: Step): void {
     const connId = this.stepPickerConnectionId();
+    const parallelNodeId = this.stepPickerParallelNodeId();
     if (connId) {
       this.insertStepAtConnection(connId, step);
+    } else if (parallelNodeId) {
+      this.insertStepInParallel(parallelNodeId, step);
     }
     this.closeStepPicker();
   }
@@ -490,7 +512,24 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
   closeStepPicker(): void {
     this.stepPickerVisible.set(false);
     this.stepPickerConnectionId.set(null);
+    this.stepPickerParallelNodeId.set(null);
     this.selectedConnectionId.set(null);
+  }
+
+  insertStepInParallel(targetNodeId: string, step: Step): void {
+    const mission = this.missionState.currentMission();
+    if (!mission) return;
+
+    const targetStep = this.lookups.nodeIdToStep.get(targetNodeId);
+    if (!targetStep) return;
+
+    const missionStep = this.createMissionStepFromStep(step);
+    makeSiblingInParallel(mission, targetStep, missionStep);
+
+    rebuildFromMission(this, mission);
+    this.layoutFlags.needsAdjust = true;
+    this.historyManager.recordHistory('insert-step-parallel');
+    this.keybindingsService.trackStepUsage(step);
   }
 
   onDragStarted(event: any): void {
@@ -502,6 +541,197 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
   onDragEnded(): void {
     this.externalDragActive.set(false);
     this.actions.onSave();
+  }
+
+  // --- Custom pointer-based node drag (nodes are position-locked, drag = move-to-target) ---
+  private nodeDragState: {
+    nodeId: string;
+    startX: number;
+    startY: number;
+    activated: boolean;
+    ghost: HTMLElement | null;
+  } | null = null;
+
+  private readonly NODE_DRAG_THRESHOLD = 6;
+
+  private onNodeDragPointerMove = (e: PointerEvent) => {
+    if (!this.nodeDragState) return;
+    const dx = e.clientX - this.nodeDragState.startX;
+    const dy = e.clientY - this.nodeDragState.startY;
+
+    if (!this.nodeDragState.activated) {
+      if (Math.hypot(dx, dy) < this.NODE_DRAG_THRESHOLD) return;
+      // Activate drag
+      this.nodeDragState.activated = true;
+      this.internalDragActive.set(true);
+      this.draggedNodeId.set(this.nodeDragState.nodeId);
+      this.createDragGhost(this.nodeDragState.nodeId, e.clientX, e.clientY);
+    }
+
+    // Move the ghost
+    if (this.nodeDragState.ghost) {
+      this.nodeDragState.ghost.style.left = `${e.clientX}px`;
+      this.nodeDragState.ghost.style.top = `${e.clientY}px`;
+    }
+  };
+
+  private onNodeDragPointerUp = (e: PointerEvent) => {
+    window.removeEventListener('pointermove', this.onNodeDragPointerMove);
+    window.removeEventListener('pointerup', this.onNodeDragPointerUp);
+
+    if (!this.nodeDragState?.activated) {
+      this.nodeDragState = null;
+      return;
+    }
+
+    const nodeId = this.nodeDragState.nodeId;
+    this.removeDragGhost();
+
+    // Hit-test drop targets at cursor position
+    const hitResult = this.hitTestDropTargets(e.clientX, e.clientY, nodeId);
+    if (hitResult) {
+      if (hitResult.type === 'connection') {
+        this.moveStepToConnection(nodeId, hitResult.id);
+      } else if (hitResult.type === 'parallel') {
+        this.moveStepToParallel(nodeId, hitResult.id);
+      }
+    }
+
+    this.nodeDragState = null;
+    this.internalDragActive.set(false);
+    this.draggedNodeId.set(null);
+    this.dragOriginalPosition.set(null);
+  };
+
+  startNodeDrag(event: PointerEvent, nodeId: string): void {
+    if (!event.isPrimary || event.button !== 0) return;
+    if (nodeId === 'start-node' || nodeId === 'end-node') return;
+    if (this.isSyntheticJunctionNodeId(nodeId)) return;
+    // Don't start drag if target is an interactive control inside the node
+    const target = event.target as HTMLElement;
+    if (target.closest('input, textarea, select, .p-select, .p-inputnumber, .p-checkbox, .p-multiselect, button')) return;
+
+    this.nodeDragState = {
+      nodeId,
+      startX: event.clientX,
+      startY: event.clientY,
+      activated: false,
+      ghost: null,
+    };
+
+    window.addEventListener('pointermove', this.onNodeDragPointerMove);
+    window.addEventListener('pointerup', this.onNodeDragPointerUp);
+  }
+
+  private createDragGhost(nodeId: string, x: number, y: number): void {
+    const node = this.nodes().find(n => n.id === nodeId);
+    const label = node?.text ?? 'Step';
+
+    const ghost = document.createElement('div');
+    ghost.className = 'node-drag-ghost-floating';
+    ghost.textContent = label;
+    ghost.style.position = 'fixed';
+    ghost.style.left = `${x}px`;
+    ghost.style.top = `${y}px`;
+    ghost.style.transform = 'translate(-50%, -50%)';
+    ghost.style.pointerEvents = 'none';
+    ghost.style.zIndex = '10000';
+    document.body.appendChild(ghost);
+    if (this.nodeDragState) {
+      this.nodeDragState.ghost = ghost;
+    }
+  }
+
+  private removeDragGhost(): void {
+    if (this.nodeDragState?.ghost) {
+      this.nodeDragState.ghost.remove();
+      this.nodeDragState.ghost = null;
+    }
+  }
+
+  private hitTestDropTargets(x: number, y: number, excludeNodeId: string):
+    | { type: 'connection'; id: string }
+    | { type: 'parallel'; id: string }
+    | null {
+    // Check connection "+" buttons
+    const connectionBtns = document.querySelectorAll('.connection-add-btn');
+    for (const btn of connectionBtns) {
+      const rect = btn.getBoundingClientRect();
+      if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
+        const connectionEl = btn.closest('f-connection');
+        const connectionId = connectionEl?.getAttribute('data-connection-id');
+        if (connectionId) {
+          return { type: 'connection', id: connectionId };
+        }
+      }
+    }
+
+    // Check parallel "+" buttons
+    const parallelBtns = document.querySelectorAll('.parallel-add-btn');
+    for (const btn of parallelBtns) {
+      const rect = btn.getBoundingClientRect();
+      if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
+        const targetNodeId = (btn as HTMLElement).getAttribute('data-target-node-id');
+        if (targetNodeId && targetNodeId !== excludeNodeId) {
+          return { type: 'parallel', id: targetNodeId };
+        }
+      }
+    }
+
+    return null;
+  }
+
+  moveStepToConnection(sourceNodeId: string, connectionId: string): void {
+    const mission = this.missionState.currentMission();
+    if (!mission) return;
+
+    const sourceStep = this.lookups.nodeIdToStep.get(sourceNodeId);
+    if (!sourceStep) return;
+
+    const connection = this.missionConnections().find(c => c.id === connectionId);
+    if (!connection) return;
+
+    const parentNodeId = connection.sourceNodeId ?? (connection.outputId ? baseId(connection.outputId, 'output') : null);
+    const childNodeId = connection.targetNodeId ?? (connection.inputId ? baseId(connection.inputId, 'input') : null);
+
+    const parentStep = parentNodeId && parentNodeId !== 'start-node'
+      ? this.lookups.nodeIdToStep.get(parentNodeId) ?? null
+      : null;
+    const childStep = childNodeId && childNodeId !== 'end-node'
+      ? this.lookups.nodeIdToStep.get(childNodeId) ?? null
+      : null;
+
+    // Don't move onto connections involving the same step
+    if (parentStep === sourceStep || childStep === sourceStep) return;
+
+    detachEverywhere(mission, sourceStep);
+
+    if (childStep) {
+      insertBetween(mission, parentStep, childStep, sourceStep);
+    } else if (parentStep) {
+      attachChildSequentially(mission, parentStep, sourceStep);
+    } else {
+      (mission.steps ??= []).push(sourceStep);
+    }
+
+    rebuildFromMission(this, mission);
+    this.layoutFlags.needsAdjust = true;
+    this.historyManager.recordHistory('move-step-to-connection');
+  }
+
+  moveStepToParallel(sourceNodeId: string, targetNodeId: string): void {
+    const mission = this.missionState.currentMission();
+    if (!mission) return;
+
+    const sourceStep = this.lookups.nodeIdToStep.get(sourceNodeId);
+    const targetStep = this.lookups.nodeIdToStep.get(targetNodeId);
+    if (!sourceStep || !targetStep || sourceStep === targetStep) return;
+
+    makeSiblingInParallel(mission, targetStep, sourceStep);
+
+    rebuildFromMission(this, mission);
+    this.layoutFlags.needsAdjust = true;
+    this.historyManager.recordHistory('move-step-to-parallel');
   }
 
 
@@ -1303,13 +1533,12 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
     if (current.size > 1) {
       this.selectedNodeIds.set(new Set([nodeId]));
       this.selectionGroup.set(null);
-      return;
-    }
-    if (!current.has(nodeId)) {
+    } else if (!current.has(nodeId)) {
       this.selectedNodeIds.set(new Set([nodeId]));
       this.selectionGroup.set(null);
-      return;
     }
+    // Start custom pointer-based drag for move-to-target
+    this.startNodeDrag(event, nodeId);
   }
 
   onSurfacePointerDown(event: PointerEvent): void {

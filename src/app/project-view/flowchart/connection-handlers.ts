@@ -88,6 +88,10 @@ export function handleAddConnection(flow: Flowchart, event: FCreateConnectionEve
 }
 
 export function handleNodeIntersected(flow: Flowchart, event: FNodeIntersectedWithConnections): void {
+  // Suppress intersection splitting during internal drag — the drag-end handler
+  // handles placement via explicit drop target hit-testing
+  if (flow.internalDragActive()) return;
+
   const nodeId = event.fNodeId;
   const hitId = event.fConnectionIds?.[0];
   if (!hitId || nodeId === START_NODE_ID || nodeId === 'end-node') return;

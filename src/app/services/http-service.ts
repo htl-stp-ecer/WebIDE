@@ -328,6 +328,21 @@ export class HttpService {
     return this.http.get<Mission[]>(this.localApi(`/missions/${projectUUID}`));
   }
 
+  getMissionSource(projectUUID: string, missionName: string) {
+    const encoded = encodeURIComponent(missionName);
+    return this.http.get<{ name: string; source: string }>(
+      this.localApi(`/missions/${projectUUID}/source/${encoded}`)
+    );
+  }
+
+  saveMissionSource(projectUUID: string, missionName: string, source: string) {
+    const encoded = encodeURIComponent(missionName);
+    return this.http.put<{ success: boolean }>(
+      this.localApi(`/missions/${projectUUID}/source/${encoded}`),
+      { source }
+    );
+  }
+
   createMission(projectUUID: string, name: string) {
     return this.http.post(this.localApi(`/missions/${projectUUID}`), {
       name: name

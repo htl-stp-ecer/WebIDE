@@ -301,7 +301,11 @@ export function handleNodeMoved(flow: Flowchart, nodeId: string, pos: { x: numbe
   };
 
   if (applyPositions(nodeId, pos)) {
-    flow.historyManager.recordHistory('move-node');
+    // Don't record history during internal drag — the drag-end handler
+    // will either snap back or perform a tree move with its own history entry
+    if (!flow.internalDragActive()) {
+      flow.historyManager.recordHistory('move-node');
+    }
     flow.syncSelectionGroup();
   }
 }

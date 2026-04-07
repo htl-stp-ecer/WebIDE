@@ -107,14 +107,27 @@ export function createFlowchartActions(flow: Flowchart): FlowchartActions {
       // Use bounding rect hit-test since elementsFromPoint is blocked by the foblex preview overlay
       const dropX = event.fDropPosition?.x ?? (event.rect.x + event.rect.width / 2);
       const dropY = event.fDropPosition?.y ?? (event.rect.y + event.rect.height / 2);
-      const buttons = document.querySelectorAll('.connection-add-btn');
-      for (const btn of buttons) {
+      const connectionBtns = document.querySelectorAll('.connection-add-btn');
+      for (const btn of connectionBtns) {
         const rect = btn.getBoundingClientRect();
         if (dropX >= rect.left && dropX <= rect.right && dropY >= rect.top && dropY <= rect.bottom) {
           const connectionEl = btn.closest('f-connection');
           const connectionId = connectionEl?.getAttribute('data-connection-id');
           if (connectionId) {
             flow.insertStepAtConnection(connectionId, step);
+            return;
+          }
+        }
+      }
+
+      // Check if the drop landed on a parallel "+" button
+      const parallelBtns = document.querySelectorAll('.parallel-add-btn');
+      for (const btn of parallelBtns) {
+        const rect = btn.getBoundingClientRect();
+        if (dropX >= rect.left && dropX <= rect.right && dropY >= rect.top && dropY <= rect.bottom) {
+          const targetNodeId = (btn as HTMLElement).getAttribute('data-target-node-id');
+          if (targetNodeId) {
+            flow.insertStepInParallel(targetNodeId, step);
             return;
           }
         }

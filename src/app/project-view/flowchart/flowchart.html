@@ -80,42 +80,7 @@
         <span class="ml-1 text-sm">{{ simulateRuns() ? ('FLOWCHART.SIM_SHORT' | translate) : ('FLOWCHART.REAL_SHORT' | translate) }}</span>
       </button>
     </div>
-    <div class="toolbar-right">
-      @if (!isRunActive()) {
-        <button class="ide-btn run text-end" (click)="actions.onRun('normal')" [attr.aria-label]="'FLOWCHART.RUN'|translate" [pTooltip]="'FLOWCHART.RUN'|translate" tooltipPosition="left">
-          <svg viewBox="0 0 32 32" aria-hidden="true" focusable="false" class="icon-run"><polygon points="10,6 10,26 24,16" /></svg>
-        </button>
-      } @else {
-        <button class="ide-btn stop mr-1" (click)="actions.stopRun()" [attr.aria-label]="'FLOWCHART.STOP'|translate" [pTooltip]="'FLOWCHART.STOP'|translate" tooltipPosition="left">
-          <i class="pi pi-stop"></i>
-        </button>
-      }
-      <button
-        class="ide-btn debug"
-        (click)="isRunActive() ? actions.continueDebug() : actions.onRun('debug')"
-        [attr.aria-label]="isRunActive() && debugState() === 'paused' ? ('FLOWCHART.CONTINUE'|translate) : ('FLOWCHART.DEBUG'|translate)"
-        [pTooltip]="isRunActive() && debugState() === 'paused' ? ('FLOWCHART.CONTINUE'|translate) : ('FLOWCHART.DEBUG'|translate)"
-        tooltipPosition="left"
-        [disabled]="isRunActive() && debugState() !== 'paused'">
-        @if (isRunActive() && debugState() === 'paused') {
-          <i class="pi pi-step-forward"></i>
-        } @else {
-          <svg viewBox="0 0 32 32" aria-hidden="true" focusable="false" class="icon-debug" xmlns="http://www.w3.org/2000/svg">
-            <g class="group-fill" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="16" cy="18" r="7" />
-              <circle cx="16" cy="9" r="3" />
-              <line x1="16" y1="12" x2="16" y2="25" />
-              <line x1="9" y1="15" x2="4" y2="13" />
-              <line x1="23" y1="15" x2="28" y2="13" />
-              <line x1="9" y1="21" x2="4" y2="23" />
-              <line x1="23" y1="21" x2="28" y2="23" />
-              <line x1="14" y1="6" x2="12" y2="4" />
-              <line x1="18" y1="6" x2="20" y2="4" />
-            </g>
-          </svg>
-        }
-      </button>
-    </div>
+    <div class="toolbar-right"></div>
   </div>
 
   <div
@@ -133,7 +98,7 @@
         </div>
       </div>
     }
-    <f-flow class="flow-root" fDraggable fEmitOnNodeIntersect (fNodeIntersectedWithConnections)="actions.onNodeIntersected($event)" (fDropToGroup)="actions.onDropToGroup($event)" (fLoaded)="actions.onLoaded()" (fCreateNode)="actions.onCreateNode($event)" (fCreateConnection)="actions.addConnection($event)" (fDragStarted)="onDragStarted($event)" (fDragEnded)="onDragEnded()" [class.external-drag-active]="externalDragActive()">
+    <f-flow class="flow-root" fDraggable fEmitOnNodeIntersect (fNodeIntersectedWithConnections)="actions.onNodeIntersected($event)" (fDropToGroup)="actions.onDropToGroup($event)" (fLoaded)="actions.onLoaded()" (fCreateNode)="actions.onCreateNode($event)" (fCreateConnection)="actions.addConnection($event)" (fDragStarted)="onDragStarted($event)" (fDragEnded)="onDragEnded()" [class.external-drag-active]="externalDragActive()" [class.internal-drag-active]="internalDragActive()" [class.any-drag-active]="anyDragActive()">
       <f-background class="flow-bg"><f-circle-pattern color="#4a5565"></f-circle-pattern></f-background>
       <f-canvas fZoom class="flow-canvas" (fCanvasChange)="onCanvasChange()">
         <!-- Manual connection drawing removed: steps are inserted via edge + buttons or keyboard -->
@@ -226,7 +191,6 @@
         @for (node of actions.visibleNodes(); track node.id) {
           <div
             fNode
-            fDragHandle
             [fNodeId]="node.id"
             [fNodePosition]="node.position"
             [fNodeParentId]="getSelectionParentId(node.id)"
@@ -234,6 +198,7 @@
             [class.node-junction]="node.step.name === '__junction__'"
             [class.node-completed]="actions.isNodeCompleted(node.id)"
             [class.node-selected]="isNodeSelected(node.id)"
+            [class.node-drag-source]="draggedNodeId() === node.id"
             [attr.data-node-id]="node.id"
             (pointerdown)="onNodePointerDown($event, node.id)"
             (contextmenu)="actions.onRightClick($event, node.id)"
@@ -407,6 +372,16 @@
               </div>
             }
             <div fNodeOutput [fOutputId]="node.id + '-output'" [fOutputMultiple]="true" [fOutputConnectableSide]="actions.isVertical() ? 'bottom' : 'right'" class="port port-hidden" [class.port-bottom]="actions.isVertical()" [class.port-right]="!actions.isVertical()"></div>
+            @if (node.step.name !== '__junction__') {
+              <button type="button" class="parallel-add-btn" [class.parallel-add-btn-right]="actions.isVertical()" [class.parallel-add-btn-bottom]="!actions.isVertical()" [attr.data-target-node-id]="node.id" (click)="onParallelAddClick($event, node.id)" (pointerdown)="$event.stopPropagation()" [attr.aria-label]="'FLOWCHART.ADD_PARALLEL' | translate">
+                <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+                  <line x1="4" y1="3" x2="4" y2="13"/>
+                  <line x1="12" y1="3" x2="12" y2="13"/>
+                  <line x1="8" y1="5" x2="8" y2="11"/>
+                  <line x1="5" y1="8" x2="11" y2="8"/>
+                </svg>
+              </button>
+            }
           </div>
         }
 

@@ -38,6 +38,42 @@
   }
 
   <div class="navbar-end">
+    <!-- Run / Debug -->
+    <div class="run-actions">
+      @if (!runAction.isRunActive()) {
+        <button class="run-btn run" (click)="runAction.run('normal')" title="Run" aria-label="Run">
+          <svg viewBox="0 0 32 32" aria-hidden="true" focusable="false"><polygon points="10,6 10,26 24,16" /></svg>
+        </button>
+      } @else {
+        <button class="run-btn stop" (click)="runAction.stop()" title="Stop" aria-label="Stop">
+          <i class="pi pi-stop"></i>
+        </button>
+      }
+      <button
+        class="run-btn debug"
+        (click)="runAction.isRunActive() && runAction.debugState() === 'paused' ? runAction.continueDebug() : runAction.run('debug')"
+        [title]="runAction.isRunActive() && runAction.debugState() === 'paused' ? 'Continue' : 'Debug'"
+        [disabled]="runAction.isRunActive() && runAction.debugState() !== 'paused'">
+        @if (runAction.isRunActive() && runAction.debugState() === 'paused') {
+          <i class="pi pi-step-forward"></i>
+        } @else {
+          <svg viewBox="0 0 32 32" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+            <g stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="16" cy="18" r="7" />
+              <circle cx="16" cy="9" r="3" />
+              <line x1="16" y1="12" x2="16" y2="25" />
+              <line x1="9" y1="15" x2="4" y2="13" />
+              <line x1="23" y1="15" x2="28" y2="13" />
+              <line x1="9" y1="21" x2="4" y2="23" />
+              <line x1="23" y1="21" x2="28" y2="23" />
+              <line x1="14" y1="6" x2="12" y2="4" />
+              <line x1="18" y1="6" x2="20" y2="4" />
+            </g>
+          </svg>
+        }
+      </button>
+    </div>
+
     <div class="lang-toggle" [attr.aria-label]="'NAVBAR.LANGUAGE_SELECTOR' | translate">
       @for (lang of languages; track lang.value) {
         <button

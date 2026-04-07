@@ -192,6 +192,78 @@
   }
 }
 
+/* Run / Debug Actions */
+.run-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.run-btn {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 5px;
+  border: 1px solid var(--rc-border, #2E3044);
+  outline: none;
+  cursor: pointer;
+  transition: transform 0.06s ease, background 0.1s ease, border-color 0.1s ease, box-shadow 0.1s ease;
+  background: var(--rc-surface, #1C1E2A);
+  color: var(--rc-muted, #A0A0AF);
+
+  svg {
+    width: 14px;
+    height: 14px;
+    display: block;
+    fill: currentColor;
+  }
+
+  &.debug svg {
+    stroke: currentColor;
+    fill: none;
+  }
+
+  i { font-size: 0.8rem; }
+
+  &:hover {
+    background: var(--rc-elevated, #252838);
+    border-color: var(--rc-dim, #5A5A6A);
+    color: var(--rc-text, #F0F0F5);
+  }
+
+  &:active { transform: translateY(1px); }
+
+  &:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+    pointer-events: none;
+  }
+
+  &.run {
+    background: var(--rc-green, #4CAF50);
+    border-color: rgba(76, 175, 80, 0.6);
+    color: #0A0A10;
+
+    &:hover {
+      background: #5DB861;
+      box-shadow: 0 0 10px rgba(76, 175, 80, 0.3);
+    }
+  }
+
+  &.stop {
+    background: var(--rc-red, #FF5252);
+    border-color: rgba(255, 82, 82, 0.6);
+    color: #0A0A10;
+
+    &:hover {
+      background: #FF6B6B;
+      box-shadow: 0 0 10px rgba(255, 82, 82, 0.3);
+    }
+  }
+}
+
 .icon-btn {
   display: flex;
   align-items: center;
