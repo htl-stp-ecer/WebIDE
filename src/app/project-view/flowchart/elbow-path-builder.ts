@@ -34,12 +34,28 @@ export class ElbowPathBuilder {
       path = `M ${sx} ${sy} L ${bendX} ${bendY} L ${tx} ${ty}`;
     }
 
-    const midX = (sx + tx) / 2;
-    const midY = (sy + ty) / 2;
+    let centerX: number, centerY: number;
+    if (isStraight) {
+      centerX = (sx + tx) / 2;
+      centerY = (sy + ty) / 2;
+    } else {
+      const len1 = Math.hypot(bendX - sx, bendY - sy);
+      const len2 = Math.hypot(tx - bendX, ty - bendY);
+      const half = (len1 + len2) / 2;
+      if (half <= len1) {
+        const t = half / len1;
+        centerX = sx + t * (bendX - sx);
+        centerY = sy + t * (bendY - sy);
+      } else {
+        const t = (half - len1) / len2;
+        centerX = bendX + t * (tx - bendX);
+        centerY = bendY + t * (ty - bendY);
+      }
+    }
 
     return {
       path,
-      connectionCenter: { x: midX, y: midY },
+      connectionCenter: { x: centerX, y: centerY },
       penultimatePoint: isStraight ? { x: sx, y: sy } : { x: bendX, y: bendY },
       secondPoint: isStraight ? { x: tx, y: ty } : { x: bendX, y: bendY },
     };

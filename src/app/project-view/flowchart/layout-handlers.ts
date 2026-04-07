@@ -279,7 +279,6 @@ function repositionSyntheticJunctions(
         : junction.position.x;
       let y = junction.position.y;
       const JUNCTION_GAP = 38;
-      const isFork = outgoing.length > incoming.length;
       if (isFork && outgoingTops.length) {
         // Fork: position just above the branches it fans out to
         y = Math.min(...outgoingTops) - JUNCTION_GAP;

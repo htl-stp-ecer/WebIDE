@@ -19,7 +19,7 @@
   stroke-width: 2;
 }
 
-:host ::ng-deep f-connection path:hover {
+:host ::ng-deep f-connection .f-connection-group:hover path[f-connection-path] {
   stroke: var(--rc-muted, #C8B9A5);
 }
 
@@ -39,10 +39,30 @@
 }
 
 /* Selected connection */
-:host ::ng-deep f-connection.connection-selected path {
+:host ::ng-deep f-connection.connection-selected path[f-connection-path] {
   stroke: var(--rc-accent, #DAA03E);
   stroke-width: 3;
   filter: drop-shadow(0 0 4px rgba(218, 160, 62, 0.4));
+}
+
+/* Widen hit area for connection hover (selection path has pointer-events: stroke) */
+:host ::ng-deep f-connection .f-connection-selection {
+  stroke-width: 20;
+  stroke: transparent;
+}
+
+/* Break the connections container stacking context so .f-connection-center can
+   compete at the canvas level against .f-node (z-index 4). Without this,
+   .f-connection-center is trapped inside the container's stacking context.
+   !important needed to override the library's scoped rule. */
+:host ::ng-deep .f-connections-container {
+  z-index: auto !important;
+}
+
+/* Lift connection center buttons above nodes (.f-node has z-index 4).
+   !important needed because foblex sets z-index: 3 via ::ng-deep globally. */
+:host ::ng-deep .f-connection-center {
+  z-index: 50 !important;
 }
 
 /* Add step button on connections */

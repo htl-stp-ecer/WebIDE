@@ -4,6 +4,10 @@ import { generateGuid } from '@foblex/utils';
 import { Connection, FlowNode, Step, baseId, isBreakpoint, isType } from './models';
 import { START_NODE_ID, END_NODE_ID, END_INPUT_ID } from './constants';
 
+function stableConnId(outputId: string, inputId: string): string {
+  return `conn::${outputId}::${inputId}`;
+}
+
 export interface ParallelGroupInfo {
   pathKey: string;
   nodeIds: string[];
@@ -51,7 +55,7 @@ export function rebuildMissionView(
     targetNodeId: string | null,
     targetPathKey: string | null
   ) => {
-    const connId = generateGuid();
+    const connId = stableConnId(exit.id, inputId);
     const sourceNode = baseId(exit.id, 'output');
     const connection: Connection = {
       id: connId,
@@ -87,8 +91,8 @@ export function rebuildMissionView(
     return { x, y };
   };
 
-  const createParallelJunction = (exits: ExitRef[]): ExitRef => {
-    const junctionId = `junction-${generateGuid()}`;
+  const createParallelJunction = (exits: ExitRef[], kind?: string, pathKey?: string | null): ExitRef => {
+    const junctionId = pathKey ? `junction-${kind}-${pathKey}` : `junction-${generateGuid()}`;
     const junctionInputId = `${junctionId}-input`;
     const junctionOutputId = `${junctionId}-output`;
     nodes.push({
@@ -140,13 +144,13 @@ export function rebuildMissionView(
         const children = s.children ?? [];
         if (children.length > 1) {
           // Create fork junction: single entry point for the parallel
-          const forkExit = createParallelJunction(parentExits);
+          const forkExit = createParallelJunction(parentExits, 'fork', pathKey);
           const forkId = baseId(forkExit.id, 'output');
           const nodesBefore = nodes.length;
           const r = build(children, [forkExit]);
           // Create join junction: single exit point for the parallel
           const childExits = r.exitRefs.length ? r.exitRefs : [forkExit];
-          const joinExit = createParallelJunction(childExits);
+          const joinExit = createParallelJunction(childExits, 'join', pathKey);
           const joinId = baseId(joinExit.id, 'output');
           // Collect all nodes (including fork/join) for auto-grouping
           if (pathKey) {
