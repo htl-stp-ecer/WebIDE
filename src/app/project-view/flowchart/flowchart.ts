@@ -40,13 +40,11 @@ import { Select } from 'primeng/select';
 import { MultiSelect } from 'primeng/multiselect';
 import { DecimalPipe } from '@angular/common';
 import { ProgressSpinner } from 'primeng/progressspinner';
-import { TableVisualizationPanel } from './table/table-visualization-panel';
 import { TimingPanel, type TimingViewMode } from './timing/timing-panel';
 import { RobotSettingsModal } from './robot-settings/robot-settings-modal';
 import { TableMapService, TableVisualizationService } from './table/services';
 import { buildPlannedPathFromProjectSimulation, buildPlannedPathFromProjectSimulationWithMissionOverride } from './table/simulation-path';
 import { PlanningModeService, PlanningOverlayComponent } from './table/planning';
-import { RunLogPanel } from './logs/run-log-panel';
 import { StepPickerModal } from './step-picker/step-picker-modal';
 import { generateGuid } from '@foblex/utils';
 import {
@@ -68,7 +66,7 @@ interface ChainMethodOption {
 }
 
 type DefinitionGroups = Partial<Record<string, DefinitionOption[]>>;
-type FloatingPanelKey = 'timing' | 'unity' | 'table' | 'logs';
+type FloatingPanelKey = 'timing' | 'unity';
 //
 interface PanelOffset {
   x: number;
@@ -92,12 +90,10 @@ interface OffscreenIndicatorState {
   angle: number;
 }
 
-const DEFAULT_VIEW_TOGGLE_STATE: Record<string, boolean> = { timestamps: true, tableVisualization: false, logs: true };
+const DEFAULT_VIEW_TOGGLE_STATE: Record<string, boolean> = { timestamps: true };
 const DEFAULT_PANEL_OFFSETS: Record<FloatingPanelKey, PanelOffset> = {
   timing: { x: 0, y: 0 },
   unity: { x: 0, y: 0 },
-  table: { x: 0, y: 0 },
-  logs: { x: 0, y: 0 },
 };
 const OFFSCREEN_INDICATOR_HORIZONTAL_THRESHOLD_PX = 340;
 const OFFSCREEN_INDICATOR_VERTICAL_THRESHOLD_PX = 220;
@@ -107,7 +103,7 @@ const OFFSCREEN_INDICATOR_CANVAS_DEBOUNCE_MS = 80;
 
 @Component({
   selector: 'app-flowchart',
-  imports: [FFlowComponent, FFlowModule, InputNumberModule, CheckboxModule, InputTextModule, ContextMenuModule, Tooltip, SelectButtonModule, FormsModule, TranslateModule, Select, MultiSelect, DecimalPipe, ProgressSpinner, TableVisualizationPanel, PlanningOverlayComponent, TimingPanel, RobotSettingsModal, RunLogPanel, StepPickerModal],
+  imports: [FFlowComponent, FFlowModule, InputNumberModule, CheckboxModule, InputTextModule, ContextMenuModule, Tooltip, SelectButtonModule, FormsModule, TranslateModule, Select, MultiSelect, DecimalPipe, ProgressSpinner, PlanningOverlayComponent, TimingPanel, RobotSettingsModal, StepPickerModal],
   templateUrl: './flowchart.html',
   styleUrl: './flowchart.scss',
   providers: [FlowHistory, { provide: F_CONNECTION_BUILDERS, useValue: { elbow: new ElbowPathBuilder() } }],
@@ -138,8 +134,6 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
   readonly viewToggleState = signal<Record<string, boolean>>(readStoredViewToggleState(DEFAULT_VIEW_TOGGLE_STATE));
   readonly viewToggleOptions = [
     { key: 'timestamps', labelKey: 'FLOWCHART.VIEW_TOGGLE_TIMESTAMPS', icon: 'pi pi-clock' },
-    { key: 'tableVisualization', labelKey: 'FLOWCHART.VIEW_TOGGLE_TABLE_VIZ', icon: 'pi pi-map' },
-    { key: 'logs', labelKey: 'FLOWCHART.VIEW_TOGGLE_LOGS', icon: 'pi pi-list' },
   ];
   readonly panelOffsets = signal<Record<FloatingPanelKey, PanelOffset>>({ ...DEFAULT_PANEL_OFFSETS });
   readonly selectedNodeIds = signal<Set<string>>(new Set());
@@ -153,7 +147,7 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
   readonly robotSettingsVisible = signal<boolean>(false);
   readonly robotSettingsInitialTab = signal<'project' | 'robot' | 'start' | 'map' | 'keybindings' | null>(null);
   readonly saveStatus = signal<'idle' | 'saving' | 'saved'>('idle');
-  readonly logsFullscreen = signal<boolean>(false);
+
   readonly selectedConnectionId = signal<string | null>(null);
   readonly externalDragActive = signal<boolean>(false);
   readonly internalDragActive = signal<boolean>(false);
@@ -265,7 +259,7 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
       this.orientation();
       this.selectionGroup();
 
-      if (this.planningService.isActive() || this.logsFullscreen()) {
+      if (this.planningService.isActive()) {
         this.hideOffscreenIndicator();
         return;
       }
@@ -1106,7 +1100,7 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
   }
 
   private updateOffscreenIndicator(): void {
-    if (this.planningService.isActive() || this.logsFullscreen()) {
+    if (this.planningService.isActive()) {
       this.hideOffscreenIndicator();
       return;
     }
@@ -1266,15 +1260,8 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
     this.viewToggleState.update(prev => {
       const next = { ...prev, [key]: !prev[key] };
       persistViewToggleState(next);
-      if (key === 'logs' && !next['logs']) {
-        this.logsFullscreen.set(false);
-      }
       return next;
     });
-  }
-
-  setLogsFullscreen(value: boolean): void {
-    this.logsFullscreen.set(value);
   }
 
   setTimingViewMode(mode: TimingViewMode): void {
