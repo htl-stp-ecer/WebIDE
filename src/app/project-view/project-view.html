@@ -1,5 +1,10 @@
 <div class="project-shell">
-  <div class="project-layout" #layoutRoot>
+  <div
+    class="project-layout"
+    #layoutRoot
+    [style.--left-panel-width]="initialLeftPanelWidth"
+    [style.--right-panel-width]="initialRightPanelWidth"
+    [style.--bottom-panel-height]="initialBottomPanelHeight">
     <!-- Tool Stripe (Left Edge — full height) -->
     <div class="tool-stripe">
       <!-- Top Tools -->
@@ -35,6 +40,17 @@
           aria-label="Table Visualization">
           <i class="pi pi-map"></i>
         </button>
+        @if (armAvailable()) {
+          <button
+            type="button"
+            class="tool-stripe-btn"
+            [class.active]="activeBottomPanel() === 'arm'"
+            (click)="toggleBottomPanel('arm')"
+            title="Arm Visualizer"
+            aria-label="Arm Visualizer">
+            <i class="pi pi-android"></i>
+          </button>
+        }
       </div>
     </div>
 
@@ -181,6 +197,19 @@
                 [showHeader]="false"
                 [embedded]="true"></app-table-visualization-panel>
             }
+          </div>
+        } @else if (activeBottomPanel() === 'arm') {
+          <div class="tool-window-header">
+            <span class="tool-window-title">
+              <i class="pi pi-android"></i>
+              Arm Visualizer
+            </span>
+            <button class="tool-window-hide" (click)="toggleBottomPanel(null)" title="Hide">
+              <i class="pi pi-minus"></i>
+            </button>
+          </div>
+          <div class="tool-panel-content">
+            <app-arm-panel [projectUuid]="projectUUID"></app-arm-panel>
           </div>
         }
       </div>

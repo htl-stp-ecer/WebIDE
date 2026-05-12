@@ -1,0 +1,95 @@
+<div class="arm-panel">
+  @if (loading()) {
+    <div class="arm-status">Loading arm…</div>
+  } @else if (errorMsg()) {
+    <div class="arm-status arm-status--error">{{ errorMsg() }}</div>
+  } @else if (chain(); as c) {
+    <aside class="arm-controls">
+      <div class="arm-section">
+        <h4 class="arm-section-title">{{ c.name }}</h4>
+
+        <div class="arm-live-row">
+          <button
+            type="button"
+            class="arm-live-toggle"
+            [class.active]="livePreview()"
+            (click)="toggleLive()"
+            title="When ON, every move is sent to the real servos">
+            <span class="dot" [class.on]="livePreview()"></span>
+            {{ livePreview() ? 'LIVE' : 'Preview' }}
+          </button>
+          @if (!reachable()) {
+            <span class="arm-warn">Unreachable</span>
+          }
+        </div>
+      </div>
+
+      <div class="arm-section">
+        <h5 class="arm-section-subtitle">Joints</h5>
+        @for (j of c.joints; track j.index; let i = $index) {
+          <div class="joint-row">
+            <div class="joint-label">
+              <span>J{{ j.index }} · {{ j.servo }}</span>
+              <span class="joint-value">{{ jointAngles()[i] | number:'1.0-1' }}°</span>
+            </div>
+            <input
+              type="range"
+              [min]="j.joint_range_deg[0]"
+              [max]="j.joint_range_deg[1]"
+              step="0.5"
+              [value]="jointAngles()[i]"
+              (input)="onJointChange(i, $any($event.target).value)"
+            />
+          </div>
+        }
+      </div>
+
+      <div class="arm-section">
+        <h5 class="arm-section-subtitle">Target (cm)</h5>
+        <div class="xyz-row">
+          <label>X<input type="number" step="0.5" [value]="targetXYZ()[0] | number:'1.0-2'" (input)="onTargetChange(0, $any($event.target).value)" /></label>
+          <label>Y<input type="number" step="0.5" [value]="targetXYZ()[1] | number:'1.0-2'" (input)="onTargetChange(1, $any($event.target).value)" /></label>
+          <label>Z<input type="number" step="0.5" [value]="targetXYZ()[2] | number:'1.0-2'" (input)="onTargetChange(2, $any($event.target).value)" /></label>
+        </div>
+        <button type="button" class="arm-btn" (click)="solveIk()">Solve IK</button>
+      </div>
+
+      <div class="arm-section">
+        <h5 class="arm-section-subtitle">Positions</h5>
+        <div class="positions-row">
+          <select [value]="selectedPosition()" (change)="onSelectPosition($any($event.target).value)">
+            <option value="">— select —</option>
+            @for (p of positionsList(); track p) {
+              <option [value]="p">{{ p }}</option>
+            }
+          </select>
+          <button type="button" class="arm-btn arm-btn--danger" [disabled]="!selectedPosition()" (click)="deletePosition()">
+            <i class="pi pi-trash"></i>
+          </button>
+        </div>
+        <div class="positions-save">
+          <input
+            type="text"
+            placeholder="name…"
+            [value]="savePositionName()"
+            (input)="savePositionName.set($any($event.target).value)"
+          />
+          <button type="button" class="arm-btn" [disabled]="!savePositionName().trim()" (click)="savePosition()">Save</button>
+        </div>
+      </div>
+
+      <div class="arm-section arm-ee-readout">
+        <span>End-effector:</span>
+        <span class="mono">
+          ({{ endEffector()[0] | number:'1.0-1' }},
+          {{ endEffector()[1] | number:'1.0-1' }},
+          {{ endEffector()[2] | number:'1.0-1' }}) cm
+        </span>
+      </div>
+    </aside>
+
+    <div #canvasHost class="arm-canvas"></div>
+  } @else {
+    <div class="arm-status">No arm data.</div>
+  }
+</div>

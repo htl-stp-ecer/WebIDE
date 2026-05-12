@@ -47,7 +47,7 @@ function applyLayoutPositionsToDom(flow: Flowchart): void {
   posMap.set(START_NODE_ID, startNodePosition(flow));
   posMap.set(END_NODE_ID, endNodePosition(flow));
 
-  flow.nodeEls.forEach(el => {
+  flow.nodeEls?.forEach(el => {
     const id = el.nativeElement.dataset['nodeId'];
     const pos = id ? posMap.get(id) : undefined;
     if (pos) {
@@ -65,12 +65,19 @@ export function handleLoaded(flow: Flowchart): void {
     canvas.emitCanvasChangeEvent();
     return;
   }
-  // Only initialize viewport when nodes are already present (e.g. tab-switch).
-  // On initial load nodes aren't rendered yet when fLoaded fires, so we defer
-  // viewport init to handleAfterViewChecked once the layout has actually run.
-  if (!flow.viewportInitialized && flow.nodes().length > 0) {
+  // Only initialize viewport when node DOM is already present (e.g. tab-switch).
+  // On initial load the mission state may already contain nodes when fLoaded
+  // fires, but the node elements are not mounted yet. Initializing here marks
+  // the viewport as ready too early and skips the first post-layout recenter.
+  const nodeElementCount = flow.nodeEls?.length ?? 0;
+  if (!flow.viewportInitialized && nodeElementCount > 0) {
     flow.viewportInitialized = true;
     canvas.resetScaleAndCenter(false);
+  } else if (!flow.viewportInitialized) {
+    console.debug('[Flowchart] fLoaded before node elements were ready', {
+      nodeCount: flow.nodes().length,
+      nodeElementCount,
+    });
   }
   canvas.emitCanvasChangeEvent();
 }
@@ -135,7 +142,7 @@ export function getNodeHeight(flow: Flowchart, nodeId: string, fallback = 80): n
   }
 
   let height = fallback;
-  flow.nodeEls.forEach(el => {
+  flow.nodeEls?.forEach(el => {
     const id = el.nativeElement.dataset['nodeId'];
     if (id === nodeId) {
       height = el.nativeElement.offsetHeight || fallback;
@@ -147,7 +154,7 @@ export function getNodeHeight(flow: Flowchart, nodeId: string, fallback = 80): n
 
 export function updateHeightCache(flow: Flowchart): Map<string, number> {
   const map = new Map<string, number>();
-  flow.nodeEls.forEach(el => {
+  flow.nodeEls?.forEach(el => {
     const id = el.nativeElement.dataset['nodeId'];
     if (id) {
       map.set(id, el.nativeElement.offsetHeight || 80);

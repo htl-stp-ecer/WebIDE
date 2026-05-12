@@ -1,0 +1,236 @@
+:host {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.arm-panel {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  background: var(--rc-bg, #121218);
+  color: var(--rc-text, #e6e6ef);
+  font-size: 12px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.arm-status {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  color: var(--rc-muted, #8a8aa0);
+
+  &--error {
+    color: #ff8888;
+  }
+}
+
+.arm-controls {
+  width: 260px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--rc-border, #2E3044);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow-y: auto;
+}
+
+.arm-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.arm-section-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--rc-text, #e6e6ef);
+}
+
+.arm-section-subtitle {
+  margin: 0 0 4px 0;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--rc-muted, #8a8aa0);
+  font-weight: 600;
+}
+
+.arm-live-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.arm-live-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 14px;
+  border: 1px solid var(--rc-border, #2E3044);
+  background: transparent;
+  color: var(--rc-text, #e6e6ef);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+
+  .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #555;
+    transition: background 0.15s;
+
+    &.on {
+      background: #ff4d6d;
+      box-shadow: 0 0 8px #ff4d6d;
+    }
+  }
+
+  &.active {
+    border-color: #ff4d6d;
+    color: #ff8aa0;
+  }
+}
+
+.arm-warn {
+  color: #ffae5a;
+  font-weight: 600;
+}
+
+.joint-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 4px;
+
+  input[type="range"] {
+    width: 100%;
+    accent-color: #66aaff;
+  }
+}
+
+.joint-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+}
+
+.joint-value {
+  font-variant-numeric: tabular-nums;
+  color: var(--rc-muted, #8a8aa0);
+}
+
+.xyz-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 6px;
+
+  label {
+    display: flex;
+    flex-direction: column;
+    font-size: 10px;
+    color: var(--rc-muted, #8a8aa0);
+    gap: 2px;
+  }
+
+  input {
+    width: 100%;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--rc-border, #2E3044);
+    border-radius: 4px;
+    color: var(--rc-text, #e6e6ef);
+    padding: 3px 5px;
+    font-size: 11px;
+  }
+}
+
+.positions-row {
+  display: flex;
+  gap: 4px;
+
+  select {
+    flex: 1;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--rc-border, #2E3044);
+    color: var(--rc-text, #e6e6ef);
+    border-radius: 4px;
+    padding: 3px 5px;
+    font-size: 11px;
+  }
+}
+
+.positions-save {
+  display: flex;
+  gap: 4px;
+  margin-top: 4px;
+
+  input {
+    flex: 1;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--rc-border, #2E3044);
+    color: var(--rc-text, #e6e6ef);
+    border-radius: 4px;
+    padding: 3px 5px;
+    font-size: 11px;
+  }
+}
+
+.arm-btn {
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--rc-border, #2E3044);
+  background: rgba(255,255,255,0.04);
+  color: var(--rc-text, #e6e6ef);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  transition: background 0.12s;
+
+  &:hover:not(:disabled) {
+    background: rgba(102,170,255,0.18);
+    border-color: #66aaff;
+  }
+
+  &:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  &--danger:hover:not(:disabled) {
+    background: rgba(255,80,100,0.18);
+    border-color: #ff5070;
+  }
+}
+
+.arm-ee-readout {
+  font-size: 11px;
+  color: var(--rc-muted, #8a8aa0);
+  border-top: 1px dashed var(--rc-border, #2E3044);
+  padding-top: 8px;
+
+  .mono {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    color: var(--rc-text, #e6e6ef);
+  }
+}
+
+.arm-canvas {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  position: relative;
+
+  canvas {
+    display: block;
+    width: 100% !important;
+    height: 100% !important;
+  }
+}

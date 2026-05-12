@@ -194,6 +194,7 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
   private stepsSub?: Subscription;
   private missionListSub?: Subscription;
   private missionDetailSub?: Subscription;
+  private nodeElsChangesSub?: Subscription;
   private _useAutoLayout = true; // Always auto-layout
   private activePanelDrag: PanelDragState | null = null;
   private deviceInfo: ConnectionInfo | null = null;
@@ -204,6 +205,9 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
   private robotSettingsWasOpen = false;
   private panelResizeObserver?: ResizeObserver;
   private pendingPanelClamp = false;
+  private pendingSurfaceGeometryRefresh = false;
+  private initialSurfaceSettleDeadline = 0;
+  private lastObservedNodeElementCount = 0;
   private selectionDrag:
     | { startX: number; startY: number; surfaceRect: DOMRect; moved: boolean }
     | null = null;
@@ -215,6 +219,8 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
   private suppressContextMenuOnce = false;
   private suppressContextMenuTimeout?: ReturnType<typeof setTimeout>;
   private readonly multiSensorSelectionCache = new Map<string, string[]>();
+  private nodeResizeObserver?: ResizeObserver;
+  private pendingNodeGeometryRefresh = false;
   multiDragStartPositions: Map<string, { x: number; y: number }> | null = null;
   private multiDragPointerUpBound = () => this.stopMultiDrag();
   private rightDragState: { startX: number; startY: number; moved: boolean } | null = null;
@@ -294,9 +300,32 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
   ngAfterViewInit(): void {
     const surface = this.flowSurfaceRef?.nativeElement;
     if (!surface || typeof ResizeObserver === 'undefined') return;
-    this.panelResizeObserver = new ResizeObserver(() => this.schedulePanelClamp());
+    this.initialSurfaceSettleDeadline = performance.now() + 1200;
+    this.panelResizeObserver = new ResizeObserver(() => {
+      this.schedulePanelClamp();
+      this.scheduleSurfaceGeometryRefresh();
+    });
     this.panelResizeObserver.observe(surface);
+    this.nodeResizeObserver = new ResizeObserver(() => this.scheduleNodeGeometryRefresh());
+    this.observeNodeElements();
+    this.lastObservedNodeElementCount = this.nodeEls?.length ?? 0;
+    this.nodeElsChangesSub = this.nodeEls.changes.subscribe(() => {
+      const nextCount = this.nodeEls?.length ?? 0;
+      if (nextCount > 0 && this.lastObservedNodeElementCount === 0) {
+        this.initialSurfaceSettleDeadline = performance.now() + 1200;
+        console.debug('[Flowchart] Node elements mounted after initial view setup', {
+          nextCount,
+          viewportInitialized: this.viewportInitialized,
+        });
+        this.scheduleSurfaceGeometryRefresh();
+      }
+      this.lastObservedNodeElementCount = nextCount;
+      this.observeNodeElements();
+      this.scheduleNodeGeometryRefresh();
+    });
     this.schedulePanelClamp();
+    this.scheduleSurfaceGeometryRefresh();
+    this.scheduleNodeGeometryRefresh();
     this.scheduleOffscreenIndicatorUpdate();
   }
 
@@ -312,10 +341,12 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
     this.stepsSub?.unsubscribe();
     this.missionListSub?.unsubscribe();
     this.missionDetailSub?.unsubscribe();
+    this.nodeElsChangesSub?.unsubscribe();
     if (this.saveStatusTimeout) {
       clearTimeout(this.saveStatusTimeout);
     }
     this.panelResizeObserver?.disconnect();
+    this.nodeResizeObserver?.disconnect();
     this.stopMultiDrag();
     if (this.suppressContextMenuTimeout) {
       clearTimeout(this.suppressContextMenuTimeout);
@@ -1685,6 +1716,55 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
     if (changed) {
       this.panelOffsets.set(next);
     }
+  }
+
+  private scheduleSurfaceGeometryRefresh(): void {
+    if (this.pendingSurfaceGeometryRefresh) return;
+    this.pendingSurfaceGeometryRefresh = true;
+    requestAnimationFrame(() => {
+      this.pendingSurfaceGeometryRefresh = false;
+      const canvas = this.fCanvas();
+      const flow = this.fFlow();
+      if (!canvas || !flow) {
+        return;
+      }
+
+      canvas.emitCanvasChangeEvent();
+
+      if (performance.now() < this.initialSurfaceSettleDeadline) {
+        const surface = this.flowSurfaceRef?.nativeElement;
+        console.debug('[Flowchart] Resetting viewport during initial settle window', {
+          viewportInitialized: this.viewportInitialized,
+          nodeCount: this.nodes().length,
+          nodeElementCount: this.nodeEls?.length ?? 0,
+          surfaceWidth: surface?.clientWidth ?? 0,
+          surfaceHeight: surface?.clientHeight ?? 0,
+        });
+        canvas.resetScaleAndCenter(false);
+        setTimeout(() => flow.redraw());
+        return;
+      }
+
+      flow.redraw();
+    });
+  }
+
+  private observeNodeElements(): void {
+    if (!this.nodeResizeObserver) return;
+    this.nodeResizeObserver.disconnect();
+    this.nodeEls.forEach(el => this.nodeResizeObserver?.observe(el.nativeElement));
+  }
+
+  private scheduleNodeGeometryRefresh(): void {
+    if (this.pendingNodeGeometryRefresh) return;
+    this.pendingNodeGeometryRefresh = true;
+    requestAnimationFrame(() => {
+      this.pendingNodeGeometryRefresh = false;
+      if (!this.useAutoLayout || this.nodeEls.length === 0) {
+        return;
+      }
+      this.layoutFlags.needsAdjust = true;
+    });
   }
 
   private onSelectionPointerMove = (event: PointerEvent): void => {

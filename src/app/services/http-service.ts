@@ -262,6 +262,13 @@ export class HttpService {
     return this.http.get<Project>(this.localApi(`/projects/${uuid}`));
   }
 
+  commandArm(projectUuid: string, joint_angles_deg: number[]) {
+    return this.http.post<{ commanded: { servo: string; port: number; servo_deg: number }[]; success: boolean }>(
+      this.deviceApi(`/api/v1/projects/${projectUuid}/arm/command`),
+      { joint_angles_deg },
+    );
+  }
+
   getDeviceProjects() {
     return this.http
       .get<Project[] | DeviceProjectListPayload>(this.deviceApi('/api/v1/projects'))

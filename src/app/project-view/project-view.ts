@@ -1,4 +1,4 @@
-import {AfterViewInit, Component, ElementRef, OnDestroy, signal, ViewChild} from '@angular/core';
+import {Component, ElementRef, OnDestroy, signal, ViewChild} from '@angular/core';
 import {MissionPanel} from './mission-panel/mission-panel';
 import {Flowchart} from './flowchart/flowchart';
 import {StepPanel} from './step-panel/step-panel';
@@ -7,8 +7,10 @@ import {CodeView} from './code-view/code-view';
 import {RunLogPanel} from './flowchart/logs/run-log-panel';
 import {TableVisualizationPanel} from './flowchart/table/table-visualization-panel';
 import {TableEditorView} from './flowchart/table/table-editor-view';
+import {ArmPanel} from './arm-panel/arm-panel';
 import { ActivatedRoute } from '@angular/router';
 import { HttpService } from '../services/http-service';
+import { HttpClient } from '@angular/common/http';
 
 type ResizeSide = 'left' | 'right' | 'bottom';
 
@@ -34,7 +36,7 @@ interface ResizeState {
 
 export type CenterView = 'flowchart' | 'code';
 export type SideToolPanel = 'missions' | null;
-export type BottomToolPanel = 'logs' | 'table' | null;
+export type BottomToolPanel = 'logs' | 'table' | 'arm' | null;
 export type RightToolPanel = 'steps' | 'docs' | null;
 
 @Component({
@@ -48,11 +50,12 @@ export type RightToolPanel = 'steps' | 'docs' | null;
     RunLogPanel,
     TableVisualizationPanel,
     TableEditorView,
+    ArmPanel,
   ],
   templateUrl: './project-view.html',
   styleUrl: './project-view.scss'
 })
-export class ProjectView implements OnDestroy, AfterViewInit {
+export class ProjectView implements OnDestroy {
   private static readonly MIN_PANEL_WIDTH = 220;
   private static readonly MIN_CENTER_WIDTH = 360;
   private static readonly MIN_BOTTOM_HEIGHT = 120;
@@ -67,20 +70,17 @@ export class ProjectView implements OnDestroy, AfterViewInit {
   @ViewChild('missionPanelRef') missionPanelRef?: MissionPanel;
 
   private resizeState: ResizeState | null = null;
+  readonly initialLeftPanelWidth = this.loadStoredCssLength(STORAGE_KEYS.leftPanelWidth);
+  readonly initialRightPanelWidth = this.loadStoredCssLength(STORAGE_KEYS.rightWidth);
+  readonly initialBottomPanelHeight = this.loadStoredCssLength(STORAGE_KEYS.bottomPanelHeight);
 
   activeRightPanel = signal<RightToolPanel>(this.loadActiveRightPanel());
   activeToolPanel = signal<SideToolPanel>(this.loadActiveToolPanel());
   activeBottomPanel = signal<BottomToolPanel>(this.loadActiveBottomPanel());
   tableEditMode = signal(false);
   centerView = signal<CenterView>('flowchart');
+  armAvailable = signal(false);
   projectUUID = '';
-
-  ngAfterViewInit(): void {
-    const savedHeight = localStorage.getItem(STORAGE_KEYS.bottomPanelHeight);
-    if (savedHeight && this.layoutRoot?.nativeElement) {
-      this.layoutRoot.nativeElement.style.setProperty('--bottom-panel-height', `${savedHeight}px`);
-    }
-  }
 
   toggleCenterView(): void {
     this.centerView.set(this.centerView() === 'flowchart' ? 'code' : 'flowchart');
@@ -89,6 +89,7 @@ export class ProjectView implements OnDestroy, AfterViewInit {
   constructor(
     private route: ActivatedRoute,
     private http: HttpService,
+    private httpClient: HttpClient,
   ) {
     const projectUUID = this.route.snapshot.paramMap.get('uuid');
     if (!projectUUID) {
@@ -96,6 +97,17 @@ export class ProjectView implements OnDestroy, AfterViewInit {
       return;
     }
     this.projectUUID = projectUUID;
+
+    // Check arm availability
+    this.httpClient.get(`/api/v1/projects/${projectUUID}/arm/chain`).subscribe({
+      next: () => this.armAvailable.set(true),
+      error: () => {
+        this.armAvailable.set(false);
+        if (this.activeBottomPanel() === 'arm') {
+          this.activeBottomPanel.set(null);
+        }
+      },
+    });
 
     this.http.getProject(projectUUID).subscribe({
       next: project => {
@@ -125,7 +137,17 @@ export class ProjectView implements OnDestroy, AfterViewInit {
 
   private loadActiveBottomPanel(): BottomToolPanel {
     const saved = localStorage.getItem(STORAGE_KEYS.activeBottomPanel);
-    return (saved === 'logs' || saved === 'table') ? saved : null;
+    return (saved === 'logs' || saved === 'table' || saved === 'arm') ? saved : null;
+  }
+
+  private loadStoredCssLength(key: string): string | null {
+    const raw = localStorage.getItem(key);
+    if (!raw) {
+      return null;
+    }
+
+    const value = Number.parseInt(raw, 10);
+    return Number.isFinite(value) ? `${value}px` : null;
   }
 
   toggleToolPanel(panel: SideToolPanel): void {
