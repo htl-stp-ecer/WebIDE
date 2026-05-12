@@ -14,12 +14,46 @@ export function handleAfterViewChecked(flow: Flowchart): void {
   if (flags.needsAdjust) {
     flags.needsAdjust = false;
     runAutoLayout(flow);
+
+    // foblex reads node positions via getBoundingClientRect() on port elements.
+    // Angular's signal-based CD propagates the new positions asynchronously, so
+    // the CSS transforms may not be committed yet when the 1ms debounce fires.
+    // We bypass this by writing the transforms directly to the DOM right now,
+    // guaranteeing that any subsequent RedrawConnectionsRequest sees correct data.
+    applyLayoutPositionsToDom(flow);
+
+    if (!flow.viewportInitialized) {
+      flow.viewportInitialized = true;
+      // resetScaleAndCenter uses an internal setTimeout(0); schedule our redraw
+      // after it so connections are drawn with the updated canvas transform.
+      flow.fCanvas()?.resetScaleAndCenter(false);
+    }
+    // Trigger connection redraw. Fires after resetScaleAndCenter's setTimeout(0)
+    // because that was registered first in the same synchronous call.
+    setTimeout(() => flow.fFlow()?.redraw());
   }
 
   if (flags.pendingViewportReset) {
     flags.pendingViewportReset = false;
     flow.fCanvas()?.resetScaleAndCenter(false);
   }
+}
+
+function applyLayoutPositionsToDom(flow: Flowchart): void {
+  const posMap = new Map<string, { x: number; y: number }>();
+  for (const node of flow.nodes()) {
+    posMap.set(node.id, node.position);
+  }
+  posMap.set(START_NODE_ID, startNodePosition(flow));
+  posMap.set(END_NODE_ID, endNodePosition(flow));
+
+  flow.nodeEls.forEach(el => {
+    const id = el.nativeElement.dataset['nodeId'];
+    const pos = id ? posMap.get(id) : undefined;
+    if (pos) {
+      el.nativeElement.style.transform = `translate(${pos.x}px,${pos.y}px) rotate(0deg)`;
+    }
+  });
 }
 
 export function handleLoaded(flow: Flowchart): void {
@@ -31,7 +65,10 @@ export function handleLoaded(flow: Flowchart): void {
     canvas.emitCanvasChangeEvent();
     return;
   }
-  if (!flow.viewportInitialized) {
+  // Only initialize viewport when nodes are already present (e.g. tab-switch).
+  // On initial load nodes aren't rendered yet when fLoaded fires, so we defer
+  // viewport init to handleAfterViewChecked once the layout has actually run.
+  if (!flow.viewportInitialized && flow.nodes().length > 0) {
     flow.viewportInitialized = true;
     canvas.resetScaleAndCenter(false);
   }

@@ -177,6 +177,7 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
   readonly eMarkerType = EFMarkerType;
   orientationOptions: { label: string; value: FlowOrientation }[] = [];
   fCanvas = viewChild(FCanvasComponent);
+  fFlow = viewChild(FFlowComponent);
   @ViewChildren('nodeElement') nodeEls!: QueryList<ElementRef<HTMLDivElement>>;
   @ViewChildren('commentTextarea') commentTextareas!: QueryList<ElementRef<HTMLTextAreaElement>>;
   @ViewChild('flowSurface') flowSurfaceRef!: ElementRef<HTMLDivElement>;
