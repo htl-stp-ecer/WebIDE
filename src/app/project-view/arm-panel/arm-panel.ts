@@ -27,8 +27,14 @@ interface ArmJoint {
   port: number;
   length_cm: number;
   axis: [number, number, number];
+  mount_rpy_deg?: [number, number, number];
   joint_range_deg: [number, number];
   servo_range_deg: [number, number];
+}
+
+interface JointAxisFrame {
+  origin_cm: [number, number, number];
+  axis: [number, number, number];
 }
 
 interface ArmPosition {
@@ -51,6 +57,7 @@ interface ArmChain {
 interface FkResponse {
   frames: [number, number, number][];
   end_effector_cm: [number, number, number];
+  joint_axes?: JointAxisFrame[];
 }
 
 interface IkResponse {
@@ -70,7 +77,8 @@ interface IkResponse {
 export class ArmPanel implements AfterViewInit, OnDestroy, OnChanges {
   @Input() projectUuid = '';
 
-  @ViewChild('canvasHost', {static: true}) canvasHost!: ElementRef<HTMLDivElement>;
+  @ViewChild('canvasHost') canvasHost?: ElementRef<HTMLDivElement>;
+  private threeInitialized = false;
 
   chain = signal<ArmChain | null>(null);
   loading = signal(false);
@@ -98,6 +106,7 @@ export class ArmPanel implements AfterViewInit, OnDestroy, OnChanges {
   private resizeObserver?: ResizeObserver;
   private jointMeshes: THREE.Mesh[] = [];
   private linkMeshes: THREE.Mesh[] = [];
+  private axisArrows: THREE.ArrowHelper[] = [];
   private endEffectorMesh?: THREE.Mesh;
   private workspaceMesh?: THREE.Mesh;
   private disposables: Array<() => void> = [];
@@ -107,8 +116,10 @@ export class ArmPanel implements AfterViewInit, OnDestroy, OnChanges {
   private dragOffset = new THREE.Vector3();
 
   private fkSubject = new Subject<number[]>();
-  private ikDragSubject = new Subject<[number, number, number]>();
+  private ikDragSubject = new Subject<{target: [number, number, number]; endJointIndex: number | null}>();
   private liveSubject = new Subject<number[]>();
+  // -1 means "full chain / end-effector"; non-negative is a sub-chain end index.
+  private activeDragEndIndex = -1;
   private subs: Subscription[] = [];
 
   constructor(
@@ -118,13 +129,12 @@ export class ArmPanel implements AfterViewInit, OnDestroy, OnChanges {
   ) {}
 
   ngAfterViewInit(): void {
-    this.initThree();
     this.subs.push(
       this.fkSubject.pipe(debounceTime(50)).subscribe(angles => this.callFk(angles)),
     );
     this.subs.push(
       this.ikDragSubject.pipe(throttleTime(80, undefined, {leading: true, trailing: true}))
-        .subscribe(target => this.callIk(target)),
+        .subscribe(({target, endJointIndex}) => this.callIk(target, endJointIndex)),
     );
     this.subs.push(
       this.liveSubject.pipe(throttleTime(100, undefined, {leading: true, trailing: true}))
@@ -164,9 +174,17 @@ export class ArmPanel implements AfterViewInit, OnDestroy, OnChanges {
       next: chain => {
         this.chain.set(chain);
         this.jointAngles.set(chain.joints.map(j => (j.joint_range_deg[0] + j.joint_range_deg[1]) / 2));
-        this.rebuildArm();
-        this.callFk(this.jointAngles());
         this.loading.set(false);
+        // canvas host is rendered via @if (chain()) — wait one tick so the
+        // ViewChild query picks it up before we touch nativeElement.
+        setTimeout(() => {
+          if (!this.threeInitialized && this.canvasHost) {
+            this.initThree();
+            this.threeInitialized = true;
+          }
+          this.rebuildArm();
+          this.callFk(this.jointAngles());
+        }, 0);
       },
       error: err => {
         this.loading.set(false);
@@ -177,6 +195,7 @@ export class ArmPanel implements AfterViewInit, OnDestroy, OnChanges {
 
   // ────────────── three.js init ──────────────
   private initThree() {
+    if (!this.canvasHost) return;
     const host = this.canvasHost.nativeElement;
     const width = host.clientWidth || 600;
     const height = host.clientHeight || 400;
@@ -184,8 +203,12 @@ export class ArmPanel implements AfterViewInit, OnDestroy, OnChanges {
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x121218);
 
+    // Robotics convention: Z is up. Three.js defaults to Y-up, so configure
+    // both the camera and OrbitControls to treat Z as up. All world-space
+    // positions we receive from the FK route are already in this frame.
     this.camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 2000);
-    this.camera.position.set(40, 40, 40);
+    this.camera.up.set(0, 0, 1);
+    this.camera.position.set(40, -40, 30);
     this.camera.lookAt(0, 0, 0);
 
     this.renderer = new THREE.WebGLRenderer({antialias: true});
@@ -197,8 +220,10 @@ export class ArmPanel implements AfterViewInit, OnDestroy, OnChanges {
     this.controls.target.set(0, 0, 0);
     this.controls.enableDamping = true;
 
-    // Floor grid 50cm
+    // Floor grid 100cm — GridHelper lies in the XZ plane by default; rotate
+    // it to the XY plane so it represents the floor in Z-up world space.
     const grid = new THREE.GridHelper(100, 20, 0x444466, 0x2a2a3a);
+    grid.rotation.x = Math.PI / 2;
     this.scene.add(grid);
     const axes = new THREE.AxesHelper(10);
     this.scene.add(axes);
@@ -244,7 +269,7 @@ export class ArmPanel implements AfterViewInit, OnDestroy, OnChanges {
   }
 
   private onResize() {
-    if (!this.renderer || !this.camera) return;
+    if (!this.renderer || !this.camera || !this.canvasHost) return;
     const host = this.canvasHost.nativeElement;
     const w = host.clientWidth || 1;
     const h = host.clientHeight || 1;
@@ -272,22 +297,22 @@ export class ArmPanel implements AfterViewInit, OnDestroy, OnChanges {
     const chain = this.chain();
     if (!chain) return;
 
-    const jointMat = new THREE.MeshStandardMaterial({color: 0x66aaff});
-    const linkMat = new THREE.MeshStandardMaterial({color: 0x888899});
+    // Joint spheres & link cylinders are now grown lazily in
+    // updateArmFromFrames() once we know how many frames the FK route
+    // actually returns (joints.length + 1 or +2 depending on whether the
+    // passive end-effector frame coincides with the last joint tip).
+    // Just (re)build the per-joint axis arrows here since their count is
+    // exactly chain.joints.length.
 
-    // One sphere per joint frame, links between consecutive frames
-    const numFrames = chain.joints.length + 1;
-    for (let i = 0; i < numFrames; i++) {
-      const geo = new THREE.SphereGeometry(1.0, 16, 12);
-      const mesh = new THREE.Mesh(geo, jointMat.clone());
-      this.scene.add(mesh);
-      this.jointMeshes.push(mesh);
-    }
+    // Rebuild axis arrows (one per joint)
+    this.axisArrows.forEach(a => this.scene!.remove(a));
+    this.axisArrows = [];
     for (let i = 0; i < chain.joints.length; i++) {
-      const geo = new THREE.CylinderGeometry(0.5, 0.5, 1, 12);
-      const mesh = new THREE.Mesh(geo, linkMat.clone());
-      this.scene.add(mesh);
-      this.linkMeshes.push(mesh);
+      const arrow = new THREE.ArrowHelper(
+        new THREE.Vector3(0, 0, 1), new THREE.Vector3(), 5, 0xffcc00, 1.5, 1.0,
+      );
+      this.scene.add(arrow);
+      this.axisArrows.push(arrow);
     }
 
     // Workspace hint
@@ -306,7 +331,58 @@ export class ArmPanel implements AfterViewInit, OnDestroy, OnChanges {
     }
   }
 
+  private updateJointAxes(axes: JointAxisFrame[]) {
+    for (let i = 0; i < this.axisArrows.length; i++) {
+      const a = axes[i];
+      const arrow = this.axisArrows[i];
+      if (!a) {
+        arrow.visible = false;
+        continue;
+      }
+      arrow.visible = true;
+      arrow.position.set(a.origin_cm[0], a.origin_cm[1], a.origin_cm[2]);
+      const dir = new THREE.Vector3(a.axis[0], a.axis[1], a.axis[2]);
+      if (dir.lengthSq() > 1e-9) arrow.setDirection(dir.normalize());
+    }
+  }
+
+  private ensureMeshCounts(numFrames: number) {
+    if (!this.scene) return;
+    const desiredLinks = Math.max(0, numFrames - 1);
+    // Joint spheres represent pivots only (origin + each joint base). The last
+    // frame is the end-effector tip, which is already drawn as the red sphere
+    // — don't double-draw it here.
+    const desiredJoints = Math.max(0, numFrames - 1);
+    while (this.jointMeshes.length < desiredJoints) {
+      const geo = new THREE.SphereGeometry(1.0, 16, 12);
+      const mat = new THREE.MeshStandardMaterial({color: 0x66aaff});
+      const mesh = new THREE.Mesh(geo, mat);
+      this.scene.add(mesh);
+      this.jointMeshes.push(mesh);
+    }
+    while (this.jointMeshes.length > desiredJoints) {
+      const mesh = this.jointMeshes.pop()!;
+      this.scene.remove(mesh);
+      (mesh.geometry as THREE.BufferGeometry).dispose();
+      (mesh.material as THREE.Material).dispose();
+    }
+    while (this.linkMeshes.length < desiredLinks) {
+      const geo = new THREE.CylinderGeometry(0.5, 0.5, 1, 12);
+      const mat = new THREE.MeshStandardMaterial({color: 0x888899});
+      const mesh = new THREE.Mesh(geo, mat);
+      this.scene.add(mesh);
+      this.linkMeshes.push(mesh);
+    }
+    while (this.linkMeshes.length > desiredLinks) {
+      const mesh = this.linkMeshes.pop()!;
+      this.scene.remove(mesh);
+      (mesh.geometry as THREE.BufferGeometry).dispose();
+      (mesh.material as THREE.Material).dispose();
+    }
+  }
+
   private updateArmFromFrames(frames: [number, number, number][]) {
+    this.ensureMeshCounts(frames.length);
     // Joints
     for (let i = 0; i < this.jointMeshes.length; i++) {
       const f = frames[i];
@@ -326,6 +402,9 @@ export class ArmPanel implements AfterViewInit, OnDestroy, OnChanges {
       const mesh = this.linkMeshes[i];
       mesh.position.copy(mid);
       mesh.scale.set(1, Math.max(len, 0.001), 1);
+      // Hide zero-length link segments (e.g. base joints with length_cm=0)
+      // so they don't render as flat discs at the origin.
+      mesh.visible = len > 1e-4;
       // Orient cylinder (default Y axis) along dir
       const up = new THREE.Vector3(0, 1, 0);
       const q = new THREE.Quaternion().setFromUnitVectors(up, dir.clone().normalize());
@@ -343,6 +422,7 @@ export class ArmPanel implements AfterViewInit, OnDestroy, OnChanges {
     this.http.post<FkResponse>(this.apiBase() + '/fk', {joint_angles_deg: angles}).subscribe({
       next: res => {
         this.updateArmFromFrames(res.frames);
+        if (res.joint_axes) this.updateJointAxes(res.joint_axes);
         this.endEffector.set(res.end_effector_cm);
         this.targetXYZ.set([...res.end_effector_cm]);
         if (this.livePreview()) {
@@ -353,17 +433,21 @@ export class ArmPanel implements AfterViewInit, OnDestroy, OnChanges {
     });
   }
 
-  private callIk(target: [number, number, number]) {
-    this.http.post<IkResponse>(this.apiBase() + '/ik', {
+  private callIk(target: [number, number, number], endJointIndex: number | null = null) {
+    const body: any = {
       target_cm: target,
       initial_angles_deg: this.jointAngles(),
-    }).subscribe({
+    };
+    if (endJointIndex !== null && endJointIndex >= 0) {
+      body.end_joint_index = endJointIndex;
+    }
+    this.http.post<IkResponse>(this.apiBase() + '/ik', body).subscribe({
       next: res => {
         this.reachable.set(res.reachable);
-        if (res.reachable) {
-          this.jointAngles.set([...res.joint_angles_deg]);
-          this.callFk(res.joint_angles_deg);
-        }
+        // Even if not perfectly reachable, accept the best-effort solve while
+        // dragging so the arm follows the cursor instead of freezing.
+        this.jointAngles.set([...res.joint_angles_deg]);
+        this.callFk(res.joint_angles_deg);
       },
       error: () => this.reachable.set(false),
     });
@@ -438,21 +522,42 @@ export class ArmPanel implements AfterViewInit, OnDestroy, OnChanges {
     this.livePreview.set(!this.livePreview());
   }
 
-  // ────────────── Drag IK on end-effector ──────────────
+  // ────────────── Drag IK (end-effector or joint pivots) ──────────────
   private onPointerDown = (e: PointerEvent) => {
-    if (!this.endEffectorMesh || !this.camera || !this.renderer) return;
+    if (!this.camera || !this.renderer) return;
     this.updatePointer(e);
     this.raycaster.setFromCamera(this.pointer, this.camera);
-    const hits = this.raycaster.intersectObject(this.endEffectorMesh);
+
+    // Hit-test end-effector + every joint sphere. Pick the first hit.
+    const candidates: THREE.Object3D[] = [];
+    if (this.endEffectorMesh) candidates.push(this.endEffectorMesh);
+    candidates.push(...this.jointMeshes);
+    const hits = this.raycaster.intersectObjects(candidates, false);
     if (hits.length === 0) return;
+
+    const hitObj = hits[0].object as THREE.Mesh;
+    let endJointIndex = -1;  // -1 = full chain (end-effector)
+    if (hitObj !== this.endEffectorMesh) {
+      // jointMeshes[i] sits at FK frame[i]. Frame layout:
+      //   frame[0] = origin (immovable)
+      //   frame[1] = joint 0 pivot (immovable — no preceding joint to rotate)
+      //   frame[k] (k≥2) = pivot of joint k-1 → solve joints 0..k-2 only
+      // The end-effector tip is the separate red mesh and represents the
+      // full chain.
+      const frameIdx = this.jointMeshes.indexOf(hitObj);
+      if (frameIdx < 2) return;
+      endJointIndex = frameIdx - 2;
+    }
+
     if (this.controls) this.controls.enabled = false;
     this.dragging.set(true);
+    this.activeDragEndIndex = endJointIndex;
 
-    // Plane perpendicular to camera dir passing through end-effector
+    // Drag plane perpendicular to camera through the hit object.
     const camDir = new THREE.Vector3();
     this.camera.getWorldDirection(camDir);
-    this.dragPlane.setFromNormalAndCoplanarPoint(camDir.negate(), this.endEffectorMesh.position.clone());
-    this.dragOffset.copy(hits[0].point).sub(this.endEffectorMesh.position);
+    this.dragPlane.setFromNormalAndCoplanarPoint(camDir.negate(), hitObj.position.clone());
+    this.dragOffset.copy(hits[0].point).sub(hitObj.position);
 
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
   };
@@ -465,14 +570,17 @@ export class ArmPanel implements AfterViewInit, OnDestroy, OnChanges {
     if (this.raycaster.ray.intersectPlane(this.dragPlane, intersect)) {
       intersect.sub(this.dragOffset);
       const target: [number, number, number] = [intersect.x, intersect.y, intersect.z];
-      this.targetXYZ.set(target);
-      this.ikDragSubject.next(target);
+      if (this.activeDragEndIndex < 0) {
+        this.targetXYZ.set(target);
+      }
+      this.ikDragSubject.next({target, endJointIndex: this.activeDragEndIndex});
     }
   };
 
   private onPointerUp = (e: PointerEvent) => {
     if (this.dragging()) {
       this.dragging.set(false);
+      this.activeDragEndIndex = -1;
       if (this.controls) this.controls.enabled = true;
       try {
         (e.target as HTMLElement).releasePointerCapture?.(e.pointerId);

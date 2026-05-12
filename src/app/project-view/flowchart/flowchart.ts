@@ -208,6 +208,7 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
   private pendingSurfaceGeometryRefresh = false;
   private initialSurfaceSettleDeadline = 0;
   private lastObservedNodeElementCount = 0;
+  private lastObservedMissionNodeCount = 0;
   private selectionDrag:
     | { startX: number; startY: number; surfaceRect: DOMRect; moved: boolean }
     | null = null;
@@ -257,6 +258,19 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
         this.refreshPlannedPathAfterRobotSettings();
       }
       this.robotSettingsWasOpen = isOpen;
+    });
+
+    effect(() => {
+      const missionNodeCount = this.nodes().length;
+      if (missionNodeCount > 0 && this.lastObservedMissionNodeCount === 0) {
+        this.initialSurfaceSettleDeadline = performance.now() + 1200;
+        console.debug('[Flowchart] Mission nodes arrived after initial load', {
+          missionNodeCount,
+          viewportInitialized: this.viewportInitialized,
+        });
+        this.scheduleSurfaceGeometryRefresh();
+      }
+      this.lastObservedMissionNodeCount = missionNodeCount;
     });
 
     effect(() => {
@@ -311,9 +325,9 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
     this.lastObservedNodeElementCount = this.nodeEls?.length ?? 0;
     this.nodeElsChangesSub = this.nodeEls.changes.subscribe(() => {
       const nextCount = this.nodeEls?.length ?? 0;
-      if (nextCount > 0 && this.lastObservedNodeElementCount === 0) {
+      if (nextCount > 2 && this.lastObservedNodeElementCount <= 2) {
         this.initialSurfaceSettleDeadline = performance.now() + 1200;
-        console.debug('[Flowchart] Node elements mounted after initial view setup', {
+        console.debug('[Flowchart] Mission node elements mounted after initial view setup', {
           nextCount,
           viewportInitialized: this.viewportInitialized,
         });

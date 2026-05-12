@@ -29,7 +29,7 @@
         @for (j of c.joints; track j.index; let i = $index) {
           <div class="joint-row">
             <div class="joint-label">
-              <span>J{{ j.index }} · {{ j.servo }}</span>
+              <span>J{{ j.index }} · {{ j.servo }} <small class="joint-meta">axis [{{ j.axis.join(',') }}] · L={{ j.length_cm }}cm</small></span>
               <span class="joint-value">{{ jointAngles()[i] | number:'1.0-1' }}°</span>
             </div>
             <input
