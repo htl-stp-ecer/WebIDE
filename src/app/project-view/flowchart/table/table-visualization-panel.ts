@@ -105,6 +105,9 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
         ? this.applyWallPhysicsToComputedPath(computedPath, robotConfig, collisionWalls)
         : null;
       this.vizService.currentPose();
+      // Trigger re-render on every live trajectory update too.
+      this.vizService.liveTrajectory();
+      this.vizService.liveTrajectoryActive();
       this.render();
     });
   }
@@ -203,6 +206,9 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
     if (this.showPaths()) {
       this.renderPath(width, height);
     }
+
+    // Draw live trajectory streamed from a real-sim run.
+    this.renderLiveTrajectory(width, height);
 
     // Draw ghost robot at planned end position
     if (this.showPaths()) {
@@ -356,6 +362,38 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
       x: (canvasX - offsetX) / scaleX,
       y: (drawHeight - (canvasY - offsetY)) / scaleY,
     };
+  }
+
+  private renderLiveTrajectory(width: number, height: number): void {
+    const trail = this.vizService.liveTrajectory();
+    if (!trail || trail.length < 1) return;
+
+    const active = this.vizService.liveTrajectoryActive();
+    // Solid cyan while the sim is running; faded once it finishes so the
+    // user can still inspect the final trace without it competing with the
+    // planned path.
+    this.ctx.strokeStyle = active ? '#22d3ee' : 'rgba(34, 211, 238, 0.55)';
+    this.ctx.lineWidth = 2;
+    this.ctx.lineCap = 'round';
+    this.ctx.lineJoin = 'round';
+
+    if (trail.length >= 2) {
+      this.ctx.beginPath();
+      const first = this.tableToCanvas(trail[0], width, height);
+      this.ctx.moveTo(first.x, first.y);
+      for (let i = 1; i < trail.length; i++) {
+        const p = this.tableToCanvas(trail[i], width, height);
+        this.ctx.lineTo(p.x, p.y);
+      }
+      this.ctx.stroke();
+    }
+
+    // Dot at the start of the run so the user can always see where it began.
+    const start = this.tableToCanvas(trail[0], width, height);
+    this.ctx.fillStyle = active ? '#22d3ee' : 'rgba(34, 211, 238, 0.55)';
+    this.ctx.beginPath();
+    this.ctx.arc(start.x, start.y, 3, 0, Math.PI * 2);
+    this.ctx.fill();
   }
 
   private renderPath(width: number, height: number): void {

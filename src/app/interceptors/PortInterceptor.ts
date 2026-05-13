@@ -29,7 +29,13 @@ export class PortInterceptor implements HttpInterceptor {
 
       const newUrl = `${parsed.protocol}//${parsed.hostname}:${parsed.port}${parsed.pathname}${parsed.search}${parsed.hash}`;
 
-      const clonedReq = req.clone({ url: newUrl });
+      let headers = req.headers;
+      const token = localStorage.getItem('raccoon_device_token');
+      if (token) {
+        headers = headers.set('X-API-Token', token);
+      }
+
+      const clonedReq = req.clone({ url: newUrl, headers });
       return next.handle(clonedReq);
     } catch (e) {
       console.error('PortInterceptor failed', e);

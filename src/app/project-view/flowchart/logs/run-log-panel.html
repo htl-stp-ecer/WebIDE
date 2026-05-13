@@ -31,7 +31,15 @@
       <div class="run-log-empty">{{ 'FLOWCHART.LOGS_EMPTY' | translate }}</div>
     } @else {
       @for (entry of entries; track entry.id) {
-        <div class="run-log-line" [class.stdout]="entry.stream === 'stdout'" [class.stderr]="entry.stream === 'stderr'" [class.system]="entry.stream === 'system'">
+        <div
+          class="run-log-line"
+          [class.stdout]="entry.stream === 'stdout'"
+          [class.stderr]="entry.stream === 'stderr'"
+          [class.system]="entry.stream === 'system'"
+          [class.info]="entry.stream === 'info'"
+          [class.warn]="entry.stream === 'warn'"
+          [class.error]="entry.stream === 'error'"
+          [class.step]="entry.stream === 'step'">
           <span class="run-log-time">{{ entry.timestampMs | date:'HH:mm:ss' }}</span>
           <span class="run-log-stream">{{ entry.stream }}</span>
           <span class="run-log-text">{{ entry.line }}</span>

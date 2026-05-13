@@ -41,6 +41,8 @@ export class TableVisualizationService {
   private readonly _plannedMissionEndIndices = signal<number[] | null>(null);
   private readonly _plannedHighlightRange = signal<{ startIndex: number; endIndex: number } | null>(null);
   private readonly _plannedPathLoading = signal<boolean>(false);
+  private readonly _liveTrajectory = signal<Pose2D[]>([]);
+  private readonly _liveTrajectoryActive = signal<boolean>(false);
 
   readonly robotConfig = this._robotConfig.asReadonly();
   readonly sensorConfig = this._sensorConfig.asReadonly();
@@ -51,6 +53,23 @@ export class TableVisualizationService {
   readonly plannedMissionEndIndices = this._plannedMissionEndIndices.asReadonly();
   readonly plannedHighlightRange = this._plannedHighlightRange.asReadonly();
   readonly plannedPathLoading = this._plannedPathLoading.asReadonly();
+  /** Pose samples streamed live from a real-sim run (empty when not running). */
+  readonly liveTrajectory = this._liveTrajectory.asReadonly();
+  readonly liveTrajectoryActive = this._liveTrajectoryActive.asReadonly();
+
+  /** Push new pose samples from the running libstp simulator. */
+  setLiveTrajectory(poses: Pose2D[]): void {
+    this._liveTrajectory.set(poses);
+  }
+
+  setLiveTrajectoryActive(active: boolean): void {
+    this._liveTrajectoryActive.set(active);
+  }
+
+  clearLiveTrajectory(): void {
+    this._liveTrajectory.set([]);
+    this._liveTrajectoryActive.set(false);
+  }
 
   /** End pose after all planned steps (or start pose if no path) */
   readonly plannedEndPose = computed<Pose2D>(() => {

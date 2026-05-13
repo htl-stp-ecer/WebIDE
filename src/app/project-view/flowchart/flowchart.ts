@@ -144,6 +144,20 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
   readonly contextMenuOnPointerUp = true;
   readonly timingViewMode = signal<TimingViewMode>('list');
   readonly simulateRuns = signal<boolean>(true);
+  /**
+   * Which simulation engine to use when `simulateRuns()` is true.
+   * - `'fast'`: existing heuristic simulator (cheap, planning-only).
+   * - `'real'`: spawn the libstp simulator and render the actual robot pose.
+   */
+  readonly simulationMode = signal<'fast' | 'real'>('fast');
+  /**
+   * Whether to render the legacy in-toolbar simulate/real toggle. Hidden by
+   * default now that the navbar dropdown owns the run mode — flip this to
+   * surface the toggle again while wiring the per-mission auto-preview.
+   */
+  showLegacySimulateToggle(): boolean {
+    return false;
+  }
   readonly robotSettingsVisible = signal<boolean>(false);
   readonly robotSettingsInitialTab = signal<'project' | 'robot' | 'start' | 'map' | 'keybindings' | null>(null);
   readonly saveStatus = signal<'idle' | 'saving' | 'saved'>('idle');
@@ -240,7 +254,7 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
     readonly tableMap: TableMapService,
     readonly planningService: PlanningModeService,
     readonly keybindingsService: KeybindingsService,
-    private readonly runActionService: RunActionService
+    readonly runActionService: RunActionService
   ) {
     this.historyManager = createHistoryManager(this);
     this.runManager = createRunManager(this);

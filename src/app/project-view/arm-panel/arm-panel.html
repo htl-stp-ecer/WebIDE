@@ -86,6 +86,18 @@
           {{ endEffector()[2] | number:'1.0-1' }}) cm
         </span>
       </div>
+
+      @if (selectedNodeLabel(); as label) {
+        <div class="arm-section arm-selection">
+          <div class="arm-selection-row">
+            <span class="arm-selection-label">
+              <span class="arm-selection-dot"></span>{{ label }}
+            </span>
+            <button type="button" class="arm-btn arm-btn--icon" (click)="clearSelection()" title="Deselect (Esc)">✕</button>
+          </div>
+          <span class="arm-keys-hint">← → X &nbsp;↑ ↓ Y &nbsp;PgUp/Dn Z &nbsp;· Shift ×4</span>
+        </div>
+      }
     </aside>
 
     <div #canvasHost class="arm-canvas"></div>

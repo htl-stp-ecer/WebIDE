@@ -1,11 +1,11 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnInit, OnDestroy, HostListener } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink, RouterLinkActive } from '@angular/router';
 import { Subscription, interval, switchMap, takeUntil, Subject } from 'rxjs';
 import { HttpService } from '../services/http-service';
-import { RunActionService } from '../services/run-action-service';
+import { RunActionService, RunTarget } from '../services/run-action-service';
 import { enTranslations, deTranslations } from '../i18n/translations';
 
 @Component({
@@ -112,5 +112,30 @@ export class Navbar implements OnInit, OnDestroy {
   changeLanguage(lang: string) {
     this.translate.use(lang);
     localStorage.setItem('selectedLanguage', lang);
+  }
+
+  runTargetMenuOpen = false;
+
+  toggleRunTargetMenu(event: MouseEvent): void {
+    event.stopPropagation();
+    this.runTargetMenuOpen = !this.runTargetMenuOpen;
+  }
+
+  selectRunTarget(target: RunTarget): void {
+    this.runAction.setRunTarget(target);
+    this.runTargetMenuOpen = false;
+  }
+
+  runTargetTooltip(): string {
+    return this.runAction.runTarget() === 'simulated'
+      ? 'Run all missions in the libstp simulator'
+      : 'Run on the wombat (raccoon run)';
+  }
+
+  @HostListener('document:click')
+  closeRunTargetMenuOnOutsideClick(): void {
+    if (this.runTargetMenuOpen) {
+      this.runTargetMenuOpen = false;
+    }
   }
 }

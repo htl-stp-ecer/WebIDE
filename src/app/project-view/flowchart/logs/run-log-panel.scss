@@ -122,6 +122,8 @@
   line-height: 1.5;
   scrollbar-width: thin;
   scrollbar-color: var(--rc-border, #2E3044) transparent;
+  /* Allow horizontal scroll so ASCII box-drawing characters stay intact */
+  overflow-x: auto;
 }
 
 .run-log-empty {
@@ -150,8 +152,7 @@
 }
 
 .run-log-text {
-  white-space: pre-wrap;
-  word-break: break-word;
+  white-space: pre;
   color: var(--rc-text, #F0F0F5);
 }
 
@@ -170,4 +171,34 @@
 
 .run-log-line.system .run-log-stream {
   color: var(--rc-accent, #DAA03E);
+}
+
+/* raccoon-lib structured log levels */
+.run-log-line.info .run-log-stream {
+  color: #60a5fa;
+}
+
+.run-log-line.warn .run-log-stream {
+  color: #facc15;
+}
+
+.run-log-line.warn .run-log-text {
+  color: #fde68a;
+}
+
+.run-log-line.error .run-log-stream {
+  color: #f87171;
+}
+
+.run-log-line.error .run-log-text {
+  color: #fca5a5;
+}
+
+/* Step-execution markers — slightly subdued so they don't drown the panel */
+.run-log-line.step .run-log-stream {
+  color: #a78bfa;
+}
+
+.run-log-line.step .run-log-text {
+  color: #e9d5ff;
 }

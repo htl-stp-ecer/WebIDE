@@ -28,11 +28,15 @@ export function createHistoryManager(flow: Flowchart): FlowchartHistoryManager {
 export function createRunManager(flow: Flowchart): FlowchartRunManager {
   return new FlowchartRunManager({
     http: flow.http,
+    runAction: flow.runActionService,
     isRunActive: flow.isRunActive,
     debugState: flow.debugState,
     breakpointInfo: flow.breakpointInfo,
     getProjectUUID: () => flow.projectUUID,
     getMissionKey: () => flow.historyManager.getMissionKey(),
     shouldSimulate: () => flow.simulateRuns(),
+    simulationMode: () => flow.simulationMode(),
+    runTarget: () => flow.runActionService.runTarget(),
+    tableViz: flow.tableViz,
   });
 }

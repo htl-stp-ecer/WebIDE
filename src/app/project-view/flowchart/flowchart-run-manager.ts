@@ -1,7 +1,10 @@
 import { WritableSignal, signal } from '@angular/core';
 import { Subscription } from 'rxjs';
 import { HttpService } from '../../services/http-service';
+import { RunActionService, RunLogEntry, RunLogStream } from '../../services/run-action-service';
 import { RunPathTracker } from './run-path-tracker';
+import { TableVisualizationService } from './table/services/table-visualization.service';
+import { Pose2D, createPose } from './table/models';
 
 type DebugState = 'idle' | 'running' | 'paused';
 
@@ -17,12 +20,37 @@ interface BreakpointEventPayload {
 
 interface FlowchartRunContext {
   http: HttpService;
+  runAction: RunActionService;
   isRunActive: WritableSignal<boolean>;
   debugState: WritableSignal<DebugState>;
   breakpointInfo: WritableSignal<BreakpointEventPayload | null>;
   getProjectUUID(): string | null;
   getMissionKey(): string | null;
   shouldSimulate?(): boolean;
+  /**
+   * Optional sim mode selector. `'fast'` (default) uses the heuristic
+   * simulation; `'real'` runs the libstp simulator subprocess and emits
+   * `sim_pose` events that this manager accumulates for live rendering.
+   */
+  simulationMode?(): 'fast' | 'real';
+  /**
+   * IntelliJ-style run target. `'simulated'` runs the *whole project* in
+   * the libstp simulator (no mission name). `'real'` runs ``raccoon run``
+   * (the wombat path) for all missions. Falls back to the legacy
+   * shouldSimulate/simulationMode pair when undefined.
+   */
+  runTarget?(): 'simulated' | 'real';
+  /** Optional sink for live pose samples — drawn by TableVisualizationPanel. */
+  tableViz?: TableVisualizationService;
+}
+
+export interface LiveSimPose {
+  /** Seconds since the runner started emitting poses. */
+  t: number;
+  xCm: number;
+  yCm: number;
+  thetaRad: number;
+  yawRate?: number;
 }
 
 export interface StepTiming {
@@ -42,17 +70,41 @@ export interface StepTiming {
   source: 'synthetic' | 'measured';
 }
 
-type RunLogStream = 'stdout' | 'stderr' | 'system';
+// Re-export so existing callers that imported `RunLogEntry` from the run
+// manager continue to compile after the move to RunActionService.
+export type { RunLogEntry } from '../../services/run-action-service';
 
-export interface RunLogEntry {
-  id: number;
-  stream: RunLogStream;
-  line: string;
-  timestampMs: number;
-  runId: number;
-}
+/**
+ * Pattern that matches raccoon-lib's structured logger output:
+ *   `YYYY-MM-DD HH:MM:SS |   0.123s | level    | source                       | message`
+ * The pipe-separated columns are padded, so we trim each captured group.
+ */
+const RACCOON_LOG_RE = /^\s*(\d{4}-\d{2}-\d{2}\s+\d{1,2}:\d{2}:\d{2}(?:\.\d+)?)\s*\|\s*([\d.]+s)\s*\|\s*(trace|debug|info|warning|warn|error|critical|fatal)\s*\|\s*([^|]*?)\s*\|\s*(.*)$/i;
 
-const MAX_LOG_ENTRIES = 1500;
+const ANSI_ESCAPE_RE = /\x1B\[[0-?]*[ -/]*[@-~]/g;
+
+/**
+ * Lines from the simulator that are pure runtime noise — they happen on every
+ * run (often during interpreter shutdown) and have no diagnostic value, so we
+ * drop them rather than scroll the actual log off-screen.
+ */
+const NOISE_SUBSTRINGS = [
+  'pure virtual method called',
+  'terminate called without an active exception',
+];
+
+/**
+ * Detect uppercase severity keywords in unstructured stdout/stderr lines
+ * (rich.Panel output, plain ``print("WARNING: ...")``, etc.) so they get
+ * coloured the same way as raccoon-lib's structured logger output.
+ *
+ * Word boundaries on both sides guard against false positives like
+ * "WARNING_THRESHOLD" or "errno".
+ */
+const KEYWORD_RE = {
+  error: /\b(ERROR|CRITICAL|FATAL)\b/,
+  warn: /\b(WARNING|WARN)\b/,
+};
 
 export class FlowchartRunManager {
   private static readonly HISTORY_RUN_ID = -1;
@@ -74,7 +126,19 @@ export class FlowchartRunManager {
   readonly stepTimings = signal<StepTiming[]>([]);
   readonly maxStepDurationMs = signal(0);
   readonly nodeTimings = signal<Map<string, StepTiming>>(new Map());
-  readonly logEntries = signal<RunLogEntry[]>([]);
+  /** Backwards-compat alias — log entries now live on RunActionService so the bottom panel keeps them when the flowchart unmounts. */
+  get logEntries() { return this.ctx.runAction.logEntries; }
+
+  /** Live trajectory captured from `sim_pose` events when running in real-sim mode. */
+  readonly liveSimPoses = signal<LiveSimPose[]>([]);
+  readonly liveSimActive = signal(false);
+  readonly liveSimScene = signal<string | null>(null);
+
+  /**
+   * Cap on the in-memory pose buffer so a 30 min run at 20 Hz doesn't bloat
+   * the signal. Beyond this we drop the oldest samples.
+   */
+  private static readonly MAX_LIVE_POSES = 8000;
 
   constructor(private readonly ctx: FlowchartRunContext) {}
 
@@ -135,17 +199,64 @@ export class FlowchartRunManager {
 
   updatePathLookups(pathToNodeId: Map<string, string>, pathToConnectionIds: Map<string, string[]>): void {
     this.tracker.updateLookups(pathToNodeId, pathToConnectionIds);
+    // Tell the tracker which mission's nodes the user is currently viewing
+    // so it can drop step events from other missions during an all-
+    // missions run.
+    this.tracker.setCurrentMissionName(this.ctx.getMissionKey());
     this.pathToNodeId = new Map(pathToNodeId);
     this.nodeTimings.set(new Map());
   }
 
+  /**
+   * Discard everything captured during the current/previous run. Called at
+   * the start of a fresh run so the user always sees a clean canvas. Do not
+   * call this on mission-view changes — that would erase the highlights and
+   * live trajectory the user expects to find when they come back.
+   */
   clearRunVisuals(): void {
     this.tracker.reset();
+    this.liveSimPoses.set([]);
+    this.liveSimActive.set(false);
+    this.liveSimScene.set(null);
+    this.ctx.tableViz?.clearLiveTrajectory();
+  }
+
+  private appendLiveSimPose(payload: Record<string, unknown>): void {
+    const xCm = Number((payload as { x_cm?: unknown }).x_cm);
+    const yCm = Number((payload as { y_cm?: unknown }).y_cm);
+    const theta = Number((payload as { theta_rad?: unknown }).theta_rad);
+    if (!Number.isFinite(xCm) || !Number.isFinite(yCm) || !Number.isFinite(theta)) {
+      return;
+    }
+    const t = Number((payload as { t?: unknown }).t ?? 0);
+    const yawRaw = (payload as { yaw_rate?: unknown }).yaw_rate;
+    const yawRate = typeof yawRaw === 'number' && Number.isFinite(yawRaw) ? yawRaw : undefined;
+    this.liveSimPoses.update(prev => {
+      const next = prev.length >= FlowchartRunManager.MAX_LIVE_POSES
+        ? prev.slice(prev.length - FlowchartRunManager.MAX_LIVE_POSES + 1)
+        : prev.slice();
+      next.push({ t: Number.isFinite(t) ? t : 0, xCm, yCm, thetaRad: theta, yawRate });
+      return next;
+    });
+
+    // Mirror into the shared visualization service so the table panel can
+    // render the live trajectory + a live current-pose marker.
+    const viz = this.ctx.tableViz;
+    if (viz) {
+      // theta is in radians; createPose expects degrees per the existing service.
+      const pose: Pose2D = createPose(xCm, yCm, (theta * 180) / Math.PI);
+      viz.setCurrentPose(pose);
+      const trail = viz.liveTrajectory().slice();
+      if (trail.length >= FlowchartRunManager.MAX_LIVE_POSES) {
+        trail.splice(0, trail.length - FlowchartRunManager.MAX_LIVE_POSES + 1);
+      }
+      trail.push(pose);
+      viz.setLiveTrajectory(trail);
+    }
   }
 
   clearLogs(): void {
-    this.logEntries.set([]);
-    this.logSequence = 0;
+    this.ctx.runAction.beginRun();
   }
 
   isNodeCompleted(nodeId: string): boolean {
@@ -174,10 +285,18 @@ export class FlowchartRunManager {
   }
 
   handleRunEvent(event: unknown): void {
-    if (!event || typeof event !== 'object') return;
+    if (!event || typeof event !== 'object') {
+      console.debug('[RunManager] discard non-object event', event);
+      return;
+    }
     if (this.paused) {
+      console.debug('[RunManager] paused, buffer event', (event as { type?: unknown }).type);
       this.bufferedEvents.push(event);
       return;
+    }
+    const type = (event as { type?: unknown }).type;
+    if (type === 'stdout' || type === 'stderr') {
+      console.debug('[RunManager] log event', type, (event as { line?: unknown }).line);
     }
     this.processEvent(event as Record<string, unknown>);
   }
@@ -209,6 +328,7 @@ export class FlowchartRunManager {
       case 'step':
         this.tracker.handleStepEvent(payload);
         this.recordStepTiming(payload);
+        this.logStepEvent(payload);
         if (
           this.currentMode === 'debug' &&
           !this.paused &&
@@ -226,6 +346,52 @@ export class FlowchartRunManager {
         break;
       case 'step_timing_status':
         // Timings database not present yet (expected in simulation); ignore.
+        break;
+      case 'sim_started':
+        this.liveSimActive.set(true);
+        this.liveSimPoses.set([]);
+        this.ctx.tableViz?.clearLiveTrajectory();
+        this.ctx.tableViz?.setLiveTrajectoryActive(true);
+        {
+          const scene = (payload as { scene?: unknown }).scene;
+          this.liveSimScene.set(typeof scene === 'string' ? scene : null);
+          this.appendSystemLog(`Sim attached (scene: ${typeof scene === 'string' ? scene : 'unknown'})`, payload);
+        }
+        break;
+      case 'sim_pose':
+        this.appendLiveSimPose(payload);
+        break;
+      case 'mission_started':
+        {
+          const name = (payload as { mission_name?: unknown }).mission_name;
+          if (typeof name === 'string') {
+            this.appendSystemLog(`▶ Mission: ${name}`, payload);
+          }
+        }
+        break;
+      case 'mission_finished':
+        {
+          const name = (payload as { mission_name?: unknown }).mission_name;
+          if (typeof name === 'string') {
+            this.appendSystemLog(`✓ Mission: ${name}`, payload);
+          }
+        }
+        break;
+      case 'sim_pose_error':
+        console.warn('[Flowchart] sim pose poller error', payload);
+        break;
+      case 'sim_error':
+        {
+          const message = (payload as { message?: unknown }).message;
+          if (message) {
+            this.appendLogLine('stderr', `[sim] ${String(message)}`, payload);
+          }
+        }
+        break;
+      case 'sim_finished':
+        this.liveSimActive.set(false);
+        this.ctx.tableViz?.setLiveTrajectoryActive(false);
+        this.appendSystemLog(`Sim finished (exit ${String((payload as { exit_code?: unknown }).exit_code ?? '?')})`, payload);
         break;
       case 'step_timing_error':
         console.warn('[Flowchart] Step timing error', payload);
@@ -272,34 +438,105 @@ export class FlowchartRunManager {
     this.appendLogLine('system', message, payload);
   }
 
+  /**
+   * Surface a ``step`` event in the logs tab so the user can follow execution
+   * without staring at the flowchart. Real-sim emits one event per leaf
+   * step; fast-sim emits per scheduled timeline entry — both reach this path
+   * unchanged.
+   */
+  private logStepEvent(payload: Record<string, unknown>): void {
+    const label = (payload['display_label'] as string)
+      || (payload['function_name'] as string)
+      || (payload['name'] as string)
+      || (payload['step_type'] as string)
+      || 'step';
+    const path = Array.isArray(payload['path'])
+      ? (payload['path'] as unknown[]).join('.')
+      : undefined;
+    const mission = typeof payload['mission_name'] === 'string'
+      ? payload['mission_name'] as string
+      : undefined;
+
+    const prefixParts: string[] = [];
+    if (mission) prefixParts.push(mission);
+    if (path) prefixParts.push(path);
+    const prefix = prefixParts.length ? prefixParts.join(' › ') : '';
+    const text = prefix ? `${prefix} › ${label}` : label;
+    this.appendLogLine('step', text, payload);
+  }
+
   private appendLogLine(stream: RunLogStream, line: unknown, payload?: Record<string, unknown>): void {
-    const text = line === undefined || line === null ? '' : String(line);
+    const raw = line === undefined || line === null ? '' : String(line);
     const timestampMs = payload ? this.extractTimestampMs(payload) ?? Date.now() : Date.now();
-    const lines = text.split(/\r?\n/);
+    const lines = raw.split(/\r?\n/);
     if (!lines.length) {
       this.appendLogEntry(stream, '', timestampMs);
       return;
     }
     for (const entry of lines) {
-      this.appendLogEntry(stream, entry, timestampMs);
+      this.ingestLine(stream, entry, timestampMs);
     }
   }
 
-  private appendLogEntry(stream: RunLogStream, line: string, timestampMs: number): void {
-    const entry: RunLogEntry = {
-      id: ++this.logSequence,
-      stream,
-      line,
-      timestampMs,
-      runId: this.currentRunId,
-    };
-    this.logEntries.update(prev => {
-      const next = [...prev, entry];
-      if (next.length > MAX_LOG_ENTRIES) {
-        next.splice(0, next.length - MAX_LOG_ENTRIES);
+  /**
+   * Normalize one log line before it lands in the panel: strip ANSI codes,
+   * skip known noise, and demote raccoon-lib's bare ``TIME | LEVEL | SRC |
+   * MSG`` format into a cleaner ``[src] msg`` line routed to the matching
+   * info/warn/error stream so the panel can colour it.
+   */
+  private ingestLine(stream: RunLogStream, rawLine: string, fallbackTs: number): void {
+    // Strip ANSI, trailing whitespace, and collapse the long runs of padding
+    // spaces that rich.Panel produces when warnings/errors get boxed.
+    let cleaned = rawLine.replace(ANSI_ESCAPE_RE, '').replace(/\s+$/g, '');
+    if (!cleaned) {
+      console.debug('[RunManager] drop empty line after clean', { rawLine });
+      return;
+    }
+
+    for (const needle of NOISE_SUBSTRINGS) {
+      if (cleaned.includes(needle)) {
+        console.debug('[RunManager] drop noise', needle, cleaned.slice(0, 80));
+        return;
       }
-      return next;
-    });
+    }
+
+    // raccoon-lib structured logger format → split into source + message,
+    // route to the matching severity stream.
+    const match = cleaned.match(RACCOON_LOG_RE);
+    if (match) {
+      const level = match[3].toLowerCase();
+      const source = match[4].trim();
+      const message = match[5].trim();
+      let mapped: RunLogStream = 'info';
+      if (level === 'warn' || level === 'warning') mapped = 'warn';
+      else if (level === 'error' || level === 'critical' || level === 'fatal') mapped = 'error';
+      else if (level === 'trace' || level === 'debug') mapped = 'info';
+      const text = source ? `[${source}] ${message}` : message;
+      const parsedTs = Date.parse(match[1]);
+      this.appendLogEntry(mapped, text, Number.isFinite(parsedTs) ? parsedTs : fallbackTs);
+      return;
+    }
+
+    // Collapse rich.Panel-style long runs of padding spaces inside the line
+    // so warnings rendered as boxed panels read as a single colored line in
+    // the panel instead of a "where did it go?" wall of whitespace.
+    const compact = cleaned.replace(/\s{2,}/g, ' ').trim();
+    if (!compact) return;
+
+    // Unstructured stdout/stderr — promote the stream to warn/error when the
+    // line contains an obvious severity keyword (rich.Panel output, plain
+    // ``print("ERROR: …")``, etc.).
+    let mapped = stream;
+    if (stream === 'stdout' || stream === 'stderr') {
+      if (KEYWORD_RE.error.test(compact)) mapped = 'error';
+      else if (KEYWORD_RE.warn.test(compact)) mapped = 'warn';
+      // stderr without a severity keyword stays red — leave stream as-is.
+    }
+    this.appendLogEntry(mapped, compact, fallbackTs);
+  }
+
+  private appendLogEntry(stream: RunLogStream, line: string, timestampMs: number): void {
+    this.ctx.runAction.appendLogEntry(stream, line, timestampMs);
   }
 
   private formatRunError(err: unknown): string {
@@ -337,7 +574,11 @@ export class FlowchartRunManager {
   onRun(mode: 'normal' | 'debug'): void {
     const projectId = this.ctx.getProjectUUID();
     const missionKey = this.ctx.getMissionKey();
-    if (!projectId || !missionKey) {
+    // Whole-project run targets only need a project id. Debug + per-mission
+    // fast sim still require a focused mission.
+    const target = this.ctx.runTarget?.() ?? 'simulated';
+    const needsMission = mode === 'debug' || (target !== 'simulated' && target !== 'real');
+    if (!projectId || (needsMission && !missionKey)) {
       console.warn('Run aborted: missing project or mission identifier.');
       return;
     }
@@ -358,12 +599,28 @@ export class FlowchartRunManager {
     this.paused = false;
     this.bufferedEvents = [];
 
-    const simulate = mode === 'debug' ? true : !!this.ctx.shouldSimulate?.();
+    // Decide what to launch based on the navbar run-target dropdown.
+    // simulated -> whole-project libstp run (missionKey ignored)
+    // real      -> raccoon run on the laptop (whole project)
+    // debug     -> fast heuristic sim of the visible mission (legacy path)
+    let simulate: boolean | 'fast' | 'real';
+    let runMissionKey: string | null = missionKey;
+
+    if (mode === 'debug') {
+      simulate = 'fast';
+    } else if (target === 'simulated') {
+      simulate = 'real';
+      runMissionKey = null; // whole project
+    } else {
+      simulate = false;
+      runMissionKey = null; // whole project on real target
+    }
+
     const runOptions = mode === 'debug'
-      ? { simulate: true, debug: true, onSocket: (socket: WebSocket | null) => this.updateSocket(socket) }
+      ? { simulate, debug: true, onSocket: (socket: WebSocket | null) => this.updateSocket(socket) }
       : { simulate, onSocket: (socket: WebSocket | null) => this.updateSocket(socket) };
 
-    this.runSubscription = this.ctx.http.runMission(projectId, missionKey, runOptions).subscribe({
+    this.runSubscription = this.ctx.http.runMission(projectId, runMissionKey, runOptions).subscribe({
       next: event => this.handleRunEvent(event),
       error: err => {
         console.error('Mission run failed', err);

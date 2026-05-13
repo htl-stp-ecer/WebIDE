@@ -50,17 +50,23 @@
           <i [class]="toggle.icon || 'pi pi-sliders-h'" class="toggle-icon"></i>
         </button>
       }
-      <button
-        type="button"
-        class="toggle-chip simulate-toggle"
-        [class.active]="simulateRuns()"
-        (click)="toggleSimulation()"
-        [attr.aria-label]="'FLOWCHART.SIMULATION_TOGGLE' | translate"
-        [pTooltip]="simulateRuns() ? ('FLOWCHART.SIMULATION_ENABLED' | translate) : ('FLOWCHART.SIMULATION_DISABLED' | translate)"
-        tooltipPosition="bottom">
-        <i class="pi pi-objects-column"></i>
-        <span class="ml-1 text-sm">{{ simulateRuns() ? ('FLOWCHART.SIM_SHORT' | translate) : ('FLOWCHART.REAL_SHORT' | translate) }}</span>
-      </button>
+      <!-- Legacy per-mission Sim/Real toggle. Hidden now that the navbar's
+           IntelliJ-style run-target dropdown owns the run mode. The signal
+           is kept around for the upcoming automatic per-mission preview
+           feature. -->
+      @if (showLegacySimulateToggle()) {
+        <button
+          type="button"
+          class="toggle-chip simulate-toggle"
+          [class.active]="simulateRuns()"
+          (click)="toggleSimulation()"
+          [attr.aria-label]="'FLOWCHART.SIMULATION_TOGGLE' | translate"
+          [pTooltip]="simulateRuns() ? ('FLOWCHART.SIMULATION_ENABLED' | translate) : ('FLOWCHART.SIMULATION_DISABLED' | translate)"
+          tooltipPosition="bottom">
+          <i class="pi pi-objects-column"></i>
+          <span class="ml-1 text-sm">{{ simulateRuns() ? ('FLOWCHART.SIM_SHORT' | translate) : ('FLOWCHART.REAL_SHORT' | translate) }}</span>
+        </button>
+      }
     </div>
     <div class="toolbar-right"></div>
   </div>

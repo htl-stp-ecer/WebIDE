@@ -19,8 +19,16 @@ export interface TableMapFileV1 {
   }>;
 }
 
+export type SimulateMode = 'fast' | 'real';
+
 interface RunMissionOptions {
-  simulate?: boolean;
+  /**
+   * Simulation mode for the run:
+   *   - `false` or omitted: real hardware (run.sh)
+   *   - `true` / `'fast'`: heuristic simulation (cheap, no robot logic)
+   *   - `'real'`: spawn the libstp simulator and stream actual pose
+   */
+  simulate?: boolean | SimulateMode;
   debug?: boolean;
   onSocket?: (socket: WebSocket | null) => void;
 }
@@ -59,9 +67,6 @@ export class HttpService {
   }
 
   setDeviceBase(ip: string) {
-    // Normalize incoming IP/base so both HttpClient and WebSocket use the same origin
-    // - Ensure scheme
-    // - Default to port 8000 if none provided (to match PortInterceptor behavior)
     let base = (ip || '').trim();
     try {
       if (!/^https?:\/\//i.test(base)) {
@@ -71,10 +76,13 @@ export class HttpService {
       if (!u.port) {
         u.port = '8421';
       }
-      // Keep only origin (scheme://host:port)
       this.deviceBaseSubject.next(u.origin);
+      // Fetch the API token from the public endpoint and cache it
+      this.http.get<{token: string}>(`${u.origin}/api/v1/device/token`).subscribe({
+        next: res => localStorage.setItem('raccoon_device_token', res.token),
+        error: () => {},
+      });
     } catch {
-      // Fallback to previous behavior if parsing fails
       this.deviceBaseSubject.next(base);
     }
   }
@@ -263,8 +271,8 @@ export class HttpService {
   }
 
   commandArm(projectUuid: string, joint_angles_deg: number[]) {
-    return this.http.post<{ commanded: { servo: string; port: number; servo_deg: number }[]; success: boolean }>(
-      this.deviceApi(`/api/v1/projects/${projectUuid}/arm/command`),
+    return this.http.post<{ success: boolean; count: number }>(
+      this.localApi(`/projects/${projectUuid}/arm/command`),
       { joint_angles_deg },
     );
   }
@@ -415,17 +423,24 @@ export class HttpService {
     }
   }
 
-  runMission(projectUUID: string, name: string, options?: RunMissionOptions): Observable<WebSocketResponse> {
+  runMission(projectUUID: string, name: string | null, options?: RunMissionOptions): Observable<WebSocketResponse> {
     const params: string[] = [];
-    const shouldSimulate = options?.simulate ?? true;
-    if (shouldSimulate) {
-      params.push('simulate=1');
+    const sim = options?.simulate ?? true;
+    if (sim === 'real') {
+      params.push('simulate=real');
+    } else if (sim === 'fast' || sim === true) {
+      params.push('simulate=fast');
     }
     if (options?.debug) {
       params.push('debug=1');
     }
     const query = params.length ? `?${params.join('&')}` : '';
-    const httpUrl = this.localApiAbsolute(`/missions/${projectUUID}/run/${name}${query}`);
+    // No mission name -> hit the project-level /run endpoint (IntelliJ-style
+    // whole-project run). With a name we keep using the per-mission route.
+    const path = name
+      ? `/missions/${projectUUID}/run/${encodeURIComponent(name)}${query}`
+      : `/missions/${projectUUID}/run${query}`;
+    const httpUrl = this.localApiAbsolute(path);
     const wsUrl = this.toWebSocketUrl(httpUrl);
 
     return new Observable<WebSocketResponse>((observer) => {
@@ -446,8 +461,15 @@ export class HttpService {
         const raw = ev.data;
         try {
           const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+          if (parsed && typeof parsed === 'object') {
+            const t = (parsed as { type?: unknown }).type;
+            if (t === 'stdout' || t === 'stderr') {
+              console.debug('[WS] message', t, (parsed as { line?: unknown }).line);
+            }
+          }
           observer.next(parsed);
         } catch {
+          console.debug('[WS] non-JSON message', raw);
           observer.next(raw);
         }
       };

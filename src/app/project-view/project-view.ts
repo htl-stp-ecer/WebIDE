@@ -1,4 +1,4 @@
-import {Component, ElementRef, OnDestroy, signal, ViewChild} from '@angular/core';
+import {Component, effect, ElementRef, OnDestroy, signal, ViewChild} from '@angular/core';
 import {MissionPanel} from './mission-panel/mission-panel';
 import {Flowchart} from './flowchart/flowchart';
 import {StepPanel} from './step-panel/step-panel';
@@ -11,6 +11,7 @@ import {ArmPanel} from './arm-panel/arm-panel';
 import { ActivatedRoute } from '@angular/router';
 import { HttpService } from '../services/http-service';
 import { HttpClient } from '@angular/common/http';
+import { RunActionService } from '../services/run-action-service';
 
 type ResizeSide = 'left' | 'right' | 'bottom';
 
@@ -90,6 +91,7 @@ export class ProjectView implements OnDestroy {
     private route: ActivatedRoute,
     private http: HttpService,
     private httpClient: HttpClient,
+    readonly runAction: RunActionService,
   ) {
     const projectUUID = this.route.snapshot.paramMap.get('uuid');
     if (!projectUUID) {
@@ -107,6 +109,14 @@ export class ProjectView implements OnDestroy {
           this.activeBottomPanel.set(null);
         }
       },
+    });
+
+    // Auto-open logs panel when a run starts
+    effect(() => {
+      if (this.runAction.isRunActive()) {
+        this.activeBottomPanel.set('logs');
+        localStorage.setItem(STORAGE_KEYS.activeBottomPanel, 'logs');
+      }
     });
 
     this.http.getProject(projectUUID).subscribe({

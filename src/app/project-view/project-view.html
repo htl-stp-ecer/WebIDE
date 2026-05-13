@@ -161,8 +161,8 @@
           </div>
           <div class="tool-panel-content">
             <app-run-log-panel
-              [entries]="$any({})"
-              [isRunning]="false"
+              [entries]="runAction.logEntries()"
+              [isRunning]="runAction.isRunActive()"
               [fullscreen]="false"
               [embedded]="true"></app-run-log-panel>
           </div>

@@ -277,7 +277,11 @@ export function rebuildFromMission(flow: Flowchart, mission: Mission): void {
   flow.rebuildParallelGroupLookup();
   mission.groups = toMissionGroups(refreshedGroups); // Only persist user groups
   recomputeMergedView(flow);
-  flow.runManager.clearRunVisuals();
+  // Don't drop run state on mission switch — the run-path tracker already
+  // re-projects the persisted per-mission completion record onto the new
+  // flowchart via updatePathLookups + setCurrentMissionName. Clearing here
+  // would erase highlights, the live trajectory and the pose stream that
+  // belong to the still-running (or just-finished) run.
 }
 
 export function handleNodeMoved(flow: Flowchart, nodeId: string, pos: { x: number; y: number }): void {
