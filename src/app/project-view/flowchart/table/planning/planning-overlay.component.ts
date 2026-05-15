@@ -20,6 +20,7 @@ import { ToggleButtonModule } from 'primeng/togglebutton';
 import { TooltipModule } from 'primeng/tooltip';
 import { PlanningModeService } from './planning-mode.service';
 import { formatStepForPreview } from './path-to-steps';
+import { sampleCatmullRom, tangentsAtWaypoints } from './catmull-rom';
 import {
   driveUntilColorFromStepId,
   isBackwardStepId,
@@ -272,17 +273,23 @@ export class PlanningOverlayComponent implements OnInit, AfterViewInit, OnDestro
       this.renderAngleGuide(width, height, angleSnap);
     }
 
+    const isSpline = this.planningService.pathMode() === 'spline';
     const hasComputedTrajectory = this.planningService.computedTrajectory().length >= 2;
 
-    // Show the raw waypoint guide only while no computed trajectory is available.
-    if (!hasComputedTrajectory) {
+    if (isSpline) {
+      this.renderSplineCurve(width, height);
+      this.renderSplineTangents(width, height);
+    } else if (!hasComputedTrajectory) {
+      // Show the raw waypoint guide only while no computed trajectory is available.
       this.renderPathLines(width, height);
     }
     this.renderActualPath(width, height);
 
     // Draw waypoint markers and ghost robot
     this.renderWaypoints(width, height);
-    this.renderGhostRobot(width, height);
+    if (!isSpline) {
+      this.renderGhostRobot(width, height);
+    }
   }
 
   /** Render the table map (white surface with black lines and walls) */
@@ -449,6 +456,82 @@ export class PlanningOverlayComponent implements OnInit, AfterViewInit, OnDestro
       const from = this.tableToCanvas(pathPoints[i].x, pathPoints[i].y, width, height);
       const to = this.tableToCanvas(pathPoints[i + 1].x, pathPoints[i + 1].y, width, height);
       this.drawArrow(from.x, from.y, to.x, to.y);
+    }
+  }
+
+  private getSplineControlPoints(): { x: number; y: number }[] {
+    const start = this.planningService.startPose();
+    return [
+      { x: start.x, y: start.y },
+      ...this.planningService.waypoints().map((wp) => ({ x: wp.x, y: wp.y })),
+    ];
+  }
+
+  private renderSplineCurve(width: number, height: number): void {
+    const controlPoints = this.getSplineControlPoints();
+    if (controlPoints.length < 2) return;
+
+    const samples = sampleCatmullRom(controlPoints, 24);
+    if (samples.length < 2) return;
+
+    this.ctx.strokeStyle = '#3b82f6';
+    this.ctx.lineWidth = 3;
+    this.ctx.lineCap = 'round';
+    this.ctx.lineJoin = 'round';
+    this.ctx.setLineDash([]);
+    this.ctx.beginPath();
+    for (let i = 0; i < samples.length; i++) {
+      const pos = this.tableToCanvas(samples[i].x, samples[i].y, width, height);
+      if (i === 0) this.ctx.moveTo(pos.x, pos.y);
+      else this.ctx.lineTo(pos.x, pos.y);
+    }
+    this.ctx.stroke();
+  }
+
+  private renderSplineTangents(width: number, height: number): void {
+    const controlPoints = this.getSplineControlPoints();
+    if (controlPoints.length < 2) return;
+
+    const tangents = tangentsAtWaypoints(controlPoints);
+    const headingMode = this.planningService.splineHeadingMode();
+    const waypoints = this.planningService.waypoints();
+    const arrowLengthPx = 28;
+
+    // Index 0 in controlPoints is the start pose, so waypoint i corresponds to
+    // tangents[i + 1].
+    for (let i = 0; i < waypoints.length; i++) {
+      const wp = waypoints[i];
+      const tangent = tangents[i + 1];
+      if (!tangent) continue;
+      const pos = this.tableToCanvas(wp.x, wp.y, width, height);
+
+      // Tangent is in table-frame cm. Canvas Y is inverted, so flip dy.
+      const angle = Math.atan2(-tangent.y, tangent.x);
+      const explicit = headingMode === 'explicit' && typeof wp.headingDeg === 'number';
+      const useAngle = explicit
+        ? // headingDeg in table frame, 0° = +X. Canvas Y inversion.
+          -((wp.headingDeg as number) * Math.PI) / 180
+        : angle;
+
+      this.ctx.save();
+      this.ctx.translate(pos.x, pos.y);
+      this.ctx.rotate(useAngle);
+      this.ctx.strokeStyle = explicit ? '#10b981' : 'rgba(59, 130, 246, 0.7)';
+      this.ctx.fillStyle = explicit ? '#10b981' : 'rgba(59, 130, 246, 0.7)';
+      this.ctx.lineWidth = 2;
+      this.ctx.setLineDash([]);
+      this.ctx.beginPath();
+      this.ctx.moveTo(0, 0);
+      this.ctx.lineTo(arrowLengthPx, 0);
+      this.ctx.stroke();
+      // Arrowhead
+      this.ctx.beginPath();
+      this.ctx.moveTo(arrowLengthPx, 0);
+      this.ctx.lineTo(arrowLengthPx - 6, -4);
+      this.ctx.lineTo(arrowLengthPx - 6, 4);
+      this.ctx.closePath();
+      this.ctx.fill();
+      this.ctx.restore();
     }
   }
 
