@@ -18,7 +18,7 @@ import { ButtonModule } from 'primeng/button';
 import { SliderModule } from 'primeng/slider';
 import { ToggleButtonModule } from 'primeng/togglebutton';
 import { TooltipModule } from 'primeng/tooltip';
-import { PlanningModeService } from './planning-mode.service';
+import { PlanningModeService, type PlanningPathMode, type SplineHeadingMode } from './planning-mode.service';
 import { formatStepForPreview } from './path-to-steps';
 import { sampleCatmullRom, tangentsAtWaypoints } from './catmull-rom';
 import {
@@ -1499,6 +1499,20 @@ export class PlanningOverlayComponent implements OnInit, AfterViewInit, OnDestro
     if (!value) {
       this.planningService.clearWaypointLineups();
     }
+  }
+
+  onPathModeChange(mode: PlanningPathMode): void {
+    this.planningService.setPathMode(mode);
+  }
+
+  onSplineSpeedChange(event: { value?: number }): void {
+    if (typeof event.value === 'number') {
+      this.planningService.setSplineSpeed(event.value);
+    }
+  }
+
+  onSplineHeadingModeChange(mode: SplineHeadingMode): void {
+    this.planningService.setSplineHeadingMode(mode);
   }
 
   onAllowStrafeChange(event: { checked?: boolean }): void {

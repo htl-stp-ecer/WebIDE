@@ -98,6 +98,68 @@
           </div>
           @if (settingsExpanded()) {
             <div class="section-content">
+              <!-- Path Mode -->
+              <div class="settings-group">
+                <label class="settings-label">{{ 'FLOWCHART.PLANNER_PATH_MODE' | translate }}</label>
+                <div class="snap-toggles">
+                  <p-toggleButton
+                    [ngModel]="planningService.pathMode() === 'linear'"
+                    onLabel="Linear"
+                    offLabel="Linear"
+                    onIcon="pi pi-arrow-up"
+                    offIcon="pi pi-arrow-up"
+                    (onChange)="onPathModeChange('linear')"
+                    styleClass="snap-toggle">
+                  </p-toggleButton>
+                  <p-toggleButton
+                    [ngModel]="planningService.pathMode() === 'spline'"
+                    onLabel="Spline"
+                    offLabel="Spline"
+                    onIcon="pi pi-wave-pulse"
+                    offIcon="pi pi-wave-pulse"
+                    (onChange)="onPathModeChange('spline')"
+                    styleClass="snap-toggle">
+                  </p-toggleButton>
+                </div>
+              </div>
+
+              @if (planningService.pathMode() === 'spline') {
+                <div class="settings-group">
+                  <label class="settings-label">Speed: {{ (planningService.splineSpeed() * 100) | number:'1.0-0' }}%</label>
+                  <p-slider
+                    [ngModel]="planningService.splineSpeed()"
+                    (onChange)="onSplineSpeedChange($event)"
+                    [min]="0.1"
+                    [max]="1.0"
+                    [step]="0.05">
+                  </p-slider>
+                </div>
+                <div class="settings-group">
+                  <label class="settings-label">Heading</label>
+                  <div class="snap-toggles">
+                    <p-toggleButton
+                      [ngModel]="planningService.splineHeadingMode() === 'tangent'"
+                      onLabel="Tangent"
+                      offLabel="Tangent"
+                      onIcon="pi pi-share-alt"
+                      offIcon="pi pi-share-alt"
+                      (onChange)="onSplineHeadingModeChange('tangent')"
+                      styleClass="snap-toggle">
+                    </p-toggleButton>
+                    <p-toggleButton
+                      [ngModel]="planningService.splineHeadingMode() === 'explicit'"
+                      onLabel="Explicit"
+                      offLabel="Explicit"
+                      onIcon="pi pi-compass"
+                      offIcon="pi pi-compass"
+                      (onChange)="onSplineHeadingModeChange('explicit')"
+                      styleClass="snap-toggle">
+                    </p-toggleButton>
+                  </div>
+                  <small class="settings-hint">Shift+drag a waypoint to set its heading. Shift+double-click to clear.</small>
+                </div>
+              }
+
               <!-- Snap Controls -->
               <div class="settings-group">
                 <label class="settings-label">{{ 'FLOWCHART.PLANNER_SNAPPING' | translate }}</label>
