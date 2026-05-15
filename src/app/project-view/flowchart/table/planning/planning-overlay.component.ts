@@ -159,6 +159,9 @@ export class PlanningOverlayComponent implements OnInit, AfterViewInit, OnDestro
   private animationFrameId: number | null = null;
   private resizeObserver!: ResizeObserver;
 
+  /** Index of waypoint whose heading is being shift-dragged, or null. */
+  private headingDragIndex: number | null = null;
+
   constructor() {
     effect(() => {
       // React to waypoint and pose changes
@@ -507,17 +510,24 @@ export class PlanningOverlayComponent implements OnInit, AfterViewInit, OnDestro
 
       // Tangent is in table-frame cm. Canvas Y is inverted, so flip dy.
       const angle = Math.atan2(-tangent.y, tangent.x);
-      const explicit = headingMode === 'explicit' && typeof wp.headingDeg === 'number';
-      const useAngle = explicit
+      const hasExplicit = typeof wp.headingDeg === 'number';
+      const inExplicitMode = headingMode === 'explicit';
+      const useAngle = hasExplicit
         ? // headingDeg in table frame, 0° = +X. Canvas Y inversion.
           -((wp.headingDeg as number) * Math.PI) / 180
         : angle;
+      // Green = explicit heading currently in use.
+      // Amber = explicit heading set but mode ignores it (visual reminder).
+      // Blue  = tangent (auto-derived).
+      const color = hasExplicit
+        ? (inExplicitMode ? '#10b981' : '#f59e0b')
+        : 'rgba(59, 130, 246, 0.7)';
 
       this.ctx.save();
       this.ctx.translate(pos.x, pos.y);
       this.ctx.rotate(useAngle);
-      this.ctx.strokeStyle = explicit ? '#10b981' : 'rgba(59, 130, 246, 0.7)';
-      this.ctx.fillStyle = explicit ? '#10b981' : 'rgba(59, 130, 246, 0.7)';
+      this.ctx.strokeStyle = color;
+      this.ctx.fillStyle = color;
       this.ctx.lineWidth = 2;
       this.ctx.setLineDash([]);
       this.ctx.beginPath();
@@ -1169,6 +1179,16 @@ export class PlanningOverlayComponent implements OnInit, AfterViewInit, OnDestro
     const hitIndex = this.hitTestWaypoint(x, y, rect.width, rect.height);
     if (hitIndex !== null) {
       this.planningService.selectWaypoint(hitIndex);
+      // Shift-drag edits the heading (spline mode only). Plain drag moves the waypoint.
+      if (event.shiftKey && this.planningService.pathMode() === 'spline') {
+        this.saveUndoState();
+        this.headingDragIndex = hitIndex;
+        canvas.setPointerCapture(event.pointerId);
+        // Apply immediate heading based on pointer offset, so the user
+        // gets feedback even without moving.
+        this.applyHeadingDrag(hitIndex, x, y, rect.width, rect.height);
+        return;
+      }
       this.planningService.startDragging(hitIndex);
       this.saveUndoState(); // Save state before dragging
       canvas.setPointerCapture(event.pointerId);
@@ -1197,13 +1217,18 @@ export class PlanningOverlayComponent implements OnInit, AfterViewInit, OnDestro
   }
 
   onPointerMove(event: PointerEvent): void {
-    const draggingIndex = this.planningService.draggingIndex();
-    if (draggingIndex === null) return;
-
     const canvas = this.canvasRef.nativeElement;
     const rect = canvas.getBoundingClientRect();
     const x = event.clientX - rect.left;
     const y = event.clientY - rect.top;
+
+    if (this.headingDragIndex !== null) {
+      this.applyHeadingDrag(this.headingDragIndex, x, y, rect.width, rect.height);
+      return;
+    }
+
+    const draggingIndex = this.planningService.draggingIndex();
+    if (draggingIndex === null) return;
 
     const tablePos = this.canvasToTable(x, y, rect.width, rect.height);
     if (tablePos) {
@@ -1227,12 +1252,43 @@ export class PlanningOverlayComponent implements OnInit, AfterViewInit, OnDestro
     const canvas = this.canvasRef.nativeElement;
     canvas.releasePointerCapture(event.pointerId);
     this.planningService.stopDragging();
+    this.headingDragIndex = null;
     this.clearSnapIndicators();
   }
 
   onPointerLeave(): void {
     this.planningService.stopDragging();
+    this.headingDragIndex = null;
     this.clearSnapIndicators();
+  }
+
+  /**
+   * Update waypoint heading from a canvas-space pointer position.
+   * The angle from the waypoint to the pointer (in table frame) becomes the
+   * new heading. Holding Ctrl/Cmd snaps to 15° increments.
+   */
+  private applyHeadingDrag(
+    index: number,
+    canvasX: number,
+    canvasY: number,
+    width: number,
+    height: number
+  ): void {
+    const wp = this.planningService.waypoints()[index];
+    if (!wp) return;
+    const tablePos = this.canvasToTable(canvasX, canvasY, width, height);
+    if (!tablePos) return;
+    const dx = tablePos.x - wp.x;
+    const dy = tablePos.y - wp.y;
+    if (dx * dx + dy * dy < 0.25) return; // ignore tiny drags
+    let deg = (Math.atan2(dy, dx) * 180) / Math.PI;
+    if (this.snapAngles()) {
+      deg = Math.round(deg / 15) * 15;
+    }
+    // Normalize to (-180, 180]
+    while (deg <= -180) deg += 360;
+    while (deg > 180) deg -= 360;
+    this.planningService.setWaypointHeading(index, deg);
   }
 
   onContextMenu(event: MouseEvent): void {
@@ -1294,10 +1350,20 @@ export class PlanningOverlayComponent implements OnInit, AfterViewInit, OnDestro
     const y = event.clientY - rect.top;
 
     const hitIndex = this.hitTestWaypoint(x, y, rect.width, rect.height);
-    if (hitIndex !== null) {
-      this.saveUndoState(); // Save state before removing
-      this.planningService.removeWaypoint(hitIndex);
+    if (hitIndex === null) return;
+
+    // Shift+double-click clears an explicit heading instead of deleting.
+    if (event.shiftKey && this.planningService.pathMode() === 'spline') {
+      const wp = this.planningService.waypoints()[hitIndex];
+      if (typeof wp?.headingDeg === 'number') {
+        this.saveUndoState();
+        this.planningService.setWaypointHeading(hitIndex, undefined);
+      }
+      return;
     }
+
+    this.saveUndoState(); // Save state before removing
+    this.planningService.removeWaypoint(hitIndex);
   }
 
   private hitTestWaypoint(canvasX: number, canvasY: number, width: number, height: number): number | null {
