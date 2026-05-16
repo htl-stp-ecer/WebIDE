@@ -36,6 +36,27 @@ const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 10;
 const ZOOM_STEP = 0.15;
 
+/** Gizmo constants (canvas CSS pixels) */
+const GIZMO_ARM_PX = 48;
+const GIZMO_CLEARANCE_PX = 12;
+const GIZMO_ARROW_SIZE = 10;
+const GIZMO_ROT_RADIUS = 58;
+const GIZMO_HIT_TOLERANCE = 10;
+
+type GizmoDragMode = 'translate-x' | 'translate-y' | 'rotate' | 'body';
+
+interface GizmoDragState {
+  mode: GizmoDragMode;
+  startCanvasX: number;
+  startCanvasY: number;
+  startTableX: number;
+  startTableY: number;
+  startTheta: number;
+  startAngle: number;
+  robotCenterX: number;
+  robotCenterY: number;
+}
+
 @Component({
   selector: 'app-table-visualization-panel',
   standalone: true,
@@ -74,7 +95,17 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
   private isPanning = false;
   private panStartPos = { x: 0, y: 0 };
 
+  // Gizmo state
+  private readonly isRobotSelected = signal(false);
+  private gizmoDragState: GizmoDragState | null = null;
+
   constructor() {
+    effect(() => {
+      if (!this.allowStartPoseEdit()) {
+        this.isRobotSelected.set(false);
+      }
+    });
+
     effect(() => {
       // React to changes in map and visualization state
       this.mapService.mapImage();
@@ -543,6 +574,152 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
       showSensors: true,
       dashed: false,
     });
+
+    if (this.allowStartPoseEdit() && this.isRobotSelected()) {
+      this.renderGizmo(this.vizService.startPose(), width, height);
+    }
+  }
+
+  private renderGizmo(pose: Pose2D, width: number, height: number): void {
+    const center = this.tableToCanvas(pose, width, height);
+    const cx = center.x;
+    const cy = center.y;
+    const isDragging = this.gizmoDragState;
+
+    this.ctx.save();
+    this.ctx.lineCap = 'round';
+    this.ctx.setLineDash([]);
+
+    // Rotation ring (blue)
+    const rotActive = isDragging?.mode === 'rotate';
+    this.ctx.strokeStyle = rotActive ? '#93c5fd' : '#60a5fa';
+    this.ctx.lineWidth = rotActive ? 3.5 : 2.5;
+    this.ctx.beginPath();
+    this.ctx.arc(cx, cy, GIZMO_ROT_RADIUS, 0, Math.PI * 2);
+    this.ctx.stroke();
+
+    // X-axis arrow (red, pointing canvas right = table +X)
+    const xActive = isDragging?.mode === 'translate-x';
+    this.ctx.strokeStyle = xActive ? '#fca5a5' : '#ef4444';
+    this.ctx.fillStyle = xActive ? '#fca5a5' : '#ef4444';
+    this.ctx.lineWidth = xActive ? 3.5 : 2.5;
+    this.ctx.beginPath();
+    this.ctx.moveTo(cx + GIZMO_CLEARANCE_PX, cy);
+    this.ctx.lineTo(cx + GIZMO_ARM_PX, cy);
+    this.ctx.stroke();
+    this.ctx.beginPath();
+    this.ctx.moveTo(cx + GIZMO_ARM_PX + GIZMO_ARROW_SIZE, cy);
+    this.ctx.lineTo(cx + GIZMO_ARM_PX, cy - GIZMO_ARROW_SIZE * 0.5);
+    this.ctx.lineTo(cx + GIZMO_ARM_PX, cy + GIZMO_ARROW_SIZE * 0.5);
+    this.ctx.closePath();
+    this.ctx.fill();
+
+    // Y-axis arrow (green, pointing canvas up = table +Y)
+    const yActive = isDragging?.mode === 'translate-y';
+    this.ctx.strokeStyle = yActive ? '#86efac' : '#4ade80';
+    this.ctx.fillStyle = yActive ? '#86efac' : '#4ade80';
+    this.ctx.lineWidth = yActive ? 3.5 : 2.5;
+    this.ctx.beginPath();
+    this.ctx.moveTo(cx, cy - GIZMO_CLEARANCE_PX);
+    this.ctx.lineTo(cx, cy - GIZMO_ARM_PX);
+    this.ctx.stroke();
+    this.ctx.beginPath();
+    this.ctx.moveTo(cx, cy - GIZMO_ARM_PX - GIZMO_ARROW_SIZE);
+    this.ctx.lineTo(cx - GIZMO_ARROW_SIZE * 0.5, cy - GIZMO_ARM_PX);
+    this.ctx.lineTo(cx + GIZMO_ARROW_SIZE * 0.5, cy - GIZMO_ARM_PX);
+    this.ctx.closePath();
+    this.ctx.fill();
+
+    this.ctx.restore();
+  }
+
+  private hitTestRobotBody(canvasX: number, canvasY: number, width: number, height: number): boolean {
+    const pose = this.vizService.startPose();
+    const center = this.tableToCanvas(pose, width, height);
+    const robotConfig = this.vizService.robotConfig();
+    const { scaleX, scaleY } = this.getDrawParams(width, height);
+
+    const dx = canvasX - center.x;
+    const dy = canvasY - center.y;
+    // Rotate pointer to robot local frame (inverse of ctx.rotate(-theta))
+    const lx = dx * Math.cos(pose.theta) - dy * Math.sin(pose.theta);
+    const ly = dx * Math.sin(pose.theta) + dy * Math.cos(pose.theta);
+
+    const rcOffsetForwardPx = robotConfig.rotationCenterForwardCm * scaleX;
+    const rcOffsetStrafePx = robotConfig.rotationCenterStrafeCm * scaleY;
+    const bodyCenterX = -rcOffsetForwardPx;
+    const bodyCenterY = rcOffsetStrafePx;
+    const halfL = (robotConfig.lengthCm * scaleY) / 2;
+    const halfW = (robotConfig.widthCm * scaleX) / 2;
+
+    return (
+      lx >= bodyCenterX - halfL &&
+      lx <= bodyCenterX + halfL &&
+      ly >= bodyCenterY - halfW &&
+      ly <= bodyCenterY + halfW
+    );
+  }
+
+  private hitTestGizmo(canvasX: number, canvasY: number, width: number, height: number): GizmoDragMode | null {
+    const pose = this.vizService.startPose();
+    const center = this.tableToCanvas(pose, width, height);
+    const dx = canvasX - center.x;
+    const dy = canvasY - center.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+
+    // Rotation ring — full circle hit
+    if (Math.abs(dist - GIZMO_ROT_RADIUS) <= GIZMO_HIT_TOLERANCE) {
+      return 'rotate';
+    }
+
+    // X-axis handle (canvas right, Y tolerance)
+    if (
+      dx >= GIZMO_CLEARANCE_PX &&
+      dx <= GIZMO_ARM_PX + GIZMO_ARROW_SIZE &&
+      Math.abs(dy) <= GIZMO_HIT_TOLERANCE
+    ) {
+      return 'translate-x';
+    }
+
+    // Y-axis handle (canvas up = negative Y, X tolerance)
+    if (
+      dy <= -GIZMO_CLEARANCE_PX &&
+      dy >= -(GIZMO_ARM_PX + GIZMO_ARROW_SIZE) &&
+      Math.abs(dx) <= GIZMO_HIT_TOLERANCE
+    ) {
+      return 'translate-y';
+    }
+
+    return null;
+  }
+
+  private handleGizmoDrag(canvasX: number, canvasY: number, width: number, height: number): void {
+    const state = this.gizmoDragState!;
+    const { scaleX, scaleY } = this.getDrawParams(width, height);
+    let newPose: Pose2D;
+
+    if (state.mode === 'translate-x') {
+      const dxTable = (canvasX - state.startCanvasX) / scaleX;
+      newPose = { x: state.startTableX + dxTable, y: state.startTableY, theta: state.startTheta };
+    } else if (state.mode === 'translate-y') {
+      const dyTable = -(canvasY - state.startCanvasY) / scaleY;
+      newPose = { x: state.startTableX, y: state.startTableY + dyTable, theta: state.startTheta };
+    } else if (state.mode === 'body') {
+      const dxTable = (canvasX - state.startCanvasX) / scaleX;
+      const dyTable = -(canvasY - state.startCanvasY) / scaleY;
+      newPose = { x: state.startTableX + dxTable, y: state.startTableY + dyTable, theta: state.startTheta };
+    } else {
+      // rotate
+      const currentAngle = Math.atan2(-(canvasY - state.robotCenterY), canvasX - state.robotCenterX);
+      let deltaAngle = currentAngle - state.startAngle;
+      // Normalise to [-π, π] to avoid jumps when crossing ±180°
+      if (deltaAngle > Math.PI) deltaAngle -= 2 * Math.PI;
+      if (deltaAngle < -Math.PI) deltaAngle += 2 * Math.PI;
+      newPose = { x: state.startTableX, y: state.startTableY, theta: state.startTheta + deltaAngle };
+    }
+
+    this.vizService.setStartPose(newPose.x, newPose.y, thetaToDegrees(newPose.theta));
+    this.startPoseChange.emit(newPose);
   }
 
   private renderGhostRobot(width: number, height: number): void {
@@ -596,6 +773,34 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
 
     const bodyCenterX = -rcOffsetForwardPx;
     const bodyCenterY = rcOffsetStrafePx;
+
+    // Draw wheels (behind body)
+    const wheelLengthPx = robotLengthPx * 0.55;
+    const wheelWidthPx = Math.max(4, robotWidthPx * 0.13);
+    this.ctx.fillStyle = options.dashed ? 'rgba(55, 65, 81, 0.5)' : '#374151';
+    this.ctx.strokeStyle = options.dashed ? 'rgba(107, 114, 128, 0.4)' : '#4b5563';
+    this.ctx.lineWidth = 1;
+    this.ctx.setLineDash([]);
+    // Left wheel
+    this.ctx.beginPath();
+    this.ctx.rect(
+      bodyCenterX - wheelLengthPx / 2,
+      bodyCenterY - robotWidthPx / 2 - wheelWidthPx,
+      wheelLengthPx,
+      wheelWidthPx
+    );
+    this.ctx.fill();
+    this.ctx.stroke();
+    // Right wheel
+    this.ctx.beginPath();
+    this.ctx.rect(
+      bodyCenterX - wheelLengthPx / 2,
+      bodyCenterY + robotWidthPx / 2,
+      wheelLengthPx,
+      wheelWidthPx
+    );
+    this.ctx.fill();
+    this.ctx.stroke();
 
     // Draw robot body
     this.ctx.fillStyle = options.bodyFill;
@@ -766,35 +971,88 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
       return;
     }
 
-    if (!this.allowStartPoseEdit() || event.button !== 0) return;
+    if (event.button !== 0 || !this.allowStartPoseEdit()) return;
+
     const canvas = this.canvasRef.nativeElement;
     const rect = canvas.getBoundingClientRect();
-    const x = event.clientX - rect.left;
-    const y = event.clientY - rect.top;
-    const tablePos = this.canvasToTable(x, y, rect.width, rect.height);
-    if (!tablePos) return;
+    const canvasX = event.clientX - rect.left;
+    const canvasY = event.clientY - rect.top;
+    const pose = this.vizService.startPose();
 
-    const current = this.vizService.startPose();
-    const nextPose: Pose2D = {
-      x: tablePos.x,
-      y: tablePos.y,
-      theta: current.theta,
-    };
-    this.vizService.setStartPose(nextPose.x, nextPose.y, thetaToDegrees(nextPose.theta));
-    this.startPoseChange.emit(nextPose);
+    // If robot is selected, check gizmo handles first
+    if (this.isRobotSelected()) {
+      const dragMode = this.hitTestGizmo(canvasX, canvasY, rect.width, rect.height);
+      if (dragMode) {
+        const center = this.tableToCanvas(pose, rect.width, rect.height);
+        this.gizmoDragState = {
+          mode: dragMode,
+          startCanvasX: canvasX,
+          startCanvasY: canvasY,
+          startTableX: pose.x,
+          startTableY: pose.y,
+          startTheta: pose.theta,
+          startAngle: Math.atan2(-(canvasY - center.y), canvasX - center.x),
+          robotCenterX: center.x,
+          robotCenterY: center.y,
+        };
+        canvas.setPointerCapture(event.pointerId);
+        return;
+      }
+
+      // Click on robot body → start free-drag
+      if (this.hitTestRobotBody(canvasX, canvasY, rect.width, rect.height)) {
+        const center = this.tableToCanvas(pose, rect.width, rect.height);
+        this.gizmoDragState = {
+          mode: 'body',
+          startCanvasX: canvasX,
+          startCanvasY: canvasY,
+          startTableX: pose.x,
+          startTableY: pose.y,
+          startTheta: pose.theta,
+          startAngle: 0,
+          robotCenterX: center.x,
+          robotCenterY: center.y,
+        };
+        canvas.setPointerCapture(event.pointerId);
+        return;
+      }
+
+      // Click outside robot/gizmo → deselect
+      this.isRobotSelected.set(false);
+      return;
+    }
+
+    // Robot not selected — click on body selects it
+    if (this.hitTestRobotBody(canvasX, canvasY, rect.width, rect.height)) {
+      this.isRobotSelected.set(true);
+    }
   }
 
   onCanvasPointerMove(event: PointerEvent): void {
-    if (!this.isPanning) return;
-    const dx = event.clientX - this.panStartPos.x;
-    const dy = event.clientY - this.panStartPos.y;
-    this.panStartPos = { x: event.clientX, y: event.clientY };
-    this.panOffset.update(p => ({ x: p.x + dx, y: p.y + dy }));
+    if (this.isPanning) {
+      const dx = event.clientX - this.panStartPos.x;
+      const dy = event.clientY - this.panStartPos.y;
+      this.panStartPos = { x: event.clientX, y: event.clientY };
+      this.panOffset.update(p => ({ x: p.x + dx, y: p.y + dy }));
+      return;
+    }
+
+    if (this.gizmoDragState) {
+      const canvas = this.canvasRef.nativeElement;
+      const rect = canvas.getBoundingClientRect();
+      const canvasX = event.clientX - rect.left;
+      const canvasY = event.clientY - rect.top;
+      this.handleGizmoDrag(canvasX, canvasY, rect.width, rect.height);
+    }
   }
 
   onCanvasPointerUp(event: PointerEvent): void {
     if (this.isPanning) {
       this.isPanning = false;
+      this.canvasRef.nativeElement.releasePointerCapture(event.pointerId);
+    }
+    if (this.gizmoDragState) {
+      this.gizmoDragState = null;
       this.canvasRef.nativeElement.releasePointerCapture(event.pointerId);
     }
   }
