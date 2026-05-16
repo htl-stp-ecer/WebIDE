@@ -458,3 +458,63 @@ $collapsed-width: 40px;
     font-size: 0.6rem;
   }
 }
+
+/* ═══════════════════════════════════════════════════════
+   Start Pose Bar — inline coordinate editor in table panel
+═══════════════════════════════════════════════════════ */
+.start-pose-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--rc-border, #2E3044);
+  background: var(--rc-elevated, #252838);
+  flex-shrink: 0;
+}
+
+.start-pose-field {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-size: 0.6875rem;
+
+  label {
+    color: var(--rc-muted, #A0A0AF);
+    font-weight: 600;
+    min-width: 12px;
+    text-align: right;
+    user-select: none;
+  }
+
+  input[type='number'] {
+    width: 64px;
+    padding: 3px 6px;
+    background: var(--rc-bg, #121218);
+    border: 1px solid var(--rc-border, #2E3044);
+    border-radius: 4px;
+    color: var(--rc-text, #F0F0F5);
+    font-family: ui-monospace, monospace;
+    font-size: 0.6875rem;
+    outline: none;
+    text-align: right;
+    -moz-appearance: textfield;
+
+    &::-webkit-outer-spin-button,
+    &::-webkit-inner-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+
+    &:focus {
+      border-color: var(--rc-accent, #DAA03E);
+    }
+  }
+}
+
+.start-pose-unit {
+  color: var(--rc-dim, #5A5A6A);
+  font-size: 0.625rem;
+  font-family: ui-monospace, monospace;
+  user-select: none;
+}

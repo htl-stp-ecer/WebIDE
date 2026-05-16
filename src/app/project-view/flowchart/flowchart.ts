@@ -159,7 +159,7 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
     return false;
   }
   readonly robotSettingsVisible = signal<boolean>(false);
-  readonly robotSettingsInitialTab = signal<'project' | 'robot' | 'start' | 'map' | 'keybindings' | null>(null);
+  readonly robotSettingsInitialTab = signal<'project' | 'keybindings' | null>(null);
   readonly saveStatus = signal<'idle' | 'saving' | 'saved'>('idle');
 
   readonly selectedConnectionId = signal<string | null>(null);

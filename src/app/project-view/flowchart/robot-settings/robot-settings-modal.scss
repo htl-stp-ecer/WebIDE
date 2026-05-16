@@ -2,9 +2,6 @@
 // Split into separate partial files for maintainability
 
 @use './project-tab';
-@use './robot-tab';
-@use './start-tab';
-@use './map-tab';
 @use './keybindings-tab';
 
 // ============================================
@@ -13,7 +10,7 @@
 
 .modal-layout {
   display: flex;
-  height: 560px;
+  height: 480px;
   max-height: 80vh;
 }
 

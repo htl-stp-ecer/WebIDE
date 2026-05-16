@@ -21,10 +21,10 @@
   align-items: center;
   gap: 8px;
   padding: 10px 14px;
-  background: #eff6ff;
-  border: 1px solid #bfdbfe;
+  background: rgba(15, 23, 42, 0.04);
+  border: 1px solid rgba(0, 0, 0, 0.08);
   border-radius: 8px;
-  color: #1e40af;
+  color: #475569;
   font-size: 13px;
 
   i {
@@ -35,9 +35,9 @@
 
 :host-context(.dark) .keybindings-hint,
 :host-context(.p-dark) .keybindings-hint {
-  background: rgba(59, 130, 246, 0.1);
-  border-color: rgba(59, 130, 246, 0.3);
-  color: #93c5fd;
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.1);
+  color: #94a3b8;
 }
 
 .keybindings-tabs {
@@ -69,8 +69,8 @@
   }
 
   &.active {
-    background: #3b82f6;
-    color: white;
+    background: #1e293b;
+    color: #f1f5f9;
   }
 }
 
@@ -84,8 +84,8 @@
   }
 
   &.active {
-    background: #3b82f6;
-    color: white;
+    background: #f1f5f9;
+    color: #0f172a;
   }
 }
 
@@ -204,8 +204,8 @@
   display: inline-flex;
   align-items: center;
   padding: 4px 8px;
-  background: #dbeafe;
-  color: #1e40af;
+  background: rgba(15, 23, 42, 0.06);
+  color: #475569;
   border-radius: 4px;
   font-size: 11px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
@@ -215,14 +215,14 @@
 .keybinding-badge-lg {
   padding: 6px 12px;
   font-size: 12px;
-  background: #3b82f6;
-  color: white;
+  background: #334155;
+  color: #f1f5f9;
 }
 
 :host-context(.dark) .keybinding-badge,
 :host-context(.p-dark) .keybinding-badge {
-  background: rgba(59, 130, 246, 0.2);
-  color: #93c5fd;
+  background: rgba(255, 255, 255, 0.08);
+  color: #94a3b8;
 }
 
 :host-context(.dark) .keybinding-badge-lg,
@@ -389,8 +389,13 @@
   font-size: 28px;
   font-weight: 600;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  color: #3b82f6;
+  color: #475569;
   margin-bottom: 20px;
+}
+
+:host-context(.dark) .keybinding-recording-key,
+:host-context(.p-dark) .keybinding-recording-key {
+  color: #94a3b8;
 }
 
 .keybinding-recording-waiting {
