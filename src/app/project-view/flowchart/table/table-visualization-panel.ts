@@ -95,17 +95,10 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
   private isPanning = false;
   private panStartPos = { x: 0, y: 0 };
 
-  // Gizmo state
-  private readonly isRobotSelected = signal(false);
+  // Gizmo drag state
   private gizmoDragState: GizmoDragState | null = null;
 
   constructor() {
-    effect(() => {
-      if (!this.allowStartPoseEdit()) {
-        this.isRobotSelected.set(false);
-      }
-    });
-
     effect(() => {
       // React to changes in map and visualization state
       this.mapService.mapImage();
@@ -575,7 +568,7 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
       dashed: false,
     });
 
-    if (this.allowStartPoseEdit() && this.isRobotSelected()) {
+    if (this.allowStartPoseEdit()) {
       this.renderGizmo(this.vizService.startPose(), width, height);
     }
   }
@@ -774,33 +767,29 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
     const bodyCenterX = -rcOffsetForwardPx;
     const bodyCenterY = rcOffsetStrafePx;
 
-    // Draw wheels (behind body)
-    const wheelLengthPx = robotLengthPx * 0.55;
-    const wheelWidthPx = Math.max(4, robotWidthPx * 0.13);
+    // Draw 4 mecanum corner wheels (behind body)
+    const wheelL = robotLengthPx * 0.35;
+    const wheelW = Math.max(4, robotWidthPx * 0.14);
+    const wheelXOff = robotLengthPx * 0.28; // offset from body center along forward axis
+    const halfL = robotLengthPx / 2;
+    const halfW = robotWidthPx / 2;
     this.ctx.fillStyle = options.dashed ? 'rgba(55, 65, 81, 0.5)' : '#374151';
     this.ctx.strokeStyle = options.dashed ? 'rgba(107, 114, 128, 0.4)' : '#4b5563';
     this.ctx.lineWidth = 1;
     this.ctx.setLineDash([]);
-    // Left wheel
-    this.ctx.beginPath();
-    this.ctx.rect(
-      bodyCenterX - wheelLengthPx / 2,
-      bodyCenterY - robotWidthPx / 2 - wheelWidthPx,
-      wheelLengthPx,
-      wheelWidthPx
-    );
-    this.ctx.fill();
-    this.ctx.stroke();
-    // Right wheel
-    this.ctx.beginPath();
-    this.ctx.rect(
-      bodyCenterX - wheelLengthPx / 2,
-      bodyCenterY + robotWidthPx / 2,
-      wheelLengthPx,
-      wheelWidthPx
-    );
-    this.ctx.fill();
-    this.ctx.stroke();
+    // 4 corner positions: front-left, front-right, rear-left, rear-right
+    const wheelCorners = [
+      { x: bodyCenterX + wheelXOff - wheelL / 2, y: bodyCenterY - halfW - wheelW }, // front-left
+      { x: bodyCenterX + wheelXOff - wheelL / 2, y: bodyCenterY + halfW },           // front-right
+      { x: bodyCenterX - wheelXOff - wheelL / 2, y: bodyCenterY - halfW - wheelW }, // rear-left
+      { x: bodyCenterX - wheelXOff - wheelL / 2, y: bodyCenterY + halfW },           // rear-right
+    ];
+    for (const w of wheelCorners) {
+      this.ctx.beginPath();
+      this.ctx.rect(w.x, w.y, wheelL, wheelW);
+      this.ctx.fill();
+      this.ctx.stroke();
+    }
 
     // Draw robot body
     this.ctx.fillStyle = options.bodyFill;
@@ -978,53 +967,40 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
     const canvasX = event.clientX - rect.left;
     const canvasY = event.clientY - rect.top;
     const pose = this.vizService.startPose();
+    const center = this.tableToCanvas(pose, rect.width, rect.height);
 
-    // If robot is selected, check gizmo handles first
-    if (this.isRobotSelected()) {
-      const dragMode = this.hitTestGizmo(canvasX, canvasY, rect.width, rect.height);
-      if (dragMode) {
-        const center = this.tableToCanvas(pose, rect.width, rect.height);
-        this.gizmoDragState = {
-          mode: dragMode,
-          startCanvasX: canvasX,
-          startCanvasY: canvasY,
-          startTableX: pose.x,
-          startTableY: pose.y,
-          startTheta: pose.theta,
-          startAngle: Math.atan2(-(canvasY - center.y), canvasX - center.x),
-          robotCenterX: center.x,
-          robotCenterY: center.y,
-        };
-        canvas.setPointerCapture(event.pointerId);
-        return;
-      }
-
-      // Click on robot body → start free-drag
-      if (this.hitTestRobotBody(canvasX, canvasY, rect.width, rect.height)) {
-        const center = this.tableToCanvas(pose, rect.width, rect.height);
-        this.gizmoDragState = {
-          mode: 'body',
-          startCanvasX: canvasX,
-          startCanvasY: canvasY,
-          startTableX: pose.x,
-          startTableY: pose.y,
-          startTheta: pose.theta,
-          startAngle: 0,
-          robotCenterX: center.x,
-          robotCenterY: center.y,
-        };
-        canvas.setPointerCapture(event.pointerId);
-        return;
-      }
-
-      // Click outside robot/gizmo → deselect
-      this.isRobotSelected.set(false);
+    // Check gizmo handles first (always visible when allowStartPoseEdit)
+    const dragMode = this.hitTestGizmo(canvasX, canvasY, rect.width, rect.height);
+    if (dragMode) {
+      this.gizmoDragState = {
+        mode: dragMode,
+        startCanvasX: canvasX,
+        startCanvasY: canvasY,
+        startTableX: pose.x,
+        startTableY: pose.y,
+        startTheta: pose.theta,
+        startAngle: Math.atan2(-(canvasY - center.y), canvasX - center.x),
+        robotCenterX: center.x,
+        robotCenterY: center.y,
+      };
+      canvas.setPointerCapture(event.pointerId);
       return;
     }
 
-    // Robot not selected — click on body selects it
+    // Click on robot body → free XY drag
     if (this.hitTestRobotBody(canvasX, canvasY, rect.width, rect.height)) {
-      this.isRobotSelected.set(true);
+      this.gizmoDragState = {
+        mode: 'body',
+        startCanvasX: canvasX,
+        startCanvasY: canvasY,
+        startTableX: pose.x,
+        startTableY: pose.y,
+        startTheta: pose.theta,
+        startAngle: 0,
+        robotCenterX: center.x,
+        robotCenterY: center.y,
+      };
+      canvas.setPointerCapture(event.pointerId);
     }
   }
 
