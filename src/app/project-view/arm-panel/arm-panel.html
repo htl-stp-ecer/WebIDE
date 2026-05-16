@@ -25,6 +25,122 @@
       </div>
 
       <div class="arm-section">
+        <div class="arm-section-header">
+          <h5 class="arm-section-subtitle">Structure</h5>
+          <button type="button" class="arm-btn arm-btn--icon" (click)="toggleStructure()" [title]="showStructure() ? 'Hide structure editor' : 'Edit lengths, mountings, axes…'">
+            <i class="pi" [class.pi-chevron-down]="!showStructure()" [class.pi-chevron-up]="showStructure()"></i>
+          </button>
+        </div>
+
+        @if (showStructure()) {
+          <div class="structure-editor">
+            @for (d of structureDraft(); track $index; let i = $index) {
+              <details class="struct-joint" open>
+                <summary>
+                  J{{ i }} · {{ c.joints[i].servo }}
+                  <small class="joint-meta">L={{ d.length_cm }}cm</small>
+                </summary>
+
+                <div class="struct-row">
+                  <label class="struct-field">
+                    <span>Length (cm)</span>
+                    <input type="number" step="0.5" min="0" [value]="d.length_cm" (input)="onStructLength(i, $any($event.target).value)" />
+                    <small class="hint">0 = rotational base (no segment length)</small>
+                  </label>
+                </div>
+
+                <div class="struct-row">
+                  <span class="struct-row-label">Rotation axis</span>
+                  <div class="axis-presets">
+                    <button type="button" class="arm-btn arm-btn--mini" (click)="setAxisPreset(i, 'x')">X</button>
+                    <button type="button" class="arm-btn arm-btn--mini" (click)="setAxisPreset(i, 'y')">Y</button>
+                    <button type="button" class="arm-btn arm-btn--mini" (click)="setAxisPreset(i, 'z')">Z</button>
+                  </div>
+                </div>
+                <div class="xyz-row">
+                  <label>x<input type="number" step="0.1" [value]="d.axis[0]" (input)="onStructAxis(i, 0, $any($event.target).value)" /></label>
+                  <label>y<input type="number" step="0.1" [value]="d.axis[1]" (input)="onStructAxis(i, 1, $any($event.target).value)" /></label>
+                  <label>z<input type="number" step="0.1" [value]="d.axis[2]" (input)="onStructAxis(i, 2, $any($event.target).value)" /></label>
+                </div>
+
+                <div class="struct-row">
+                  <span class="struct-row-label">Mount RPY (deg)</span>
+                </div>
+                <div class="xyz-row">
+                  <label>R<input type="number" step="1" [value]="d.mount_rpy_deg[0]" (input)="onStructRpy(i, 0, $any($event.target).value)" /></label>
+                  <label>P<input type="number" step="1" [value]="d.mount_rpy_deg[1]" (input)="onStructRpy(i, 1, $any($event.target).value)" /></label>
+                  <label>Y<input type="number" step="1" [value]="d.mount_rpy_deg[2]" (input)="onStructRpy(i, 2, $any($event.target).value)" /></label>
+                </div>
+
+                <div class="struct-row">
+                  <label class="struct-check">
+                    <input type="checkbox" [checked]="!!d.offset_cm" (change)="toggleStructOffset(i, $any($event.target).checked)" />
+                    Explicit offset (cm) — overrides auto length-along-X
+                  </label>
+                </div>
+                @if (d.offset_cm) {
+                  <div class="xyz-row">
+                    <label>x<input type="number" step="0.5" [value]="d.offset_cm[0]" (input)="onStructOffset(i, 0, $any($event.target).value)" /></label>
+                    <label>y<input type="number" step="0.5" [value]="d.offset_cm[1]" (input)="onStructOffset(i, 1, $any($event.target).value)" /></label>
+                    <label>z<input type="number" step="0.5" [value]="d.offset_cm[2]" (input)="onStructOffset(i, 2, $any($event.target).value)" /></label>
+                  </div>
+                }
+
+                <div class="struct-row">
+                  <span class="struct-row-label">Joint range (deg)</span>
+                </div>
+                <div class="range-row">
+                  <label>min<input type="number" step="1" [value]="d.joint_range_deg[0]" (input)="onStructJointRange(i, 0, $any($event.target).value)" /></label>
+                  <label>max<input type="number" step="1" [value]="d.joint_range_deg[1]" (input)="onStructJointRange(i, 1, $any($event.target).value)" /></label>
+                </div>
+
+                <div class="struct-row">
+                  <span class="struct-row-label">Servo range (deg)</span>
+                  <small class="hint">Swap to invert servo direction</small>
+                </div>
+                <div class="range-row">
+                  <label>at min<input type="number" step="1" [value]="d.servo_range_deg[0]" (input)="onStructServoRange(i, 0, $any($event.target).value)" /></label>
+                  <label>at max<input type="number" step="1" [value]="d.servo_range_deg[1]" (input)="onStructServoRange(i, 1, $any($event.target).value)" /></label>
+                </div>
+              </details>
+            }
+
+            <details class="struct-joint" open>
+              <summary>Tip offset (end-effector)</summary>
+              <div class="struct-row">
+                <label class="struct-check">
+                  <input type="checkbox" [checked]="!!tipOffsetDraft()" (change)="toggleTipOffset($any($event.target).checked)" />
+                  Explicit tip offset (cm)
+                </label>
+              </div>
+              @if (tipOffsetDraft(); as t) {
+                <div class="xyz-row">
+                  <label>x<input type="number" step="0.5" [value]="t[0]" (input)="onTipOffset(0, $any($event.target).value)" /></label>
+                  <label>y<input type="number" step="0.5" [value]="t[1]" (input)="onTipOffset(1, $any($event.target).value)" /></label>
+                  <label>z<input type="number" step="0.5" [value]="t[2]" (input)="onTipOffset(2, $any($event.target).value)" /></label>
+                </div>
+              }
+            </details>
+
+            @if (structureError(); as err) {
+              <div class="struct-error">{{ err }}</div>
+            }
+            <div class="struct-actions">
+              <span class="struct-status">
+                @if (structureSaving()) {
+                  <span class="struct-status-dot saving"></span> Saving…
+                } @else if (structureDirty()) {
+                  <span class="struct-status-dot dirty"></span> Pending…
+                } @else {
+                  <span class="struct-status-dot saved"></span> Auto-saved
+                }
+              </span>
+            </div>
+          </div>
+        }
+      </div>
+
+      <div class="arm-section">
         <h5 class="arm-section-subtitle">Joints</h5>
         @for (j of c.joints; track j.index; let i = $index) {
           <div class="joint-row">

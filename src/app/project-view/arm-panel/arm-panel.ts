@@ -28,6 +28,16 @@ interface ArmJoint {
   length_cm: number;
   axis: [number, number, number];
   mount_rpy_deg?: [number, number, number];
+  offset_cm?: [number, number, number] | null;
+  joint_range_deg: [number, number];
+  servo_range_deg: [number, number];
+}
+
+interface JointStructureDraft {
+  length_cm: number;
+  axis: [number, number, number];
+  mount_rpy_deg: [number, number, number];
+  offset_cm: [number, number, number] | null;
   joint_range_deg: [number, number];
   servo_range_deg: [number, number];
 }
@@ -41,6 +51,7 @@ interface ArmChain {
   name: string;
   joints: ArmJoint[];
   positions: Record<string, ArmPosition>;
+  tip_offset_cm?: [number, number, number] | null;
   workspace?: {
     reach_max_cm?: number;
     reach_min_cm?: number;
@@ -49,10 +60,22 @@ interface ArmChain {
   forbidden_zones?: any[];
 }
 
+interface JointAxisInfo {
+  origin_cm: [number, number, number];
+  axis: [number, number, number];
+}
+
+interface JointSegmentInfo {
+  origin_cm: [number, number, number];
+  end_cm: [number, number, number];
+  length_cm: number;
+}
+
 interface FkResponse {
   frames: [number, number, number][];
   end_effector_cm: [number, number, number];
-  joint_axes?: unknown[];
+  joint_axes?: JointAxisInfo[];
+  joint_segments?: JointSegmentInfo[];
 }
 
 interface IkResponse {
@@ -97,6 +120,14 @@ export class ArmPanel implements AfterViewInit, OnDestroy, OnChanges {
   /** null = none, -1 = end-effector, ≥2 = jointMeshes frame index */
   selectedNode = signal<number | null>(null);
 
+  // Structure editor state
+  showStructure = signal(false);
+  structureDraft = signal<JointStructureDraft[]>([]);
+  tipOffsetDraft = signal<[number, number, number] | null>(null);
+  structureDirty = signal(false);
+  structureSaving = signal(false);
+  structureError = signal<string | null>(null);
+
   positionsList = computed(() => {
     const c = this.chain();
     return c ? Object.keys(c.positions ?? {}) : [];
@@ -121,7 +152,12 @@ export class ArmPanel implements AfterViewInit, OnDestroy, OnChanges {
   private rafHandle = 0;
   private resizeObserver?: ResizeObserver;
   private jointMeshes: THREE.Mesh[] = [];
-  private linkMeshes: THREE.Mesh[] = [];
+  /** Primary structural bars driven by length_cm — colored "arm" segments. */
+  private segmentMeshes: THREE.Mesh[] = [];
+  /** Thin brackets connecting a segment's end to the next joint's pivot (offset_cm). */
+  private offsetMeshes: THREE.Mesh[] = [];
+  private axisArrows: THREE.ArrowHelper[] = [];
+  private lastSegments: JointSegmentInfo[] = [];
   private endEffectorMesh?: THREE.Mesh;
   private workspaceMesh?: THREE.Mesh;
   private disposables: Array<() => void> = [];
@@ -148,6 +184,7 @@ export class ArmPanel implements AfterViewInit, OnDestroy, OnChanges {
   private fkSubject = new Subject<number[]>();
   private ikDragSubject = new Subject<{target: [number, number, number]; endJointIndex: number | null}>();
   private liveSubject = new Subject<number[]>();
+  private structureSaveSubject = new Subject<void>();
   private subs: Subscription[] = [];
 
   private keydownHandler = (e: KeyboardEvent) => this.zone.run(() => this.onKeyDown(e));
@@ -171,6 +208,11 @@ export class ArmPanel implements AfterViewInit, OnDestroy, OnChanges {
       this.liveSubject
         .pipe(throttleTime(100, undefined, {leading: true, trailing: true}))
         .subscribe(angles => this.callCommand(angles)),
+    );
+    this.subs.push(
+      this.structureSaveSubject
+        .pipe(debounceTime(350))
+        .subscribe(() => this.saveStructure()),
     );
     document.addEventListener('keydown', this.keydownHandler);
     if (this.projectUuid) this.loadChain();
@@ -208,6 +250,7 @@ export class ArmPanel implements AfterViewInit, OnDestroy, OnChanges {
       next: chain => {
         this.chain.set(chain);
         this.jointAngles.set(chain.joints.map(j => (j.joint_range_deg[0] + j.joint_range_deg[1]) / 2));
+        this.seedStructureDraft(chain);
         this.loading.set(false);
         // canvas host rendered via @if — wait one tick so ViewChild is populated
         setTimeout(() => {
@@ -387,18 +430,19 @@ export class ArmPanel implements AfterViewInit, OnDestroy, OnChanges {
 
   private rebuildArm() {
     if (!this.scene) return;
-    this.jointMeshes.forEach(m => {
-      this.scene!.remove(m);
-      (m.geometry as THREE.BufferGeometry).dispose();
-      (m.material as THREE.Material).dispose();
-    });
-    this.linkMeshes.forEach(m => {
-      this.scene!.remove(m);
-      (m.geometry as THREE.BufferGeometry).dispose();
-      (m.material as THREE.Material).dispose();
-    });
+    const disposeAll = (arr: THREE.Mesh[]) => {
+      arr.forEach(m => {
+        this.scene!.remove(m);
+        (m.geometry as THREE.BufferGeometry).dispose();
+        (m.material as THREE.Material).dispose();
+      });
+    };
+    disposeAll(this.jointMeshes);
+    disposeAll(this.segmentMeshes);
+    disposeAll(this.offsetMeshes);
     this.jointMeshes = [];
-    this.linkMeshes = [];
+    this.segmentMeshes = [];
+    this.offsetMeshes = [];
 
     if (this.workspaceMesh) {
       this.scene.remove(this.workspaceMesh);
@@ -417,62 +461,90 @@ export class ArmPanel implements AfterViewInit, OnDestroy, OnChanges {
     }
   }
 
-  private ensureMeshCounts(numFrames: number) {
+  private ensureJointMeshCount(n: number) {
     if (!this.scene) return;
-    const desired = Math.max(0, numFrames - 1);
-    while (this.jointMeshes.length < desired) {
+    while (this.jointMeshes.length < n) {
       const geo = new THREE.SphereGeometry(1.0, 16, 12);
       const mat = new THREE.MeshStandardMaterial({color: 0x66aaff});
       const mesh = new THREE.Mesh(geo, mat);
       this.scene.add(mesh);
       this.jointMeshes.push(mesh);
     }
-    while (this.jointMeshes.length > desired) {
+    while (this.jointMeshes.length > n) {
       const mesh = this.jointMeshes.pop()!;
-      this.scene.remove(mesh);
-      (mesh.geometry as THREE.BufferGeometry).dispose();
-      (mesh.material as THREE.Material).dispose();
-    }
-    while (this.linkMeshes.length < desired) {
-      const geo = new THREE.CylinderGeometry(0.5, 0.5, 1, 12);
-      const mat = new THREE.MeshStandardMaterial({color: 0x888899});
-      const mesh = new THREE.Mesh(geo, mat);
-      this.scene.add(mesh);
-      this.linkMeshes.push(mesh);
-    }
-    while (this.linkMeshes.length > desired) {
-      const mesh = this.linkMeshes.pop()!;
       this.scene.remove(mesh);
       (mesh.geometry as THREE.BufferGeometry).dispose();
       (mesh.material as THREE.Material).dispose();
     }
   }
 
-  private updateArmFromFrames(frames: [number, number, number][]) {
-    this.lastFrames = frames;
-    this.ensureMeshCounts(frames.length);
+  private ensureBarMeshCount(arr: THREE.Mesh[], n: number, color: number, radius: number) {
+    if (!this.scene) return;
+    while (arr.length < n) {
+      const geo = new THREE.CylinderGeometry(radius, radius, 1, 12);
+      const mat = new THREE.MeshStandardMaterial({color});
+      const mesh = new THREE.Mesh(geo, mat);
+      this.scene.add(mesh);
+      arr.push(mesh);
+    }
+    while (arr.length > n) {
+      const mesh = arr.pop()!;
+      this.scene.remove(mesh);
+      (mesh.geometry as THREE.BufferGeometry).dispose();
+      (mesh.material as THREE.Material).dispose();
+    }
+  }
 
-    for (let i = 0; i < this.jointMeshes.length; i++) {
+  private placeBar(mesh: THREE.Mesh, a: THREE.Vector3, b: THREE.Vector3) {
+    const dir = b.clone().sub(a);
+    const len = dir.length();
+    mesh.position.copy(a.clone().add(b).multiplyScalar(0.5));
+    mesh.scale.set(1, Math.max(len, 0.001), 1);
+    mesh.visible = len > 1e-4;
+    mesh.quaternion.setFromUnitVectors(
+      new THREE.Vector3(0, 1, 0),
+      len > 1e-6 ? dir.clone().normalize() : new THREE.Vector3(0, 1, 0),
+    );
+  }
+
+  private updateArmFromFrames(frames: [number, number, number][], segments: JointSegmentInfo[]) {
+    this.lastFrames = frames;
+    this.lastSegments = segments;
+
+    // Joint pivots: one per active joint (frames index 1..n-1, where index 0 is base origin).
+    const pivotCount = Math.max(0, frames.length - 1);
+    this.ensureJointMeshCount(pivotCount);
+    for (let i = 0; i < pivotCount; i++) {
       const f = frames[i];
       if (f) this.jointMeshes[i].position.set(f[0], f[1], f[2]);
     }
-    for (let i = 0; i < this.linkMeshes.length; i++) {
-      const a = frames[i];
-      const b = frames[i + 1];
-      if (!a || !b) continue;
-      const va = new THREE.Vector3(a[0], a[1], a[2]);
-      const vb = new THREE.Vector3(b[0], b[1], b[2]);
-      const dir = vb.clone().sub(va);
-      const len = dir.length();
-      const mesh = this.linkMeshes[i];
-      mesh.position.copy(va.clone().add(vb).multiplyScalar(0.5));
-      mesh.scale.set(1, Math.max(len, 0.001), 1);
-      mesh.visible = len > 1e-4;
-      mesh.quaternion.setFromUnitVectors(
-        new THREE.Vector3(0, 1, 0),
-        dir.clone().normalize(),
-      );
+
+    // Primary structural segments — one per joint (skipping length=0 base/rotational joints).
+    // Color: blue, fat bar.
+    this.ensureBarMeshCount(this.segmentMeshes, segments.length, 0x4ea1ff, 0.55);
+    for (let i = 0; i < segments.length; i++) {
+      const s = segments[i];
+      const a = new THREE.Vector3(...s.origin_cm);
+      const b = new THREE.Vector3(...s.end_cm);
+      this.placeBar(this.segmentMeshes[i], a, b);
+      // Hide bars with zero length entirely (e.g. rotational base).
+      if (s.length_cm < 1e-4) this.segmentMeshes[i].visible = false;
     }
+
+    // Offset brackets — connect this joint's segment end to the *next* joint's pivot
+    // (or to the end-effector for the last joint). Color: warm orange, thin.
+    const bracketCount = segments.length;
+    this.ensureBarMeshCount(this.offsetMeshes, bracketCount, 0xffae5a, 0.28);
+    const eeFrame = frames[frames.length - 1];
+    for (let i = 0; i < segments.length; i++) {
+      const segEnd = new THREE.Vector3(...segments[i].end_cm);
+      // Next pivot: joint i+1 lives at frames[i+1]; for the last joint, target the EE.
+      const nextTarget = i + 1 < segments.length
+        ? new THREE.Vector3(...segments[i + 1].origin_cm)
+        : (eeFrame ? new THREE.Vector3(...eeFrame) : segEnd);
+      this.placeBar(this.offsetMeshes[i], segEnd, nextTarget);
+    }
+
     const ee = frames[frames.length - 1];
     if (ee && this.endEffectorMesh) {
       this.endEffectorMesh.position.set(ee[0], ee[1], ee[2]);
@@ -487,13 +559,44 @@ export class ArmPanel implements AfterViewInit, OnDestroy, OnChanges {
     if (!this.chain()) return;
     this.http.post<FkResponse>(this.apiBase() + '/fk', {joint_angles_deg: angles}).subscribe({
       next: res => {
-        this.updateArmFromFrames(res.frames);
+        this.updateArmFromFrames(res.frames, res.joint_segments ?? []);
+        this.updateJointAxes(res.joint_axes ?? []);
         this.endEffector.set(res.end_effector_cm);
         this.targetXYZ.set([...res.end_effector_cm]);
         if (this.livePreview()) this.liveSubject.next(angles);
       },
       error: () => {/* ignore */},
     });
+  }
+
+  private updateJointAxes(axes: JointAxisInfo[]) {
+    if (!this.scene) return;
+    // Resize pool
+    while (this.axisArrows.length < axes.length) {
+      const arr = new THREE.ArrowHelper(
+        new THREE.Vector3(0, 1, 0),
+        new THREE.Vector3(0, 0, 0),
+        4, 0xffcc33, 1.0, 0.5,
+      );
+      this.scene.add(arr);
+      this.axisArrows.push(arr);
+    }
+    while (this.axisArrows.length > axes.length) {
+      const a = this.axisArrows.pop()!;
+      this.scene.remove(a);
+      a.dispose();
+    }
+    for (let i = 0; i < axes.length; i++) {
+      const {origin_cm, axis} = axes[i];
+      const dir = new THREE.Vector3(axis[0], axis[1], axis[2]);
+      const len = dir.length();
+      if (len < 1e-6) { this.axisArrows[i].visible = false; continue; }
+      dir.divideScalar(len);
+      this.axisArrows[i].visible = true;
+      this.axisArrows[i].position.set(origin_cm[0], origin_cm[1], origin_cm[2]);
+      this.axisArrows[i].setDirection(dir);
+      this.axisArrows[i].setLength(4, 1.0, 0.5);
+    }
   }
 
   private callIk(target: [number, number, number], endJointIndex: number | null = null) {
@@ -577,6 +680,154 @@ export class ArmPanel implements AfterViewInit, OnDestroy, OnChanges {
   clearSelection() {
     this.selectedNode.set(null);
     this.gizmoGroup.visible = false;
+  }
+
+  // ────────────── Structure editor ──────────────
+
+  private seedStructureDraft(chain: ArmChain) {
+    const drafts: JointStructureDraft[] = chain.joints.map(j => ({
+      length_cm: j.length_cm,
+      axis: [...j.axis] as [number, number, number],
+      mount_rpy_deg: [...(j.mount_rpy_deg ?? [0, 0, 0])] as [number, number, number],
+      offset_cm: j.offset_cm ? ([...j.offset_cm] as [number, number, number]) : null,
+      joint_range_deg: [...j.joint_range_deg] as [number, number],
+      servo_range_deg: [...j.servo_range_deg] as [number, number],
+    }));
+    this.structureDraft.set(drafts);
+    this.tipOffsetDraft.set(
+      chain.tip_offset_cm ? ([...chain.tip_offset_cm] as [number, number, number]) : null,
+    );
+    this.structureDirty.set(false);
+    this.structureError.set(null);
+  }
+
+  toggleStructure() {
+    this.showStructure.set(!this.showStructure());
+  }
+
+  private patchJoint(i: number, patch: Partial<JointStructureDraft>) {
+    const arr = this.structureDraft().map((d, idx) => (idx === i ? {...d, ...patch} : d));
+    this.structureDraft.set(arr);
+    this.structureDirty.set(true);
+    this.structureSaveSubject.next();
+  }
+
+  onStructLength(i: number, v: string) {
+    const n = parseFloat(v);
+    if (isNaN(n)) return;
+    this.patchJoint(i, {length_cm: n});
+  }
+
+  onStructAxis(i: number, axis: 0 | 1 | 2, v: string) {
+    const n = parseFloat(v);
+    if (isNaN(n)) return;
+    const cur = [...this.structureDraft()[i].axis] as [number, number, number];
+    cur[axis] = n;
+    this.patchJoint(i, {axis: cur});
+  }
+
+  setAxisPreset(i: number, preset: 'x' | 'y' | 'z') {
+    const axis: [number, number, number] =
+      preset === 'x' ? [1, 0, 0] : preset === 'y' ? [0, 1, 0] : [0, 0, 1];
+    this.patchJoint(i, {axis});
+  }
+
+  onStructRpy(i: number, axis: 0 | 1 | 2, v: string) {
+    const n = parseFloat(v);
+    if (isNaN(n)) return;
+    const cur = [...this.structureDraft()[i].mount_rpy_deg] as [number, number, number];
+    cur[axis] = n;
+    this.patchJoint(i, {mount_rpy_deg: cur});
+  }
+
+  onStructOffset(i: number, axis: 0 | 1 | 2, v: string) {
+    const n = parseFloat(v);
+    if (isNaN(n)) return;
+    const cur: [number, number, number] =
+      this.structureDraft()[i].offset_cm
+        ? ([...this.structureDraft()[i].offset_cm!] as [number, number, number])
+        : [0, 0, 0];
+    cur[axis] = n;
+    this.patchJoint(i, {offset_cm: cur});
+  }
+
+  toggleStructOffset(i: number, enabled: boolean) {
+    if (enabled) {
+      this.patchJoint(i, {offset_cm: this.structureDraft()[i].offset_cm ?? [0, 0, 0]});
+    } else {
+      this.patchJoint(i, {offset_cm: null});
+    }
+  }
+
+  onStructJointRange(i: number, idx: 0 | 1, v: string) {
+    const n = parseFloat(v);
+    if (isNaN(n)) return;
+    const cur = [...this.structureDraft()[i].joint_range_deg] as [number, number];
+    cur[idx] = n;
+    this.patchJoint(i, {joint_range_deg: cur});
+  }
+
+  onStructServoRange(i: number, idx: 0 | 1, v: string) {
+    const n = parseFloat(v);
+    if (isNaN(n)) return;
+    const cur = [...this.structureDraft()[i].servo_range_deg] as [number, number];
+    cur[idx] = n;
+    this.patchJoint(i, {servo_range_deg: cur});
+  }
+
+  onTipOffset(axis: 0 | 1 | 2, v: string) {
+    const n = parseFloat(v);
+    if (isNaN(n)) return;
+    const cur: [number, number, number] =
+      this.tipOffsetDraft() ? ([...this.tipOffsetDraft()!] as [number, number, number]) : [0, 0, 0];
+    cur[axis] = n;
+    this.tipOffsetDraft.set(cur);
+    this.structureDirty.set(true);
+    this.structureSaveSubject.next();
+  }
+
+  toggleTipOffset(enabled: boolean) {
+    this.tipOffsetDraft.set(enabled ? (this.tipOffsetDraft() ?? [0, 0, 0]) : null);
+    this.structureDirty.set(true);
+    this.structureSaveSubject.next();
+  }
+
+  resetStructure() {
+    const c = this.chain();
+    if (c) this.seedStructureDraft(c);
+  }
+
+  saveStructure() {
+    if (!this.structureDirty() || this.structureSaving()) return;
+    this.structureSaving.set(true);
+    this.structureError.set(null);
+    const body = {
+      joints: this.structureDraft().map(d => ({
+        length_cm: d.length_cm,
+        axis: d.axis,
+        mount_rpy_deg: d.mount_rpy_deg,
+        offset_cm: d.offset_cm ?? [],  // [] clears on backend
+        joint_range_deg: d.joint_range_deg,
+        servo_range_deg: d.servo_range_deg,
+      })),
+      tip_offset_cm: this.tipOffsetDraft() ?? [],
+    };
+    this.http.patch<ArmChain>(this.apiBase() + '/structure', body).subscribe({
+      next: chain => {
+        this.chain.set(chain);
+        this.jointAngles.set(chain.joints.map(j => (j.joint_range_deg[0] + j.joint_range_deg[1]) / 2));
+        this.seedStructureDraft(chain);
+        this.structureSaving.set(false);
+        setTimeout(() => {
+          this.rebuildArm();
+          this.callFk(this.jointAngles());
+        }, 0);
+      },
+      error: err => {
+        this.structureSaving.set(false);
+        this.structureError.set(err?.error?.detail ?? 'Failed to save structure');
+      },
+    });
   }
 
   // ────────────── Pointer events ──────────────
@@ -786,10 +1037,15 @@ export class ArmPanel implements AfterViewInit, OnDestroy, OnChanges {
       (m.geometry as THREE.BufferGeometry).dispose();
       (m.material as THREE.Material).dispose();
     });
-    this.linkMeshes.forEach(m => {
+    this.segmentMeshes.forEach(m => {
       (m.geometry as THREE.BufferGeometry).dispose();
       (m.material as THREE.Material).dispose();
     });
+    this.offsetMeshes.forEach(m => {
+      (m.geometry as THREE.BufferGeometry).dispose();
+      (m.material as THREE.Material).dispose();
+    });
+    this.axisArrows.forEach(a => a.dispose());
     if (this.workspaceMesh) {
       (this.workspaceMesh.geometry as THREE.BufferGeometry).dispose();
       (this.workspaceMesh.material as THREE.Material).dispose();
