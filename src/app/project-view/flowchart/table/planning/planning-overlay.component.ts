@@ -18,8 +18,9 @@ import { ButtonModule } from 'primeng/button';
 import { SliderModule } from 'primeng/slider';
 import { ToggleButtonModule } from 'primeng/togglebutton';
 import { TooltipModule } from 'primeng/tooltip';
-import { PlanningModeService } from './planning-mode.service';
+import { PlanningModeService, type PlanningPathMode, type SplineHeadingMode } from './planning-mode.service';
 import { formatStepForPreview } from './path-to-steps';
+import { sampleCatmullRom, tangentsAtWaypoints } from './catmull-rom';
 import {
   driveUntilColorFromStepId,
   isBackwardStepId,
@@ -158,6 +159,9 @@ export class PlanningOverlayComponent implements OnInit, AfterViewInit, OnDestro
   private animationFrameId: number | null = null;
   private resizeObserver!: ResizeObserver;
 
+  /** Index of waypoint whose heading is being shift-dragged, or null. */
+  private headingDragIndex: number | null = null;
+
   constructor() {
     effect(() => {
       // React to waypoint and pose changes
@@ -272,17 +276,23 @@ export class PlanningOverlayComponent implements OnInit, AfterViewInit, OnDestro
       this.renderAngleGuide(width, height, angleSnap);
     }
 
+    const isSpline = this.planningService.pathMode() === 'spline';
     const hasComputedTrajectory = this.planningService.computedTrajectory().length >= 2;
 
-    // Show the raw waypoint guide only while no computed trajectory is available.
-    if (!hasComputedTrajectory) {
+    if (isSpline) {
+      this.renderSplineCurve(width, height);
+      this.renderSplineTangents(width, height);
+    } else if (!hasComputedTrajectory) {
+      // Show the raw waypoint guide only while no computed trajectory is available.
       this.renderPathLines(width, height);
     }
     this.renderActualPath(width, height);
 
     // Draw waypoint markers and ghost robot
     this.renderWaypoints(width, height);
-    this.renderGhostRobot(width, height);
+    if (!isSpline) {
+      this.renderGhostRobot(width, height);
+    }
   }
 
   /** Render the table map (white surface with black lines and walls) */
@@ -449,6 +459,89 @@ export class PlanningOverlayComponent implements OnInit, AfterViewInit, OnDestro
       const from = this.tableToCanvas(pathPoints[i].x, pathPoints[i].y, width, height);
       const to = this.tableToCanvas(pathPoints[i + 1].x, pathPoints[i + 1].y, width, height);
       this.drawArrow(from.x, from.y, to.x, to.y);
+    }
+  }
+
+  private getSplineControlPoints(): { x: number; y: number }[] {
+    const start = this.planningService.startPose();
+    return [
+      { x: start.x, y: start.y },
+      ...this.planningService.waypoints().map((wp) => ({ x: wp.x, y: wp.y })),
+    ];
+  }
+
+  private renderSplineCurve(width: number, height: number): void {
+    const controlPoints = this.getSplineControlPoints();
+    if (controlPoints.length < 2) return;
+
+    const samples = sampleCatmullRom(controlPoints, 24);
+    if (samples.length < 2) return;
+
+    this.ctx.strokeStyle = '#3b82f6';
+    this.ctx.lineWidth = 3;
+    this.ctx.lineCap = 'round';
+    this.ctx.lineJoin = 'round';
+    this.ctx.setLineDash([]);
+    this.ctx.beginPath();
+    for (let i = 0; i < samples.length; i++) {
+      const pos = this.tableToCanvas(samples[i].x, samples[i].y, width, height);
+      if (i === 0) this.ctx.moveTo(pos.x, pos.y);
+      else this.ctx.lineTo(pos.x, pos.y);
+    }
+    this.ctx.stroke();
+  }
+
+  private renderSplineTangents(width: number, height: number): void {
+    const controlPoints = this.getSplineControlPoints();
+    if (controlPoints.length < 2) return;
+
+    const tangents = tangentsAtWaypoints(controlPoints);
+    const headingMode = this.planningService.splineHeadingMode();
+    const waypoints = this.planningService.waypoints();
+    const arrowLengthPx = 28;
+
+    // Index 0 in controlPoints is the start pose, so waypoint i corresponds to
+    // tangents[i + 1].
+    for (let i = 0; i < waypoints.length; i++) {
+      const wp = waypoints[i];
+      const tangent = tangents[i + 1];
+      if (!tangent) continue;
+      const pos = this.tableToCanvas(wp.x, wp.y, width, height);
+
+      // Tangent is in table-frame cm. Canvas Y is inverted, so flip dy.
+      const angle = Math.atan2(-tangent.y, tangent.x);
+      const hasExplicit = typeof wp.headingDeg === 'number';
+      const inExplicitMode = headingMode === 'explicit';
+      const useAngle = hasExplicit
+        ? // headingDeg in table frame, 0° = +X. Canvas Y inversion.
+          -((wp.headingDeg as number) * Math.PI) / 180
+        : angle;
+      // Green = explicit heading currently in use.
+      // Amber = explicit heading set but mode ignores it (visual reminder).
+      // Blue  = tangent (auto-derived).
+      const color = hasExplicit
+        ? (inExplicitMode ? '#10b981' : '#f59e0b')
+        : 'rgba(59, 130, 246, 0.7)';
+
+      this.ctx.save();
+      this.ctx.translate(pos.x, pos.y);
+      this.ctx.rotate(useAngle);
+      this.ctx.strokeStyle = color;
+      this.ctx.fillStyle = color;
+      this.ctx.lineWidth = 2;
+      this.ctx.setLineDash([]);
+      this.ctx.beginPath();
+      this.ctx.moveTo(0, 0);
+      this.ctx.lineTo(arrowLengthPx, 0);
+      this.ctx.stroke();
+      // Arrowhead
+      this.ctx.beginPath();
+      this.ctx.moveTo(arrowLengthPx, 0);
+      this.ctx.lineTo(arrowLengthPx - 6, -4);
+      this.ctx.lineTo(arrowLengthPx - 6, 4);
+      this.ctx.closePath();
+      this.ctx.fill();
+      this.ctx.restore();
     }
   }
 
@@ -1086,6 +1179,16 @@ export class PlanningOverlayComponent implements OnInit, AfterViewInit, OnDestro
     const hitIndex = this.hitTestWaypoint(x, y, rect.width, rect.height);
     if (hitIndex !== null) {
       this.planningService.selectWaypoint(hitIndex);
+      // Shift-drag edits the heading (spline mode only). Plain drag moves the waypoint.
+      if (event.shiftKey && this.planningService.pathMode() === 'spline') {
+        this.saveUndoState();
+        this.headingDragIndex = hitIndex;
+        canvas.setPointerCapture(event.pointerId);
+        // Apply immediate heading based on pointer offset, so the user
+        // gets feedback even without moving.
+        this.applyHeadingDrag(hitIndex, x, y, rect.width, rect.height);
+        return;
+      }
       this.planningService.startDragging(hitIndex);
       this.saveUndoState(); // Save state before dragging
       canvas.setPointerCapture(event.pointerId);
@@ -1114,13 +1217,18 @@ export class PlanningOverlayComponent implements OnInit, AfterViewInit, OnDestro
   }
 
   onPointerMove(event: PointerEvent): void {
-    const draggingIndex = this.planningService.draggingIndex();
-    if (draggingIndex === null) return;
-
     const canvas = this.canvasRef.nativeElement;
     const rect = canvas.getBoundingClientRect();
     const x = event.clientX - rect.left;
     const y = event.clientY - rect.top;
+
+    if (this.headingDragIndex !== null) {
+      this.applyHeadingDrag(this.headingDragIndex, x, y, rect.width, rect.height);
+      return;
+    }
+
+    const draggingIndex = this.planningService.draggingIndex();
+    if (draggingIndex === null) return;
 
     const tablePos = this.canvasToTable(x, y, rect.width, rect.height);
     if (tablePos) {
@@ -1144,12 +1252,43 @@ export class PlanningOverlayComponent implements OnInit, AfterViewInit, OnDestro
     const canvas = this.canvasRef.nativeElement;
     canvas.releasePointerCapture(event.pointerId);
     this.planningService.stopDragging();
+    this.headingDragIndex = null;
     this.clearSnapIndicators();
   }
 
   onPointerLeave(): void {
     this.planningService.stopDragging();
+    this.headingDragIndex = null;
     this.clearSnapIndicators();
+  }
+
+  /**
+   * Update waypoint heading from a canvas-space pointer position.
+   * The angle from the waypoint to the pointer (in table frame) becomes the
+   * new heading. Holding Ctrl/Cmd snaps to 15° increments.
+   */
+  private applyHeadingDrag(
+    index: number,
+    canvasX: number,
+    canvasY: number,
+    width: number,
+    height: number
+  ): void {
+    const wp = this.planningService.waypoints()[index];
+    if (!wp) return;
+    const tablePos = this.canvasToTable(canvasX, canvasY, width, height);
+    if (!tablePos) return;
+    const dx = tablePos.x - wp.x;
+    const dy = tablePos.y - wp.y;
+    if (dx * dx + dy * dy < 0.25) return; // ignore tiny drags
+    let deg = (Math.atan2(dy, dx) * 180) / Math.PI;
+    if (this.snapAngles()) {
+      deg = Math.round(deg / 15) * 15;
+    }
+    // Normalize to (-180, 180]
+    while (deg <= -180) deg += 360;
+    while (deg > 180) deg -= 360;
+    this.planningService.setWaypointHeading(index, deg);
   }
 
   onContextMenu(event: MouseEvent): void {
@@ -1211,10 +1350,20 @@ export class PlanningOverlayComponent implements OnInit, AfterViewInit, OnDestro
     const y = event.clientY - rect.top;
 
     const hitIndex = this.hitTestWaypoint(x, y, rect.width, rect.height);
-    if (hitIndex !== null) {
-      this.saveUndoState(); // Save state before removing
-      this.planningService.removeWaypoint(hitIndex);
+    if (hitIndex === null) return;
+
+    // Shift+double-click clears an explicit heading instead of deleting.
+    if (event.shiftKey && this.planningService.pathMode() === 'spline') {
+      const wp = this.planningService.waypoints()[hitIndex];
+      if (typeof wp?.headingDeg === 'number') {
+        this.saveUndoState();
+        this.planningService.setWaypointHeading(hitIndex, undefined);
+      }
+      return;
     }
+
+    this.saveUndoState(); // Save state before removing
+    this.planningService.removeWaypoint(hitIndex);
   }
 
   private hitTestWaypoint(canvasX: number, canvasY: number, width: number, height: number): number | null {
@@ -1350,6 +1499,20 @@ export class PlanningOverlayComponent implements OnInit, AfterViewInit, OnDestro
     if (!value) {
       this.planningService.clearWaypointLineups();
     }
+  }
+
+  onPathModeChange(mode: PlanningPathMode): void {
+    this.planningService.setPathMode(mode);
+  }
+
+  onSplineSpeedChange(event: { value?: number }): void {
+    if (typeof event.value === 'number') {
+      this.planningService.setSplineSpeed(event.value);
+    }
+  }
+
+  onSplineHeadingModeChange(mode: SplineHeadingMode): void {
+    this.planningService.setSplineHeadingMode(mode);
   }
 
   onAllowStrafeChange(event: { checked?: boolean }): void {

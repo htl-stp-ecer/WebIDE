@@ -15,6 +15,12 @@ export interface Waypoint {
   lineupLineIndex?: number;
   /** Action to take when snapped to a line */
   lineSnapAction?: 'lineup' | 'follow' | 'drive' | 'drive_until';
+  /**
+   * Explicit heading at this waypoint in degrees (table frame, 0° = +X axis).
+   * Only meaningful in spline mode with explicit-heading sub-mode.
+   * Undefined ⇒ heading follows the spline tangent.
+   */
+  headingDeg?: number;
 }
 
 let waypointCounter = 0;
@@ -27,7 +33,8 @@ export function createWaypoint(
   y: number,
   lineup = false,
   lineupLineIndex?: number,
-  lineSnapAction?: 'lineup' | 'follow' | 'drive' | 'drive_until'
+  lineSnapAction?: 'lineup' | 'follow' | 'drive' | 'drive_until',
+  headingDeg?: number
 ): Waypoint {
   return {
     id: `wp-${++waypointCounter}-${Date.now()}`,
@@ -36,5 +43,6 @@ export function createWaypoint(
     lineup,
     lineupLineIndex,
     lineSnapAction,
+    headingDeg,
   };
 }

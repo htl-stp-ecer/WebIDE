@@ -29,6 +29,7 @@ export enum FlowStepId {
   ForwardLineupOnWhite = 'forward_lineup_on_white',
   BackwardLineupOnBlack = 'backward_lineup_on_black',
   BackwardLineupOnWhite = 'backward_lineup_on_white',
+  SplinePath = 'spline_path',
 }
 
 const TAG_MOTION = 'motion';

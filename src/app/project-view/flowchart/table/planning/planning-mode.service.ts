@@ -33,8 +33,12 @@ import {
 import { DEFAULT_ASTAR_CONFIG, simulateCommand, type AStarConfig } from './pathfinding';
 import { Waypoint, createWaypoint } from './models';
 import { optimizeWaypointsToSteps, type OptimizationContext } from './path-optimizer';
+import { waypointsToSplineStep } from './path-to-steps';
 
 const DEFAULT_FOLLOW_LINE_MAX_DISTANCE_CM = 300;
+
+export type PlanningPathMode = 'linear' | 'spline';
+export type SplineHeadingMode = 'tangent' | 'explicit';
 
 /**
  * Service for managing planning mode state.
@@ -55,6 +59,9 @@ export class PlanningModeService {
   private readonly _allowStrafe = signal<boolean>(true);
   private readonly _generatedSteps = signal<MissionStep[]>([]);
   private readonly _isGenerating = signal<boolean>(false);
+  private readonly _pathMode = signal<PlanningPathMode>('linear');
+  private readonly _splineSpeed = signal<number>(1.0);
+  private readonly _splineHeadingMode = signal<SplineHeadingMode>('tangent');
 
   private generationId = 0;
   private activeGenerationId = 0;
@@ -74,6 +81,9 @@ export class PlanningModeService {
   readonly allowStrafe = this._allowStrafe.asReadonly();
   readonly generatedSteps = this._generatedSteps.asReadonly();
   readonly isGenerating = this._isGenerating.asReadonly();
+  readonly pathMode = this._pathMode.asReadonly();
+  readonly splineSpeed = this._splineSpeed.asReadonly();
+  readonly splineHeadingMode = this._splineHeadingMode.asReadonly();
 
   constructor() {
     effect(() => {
@@ -82,6 +92,10 @@ export class PlanningModeService {
       const threshold = this._lineupThreshold();
       const useAStar = this._useAStarPathfinding();
       const allowStrafe = this._allowStrafe();
+      // React to spline-related changes too:
+      this._pathMode();
+      this._splineSpeed();
+      this._splineHeadingMode();
       const wallSegments = this.mapService.wallSegmentsCm();
       const lineSegments = this.mapService.lineSegmentsCm();
       const mapConfig = this.mapService.config();
@@ -255,6 +269,28 @@ export class PlanningModeService {
     this._allowStrafe.set(enabled);
   }
 
+  /** Switch path mode (linear sequence of drive/turn vs. one spline_path). */
+  setPathMode(mode: PlanningPathMode): void {
+    this._pathMode.set(mode);
+  }
+
+  /** Set global speed scale for the spline (0..1). */
+  setSplineSpeed(speed: number): void {
+    this._splineSpeed.set(Math.max(0.01, Math.min(1, speed)));
+  }
+
+  /** Choose how the robot heading is determined along the spline. */
+  setSplineHeadingMode(mode: SplineHeadingMode): void {
+    this._splineHeadingMode.set(mode);
+  }
+
+  /** Set or clear an explicit heading on a waypoint (degrees, table frame). */
+  setWaypointHeading(index: number, headingDeg: number | undefined): void {
+    this._waypoints.update((wps) =>
+      wps.map((wp, i) => (i === index ? { ...wp, headingDeg } : wp))
+    );
+  }
+
   /** Add a waypoint at the given position. */
   addWaypoint(
     x: number,
@@ -414,6 +450,26 @@ export class PlanningModeService {
     if (wps.length < 1) {
       this._generatedSteps.set([]);
       this._isGenerating.set(false);
+      return;
+    }
+
+    // Spline mode short-circuits all the drive/turn planning: emit one step.
+    if (this._pathMode() === 'spline') {
+      this._isGenerating.set(false);
+      const step = waypointsToSplineStep(
+        [
+          { id: 'start', x: start.x, y: start.y } as Waypoint,
+          ...wps,
+        ],
+        {
+          startX: start.x,
+          startY: start.y,
+          startHeading: start.theta,
+          speed: this._splineSpeed(),
+          useExplicitHeadings: this._splineHeadingMode() === 'explicit',
+        }
+      );
+      this._generatedSteps.set(step ? [step] : []);
       return;
     }
 
