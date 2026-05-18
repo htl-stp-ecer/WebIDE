@@ -20,6 +20,7 @@ import { applyWallPhysicsToPathWithSegments, buildCollisionWalls, type PathWithS
 import { PlanningModeService } from './planning';
 import { MissionStep } from '../../../entities/MissionStep';
 import { HttpService } from '../../../services/http-service';
+import { renderRobotAtCenter, type RobotCanvasOptions } from './robot-render';
 
 /** Line thickness in cm for rendering */
 const LINE_THICKNESS_CM = 2.54;
@@ -149,6 +150,36 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
     this.resizeCanvas();
     this.startRenderLoop();
     this.loadStoredMap();
+    this.loadRobotConfig();
+  }
+
+  /** Load robot dimensions/pose from backend so the robot renders correctly without opening the robot editor */
+  private loadRobotConfig(): void {
+    const projectUuid = this.projectUuid();
+    if (!projectUuid) return;
+
+    this.httpService.getLocalDeviceInfo(projectUuid).subscribe({
+      next: (info) => {
+        if (info.width_cm && info.length_cm) {
+          this.vizService.setRobotDimensions(info.width_cm, info.length_cm);
+        }
+        if (info.rotation_center && info.width_cm && info.length_cm) {
+          const rc = info.rotation_center;
+          const w = info.width_cm;
+          const l = info.length_cm;
+          const forwardCm = rc.y_cm - l / 2;
+          const strafeCm = w / 2 - rc.x_cm;
+          this.vizService.setRotationCenter(forwardCm, strafeCm);
+        }
+        if (info.start_pose) {
+          const p = info.start_pose;
+          this.vizService.setStartPose(p.x_cm, p.y_cm, p.theta_deg);
+        }
+      },
+      error: () => {
+        // No device info saved yet — robot renders with defaults
+      },
+    });
   }
 
   /** Load stored map from backend on first render */
@@ -750,106 +781,17 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
       dashed: boolean;
     }
   ): void {
-    const rotationCenter = this.tableToCanvas(pose, width, height);
-    const robotConfig = this.vizService.robotConfig();
+    const center = this.tableToCanvas(pose, width, height);
     const { scaleX, scaleY } = this.getDrawParams(width, height);
+    const robotConfig = this.vizService.robotConfig();
+    const sensorConfig = this.vizService.sensorConfig();
 
-    const robotWidthPx = robotConfig.widthCm * scaleX;
-    const robotLengthPx = robotConfig.lengthCm * scaleY;
-
-    const rcOffsetForwardPx = robotConfig.rotationCenterForwardCm * scaleX;
-    const rcOffsetStrafePx = robotConfig.rotationCenterStrafeCm * scaleY;
-
-    this.ctx.save();
-    this.ctx.translate(rotationCenter.x, rotationCenter.y);
-    this.ctx.rotate(-pose.theta);
-
-    const bodyCenterX = -rcOffsetForwardPx;
-    const bodyCenterY = rcOffsetStrafePx;
-
-    // Draw 4 mecanum corner wheels (behind body)
-    const wheelL = robotLengthPx * 0.35;
-    const wheelW = Math.max(4, robotWidthPx * 0.14);
-    const wheelXOff = robotLengthPx * 0.28; // offset from body center along forward axis
-    const halfL = robotLengthPx / 2;
-    const halfW = robotWidthPx / 2;
-    this.ctx.fillStyle = options.dashed ? 'rgba(55, 65, 81, 0.5)' : '#374151';
-    this.ctx.strokeStyle = options.dashed ? 'rgba(107, 114, 128, 0.4)' : '#4b5563';
-    this.ctx.lineWidth = 1;
-    this.ctx.setLineDash([]);
-    // 4 corner positions: front-left, front-right, rear-left, rear-right
-    const wheelCorners = [
-      { x: bodyCenterX + wheelXOff - wheelL / 2, y: bodyCenterY - halfW - wheelW }, // front-left
-      { x: bodyCenterX + wheelXOff - wheelL / 2, y: bodyCenterY + halfW },           // front-right
-      { x: bodyCenterX - wheelXOff - wheelL / 2, y: bodyCenterY - halfW - wheelW }, // rear-left
-      { x: bodyCenterX - wheelXOff - wheelL / 2, y: bodyCenterY + halfW },           // rear-right
-    ];
-    for (const w of wheelCorners) {
-      this.ctx.beginPath();
-      this.ctx.rect(w.x, w.y, wheelL, wheelW);
-      this.ctx.fill();
-      this.ctx.stroke();
-    }
-
-    // Draw robot body
-    this.ctx.fillStyle = options.bodyFill;
-    this.ctx.strokeStyle = options.bodyStroke;
-    this.ctx.lineWidth = 2;
-    if (options.dashed) {
-      this.ctx.setLineDash([6, 4]);
-    }
-    this.ctx.beginPath();
-    this.ctx.rect(
-      bodyCenterX - robotLengthPx / 2,
-      bodyCenterY - robotWidthPx / 2,
-      robotLengthPx,
-      robotWidthPx
-    );
-    this.ctx.fill();
-    this.ctx.stroke();
-    if (options.dashed) {
-      this.ctx.setLineDash([]);
-    }
-
-    // Draw forward indicator (arrow)
-    this.ctx.fillStyle = options.arrowFill;
-    this.ctx.beginPath();
-    const arrowTipX = bodyCenterX + robotLengthPx / 2;
-    this.ctx.moveTo(arrowTipX, bodyCenterY);
-    this.ctx.lineTo(arrowTipX - 10, bodyCenterY - 6);
-    this.ctx.lineTo(arrowTipX - 10, bodyCenterY + 6);
-    this.ctx.closePath();
-    this.ctx.fill();
-
-    // Draw rotation center marker
-    this.ctx.fillStyle = options.rotationCenterFill;
-    this.ctx.beginPath();
-    this.ctx.arc(0, 0, 4, 0, Math.PI * 2);
-    this.ctx.fill();
-
-    // Draw geometric center marker (if offset is non-zero)
-    if (robotConfig.rotationCenterForwardCm !== 0 || robotConfig.rotationCenterStrafeCm !== 0) {
-      this.ctx.fillStyle = options.geometricCenterFill;
-      this.ctx.beginPath();
-      this.ctx.arc(bodyCenterX, bodyCenterY, 3, 0, Math.PI * 2);
-      this.ctx.fill();
-    }
-
-    // Draw sensors
-    if (options.showSensors) {
-      const sensorConfig = this.vizService.sensorConfig();
-      for (const sensor of sensorConfig.lineSensors) {
-        const sensorX = bodyCenterX + sensor.forwardCm * scaleX;
-        const sensorY = bodyCenterY - sensor.strafeCm * scaleY;
-
-        this.ctx.fillStyle = '#22d3ee';
-        this.ctx.beginPath();
-        this.ctx.arc(sensorX, sensorY, 3, 0, Math.PI * 2);
-        this.ctx.fill();
-      }
-    }
-
-    this.ctx.restore();
+    renderRobotAtCenter(this.ctx, center.x, center.y, pose.theta, robotConfig, scaleX, scaleY, {
+      ...options,
+      sensors: options.showSensors
+        ? sensorConfig.lineSensors.map(s => ({ forwardCm: s.forwardCm, strafeCm: s.strafeCm, color: '#22d3ee' }))
+        : [],
+    });
   }
 
   private applyWallPhysicsToComputedPath(

@@ -1,13 +1,16 @@
 import {
   AfterViewChecked,
+  AfterViewInit,
   Component,
   ElementRef,
   Input,
+  OnDestroy,
   OnInit,
   ViewChild,
 } from '@angular/core';
+import { renderRobotAtCenter } from '../table/robot-render';
 import {FormsModule} from '@angular/forms';
-import {NgClass, NgStyle} from '@angular/common';
+import {NgClass} from '@angular/common';
 import {InputText} from 'primeng/inputtext';
 import {Button} from 'primeng/button';
 import {TranslateModule, TranslateService} from '@ngx-translate/core';
@@ -65,16 +68,17 @@ interface WheelPosition {
 @Component({
   selector: 'app-robot-config-panel',
   standalone: true,
-  imports: [FormsModule, NgClass, NgStyle, InputText, Button, TranslateModule],
+  imports: [FormsModule, NgClass, InputText, Button, TranslateModule],
   templateUrl: './robot-config-panel.html',
   styleUrl: './robot-config-panel.scss'
 })
-export class RobotConfigPanel implements OnInit, AfterViewChecked {
+export class RobotConfigPanel implements OnInit, AfterViewInit, AfterViewChecked, OnDestroy {
   @Input() projectUuid: string | null = null;
   @Input() typeDefinitions: TypeDefinition[] = [];
 
-  @ViewChild('robotBody') robotBodyRef!: ElementRef<HTMLDivElement>;
-  @ViewChild('robotFrame') robotFrameRef!: ElementRef<HTMLDivElement>;
+  @ViewChild('robotCanvas') robotCanvasRef!: ElementRef<HTMLCanvasElement>;
+  private resizeObserver?: ResizeObserver;
+  private ctx!: CanvasRenderingContext2D;
   @ViewChild('widthInput') widthInputRef?: ElementRef<HTMLInputElement>;
   @ViewChild('lengthInput') lengthInputRef?: ElementRef<HTMLInputElement>;
   @ViewChild('trackWidthInput') trackWidthInputRef?: ElementRef<HTMLInputElement>;
@@ -151,6 +155,170 @@ export class RobotConfigPanel implements OnInit, AfterViewChecked {
     this.loadDeviceInfo();
   }
 
+  ngAfterViewInit(): void {
+    const canvas = this.robotCanvasRef?.nativeElement;
+    if (!canvas) return;
+    this.ctx = canvas.getContext('2d')!;
+    this.resizeObserver = new ResizeObserver(() => this.resizeAndRender());
+    this.resizeObserver.observe(canvas.parentElement!);
+    this.resizeAndRender();
+  }
+
+  ngOnDestroy(): void {
+    this.resizeObserver?.disconnect();
+    document.removeEventListener('mousemove', this.boundDocMouseMove);
+    document.removeEventListener('mouseup', this.boundDocMouseUp);
+  }
+
+  private resizeAndRender(): void {
+    const canvas = this.robotCanvasRef?.nativeElement;
+    if (!canvas || !this.ctx) return;
+    const parent = canvas.parentElement!;
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = parent.clientWidth * dpr;
+    canvas.height = parent.clientHeight * dpr;
+    canvas.style.width = `${parent.clientWidth}px`;
+    canvas.style.height = `${parent.clientHeight}px`;
+    this.ctx.scale(dpr, dpr);
+    this.renderEditorCanvas();
+  }
+
+  renderEditorCanvas(): void {
+    const canvas = this.robotCanvasRef?.nativeElement;
+    if (!canvas || !this.ctx) return;
+    const dpr = window.devicePixelRatio || 1;
+    const w = canvas.width / dpr;
+    const h = canvas.height / dpr;
+
+    this.ctx.clearRect(0, 0, w, h);
+
+    const dims = this.getDisplayDimensions();
+    if (!dims) return;
+
+    const config = this.vizService.robotConfig();
+    const scale = Math.min((w * 0.5) / dims.width, (h * 0.5) / dims.length);
+    const scaleX = scale;
+    const scaleY = scale;
+
+    const robotWidthPx = dims.width * scale;
+    const robotLengthPx = dims.length * scale;
+    const rcOffsetForwardPx = config.rotationCenterForwardCm * scale;
+    const rcOffsetStrafePx = config.rotationCenterStrafeCm * scale;
+
+    // Geometric center at canvas center; RC offset from geometric center
+    // With theta=π/2: rotate(-π/2) transforms (lx,ly) → (ly, -lx)
+    // bodyCenterX=-rcOffsetForwardPx, bodyCenterY=rcOffsetStrafePx in local frame
+    // In canvas: body offset from RC = (bodyCenterY, -bodyCenterX) = (rcOffsetStrafePx, rcOffsetForwardPx)
+    // We want body center at canvas (w/2, h/2), so RC is at:
+    const rcX = w / 2 - rcOffsetStrafePx;
+    const rcY = h / 2 - rcOffsetForwardPx;
+
+    // Convert sensors from pct to forwardCm/strafeCm for shared renderer
+    const rendererSensors = this.sensors
+      .filter(s => s.x_pct !== undefined && s.y_pct !== undefined)
+      .map(s => ({
+        forwardCm: (0.5 - s.y_pct! / 100) * dims.length,
+        strafeCm: (0.5 - s.x_pct! / 100) * dims.width,
+        color: s.color,
+        selected: this.selectedSensorId === s.id,
+      }));
+
+    renderRobotAtCenter(this.ctx, rcX, rcY, Math.PI / 2, config, scaleX, scaleY, {
+      bodyFill: 'rgba(15, 23, 42, 0.06)',
+      bodyStroke: '#94a3b8',
+      arrowFill: '#64748b',
+      rotationCenterFill: '#a855f7',
+      geometricCenterFill: '#64748b',
+      dashed: false,
+      sensors: rendererSensors,
+    });
+
+    // Draw guidelines
+    if (this.showGuidelines) {
+      const bodyLeft = w / 2 - robotWidthPx / 2;
+      const bodyRight = w / 2 + robotWidthPx / 2;
+      const bodyTop = h / 2 - robotLengthPx / 2;
+      const bodyBottom = h / 2 + robotLengthPx / 2;
+
+      for (const g of this.verticalGuidelines) {
+        const gx = w / 2 + (g.position / 100 - 0.5) * robotWidthPx;
+        const isActive = this.activeGuidelines.x?.position === g.position && this.activeGuidelines.x?.type === g.type;
+        this.ctx.strokeStyle = isActive
+          ? 'rgba(59, 130, 246, 0.9)'
+          : g.type === 'center' ? 'rgba(100,116,139,0.35)' : g.type === 'edge' ? 'rgba(100,116,139,0.25)' : 'rgba(59,130,246,0.5)';
+        this.ctx.lineWidth = isActive ? 1.5 : 1;
+        this.ctx.setLineDash(isActive ? [] : [3, 3]);
+        this.ctx.beginPath();
+        this.ctx.moveTo(gx, bodyTop - 10);
+        this.ctx.lineTo(gx, bodyBottom + 10);
+        this.ctx.stroke();
+      }
+
+      for (const g of this.horizontalGuidelines) {
+        const gy = h / 2 + (g.position / 100 - 0.5) * robotLengthPx;
+        const isActive = this.activeGuidelines.y?.position === g.position && this.activeGuidelines.y?.type === g.type;
+        this.ctx.strokeStyle = isActive
+          ? 'rgba(59, 130, 246, 0.9)'
+          : g.type === 'center' ? 'rgba(100,116,139,0.35)' : g.type === 'edge' ? 'rgba(100,116,139,0.25)' : 'rgba(59,130,246,0.5)';
+        this.ctx.lineWidth = isActive ? 1.5 : 1;
+        this.ctx.setLineDash(isActive ? [] : [3, 3]);
+        this.ctx.beginPath();
+        this.ctx.moveTo(bodyLeft - 10, gy);
+        this.ctx.lineTo(bodyRight + 10, gy);
+        this.ctx.stroke();
+      }
+
+      this.ctx.setLineDash([]);
+    }
+
+    // Draw rotation center selected ring
+    if (this.isRotationSelected) {
+      this.ctx.strokeStyle = 'rgba(168, 85, 247, 0.6)';
+      this.ctx.lineWidth = 2;
+      this.ctx.beginPath();
+      this.ctx.arc(rcX, rcY, 8, 0, Math.PI * 2);
+      this.ctx.stroke();
+    }
+  }
+
+  private getEditorScale(w: number, h: number): number {
+    const dims = this.getDisplayDimensions();
+    if (!dims) return 1;
+    return Math.min((w * 0.5) / dims.width, (h * 0.5) / dims.length);
+  }
+
+  private canvasToRobotPct(canvasX: number, canvasY: number): { x: number; y: number } {
+    const canvas = this.robotCanvasRef?.nativeElement;
+    if (!canvas) return { x: 50, y: 50 };
+    const dpr = window.devicePixelRatio || 1;
+    const w = canvas.width / dpr;
+    const h = canvas.height / dpr;
+    const config = this.vizService.robotConfig();
+    const scale = this.getEditorScale(w, h);
+    const rcOffsetForwardPx = config.rotationCenterForwardCm * scale;
+    const rcOffsetStrafePx = config.rotationCenterStrafeCm * scale;
+    const rcX = w / 2 - rcOffsetStrafePx;
+    const rcY = h / 2 - rcOffsetForwardPx;
+
+    // Canvas relative to RC, then undo rotate(-π/2): local = (-dy, dx)
+    const dx = canvasX - rcX;
+    const dy = canvasY - rcY;
+    const lx = -dy;
+    const ly = dx;
+
+    // forwardCm = (lx - bodyCenterX) / scale, bodyCenterX = -rcOffsetForwardPx
+    // strafeCm = (bodyCenterY - ly) / scale, bodyCenterY = rcOffsetStrafePx
+    const dims = this.getDisplayDimensions();
+    if (!dims) return { x: 50, y: 50 };
+    const forwardCm = (lx + rcOffsetForwardPx) / scale;
+    const strafeCm = (rcOffsetStrafePx - ly) / scale;
+
+    return {
+      x: (0.5 - strafeCm / dims.width) * 100,
+      y: (0.5 - forwardCm / dims.length) * 100,
+    };
+  }
+
   ngAfterViewChecked() {
     if (this.pendingFocus === 'width' && this.widthInputRef) {
       this.widthInputRef.nativeElement.focus();
@@ -210,6 +378,7 @@ export class RobotConfigPanel implements OnInit, AfterViewChecked {
     this.syncTableVisualizationStartPose(info);
     this.syncSensorsFromDefinitions();
     this.loading = false;
+    this.renderEditorCanvas();
   }
 
   /**
@@ -424,6 +593,7 @@ export class RobotConfigPanel implements OnInit, AfterViewChecked {
     const length = info?.length_cm;
     if (typeof width === 'number' && typeof length === 'number' && width > 0 && length > 0) {
       this.vizService.setRobotDimensions(width, length);
+      this.renderEditorCanvas();
     }
   }
 
@@ -449,6 +619,7 @@ export class RobotConfigPanel implements OnInit, AfterViewChecked {
     const strafeCm = (width / 2) - xCm;
 
     this.vizService.setRotationCenter(forwardCm, strafeCm);
+    this.renderEditorCanvas();
   }
 
   private syncTableVisualizationStartPose(info?: ConnectionInfo) {
@@ -507,6 +678,7 @@ export class RobotConfigPanel implements OnInit, AfterViewChecked {
       }
     }
     this.syncTableVisualizationSensors();
+    this.renderEditorCanvas();
   }
 
   private syncTableVisualizationSensors() {
@@ -534,10 +706,12 @@ export class RobotConfigPanel implements OnInit, AfterViewChecked {
     } else {
       this.editTarget = {type: 'sensor', id: sensorId};
     }
+    this.renderEditorCanvas();
   }
 
   selectRotationCenter() {
     this.editTarget = this.editTarget?.type === 'rotation' ? null : {type: 'rotation'};
+    this.renderEditorCanvas();
   }
 
   get selectedSensorId(): number | null {
@@ -625,35 +799,27 @@ export class RobotConfigPanel implements OnInit, AfterViewChecked {
 
   // Mouse events for live drag placement
   onRobotMouseDown(event: MouseEvent) {
-    // Don't interfere with interactive elements (dimension labels, inputs)
-    const clickedEl = event.target as HTMLElement;
-    if (clickedEl.closest('button, input, .robot-measure-label')) return;
-
     event.preventDefault();
 
-    // Calculate click position as percentage relative to robot body
-    const bodyEl = this.robotBodyRef?.nativeElement;
-    if (!bodyEl) return;
-    const rect = bodyEl.getBoundingClientRect();
-    if (rect.width === 0 || rect.height === 0) return;
+    const canvas = this.robotCanvasRef?.nativeElement;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const canvasX = event.clientX - rect.left;
+    const canvasY = event.clientY - rect.top;
+    const pct = this.canvasToRobotPct(canvasX, canvasY);
 
-    const clickX = ((event.clientX - rect.left) / rect.width) * 100;
-    const clickY = ((event.clientY - rect.top) / rect.height) * 100;
-
-    // Check if clicking on an existing element - auto-select it
-    const hitElement = this.hitTestElement(clickX, clickY);
+    const hitElement = this.hitTestElement(pct.x, pct.y);
     if (hitElement) {
       this.editTarget = hitElement;
     }
 
-    // Only start dragging if we have a target
     if (!this.editTarget) return;
 
     this.isDragging = true;
     this.computeGuidelines();
     this.updateTargetPosition(event);
+    this.renderEditorCanvas();
 
-    // Listen on document so drag continues when mouse leaves the robot area
     document.addEventListener('mousemove', this.boundDocMouseMove);
     document.addEventListener('mouseup', this.boundDocMouseUp);
   }
@@ -691,6 +857,7 @@ export class RobotConfigPanel implements OnInit, AfterViewChecked {
     if (!this.isDragging || !this.editTarget) return;
     event.preventDefault();
     this.updateTargetPosition(event);
+    this.renderEditorCanvas();
   }
 
   private onDocumentMouseMove(event: MouseEvent) {
@@ -719,19 +886,19 @@ export class RobotConfigPanel implements OnInit, AfterViewChecked {
       } else if (this.editTarget?.type === 'rotation') {
         this.persistCentersToServer();
       }
+      this.renderEditorCanvas();
     }
   }
 
   private updateTargetPosition(event: MouseEvent) {
-    // Always calculate position relative to the robot body, even when mouse is outside it
-    const bodyEl = this.robotBodyRef?.nativeElement;
-    if (!bodyEl) return;
-    const rect = bodyEl.getBoundingClientRect();
-    if (rect.width === 0 || rect.height === 0) return;
-
-    // Allow values outside 0-100% so sensors can be placed outside the robot body
-    let x = ((event.clientX - rect.left) / rect.width) * 100;
-    let y = ((event.clientY - rect.top) / rect.height) * 100;
+    const canvas = this.robotCanvasRef?.nativeElement;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const canvasX = event.clientX - rect.left;
+    const canvasY = event.clientY - rect.top;
+    const raw = this.canvasToRobotPct(canvasX, canvasY);
+    let x = raw.x;
+    let y = raw.y;
 
     // Apply snapping
     const snapped = this.applySnapping(x, y);

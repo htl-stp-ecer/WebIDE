@@ -135,6 +135,29 @@ export class ProjectView implements OnDestroy {
       }
     });
 
+    // Sync robot dimensions/sensors/rotation center into viz service on load
+    // so the table visualization has correct robot data even before the robot panel is opened.
+    this.http.getLocalDeviceInfo(projectUUID).subscribe({
+      next: info => {
+        if (info.width_cm && info.length_cm) {
+          this.vizService.setRobotDimensions(info.width_cm, info.length_cm);
+        }
+        if (info.rotation_center && info.width_cm && info.length_cm) {
+          const rc = info.rotation_center;
+          const w = info.width_cm, l = info.length_cm;
+          const xCm = rc.x_cm;
+          const yCm = rc.y_cm;
+          const forwardCm = yCm - l / 2;
+          const strafeCm = (w / 2) - xCm;
+          this.vizService.setRotationCenter(forwardCm, strafeCm);
+        }
+        if (info.start_pose) {
+          const p = info.start_pose;
+          this.vizService.setStartPose(p.x_cm, p.y_cm, p.theta_deg);
+        }
+      },
+    });
+
     this.http.getProject(projectUUID).subscribe({
       next: project => {
         const connection = project.connection;

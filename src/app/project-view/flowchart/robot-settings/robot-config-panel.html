@@ -256,12 +256,17 @@
   <div class="flex-1 flex items-center justify-center p-6 robot-canvas-bg">
     <div #robotFrame
          class="relative robot-frame select-none"
-         [ngClass]="{'cursor-crosshair': editTarget !== null}"
          [style.--robot-width]="robotScale.widthPct + '%'"
-         [style.--robot-height]="robotScale.heightPct + '%'"
-         (mousedown)="onRobotMouseDown($event)"
-         (mousemove)="onRobotMouseMove($event)"
-         (mouseup)="onRobotMouseUp()">
+         [style.--robot-height]="robotScale.heightPct + '%'">
+
+      <!-- Canvas renders the robot (first child so labels/controls paint on top) -->
+      <canvas
+        #robotCanvas
+        class="robot-canvas"
+        (mousedown)="onRobotMouseDown($event)"
+        (mousemove)="onRobotMouseMove($event)"
+        (mouseup)="onRobotMouseUp()">
+      </canvas>
 
       <!-- Measurement Lines -->
       <div class="robot-measure robot-measure-width" aria-hidden="true"></div>
@@ -367,109 +372,6 @@
         </div>
       }
 
-      <!-- Robot Body -->
-      <div
-        #robotBody
-        class="robot-body relative border-2 rounded-2xl shadow-lg flex items-center justify-center transition-colors select-none"
-        [ngClass]="{
-          'cursor-crosshair border-blue-400 robot-body--active': editTarget !== null,
-          'cursor-default border-slate-300 dark:border-slate-600 robot-body--idle': editTarget === null
-        }"
-        [style.width.%]="robotScale.widthPct"
-        [style.height.%]="robotScale.heightPct"
->
-
-        <!-- Guidelines (visible during drag) -->
-        @if (showGuidelines) {
-          <!-- Vertical guidelines (for X alignment) -->
-          @for (guideline of verticalGuidelines; track guideline.position + '-' + guideline.type) {
-            <span
-              class="guideline guideline-vertical"
-              [ngClass]="{
-                'guideline-active': isGuidelineActive(guideline, 'x'),
-                'guideline-center': guideline.type === 'center',
-                'guideline-edge': guideline.type === 'edge',
-                'guideline-sensor': guideline.type === 'sensor',
-                'guideline-rotation': guideline.type === 'rotation'
-              }"
-              [style.--guide-pos]="guideline.position + '%'">
-            </span>
-          }
-          <!-- Horizontal guidelines (for Y alignment) -->
-          @for (guideline of horizontalGuidelines; track guideline.position + '-' + guideline.type) {
-            <span
-              class="guideline guideline-horizontal"
-              [ngClass]="{
-                'guideline-active': isGuidelineActive(guideline, 'y'),
-                'guideline-center': guideline.type === 'center',
-                'guideline-edge': guideline.type === 'edge',
-                'guideline-sensor': guideline.type === 'sensor',
-                'guideline-rotation': guideline.type === 'rotation'
-              }"
-              [style.--guide-pos]="guideline.position + '%'">
-            </span>
-          }
-        }
-
-        <!-- Wheel Markers -->
-        @for (wheel of wheelPositions; track wheel.name) {
-          <span
-            class="wheel-marker"
-            [ngClass]="{'wheel-marker-mecanum': isMecanumDrive, 'wheel-marker-diff': !isMecanumDrive}"
-            [ngStyle]="getWheelMarkerStyle(wheel)">
-            <span class="wheel-rect" [ngClass]="getWheelRectClass(wheel)"></span>
-            @if (isMecanumDrive) {
-              <span class="wheel-roller-line" [ngClass]="getWheelRollerClass(wheel)"></span>
-            }
-          </span>
-        }
-
-        <!-- Axle Lines (differential only) -->
-        @if (wheelPositions.length === 2) {
-          <span class="axle-line axle-center"></span>
-        }
-
-        <!-- Geometric Center Marker (fixed at center) -->
-        <span class="center-marker center-marker-geometric center-marker-fixed">
-          <i class="pi pi-plus text-[8px]"></i>
-        </span>
-
-        <!-- Rotation Center Marker -->
-        @if (rotationCenter) {
-          <span
-            class="center-marker center-marker-rotation"
-            [ngStyle]="getCenterMarkerStyle(rotationCenter)"
-            [ngClass]="{'center-marker-selected': isRotationSelected}">
-            <i class="pi pi-sync text-[8px]"></i>
-          </span>
-        }
-
-        <!-- Sensor Dots -->
-        @for (sensor of sensors; track sensor.id) {
-          @if (sensor.x_pct !== undefined && sensor.y_pct !== undefined) {
-            <span
-              class="sensor-marker"
-              [ngStyle]="getSensorMarkerStyle(sensor)">
-              @if (getSensorClearanceVisible(sensor)) {
-                <span class="sensor-clearance"></span>
-              }
-              <span
-                class="sensor-dot"
-                [style.background]="sensor.color"
-                [ngClass]="{'ring-2 ring-offset-2 ring-blue-500 scale-125': selectedSensorId === sensor.id}">
-              </span>
-            </span>
-          }
-        }
-
-        <!-- Empty State -->
-        @if (!editTarget) {
-          <div class="text-center text-slate-400 pointer-events-none">
-            <i class="pi pi-hand-pointer text-3xl mb-2 opacity-30"></i>
-            <p class="text-sm">{{ 'ROBOT_SETTINGS.SELECT_ITEM_HINT' | translate }}</p>
-          </div>
-        }
-      </div>
     </div>
   </div>
 

@@ -4,7 +4,7 @@
 
 :host {
   display: flex;
-  flex-direction: row;
+  flex-direction: column;
   flex: 1;
   overflow: hidden;
   min-height: 0;
@@ -12,12 +12,14 @@
 }
 
 .robot-sidebar {
-  width: 220px;
+  width: 100%;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  border-right: 1px solid rgba(0, 0, 0, 0.06);
+  border-right: none;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
   overflow-y: auto;
+  max-height: 240px;
 }
 
 .robot-main {
@@ -31,7 +33,7 @@
 
 :host-context(.dark) .robot-sidebar,
 :host-context(.p-dark) .robot-sidebar {
-  border-right-color: rgba(255, 255, 255, 0.06);
+  border-bottom-color: rgba(255, 255, 255, 0.06);
 }
 
 .robot-hint {
@@ -131,32 +133,13 @@
 :host-context(.p-dark) .robot-canvas-bg {
 }
 
-.robot-body {
-  background: rgba(15, 23, 42, 0.04);
-  overflow: visible;
-}
-
-.robot-body--active {
-  background: rgba(15, 23, 42, 0.08);
-}
-
-.robot-body--idle {
-  background: rgba(15, 23, 42, 0.04);
-}
-
-:host-context(.dark) .robot-body,
-:host-context(.p-dark) .robot-body {
-  background: rgba(248, 250, 252, 0.05);
-}
-
-:host-context(.dark) .robot-body--active,
-:host-context(.p-dark) .robot-body--active {
-  background: rgba(248, 250, 252, 0.1);
-}
-
-:host-context(.dark) .robot-body--idle,
-:host-context(.p-dark) .robot-body--idle {
-  background: rgba(248, 250, 252, 0.05);
+.robot-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  cursor: crosshair;
+  touch-action: none;
 }
 
 // Robot frame - responsive sizing that always fits
@@ -344,45 +327,6 @@
   }
 }
 
-// Sensor markers
-.sensor-marker {
-  position: absolute;
-  --dot-size: 12px;
-  inset: 0;
-  pointer-events: none;
-}
-
-.sensor-dot {
-  position: absolute;
-  width: var(--dot-size);
-  height: var(--dot-size);
-  border-radius: 9999px;
-  border: 2px solid white;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
-  left: var(--sensor-x);
-  top: var(--sensor-y);
-  transform: translate(-50%, -50%);
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
-}
-
-.sensor-clearance {
-  position: absolute;
-  width: var(--sensor-clear-x);
-  height: var(--sensor-clear-y);
-  border-radius: 9999px;
-  border: 1px dashed rgba(100, 116, 139, 0.5);
-  background: rgba(100, 116, 139, 0.05);
-  left: var(--sensor-x);
-  top: var(--sensor-y);
-  transform: translate(-50%, -50%);
-}
-
-:host-context(.dark) .sensor-clearance,
-:host-context(.p-dark) .sensor-clearance {
-  border-color: rgba(148, 163, 184, 0.4);
-  background: rgba(148, 163, 184, 0.1);
-}
-
 // Center point icons in sidebar
 .center-icon {
   display: flex;
@@ -401,151 +345,6 @@
 
 .center-icon-rotation {
   background: #8b5cf6;
-}
-
-// Center markers on robot
-.center-marker {
-  position: absolute;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  border-radius: 4px;
-  color: white;
-  font-weight: bold;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
-  left: var(--center-x, 50%);
-  top: var(--center-y, 50%);
-  transform: translate(-50%, -50%);
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
-  pointer-events: none;
-  z-index: 5;
-}
-
-.center-marker-geometric {
-  background: #10b981;
-  border: 2px solid white;
-}
-
-.center-marker-rotation {
-  background: #8b5cf6;
-  border: 2px solid white;
-}
-
-.center-marker-selected {
-  transform: translate(-50%, -50%) scale(1.2);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3);
-}
-
-.center-marker-fixed {
-  left: 50%;
-  top: 50%;
-  opacity: 0.6;
-}
-
-// Guidelines
-.guideline {
-  position: absolute;
-  pointer-events: none;
-  z-index: 1;
-  --guide-pos: 50%;
-  --guide-color: rgba(148, 163, 184, 0.4);
-  --guide-active-color: rgba(59, 130, 246, 0.7);
-  transition: opacity 0.15s ease;
-}
-
-.guideline-vertical {
-  left: var(--guide-pos);
-  top: 0;
-  bottom: 0;
-  width: 1px;
-  background: linear-gradient(
-    to bottom,
-    transparent 0%,
-    var(--guide-color) 10%,
-    var(--guide-color) 90%,
-    transparent 100%
-  );
-
-  &.guideline-active {
-    background: linear-gradient(
-      to bottom,
-      transparent 0%,
-      var(--guide-active-color) 10%,
-      var(--guide-active-color) 90%,
-      transparent 100%
-    );
-    width: 2px;
-    transform: translateX(-0.5px);
-  }
-}
-
-.guideline-horizontal {
-  top: var(--guide-pos);
-  left: 0;
-  right: 0;
-  height: 1px;
-  background: linear-gradient(
-    to right,
-    transparent 0%,
-    var(--guide-color) 10%,
-    var(--guide-color) 90%,
-    transparent 100%
-  );
-
-  &.guideline-active {
-    background: linear-gradient(
-      to right,
-      transparent 0%,
-      var(--guide-active-color) 10%,
-      var(--guide-active-color) 90%,
-      transparent 100%
-    );
-    height: 2px;
-    transform: translateY(-0.5px);
-  }
-}
-
-.guideline-center {
-  --guide-color: rgba(59, 130, 246, 0.25);
-}
-
-.guideline-edge {
-  --guide-color: rgba(148, 163, 184, 0.3);
-}
-
-.guideline-sensor {
-  --guide-color: rgba(34, 197, 94, 0.35);
-  --guide-active-color: rgba(34, 197, 94, 0.8);
-}
-
-.guideline-rotation {
-  --guide-color: rgba(139, 92, 246, 0.35);
-  --guide-active-color: rgba(139, 92, 246, 0.8);
-}
-
-:host-context(.dark) .guideline,
-:host-context(.p-dark) .guideline {
-  --guide-color: rgba(100, 116, 139, 0.4);
-  --guide-active-color: rgba(96, 165, 250, 0.8);
-}
-
-:host-context(.dark) .guideline-center,
-:host-context(.p-dark) .guideline-center {
-  --guide-color: rgba(96, 165, 250, 0.3);
-}
-
-:host-context(.dark) .guideline-sensor,
-:host-context(.p-dark) .guideline-sensor {
-  --guide-color: rgba(74, 222, 128, 0.35);
-  --guide-active-color: rgba(74, 222, 128, 0.85);
-}
-
-:host-context(.dark) .guideline-rotation,
-:host-context(.p-dark) .guideline-rotation {
-  --guide-color: rgba(167, 139, 250, 0.35);
-  --guide-active-color: rgba(167, 139, 250, 0.85);
 }
 
 // Distance indicators
@@ -767,117 +566,6 @@
   &::after {
     background: rgba(74, 222, 128, 0.6);
   }
-}
-
-// ============================================
-// Wheel Markers
-// ============================================
-
-.wheel-marker {
-  position: absolute;
-  --wheel-x: 50%;
-  --wheel-y: 50%;
-  --wheel-width: 10%;
-  --wheel-height: 18%;
-  inset: 0;
-  pointer-events: none;
-  z-index: 2;
-}
-
-.wheel-rect {
-  position: absolute;
-  // Use dynamic sizing based on wheel radius if provided
-  width: var(--wheel-width, 18px);
-  height: var(--wheel-height, 8px);
-  // Constrain to reasonable sizes
-  min-width: 8px;
-  max-width: 30%;
-  min-height: 4px;
-  max-height: 40%;
-  border-radius: 2px;
-  background: #1e293b;
-  border: 1px solid #334155;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
-  left: var(--wheel-x);
-  top: var(--wheel-y);
-  transform: translate(-50%, -50%);
-}
-
-// Mecanum wheels
-.wheel-rect-mecanum {
-  border-radius: 3px;
-}
-
-// Differential wheels
-.wheel-rect-diff {
-  border-radius: 3px;
-}
-
-:host-context(.dark) .wheel-rect,
-:host-context(.p-dark) .wheel-rect {
-  background: #334155;
-  border-color: #64748b;
-}
-
-// Mecanum roller line (diagonal stripe on wheel)
-.wheel-roller-line {
-  position: absolute;
-  width: 2px;
-  height: 14px;
-  background: rgba(148, 163, 184, 0.6);
-  border-radius: 1px;
-  left: var(--wheel-x);
-  top: var(--wheel-y);
-  transform-origin: center;
-}
-
-.wheel-roller-left {
-  transform: translate(-50%, -50%) rotate(-45deg);
-}
-
-.wheel-roller-right {
-  transform: translate(-50%, -50%) rotate(45deg);
-}
-
-:host-context(.dark) .wheel-roller-line,
-:host-context(.p-dark) .wheel-roller-line {
-  background: rgba(203, 213, 225, 0.5);
-}
-
-// ============================================
-// Axle Lines (connecting wheels)
-// ============================================
-
-.axle-line {
-  position: absolute;
-  height: 2px;
-  background: rgba(71, 85, 105, 0.5);
-  pointer-events: none;
-  z-index: 1;
-  // Default horizontal line spanning most of the robot width
-  left: 5%;
-  right: 5%;
-}
-
-// For mecanum: front and back axles at approximately wheel positions
-// These are approximate - actual position is determined by kinematics
-.axle-front {
-  top: 20%;
-}
-
-.axle-back {
-  top: 80%;
-}
-
-// For differential: center axle
-.axle-center {
-  top: 50%;
-  transform: translateY(-50%);
-}
-
-:host-context(.dark) .axle-line,
-:host-context(.p-dark) .axle-line {
-  background: rgba(148, 163, 184, 0.5);
 }
 
 // ============================================
