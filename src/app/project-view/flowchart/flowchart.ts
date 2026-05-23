@@ -43,6 +43,7 @@ import { ProgressSpinner } from 'primeng/progressspinner';
 import { TimingPanel, type TimingViewMode } from './timing/timing-panel';
 import { RobotSettingsModal } from './robot-settings/robot-settings-modal';
 import { TableMapService, TableVisualizationService } from './table/services';
+import { LocalizationReplayService } from './table/replay/localization-replay.service';
 import { buildPlannedPathFromProjectSimulation, buildPlannedPathFromProjectSimulationWithMissionOverride } from './table/simulation-path';
 import { PlanningModeService, PlanningOverlayComponent } from './table/planning';
 import { StepPickerModal } from './step-picker/step-picker-modal';
@@ -254,7 +255,8 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
     readonly tableMap: TableMapService,
     readonly planningService: PlanningModeService,
     readonly keybindingsService: KeybindingsService,
-    readonly runActionService: RunActionService
+    readonly runActionService: RunActionService,
+    readonly replayService: LocalizationReplayService,
   ) {
     this.historyManager = createHistoryManager(this);
     this.runManager = createRunManager(this);

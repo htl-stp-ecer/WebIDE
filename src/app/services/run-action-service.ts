@@ -15,6 +15,7 @@ export interface RunLogEntry {
 }
 
 const RUN_TARGET_STORAGE_KEY = 'raccoon.runTarget';
+const RECORD_LOCALIZATION_STORAGE_KEY = 'raccoon.recordLocalization';
 const MAX_LOG_ENTRIES = 1500;
 
 function loadInitialTarget(): RunTarget {
@@ -26,6 +27,15 @@ function loadInitialTarget(): RunTarget {
     // localStorage may be unavailable; fall through.
   }
   return 'simulated';
+}
+
+function loadInitialRecordLocalization(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    return window.localStorage.getItem(RECORD_LOCALIZATION_STORAGE_KEY) === '1';
+  } catch {
+    return false;
+  }
 }
 
 @Injectable({ providedIn: 'root' })
@@ -40,6 +50,9 @@ export class RunActionService {
    * connected). Persisted to localStorage so it sticks across reloads.
    */
   readonly runTarget = signal<RunTarget>(loadInitialTarget());
+
+  /** Record localization data during real runs. Only meaningful when runTarget === 'real'. */
+  readonly recordLocalization = signal<boolean>(loadInitialRecordLocalization());
 
   /**
    * Owns the in-memory log buffer. Lives on the root-provided service so
@@ -94,6 +107,15 @@ export class RunActionService {
         // ignore quota / private-mode errors
       }
     });
+    effect(() => {
+      const value = this.recordLocalization();
+      if (typeof window === 'undefined') return;
+      try {
+        window.localStorage.setItem(RECORD_LOCALIZATION_STORAGE_KEY, value ? '1' : '0');
+      } catch {
+        // ignore quota / private-mode errors
+      }
+    });
   }
 
   register(handlers: {
@@ -116,6 +138,10 @@ export class RunActionService {
 
   setRunTarget(target: RunTarget): void {
     this.runTarget.set(target);
+  }
+
+  toggleRecordLocalization(): void {
+    this.recordLocalization.update(v => !v);
   }
 
   run(mode: 'normal' | 'debug'): void {

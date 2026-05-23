@@ -81,6 +81,17 @@
         }
       </div>
 
+      @if (runAction.runTarget() === 'real') {
+        <button
+          type="button"
+          class="record-toggle"
+          [class.active]="runAction.recordLocalization()"
+          (click)="runAction.toggleRecordLocalization()"
+          [title]="runAction.recordLocalization() ? 'Localization recording ON – click to disable' : 'Record localization after run'">
+          <i class="pi pi-circle-fill"></i>
+        </button>
+      }
+
       @if (!runAction.isRunActive()) {
         <button class="run-btn run" (click)="runAction.run('normal')" title="Run" aria-label="Run">
           <svg viewBox="0 0 32 32" aria-hidden="true" focusable="false"><polygon points="10,6 10,26 24,16" /></svg>

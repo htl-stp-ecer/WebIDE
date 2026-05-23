@@ -135,6 +135,7 @@ interface RunMissionOptions {
    */
   simulate?: boolean | SimulateMode;
   debug?: boolean;
+  recordLocalization?: boolean;
   onSocket?: (socket: WebSocket | null) => void;
 }
 
@@ -538,6 +539,9 @@ export class HttpService {
     }
     if (options?.debug) {
       params.push('debug=1');
+    }
+    if (options?.recordLocalization) {
+      params.push('record_localization=1');
     }
     const query = params.length ? `?${params.join('&')}` : '';
     // No mission name -> hit the project-level /run endpoint (IntelliJ-style

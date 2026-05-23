@@ -82,9 +82,11 @@ export class LocalizationReplayService {
   private readonly _playbackSpeed = signal<number>(1.0);
   private readonly _loading = signal<boolean>(false);
   private readonly _error = signal<string | null>(null);
+  private readonly _autoLoadRequest = signal<{ projectUuid: string; runId: string } | null>(null);
 
   readonly availableRuns = this._availableRuns.asReadonly();
   readonly loadedRunId = this._loadedRunId.asReadonly();
+  readonly autoLoadRequest = this._autoLoadRequest.asReadonly();
   readonly header = this._header.asReadonly();
   readonly frames = this._frames.asReadonly();
   readonly currentFrameIndex = this._currentFrameIndex.asReadonly();
@@ -185,6 +187,14 @@ export class LocalizationReplayService {
     this._loadedRunId.set(null);
     this._loadedProjectUuid.set(null);
     this._error.set(null);
+  }
+
+  requestAutoLoad(projectUuid: string, runId: string): void {
+    this._autoLoadRequest.set({ projectUuid, runId });
+  }
+
+  clearAutoLoadRequest(): void {
+    this._autoLoadRequest.set(null);
   }
 
   // ---- Playback ----

@@ -37,6 +37,10 @@ export function createRunManager(flow: Flowchart): FlowchartRunManager {
     shouldSimulate: () => flow.simulateRuns(),
     simulationMode: () => flow.simulationMode(),
     runTarget: () => flow.runActionService.runTarget(),
+    recordLocalization: () => flow.runActionService.recordLocalization(),
+    onRunRecorded: (projectUuid, runId) => {
+      flow.replayService.requestAutoLoad(projectUuid, runId);
+    },
     tableViz: flow.tableViz,
   });
 }

@@ -40,6 +40,10 @@ interface FlowchartRunContext {
    * shouldSimulate/simulationMode pair when undefined.
    */
   runTarget?(): 'simulated' | 'real';
+  /** Whether to record localization data during real runs. */
+  recordLocalization?(): boolean;
+  /** Called after a real run that produced a recording. */
+  onRunRecorded?(projectUuid: string, runId: string): void;
   /** Optional sink for live pose samples — drawn by TableVisualizationPanel. */
   tableViz?: TableVisualizationService;
 }
@@ -401,6 +405,16 @@ export class FlowchartRunManager {
         this.ctx.isRunActive.set(false);
         this.resetDebugState();
         break;
+      case 'run_recorded':
+        {
+          const runId = (payload as { run_id?: unknown }).run_id;
+          const projectUuid = this.ctx.getProjectUUID();
+          if (typeof runId === 'string' && projectUuid) {
+            this.appendSystemLog(`Recording saved (run id: ${runId})`);
+            this.ctx.onRunRecorded?.(projectUuid, runId);
+          }
+        }
+        break;
       case 'error':
         if (type === 'error') {
           const message = (payload as { message?: unknown }).message;
@@ -616,9 +630,10 @@ export class FlowchartRunManager {
       runMissionKey = null; // whole project on real target
     }
 
+    const recordLocalization = target === 'real' && mode !== 'debug' && (this.ctx.recordLocalization?.() ?? false);
     const runOptions = mode === 'debug'
       ? { simulate, debug: true, onSocket: (socket: WebSocket | null) => this.updateSocket(socket) }
-      : { simulate, onSocket: (socket: WebSocket | null) => this.updateSocket(socket) };
+      : { simulate, recordLocalization, onSocket: (socket: WebSocket | null) => this.updateSocket(socket) };
 
     this.runSubscription = this.ctx.http.runMission(projectId, runMissionKey, runOptions).subscribe({
       next: event => this.handleRunEvent(event),

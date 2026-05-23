@@ -20,6 +20,7 @@ import {Subject} from 'rxjs';
 import {debounceTime} from 'rxjs/operators';
 import {NotificationService} from '../services/NotificationService';
 import {TranslateService} from '@ngx-translate/core';
+import { LocalizationReplayService } from './flowchart/table/replay/localization-replay.service';
 
 type ResizeSide = 'left' | 'right' | 'bottom';
 
@@ -108,6 +109,7 @@ export class ProjectView implements OnDestroy {
     private vizService: TableVisualizationService,
     private mapService: TableMapService,
     private translate: TranslateService,
+    private replayService: LocalizationReplayService,
   ) {
     const projectUUID = this.route.snapshot.paramMap.get('uuid');
     if (!projectUUID) {
@@ -133,6 +135,17 @@ export class ProjectView implements OnDestroy {
         this.activeBottomPanel.set('logs');
         localStorage.setItem(STORAGE_KEYS.activeBottomPanel, 'logs');
       }
+    });
+
+    // Auto-open table panel and load recording when a real run with recording completes
+    effect(() => {
+      const req = this.replayService.autoLoadRequest();
+      if (!req) return;
+      this.replayService.clearAutoLoadRequest();
+      this.activeBottomPanel.set('table');
+      localStorage.setItem(STORAGE_KEYS.activeBottomPanel, 'table');
+      this.replayService.loadRun(req.projectUuid, req.runId).catch(console.error);
+      this.replayService.listRuns(req.projectUuid).catch(console.error);
     });
 
     // Sync robot dimensions/sensors/rotation center into viz service on load
