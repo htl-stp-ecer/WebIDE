@@ -64,7 +64,8 @@ type SelectDragState =
     };
 
 const TABLE_MAP_FILE_FORMAT = 'flowchart-table-map';
-const TABLE_MAP_FILE_VERSION = 1;
+const TABLE_MAP_FILE_VERSION = 2;
+const TABLE_MAP_FILE_LEGACY_VERSION = 1;
 const TABLE_MAP_FILE_EXTENSION = 'ftmap';
 
 interface TableMapFileLine {
@@ -78,13 +79,50 @@ interface TableMapFileLine {
 
 interface TableMapFileV1 {
   format: typeof TABLE_MAP_FILE_FORMAT;
-  version: typeof TABLE_MAP_FILE_VERSION;
+  version: typeof TABLE_MAP_FILE_LEGACY_VERSION;
   table: {
     widthCm: number;
     heightCm: number;
   };
   lines: TableMapFileLine[];
 }
+
+interface TableMapFileLayer {
+  id: string;
+  name: string;
+  zCm?: number;
+  lines: TableMapFileLine[];
+}
+
+interface TableMapTransitionEdgeLocal {
+  startX: number;
+  startY: number;
+  endX: number;
+  endY: number;
+}
+
+interface TableMapTransitionLocal {
+  id: string;
+  name?: string;
+  fromLayer: string;
+  toLayer: string;
+  from: TableMapTransitionEdgeLocal;
+  to: TableMapTransitionEdgeLocal;
+  bidirectional?: boolean;
+  costMultiplier?: number;
+  widthCm?: number;
+}
+
+interface TableMapFileV2 {
+  format: typeof TABLE_MAP_FILE_FORMAT;
+  version: typeof TABLE_MAP_FILE_VERSION;
+  table: { widthCm: number; heightCm: number };
+  layers: TableMapFileLayer[];
+  transitions: TableMapTransitionLocal[];
+  activeLayerId?: string;
+}
+
+type TableMapFileAny = TableMapFileV1 | TableMapFileV2;
 
 @Component({
   selector: 'app-table-editor-view',
@@ -1454,22 +1492,59 @@ export class TableEditorView implements AfterViewInit, OnDestroy {
     this.clearDraft();
   }
 
-  private buildMapFilePayload(): TableMapFileV1 {
+  private buildMapFilePayload(): TableMapFileV2 {
+    const editorLines = this.lines().map(line => ({
+      kind: line.kind,
+      startX: roundTo(line.startX, 2),
+      startY: roundTo(line.startY, 2),
+      endX: roundTo(line.endX, 2),
+      endY: roundTo(line.endY, 2),
+      widthCm: roundTo(Math.max(MIN_LINE_WIDTH_CM, line.widthCm), 2),
+    }));
+
+    // Preserve other layers and transitions from the in-memory service state;
+    // the editor only owns the *active* layer's lines.
+    const serviceLayers = this.mapService.layers();
+    const activeId = this.mapService.activeLayerId() || 'ground';
+    let layers: TableMapFileLayer[];
+    if (serviceLayers.length) {
+      layers = serviceLayers.map((l, idx) => ({
+        id: l.id,
+        name: l.name,
+        zCm: typeof l.zCm === 'number' ? l.zCm : idx * 10,
+        lines: l.id === activeId
+          ? editorLines
+          // Re-export inactive layer lines back into file format.
+          : [
+              ...l.lineSegments.map(s => ({
+                kind: 'line' as const,
+                startX: roundTo(s.startX, 2),
+                startY: roundTo(TABLE_HEIGHT_CM - s.startY, 2),
+                endX: roundTo(s.endX, 2),
+                endY: roundTo(TABLE_HEIGHT_CM - s.endY, 2),
+                widthCm: roundTo(Math.max(MIN_LINE_WIDTH_CM, s.thickness ?? DEFAULT_LINE_WIDTH_CM), 2),
+              })),
+              ...l.wallSegments.map(s => ({
+                kind: 'wall' as const,
+                startX: roundTo(s.startX, 2),
+                startY: roundTo(TABLE_HEIGHT_CM - s.startY, 2),
+                endX: roundTo(s.endX, 2),
+                endY: roundTo(TABLE_HEIGHT_CM - s.endY, 2),
+                widthCm: roundTo(Math.max(MIN_LINE_WIDTH_CM, s.thickness), 2),
+              })),
+            ],
+      }));
+    } else {
+      layers = [{ id: 'ground', name: 'Ground', zCm: 0, lines: editorLines }];
+    }
+
     return {
       format: TABLE_MAP_FILE_FORMAT,
       version: TABLE_MAP_FILE_VERSION,
-      table: {
-        widthCm: TABLE_WIDTH_CM,
-        heightCm: TABLE_HEIGHT_CM,
-      },
-      lines: this.lines().map(line => ({
-        kind: line.kind,
-        startX: roundTo(line.startX, 2),
-        startY: roundTo(line.startY, 2),
-        endX: roundTo(line.endX, 2),
-        endY: roundTo(line.endY, 2),
-        widthCm: roundTo(Math.max(MIN_LINE_WIDTH_CM, line.widthCm), 2),
-      })),
+      table: { widthCm: TABLE_WIDTH_CM, heightCm: TABLE_HEIGHT_CM },
+      layers,
+      transitions: this.mapService.transitions().map(t => ({ ...t })),
+      activeLayerId: activeId,
     };
   }
 
@@ -1485,11 +1560,11 @@ export class TableEditorView implements AfterViewInit, OnDestroy {
       throw new Error('Invalid map file structure.');
     }
 
-    const file = parsed as Partial<TableMapFileV1>;
+    const file = parsed as Partial<TableMapFileAny>;
     if (file.format !== TABLE_MAP_FILE_FORMAT) {
       throw new Error(`Unsupported map file format: ${String(file.format ?? 'unknown')}`);
     }
-    if (file.version !== TABLE_MAP_FILE_VERSION) {
+    if (file.version !== TABLE_MAP_FILE_VERSION && file.version !== TABLE_MAP_FILE_LEGACY_VERSION) {
       throw new Error(`Unsupported map file version: ${String(file.version ?? 'unknown')}`);
     }
 
@@ -1504,11 +1579,27 @@ export class TableEditorView implements AfterViewInit, OnDestroy {
       throw new Error(`Map dimensions must be ${TABLE_WIDTH_CM}x${TABLE_HEIGHT_CM} cm.`);
     }
 
-    if (!Array.isArray(file.lines)) {
-      throw new Error('Map file does not contain a valid line list.');
+    // Source of truth for the editor's line list = active layer (v2) or flat lines (v1).
+    let sourceLines: unknown[] | undefined;
+    if (file.version === TABLE_MAP_FILE_VERSION) {
+      const v2 = file as Partial<TableMapFileV2>;
+      if (!Array.isArray(v2.layers) || !v2.layers.length) {
+        throw new Error('Map file does not contain any layers.');
+      }
+      const activeId = v2.activeLayerId && v2.layers.some(l => l?.id === v2.activeLayerId)
+        ? v2.activeLayerId
+        : v2.layers[0]?.id;
+      const layer = v2.layers.find(l => l?.id === activeId) ?? v2.layers[0];
+      sourceLines = Array.isArray(layer?.lines) ? layer.lines : [];
+    } else {
+      const v1 = file as Partial<TableMapFileV1>;
+      if (!Array.isArray(v1.lines)) {
+        throw new Error('Map file does not contain a valid line list.');
+      }
+      sourceLines = v1.lines;
     }
 
-    return file.lines.map((entry, index) => this.parseMapFileLine(entry, index));
+    return (sourceLines ?? []).map((entry, index) => this.parseMapFileLine(entry, index));
   }
 
   private parseMapFileLine(entry: unknown, index: number): VectorLine {
@@ -1614,8 +1705,13 @@ export class TableEditorView implements AfterViewInit, OnDestroy {
     }
   }
 
-  private loadSavedVectorMap(mapData: TableMapFileV1): void {
+  private loadSavedVectorMap(mapData: TableMapFileAny): void {
     try {
+      // Push the full v1/v2 file into the service first so transitions and
+      // inactive layers survive the round-trip. The editor then takes its own
+      // working copy from the active layer.
+      this.mapService.loadFromFtmap(mapData as unknown as Parameters<typeof this.mapService.loadFromFtmap>[0]);
+
       const content = JSON.stringify(mapData);
       const lines = this.parseMapFile(content);
       this.lines.set(lines);

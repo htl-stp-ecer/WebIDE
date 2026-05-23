@@ -2,6 +2,7 @@ import { ProjectSimulationData } from '../../entities/Simulation';
 import { TypeDefinition } from '../../entities/TypeDefinition';
 import { Pose2D, createPose, lerpPose } from '../../project-view/flowchart/table/models';
 import { LineSensor } from '../../project-view/flowchart/table/models';
+import { resolveDefinitionType } from '../../project-view/flowchart/models';
 import {
   buildTimedPlannedPathFromProjectSimulation,
   MissionPlannedRange,
@@ -267,7 +268,9 @@ function createLineSensors(
   typeDefinitions: TypeDefinition[] = []
 ): LineSensor[] {
   const sensors = info?.sensors ?? [];
-  const irDefs = typeDefinitions.filter(def => def.type === 'IRSensor');
+  const irDefs = typeDefinitions.filter(
+    def => resolveDefinitionType(typeof def.type === 'string' ? def.type : null) === 'IRSensor'
+  );
   const sensorLookup = new Map(sensors.map(sensor => [sensor.name, sensor]));
   const orderedSensors = irDefs.length
     ? irDefs.map(def => sensorLookup.get(def.name)).filter((sensor): sensor is DeviceSensorInfo => !!sensor)

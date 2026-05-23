@@ -21,6 +21,14 @@ import { PlanningModeService } from './planning';
 import { MissionStep } from '../../../entities/MissionStep';
 import { HttpService } from '../../../services/http-service';
 import { renderRobotAtCenter, type RobotCanvasOptions } from './robot-render';
+import { LocalizationReplayService } from './replay/localization-replay.service';
+import {
+  poseToTableCm,
+  renderParticleCloud,
+  renderReplayTrail,
+  renderSensorHits,
+  formatTns,
+} from './replay/replay-render';
 
 /** Line thickness in cm for rendering */
 const LINE_THICKNESS_CM = 2.54;
@@ -80,7 +88,11 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
   readonly mapService = inject(TableMapService);
   readonly vizService = inject(TableVisualizationService);
   readonly planningService = inject(PlanningModeService);
+  readonly replayService = inject(LocalizationReplayService);
   private readonly httpService = inject(HttpService);
+
+  /** Expose formatter so the template can render the timestamp. */
+  readonly formatTns = formatTns;
 
   private ctx!: CanvasRenderingContext2D;
   private animationFrameId: number | null = null;
@@ -133,6 +145,9 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
       // Trigger re-render on every live trajectory update too.
       this.vizService.liveTrajectory();
       this.vizService.liveTrajectoryActive();
+      // Replay overlay reactivity — re-render on frame changes / load.
+      this.replayService.loadedRunId();
+      this.replayService.currentFrameIndex();
       this.render();
     });
   }
@@ -151,6 +166,63 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
     this.startRenderLoop();
     this.loadStoredMap();
     this.loadRobotConfig();
+    this.loadAvailableRuns();
+  }
+
+  private loadAvailableRuns(): void {
+    const projectUuid = this.projectUuid();
+    if (!projectUuid) return;
+    this.replayService.listRuns(projectUuid).catch(() => {
+      // Silent — the runs list just stays empty.
+    });
+  }
+
+  // ---- Replay UI helpers ----
+
+  onReplayRunSelect(event: Event): void {
+    const value = (event.target as HTMLSelectElement).value;
+    if (!value) {
+      this.replayService.unloadRun();
+      return;
+    }
+    const projectUuid = this.projectUuid();
+    if (!projectUuid) return;
+    this.replayService.loadRun(projectUuid, value).catch(() => {
+      // Surface via service.error() — nothing else to do here.
+    });
+  }
+
+  onReplaySliderChange(event: Event): void {
+    const value = Number((event.target as HTMLInputElement).value);
+    if (Number.isFinite(value)) {
+      this.replayService.seek(value);
+    }
+  }
+
+  onReplaySpeedSelect(event: Event): void {
+    const value = parseFloat((event.target as HTMLSelectElement).value);
+    if (Number.isFinite(value)) {
+      this.replayService.setPlaybackSpeed(value);
+    }
+  }
+
+  toggleReplayPlay(): void {
+    this.replayService.togglePlay();
+  }
+
+  unloadReplay(): void {
+    this.replayService.unloadRun();
+  }
+
+  replayRunOptionLabel(run: { run_id: string; duration_ms: number | null; frame_count: number | null }): string {
+    const parts: string[] = [run.run_id];
+    if (typeof run.duration_ms === 'number') {
+      parts.push(`${(run.duration_ms / 1000).toFixed(1)}s`);
+    }
+    if (typeof run.frame_count === 'number') {
+      parts.push(`${run.frame_count}f`);
+    }
+    return parts.join(' · ');
   }
 
   /** Load robot dimensions/pose from backend so the robot renders correctly without opening the robot editor */
@@ -265,13 +337,64 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
     // Draw live trajectory streamed from a real-sim run.
     this.renderLiveTrajectory(width, height);
 
+    const replayActive = this.replayService.loadedRunId() !== null;
+
     // Draw ghost robot at planned end position
-    if (this.showPaths()) {
+    if (this.showPaths() && !replayActive) {
       this.renderGhostRobot(width, height);
     }
 
-    // Draw robot
-    this.renderRobot(width, height);
+    if (replayActive) {
+      this.renderReplayOverlay(width, height);
+    } else {
+      // Draw robot
+      this.renderRobot(width, height);
+    }
+  }
+
+  private renderReplayOverlay(width: number, height: number): void {
+    const frame = this.replayService.currentFrame();
+    if (!frame) return;
+
+    const { offsetX, offsetY, scaleX, scaleY, drawHeight } = this.getDrawParams(width, height);
+    const tableToCanvasX = (xCm: number, _yCm: number) => offsetX + xCm * scaleX;
+    const tableToCanvasY = (_xCm: number, yCm: number) => offsetY + drawHeight - yCm * scaleY;
+    const params = { tableToCanvasX, tableToCanvasY };
+
+    // Trail of estimate poses up to now.
+    renderReplayTrail(this.ctx, this.replayService.trailUpToNow(), params);
+
+    // Particle cloud.
+    renderParticleCloud(this.ctx, frame, params);
+
+    // Ghost robot at recorded pose (use header dims if present, fall back to live config).
+    const header = this.replayService.header();
+    const pose = poseToTableCm(frame.pose);
+    const cx = tableToCanvasX(pose.x, pose.y);
+    const cy = tableToCanvasY(pose.x, pose.y);
+    const liveCfg = this.vizService.robotConfig();
+    const robotConfig = {
+      widthCm: header?.robot?.width_cm ?? liveCfg.widthCm,
+      lengthCm: header?.robot?.length_cm ?? liveCfg.lengthCm,
+      rotationCenterForwardCm: liveCfg.rotationCenterForwardCm,
+      rotationCenterStrafeCm: liveCfg.rotationCenterStrafeCm,
+    };
+
+    this.ctx.save();
+    this.ctx.globalAlpha = 0.6;
+    renderRobotAtCenter(this.ctx, cx, cy, pose.theta, robotConfig, scaleX, scaleY, {
+      bodyFill: 'rgba(125, 211, 252, 0.35)',
+      bodyStroke: '#7dd3fc',
+      arrowFill: '#facc15',
+      rotationCenterFill: '#a855f7',
+      geometricCenterFill: '#facc15',
+      dashed: false,
+      sensors: [],
+    });
+    this.ctx.restore();
+
+    // Sensor-hit markers (only on resync ticks observations are non-empty).
+    renderSensorHits(this.ctx, frame, params, header);
   }
 
   private renderMap(width: number, height: number): void {

@@ -19,7 +19,7 @@ import { MultiSelect } from 'primeng/multiselect';
 import { Select } from 'primeng/select';
 import { SliderModule } from 'primeng/slider';
 
-import { HttpService, type TableMapFileV1 } from '../../services/http-service';
+import { HttpService, type TableMapFile } from '../../services/http-service';
 import { TableMapService } from '../../project-view/flowchart/table/services';
 import { Pose2D } from '../../project-view/flowchart/table/models';
 import { TypeDefinition } from '../../entities/TypeDefinition';
@@ -275,7 +275,7 @@ export class ProjectCollisionCompareComponent implements OnChanges, AfterViewIni
     this.subscriptions.add(subscription);
   }
 
-  private loadProjectMap(mapData: TableMapFileV1 | null): ProjectMapGeometry {
+  private loadProjectMap(mapData: TableMapFile | null): ProjectMapGeometry {
     const service = new TableMapService();
     if (mapData) {
       service.loadFromFtmap(mapData);

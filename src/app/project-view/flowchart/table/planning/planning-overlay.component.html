@@ -90,6 +90,78 @@
       </button>
 
       @if (!sidebarCollapsed()) {
+        <!-- Layers Section -->
+        <div class="sidebar-section">
+          <div class="section-header" (click)="toggleLayersSection()">
+            <span>{{ 'FLOWCHART.LAYERS_TITLE' | translate }}</span>
+            <i [class]="layersExpanded() ? 'pi pi-chevron-up' : 'pi pi-chevron-down'"></i>
+          </div>
+          @if (layersExpanded()) {
+            <div class="section-content">
+              @if (layers().length === 0) {
+                <div class="planner-empty-hint">{{ 'FLOWCHART.LAYERS_EMPTY' | translate }}</div>
+              }
+              @if (layers().length > 0) {
+                <div class="settings-group">
+                  <label class="settings-label">{{ 'FLOWCHART.LAYERS_ACTIVE' | translate }}</label>
+                  <select
+                    class="layer-select"
+                    [ngModel]="activeLayerId()"
+                    (ngModelChange)="selectLayer($event)">
+                    @for (layer of layers(); track layer.id) {
+                      <option [value]="layer.id">{{ layer.name }}</option>
+                    }
+                  </select>
+                </div>
+                <div class="settings-group layer-actions">
+                  <button class="layer-action-btn" (click)="addLayer()"
+                          [pTooltip]="'FLOWCHART.LAYERS_ADD' | translate">
+                    <i class="pi pi-plus"></i>
+                  </button>
+                  <button class="layer-action-btn" (click)="renameActiveLayer()"
+                          [pTooltip]="'FLOWCHART.LAYERS_RENAME' | translate">
+                    <i class="pi pi-pencil"></i>
+                  </button>
+                  <button class="layer-action-btn"
+                          [disabled]="layers().length <= 1"
+                          (click)="removeActiveLayer()"
+                          [pTooltip]="'FLOWCHART.LAYERS_REMOVE' | translate">
+                    <i class="pi pi-trash"></i>
+                  </button>
+                </div>
+                <div class="layer-meta-hint">{{ 'FLOWCHART.LAYERS_OTHERS_DIMMED' | translate }}</div>
+              }
+
+              <div class="section-header inner-section-header"
+                   style="margin-top: 0.75rem; cursor: default;">
+                <span>{{ 'FLOWCHART.TRANSITIONS_TITLE' | translate }}</span>
+              </div>
+              @if (transitions().length === 0) {
+                <div class="planner-empty-hint">{{ 'FLOWCHART.TRANSITIONS_EMPTY' | translate }}</div>
+              }
+              @if (transitions().length > 0) {
+                <ul class="transition-list">
+                  @for (t of transitions(); track t.id) {
+                    <li class="transition-item">
+                      <span class="transition-name">{{ t.name || t.id }}</span>
+                      <span class="transition-edges">{{ t.fromLayer }} ↔ {{ t.toLayer }}</span>
+                      <button class="layer-action-btn small"
+                              (click)="removeTransition(t.id)"
+                              [pTooltip]="'FLOWCHART.TRANSITIONS_REMOVE' | translate">
+                        <i class="pi pi-times"></i>
+                      </button>
+                    </li>
+                  }
+                </ul>
+              }
+              <button class="layer-action-btn full" (click)="addTransition()">
+                <i class="pi pi-plus"></i>
+                <span>{{ 'FLOWCHART.TRANSITIONS_ADD' | translate }}</span>
+              </button>
+            </div>
+          }
+        </div>
+
         <!-- Settings Section -->
         <div class="sidebar-section">
           <div class="section-header" (click)="toggleSettingsSection()">

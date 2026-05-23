@@ -1533,7 +1533,9 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
 
     const sensors = info.sensors ?? [];
     const definitions = this.typeDefinitions();
-    const irDefs = definitions.filter(d => d.type === 'IRSensor');
+    const irDefs = definitions.filter(
+      d => resolveDefinitionType(typeof d.type === 'string' ? d.type : null) === 'IRSensor'
+    );
     const sensorLookup = new Map(sensors.map(sensor => [sensor.name, sensor]));
     const orderedSensors = irDefs.length
       ? irDefs.map(def => sensorLookup.get(def.name)).filter((s): s is DeviceSensorInfo => !!s)

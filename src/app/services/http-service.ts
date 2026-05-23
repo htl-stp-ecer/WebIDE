@@ -5,18 +5,123 @@ import {Mission} from '../entities/Mission';
 import { TypeDefinition } from '../entities/TypeDefinition';
 import { MissionSimulationData, ProjectSimulationData } from '../entities/Simulation';
 
+/** A single drawn line or wall segment, in table coordinates (cm). */
+export interface TableMapLine {
+  kind: 'line' | 'wall';
+  startX: number;
+  startY: number;
+  endX: number;
+  endY: number;
+  widthCm: number;
+}
+
+/** Edge geometry of a transition portal/ramp on one layer. */
+export interface TableMapTransitionEdge {
+  startX: number;
+  startY: number;
+  endX: number;
+  endY: number;
+}
+
+/**
+ * A transition (ramp/portal) connecting two layers along a line on each layer.
+ * The two edges should have approximately equal length — the parameter t along
+ * the edge maps 1:1 between layers.
+ */
+export interface TableMapTransition {
+  id: string;
+  name?: string;
+  fromLayer: string;
+  toLayer: string;
+  from: TableMapTransitionEdge;
+  to: TableMapTransitionEdge;
+  /** If true (default) the transition is usable in both directions. */
+  bidirectional?: boolean;
+  /** Cost multiplier (1 = normal travel). Default 1. */
+  costMultiplier?: number;
+  /** Effective ramp width for clearance checks. */
+  widthCm?: number;
+}
+
+/** One stacked level of the table (e.g. ground floor, upper floor). */
+export interface TableMapLayer {
+  id: string;
+  name: string;
+  /** Optional z-height for visualization (cm). Defaults to layer index * 10. */
+  zCm?: number;
+  lines: TableMapLine[];
+}
+
+/** Current persistent format with stacked layers and inter-layer transitions. */
+export interface TableMapFileV2 {
+  format: 'flowchart-table-map';
+  version: 2;
+  table: { widthCm: number; heightCm: number };
+  layers: TableMapLayer[];
+  transitions: TableMapTransition[];
+  /** Last-edited layer id (UI hint, optional). */
+  activeLayerId?: string;
+}
+
+/** Legacy single-layer format. Still accepted on read for backwards compatibility. */
 export interface TableMapFileV1 {
   format: 'flowchart-table-map';
   version: 1;
   table: { widthCm: number; heightCm: number };
-  lines: Array<{
-    kind: 'line' | 'wall';
-    startX: number;
-    startY: number;
-    endX: number;
-    endY: number;
-    widthCm: number;
-  }>;
+  lines: TableMapLine[];
+}
+
+/** Either supported format. Loaders should accept this and normalize via `migrateTableMap`. */
+export type TableMapFile = TableMapFileV1 | TableMapFileV2;
+
+export const DEFAULT_LAYER_ID = 'ground';
+export const DEFAULT_LAYER_NAME = 'Ground';
+
+/**
+ * Normalize any accepted .ftmap shape to v2. v1 maps get wrapped into a single
+ * default layer; v2 maps are returned as-is (with defensive defaults).
+ */
+export function migrateTableMap(file: TableMapFile | null | undefined): TableMapFileV2 | null {
+  if (!file || file.format !== 'flowchart-table-map') return null;
+  const table = file.table ?? { widthCm: 0, heightCm: 0 };
+
+  if ((file as TableMapFileV2).version === 2) {
+    const v2 = file as TableMapFileV2;
+    const layers = Array.isArray(v2.layers) && v2.layers.length
+      ? v2.layers.map((l, idx) => ({
+          id: l.id || `layer-${idx}`,
+          name: l.name || `Layer ${idx + 1}`,
+          zCm: typeof l.zCm === 'number' ? l.zCm : idx * 10,
+          lines: Array.isArray(l.lines) ? l.lines : [],
+        }))
+      : [{ id: DEFAULT_LAYER_ID, name: DEFAULT_LAYER_NAME, zCm: 0, lines: [] }];
+    return {
+      format: 'flowchart-table-map',
+      version: 2,
+      table,
+      layers,
+      transitions: Array.isArray(v2.transitions) ? v2.transitions : [],
+      activeLayerId: v2.activeLayerId && layers.some(l => l.id === v2.activeLayerId)
+        ? v2.activeLayerId
+        : layers[0].id,
+    };
+  }
+
+  // v1 → v2: wrap flat lines[] into a single default layer
+  const v1 = file as TableMapFileV1;
+  return {
+    format: 'flowchart-table-map',
+    version: 2,
+    table,
+    layers: [{
+      id: DEFAULT_LAYER_ID,
+      name: DEFAULT_LAYER_NAME,
+      zCm: 0,
+      lines: Array.isArray(v1.lines) ? v1.lines : [],
+    }],
+    transitions: [],
+    activeLayerId: DEFAULT_LAYER_ID,
+  };
 }
 
 export type SimulateMode = 'fast' | 'real';
@@ -255,10 +360,10 @@ export class HttpService {
   }
 
   getLocalTableMap(projectUuid: string) {
-    return this.http.get<{ map: TableMapFileV1 | null }>(this.localApi(`/device/${projectUuid}/table-map`));
+    return this.http.get<{ map: TableMapFile | null }>(this.localApi(`/device/${projectUuid}/table-map`));
   }
 
-  saveLocalTableMap(projectUuid: string, mapData: TableMapFileV1) {
+  saveLocalTableMap(projectUuid: string, mapData: TableMapFile) {
     return this.http.put<{ success: boolean }>(this.localApi(`/device/${projectUuid}/table-map`), mapData);
   }
 
@@ -520,11 +625,11 @@ export class HttpService {
   }
 
   // Table Map API
-  saveTableMap(mapData: TableMapFileV1) {
+  saveTableMap(mapData: TableMapFile) {
     return this.http.put<{ success: boolean }>(this.deviceApi('/api/v1/device/table-map'), mapData);
   }
 
   getTableMap() {
-    return this.http.get<{ map: TableMapFileV1 | null }>(this.deviceApi('/api/v1/device/table-map'));
+    return this.http.get<{ map: TableMapFile | null }>(this.deviceApi('/api/v1/device/table-map'));
   }
 }

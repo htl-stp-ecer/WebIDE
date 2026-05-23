@@ -21,6 +21,75 @@
       </div>
     </div>
   }
+  @if (replayService.availableRuns().length > 0 || replayService.loadedRunId()) {
+    <div class="replay-bar">
+      <select
+        class="replay-select"
+        [value]="replayService.loadedRunId() ?? ''"
+        (change)="onReplayRunSelect($event)">
+        <option value="">{{ 'FLOWCHART.REPLAY_LOAD_RUN' | translate }}</option>
+        @for (run of replayService.availableRuns(); track run.run_id) {
+          <option [value]="run.run_id">{{ replayRunOptionLabel(run) }}</option>
+        }
+      </select>
+
+      @if (replayService.loadedRunId()) {
+        <button
+          type="button"
+          class="replay-btn"
+          (click)="toggleReplayPlay()"
+          [title]="replayService.isPlaying() ? 'Pause' : 'Play'">
+          @if (replayService.isPlaying()) {
+            <i class="pi pi-pause"></i>
+          } @else {
+            <i class="pi pi-play"></i>
+          }
+        </button>
+
+        <input
+          type="range"
+          class="replay-slider"
+          min="0"
+          [max]="replayService.frames().length - 1"
+          [value]="replayService.currentFrameIndex()"
+          (input)="onReplaySliderChange($event)" />
+
+        <span class="replay-timestamp">
+          @if (replayService.currentFrame(); as frame) {
+            {{ formatTns(frame.t_ns) }}
+          } @else {
+            00:00.000
+          }
+          <span class="replay-frame-counter">
+            {{ replayService.currentFrameIndex() + 1 }}/{{ replayService.frames().length }}
+          </span>
+        </span>
+
+        <select
+          class="replay-speed"
+          [value]="replayService.playbackSpeed()"
+          (change)="onReplaySpeedSelect($event)">
+          <option [value]="0.25">0.25×</option>
+          <option [value]="0.5">0.5×</option>
+          <option [value]="1">1×</option>
+          <option [value]="2">2×</option>
+          <option [value]="4">4×</option>
+        </select>
+
+        <button
+          type="button"
+          class="replay-btn replay-btn-close"
+          (click)="unloadReplay()"
+          title="Unload run">
+          <i class="pi pi-times"></i>
+        </button>
+      }
+
+      @if (replayService.loading()) {
+        <i class="pi pi-spin pi-spinner replay-loading"></i>
+      }
+    </div>
+  }
   <div class="viz-body">
     <canvas
       #canvas

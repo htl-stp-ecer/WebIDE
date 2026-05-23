@@ -1,6 +1,13 @@
 import { Injectable, signal, computed } from '@angular/core';
 import { TABLE_WIDTH_CM, TABLE_HEIGHT_CM, MAP_WIDTH, MAP_HEIGHT } from '../models/editor-state';
-import type { TableMapFileV1 } from '../../../../services/http-service';
+import {
+  DEFAULT_LAYER_ID,
+  DEFAULT_LAYER_NAME,
+  migrateTableMap,
+  type TableMapFile,
+  type TableMapFileV2,
+  type TableMapTransition,
+} from '../../../../services/http-service';
 
 export interface MapConfig {
   widthCm: number;
@@ -74,13 +81,23 @@ const VECTOR_MAP_CACHE_KEY = 'tableVectorMapCacheV1';
  * Service for loading and querying the game table map.
  * Provides line detection based on the map image and parsed vector data.
  */
+interface LayerVectorData {
+  id: string;
+  name: string;
+  zCm: number;
+  lineSegments: LineSegmentCm[];
+  wallSegments: WallSegmentCm[];
+}
+
 @Injectable({ providedIn: 'root' })
 export class TableMapService {
   private readonly _mapImage = signal<HTMLImageElement | null>(null);
   private readonly _imageData = signal<ImageData | null>(null);
   private readonly _parsedData = signal<ParsedMapData | null>(null);
-  private readonly _vectorLineSegmentsCm = signal<LineSegmentCm[] | null>(null);
-  private readonly _vectorWallSegmentsCm = signal<WallSegmentCm[] | null>(null);
+  /** Per-layer vector data. `null` means "image-based / not layered yet". */
+  private readonly _layers = signal<LayerVectorData[] | null>(null);
+  private readonly _activeLayerId = signal<string>(DEFAULT_LAYER_ID);
+  private readonly _transitions = signal<TableMapTransition[]>([]);
   private readonly _isLoading = signal<boolean>(false);
   // Default dimensions: 79x40 pixels mapped to TABLE_WIDTH_CM x TABLE_HEIGHT_CM
   private readonly _config = signal<MapConfig>({
@@ -94,15 +111,25 @@ export class TableMapService {
   readonly isLoaded = computed(() =>
     this._mapImage() !== null ||
     this._parsedData() !== null ||
-    this._vectorLineSegmentsCm() !== null ||
-    this._vectorWallSegmentsCm() !== null
+    this._layers() !== null
   );
   readonly isLoading = this._isLoading.asReadonly();
 
-  /** Line segments in table coordinates (cm) */
+  /** All layers (read-only view of the in-memory layered state). */
+  readonly layers = computed<LayerVectorData[]>(() => this._layers() ?? []);
+  readonly activeLayerId = this._activeLayerId.asReadonly();
+  readonly activeLayer = computed<LayerVectorData | null>(() => {
+    const all = this._layers();
+    if (!all || !all.length) return null;
+    const id = this._activeLayerId();
+    return all.find(l => l.id === id) ?? all[0];
+  });
+  readonly transitions = this._transitions.asReadonly();
+
+  /** Line segments of the active layer, in table coordinates (cm). */
   readonly lineSegmentsCm = computed<LineSegmentCm[]>(() => {
-    const vector = this._vectorLineSegmentsCm();
-    if (vector) return vector;
+    const layer = this.activeLayer();
+    if (layer) return layer.lineSegments;
 
     const data = this._parsedData();
     if (!data) return [];
@@ -114,10 +141,10 @@ export class TableMapService {
     }));
   });
 
-  /** Wall segments in table coordinates (cm) */
+  /** Wall segments of the active layer, in table coordinates (cm). */
   readonly wallSegmentsCm = computed<WallSegmentCm[]>(() => {
-    const vector = this._vectorWallSegmentsCm();
-    if (vector) return vector;
+    const layer = this.activeLayer();
+    if (layer) return layer.wallSegments;
 
     const data = this._parsedData();
     if (!data) return [];
@@ -126,6 +153,14 @@ export class TableMapService {
       ...this.pixelSegmentToTableCm(seg, data.height),
       thickness: seg.thickness * CM_PER_PIXEL_AVG,
     }));
+  });
+
+  /** Layers other than the active one — useful for dimmed background rendering. */
+  readonly inactiveLayers = computed<LayerVectorData[]>(() => {
+    const all = this._layers();
+    if (!all) return [];
+    const id = this._activeLayerId();
+    return all.filter(l => l.id !== id);
   });
 
   private pixelSegmentToTableCm(
@@ -143,8 +178,8 @@ export class TableMapService {
   /** Load a map image from a URL */
   async loadMap(url: string): Promise<void> {
     this._isLoading.set(true);
-    this._vectorLineSegmentsCm.set(null);
-    this._vectorWallSegmentsCm.set(null);
+    this._layers.set(null);
+    this._transitions.set([]);
     return new Promise((resolve, reject) => {
       const img = new Image();
       img.crossOrigin = 'anonymous';
@@ -184,12 +219,39 @@ export class TableMapService {
   }
 
   /**
-   * Set map vectors directly in table coordinates (cm). This keeps geometric precision
-   * for planning/simulation while still allowing PNG persistence separately.
+   * Set map vectors for the active layer directly in table coordinates (cm).
+   * If no layered state exists yet, a default single layer is created.
    */
   setVectorMap(lineSegments: LineSegmentCm[], wallSegments: WallSegmentCm[] = []): void {
-    this._vectorLineSegmentsCm.set([...lineSegments]);
-    this._vectorWallSegmentsCm.set([...wallSegments]);
+    const existing = this._layers();
+    const activeId = this._activeLayerId();
+    let layers: LayerVectorData[];
+    if (existing && existing.length) {
+      layers = existing.map(l => l.id === activeId
+        ? { ...l, lineSegments: [...lineSegments], wallSegments: [...wallSegments] }
+        : l
+      );
+      if (!layers.some(l => l.id === activeId)) {
+        layers = [{
+          id: DEFAULT_LAYER_ID,
+          name: DEFAULT_LAYER_NAME,
+          zCm: 0,
+          lineSegments: [...lineSegments],
+          wallSegments: [...wallSegments],
+        }];
+        this._activeLayerId.set(DEFAULT_LAYER_ID);
+      }
+    } else {
+      layers = [{
+        id: DEFAULT_LAYER_ID,
+        name: DEFAULT_LAYER_NAME,
+        zCm: 0,
+        lineSegments: [...lineSegments],
+        wallSegments: [...wallSegments],
+      }];
+      this._activeLayerId.set(DEFAULT_LAYER_ID);
+    }
+    this._layers.set(layers);
     this._parsedData.set(null);
     this._mapImage.set(null);
     this._imageData.set(null);
@@ -201,32 +263,156 @@ export class TableMapService {
   }
 
   /**
-   * Load map from a vector ftmap payload (as stored in project config).
-   * Converts ftmap lines into LineSegmentCm / WallSegmentCm and sets the vector map.
+   * Load map from a vector ftmap payload. Accepts both v1 (flat ``lines``) and
+   * v2 (``layers`` + ``transitions``) shapes — v1 is auto-migrated into a
+   * single default layer.
    */
-  loadFromFtmap(mapData: TableMapFileV1): void {
-    const lineSegments: LineSegmentCm[] = [];
-    const wallSegments: WallSegmentCm[] = [];
+  loadFromFtmap(mapData: TableMapFile): void {
+    const v2 = migrateTableMap(mapData);
+    if (!v2) return;
 
-    for (const line of mapData.lines) {
-      const seg = {
-        startX: line.startX,
-        startY: TABLE_HEIGHT_CM - line.startY,
-        endX: line.endX,
-        endY: TABLE_HEIGHT_CM - line.endY,
-        thickness: line.widthCm,
-      };
-
-      if (line.kind === 'wall') {
-        wallSegments.push(seg);
-      } else {
-        const dx = line.endX - line.startX;
-        const dy = line.endY - line.startY;
-        lineSegments.push({ ...seg, isDiagonal: dx !== 0 && dy !== 0 });
+    const layers: LayerVectorData[] = v2.layers.map((layer, idx) => {
+      const lineSegments: LineSegmentCm[] = [];
+      const wallSegments: WallSegmentCm[] = [];
+      for (const line of layer.lines ?? []) {
+        const seg = {
+          startX: line.startX,
+          startY: TABLE_HEIGHT_CM - line.startY,
+          endX: line.endX,
+          endY: TABLE_HEIGHT_CM - line.endY,
+          thickness: line.widthCm,
+        };
+        if (line.kind === 'wall') {
+          wallSegments.push(seg);
+        } else {
+          const dx = line.endX - line.startX;
+          const dy = line.endY - line.startY;
+          lineSegments.push({ ...seg, isDiagonal: dx !== 0 && dy !== 0 });
+        }
       }
-    }
+      return {
+        id: layer.id,
+        name: layer.name,
+        zCm: typeof layer.zCm === 'number' ? layer.zCm : idx * 10,
+        lineSegments,
+        wallSegments,
+      };
+    });
 
-    this.setVectorMap(lineSegments, wallSegments);
+    this._layers.set(layers);
+    this._transitions.set([...v2.transitions]);
+    this._activeLayerId.set(v2.activeLayerId ?? layers[0]?.id ?? DEFAULT_LAYER_ID);
+    this._parsedData.set(null);
+    this._mapImage.set(null);
+    this._imageData.set(null);
+    this._config.set({
+      widthCm: MAP_WIDTH * CM_PER_PIXEL_X,
+      heightCm: MAP_HEIGHT * CM_PER_PIXEL_Y,
+      pixelsPerCm: 1 / CM_PER_PIXEL_AVG,
+    });
+  }
+
+  /** Switch the active layer. Falls back to first layer if id is unknown. */
+  setActiveLayer(layerId: string): void {
+    const all = this._layers();
+    if (!all || !all.length) return;
+    if (all.some(l => l.id === layerId)) {
+      this._activeLayerId.set(layerId);
+    }
+  }
+
+  /** Add a new empty layer. Returns the created id. */
+  addLayer(name: string): string {
+    const existing = this._layers() ?? [];
+    const slug = (name || 'layer').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'layer';
+    let id = slug;
+    let counter = 1;
+    while (existing.some(l => l.id === id)) {
+      counter += 1;
+      id = `${slug}-${counter}`;
+    }
+    const newLayer: LayerVectorData = {
+      id,
+      name: name?.trim() || `Layer ${existing.length + 1}`,
+      zCm: existing.length * 10,
+      lineSegments: [],
+      wallSegments: [],
+    };
+    this._layers.set([...existing, newLayer]);
+    return id;
+  }
+
+  /** Rename an existing layer. No-op if id is unknown. */
+  renameLayer(layerId: string, newName: string): void {
+    const existing = this._layers();
+    if (!existing) return;
+    const trimmed = newName?.trim();
+    if (!trimmed) return;
+    this._layers.set(existing.map(l => l.id === layerId ? { ...l, name: trimmed } : l));
+  }
+
+  /**
+   * Remove a layer. Refuses to remove the last remaining layer. Also drops any
+   * transitions that reference the removed layer.
+   */
+  removeLayer(layerId: string): void {
+    const existing = this._layers();
+    if (!existing || existing.length <= 1) return;
+    const filtered = existing.filter(l => l.id !== layerId);
+    if (filtered.length === existing.length) return;
+    this._layers.set(filtered);
+    this._transitions.update(ts => ts.filter(t => t.fromLayer !== layerId && t.toLayer !== layerId));
+    if (this._activeLayerId() === layerId) {
+      this._activeLayerId.set(filtered[0].id);
+    }
+  }
+
+  /** Replace all transitions (used by the transition editor). */
+  setTransitions(transitions: TableMapTransition[]): void {
+    this._transitions.set([...transitions]);
+  }
+
+  addTransition(t: TableMapTransition): void {
+    this._transitions.update(ts => [...ts, t]);
+  }
+
+  removeTransition(id: string): void {
+    this._transitions.update(ts => ts.filter(t => t.id !== id));
+  }
+
+  /** Export current in-memory state as a v2 ftmap payload (ready for save). */
+  toFtmapV2(): TableMapFileV2 {
+    const layers = this._layers() ?? [];
+    return {
+      format: 'flowchart-table-map',
+      version: 2,
+      table: { widthCm: TABLE_WIDTH_CM, heightCm: TABLE_HEIGHT_CM },
+      layers: layers.map((layer, idx) => ({
+        id: layer.id,
+        name: layer.name,
+        zCm: typeof layer.zCm === 'number' ? layer.zCm : idx * 10,
+        lines: [
+          ...layer.lineSegments.map(s => ({
+            kind: 'line' as const,
+            startX: s.startX,
+            startY: TABLE_HEIGHT_CM - s.startY,
+            endX: s.endX,
+            endY: TABLE_HEIGHT_CM - s.endY,
+            widthCm: s.thickness ?? CM_PER_PIXEL_AVG,
+          })),
+          ...layer.wallSegments.map(s => ({
+            kind: 'wall' as const,
+            startX: s.startX,
+            startY: TABLE_HEIGHT_CM - s.startY,
+            endX: s.endX,
+            endY: TABLE_HEIGHT_CM - s.endY,
+            widthCm: s.thickness,
+          })),
+        ],
+      })),
+      transitions: [...this._transitions()],
+      activeLayerId: this._activeLayerId(),
+    };
   }
 
   cacheVectorMapForBase64(base64: string, lineSegments: LineSegmentCm[], wallSegments: WallSegmentCm[] = []): void {
@@ -248,8 +434,9 @@ export class TableMapService {
     this._mapImage.set(null);
     this._imageData.set(null);
     this._parsedData.set(null);
-    this._vectorLineSegmentsCm.set(null);
-    this._vectorWallSegmentsCm.set(null);
+    this._layers.set(null);
+    this._transitions.set([]);
+    this._activeLayerId.set(DEFAULT_LAYER_ID);
   }
 
   private extractImageData(img: HTMLImageElement): void {
@@ -263,7 +450,7 @@ export class TableMapService {
 
   /** Check if a position (in table cm) is on a black line */
   isOnBlackLine(xCm: number, yCm: number): boolean {
-    const vectorSegments = this._vectorLineSegmentsCm();
+    const vectorSegments = this.activeLayer()?.lineSegments;
     if (vectorSegments?.length) {
       for (const segment of vectorSegments) {
         const segmentThickness = Math.max(0.6, segment.thickness ?? Math.min(CM_PER_PIXEL_X, CM_PER_PIXEL_Y));

@@ -139,6 +139,124 @@ export class PlanningOverlayComponent implements OnInit, AfterViewInit, OnDestro
   readonly allowStrafe = signal(localStorage.getItem(STORAGE_KEYS.allowStrafe) !== 'false');
 
   // PrimeNG component bindings
+  // Layer panel UI state
+  readonly layersExpanded = signal(localStorage.getItem('planning-layers-expanded') !== 'false');
+
+  /** Expose service signals to the template. */
+  readonly layers = this.mapService.layers;
+  readonly activeLayerId = this.mapService.activeLayerId;
+  readonly transitions = this.mapService.transitions;
+
+  toggleLayersSection(): void {
+    const next = !this.layersExpanded();
+    this.layersExpanded.set(next);
+    localStorage.setItem('planning-layers-expanded', String(next));
+  }
+
+  selectLayer(id: string): void {
+    this.mapService.setActiveLayer(id);
+  }
+
+  addLayer(): void {
+    const name = window.prompt(
+      this.translateInstantOrFallback('FLOWCHART.LAYERS_ADD_PROMPT', 'Name of the new layer'),
+      `Layer ${this.layers().length + 1}`,
+    );
+    if (!name) return;
+    const id = this.mapService.addLayer(name);
+    this.mapService.setActiveLayer(id);
+  }
+
+  renameActiveLayer(): void {
+    const layer = this.layers().find(l => l.id === this.activeLayerId());
+    if (!layer) return;
+    const name = window.prompt(
+      this.translateInstantOrFallback('FLOWCHART.LAYERS_RENAME_PROMPT', 'New layer name'),
+      layer.name,
+    );
+    if (!name) return;
+    this.mapService.renameLayer(layer.id, name);
+  }
+
+  removeActiveLayer(): void {
+    const layers = this.layers();
+    const layer = layers.find(l => l.id === this.activeLayerId());
+    if (!layer) return;
+    if (layers.length <= 1) {
+      window.alert(this.translateInstantOrFallback('FLOWCHART.LAYERS_REMOVE_LAST', 'Cannot remove the last layer.'));
+      return;
+    }
+    const msg = this.translateInstantOrFallback(
+      'FLOWCHART.LAYERS_REMOVE_CONFIRM',
+      `Remove layer "${layer.name}"?`,
+      { name: layer.name },
+    );
+    if (!window.confirm(msg)) return;
+    this.mapService.removeLayer(layer.id);
+  }
+
+  removeTransition(id: string): void {
+    const t = this.transitions().find(x => x.id === id);
+    if (!t) return;
+    const msg = this.translateInstantOrFallback(
+      'FLOWCHART.TRANSITIONS_REMOVE_CONFIRM',
+      `Remove transition "${t.name ?? t.id}"?`,
+      { name: t.name ?? t.id },
+    );
+    if (!window.confirm(msg)) return;
+    this.mapService.removeTransition(id);
+  }
+
+  /**
+   * Add a transition stub connecting the two layers the user picks. The actual
+   * ramp edge geometry is filled in by the user via the canvas — this just
+   * creates a placeholder entry the user can edit afterwards.
+   */
+  addTransition(): void {
+    const layers = this.layers();
+    if (layers.length < 2) {
+      window.alert(this.translateInstantOrFallback(
+        'FLOWCHART.LAYERS_EMPTY',
+        'Add at least two layers before creating a transition.',
+      ));
+      return;
+    }
+    const name = window.prompt(
+      this.translateInstantOrFallback('FLOWCHART.TRANSITIONS_NAME', 'Name'),
+      `Ramp ${this.transitions().length + 1}`,
+    );
+    if (!name) return;
+    const fromLayer = layers[0].id;
+    const toLayer = layers[1].id;
+    // Placeholder edge geometry — a 20cm horizontal segment in the table center.
+    const cx = this.mapService.config().widthCm / 2;
+    const cy = this.mapService.config().heightCm / 2;
+    const half = 10;
+    this.mapService.addTransition({
+      id: `transition-${Date.now()}`,
+      name,
+      fromLayer,
+      toLayer,
+      from: { startX: cx - half, startY: cy, endX: cx + half, endY: cy },
+      to:   { startX: cx - half, startY: cy, endX: cx + half, endY: cy },
+      bidirectional: true,
+      costMultiplier: 1.0,
+      widthCm: 20,
+    });
+  }
+
+  private translateInstantOrFallback(key: string, fallback: string, params?: Record<string, unknown>): string {
+    // ngx-translate's TranslateService isn't directly injected here; fall back
+    // to native template interpolation for the few prompt/confirm strings.
+    if (params) {
+      return Object.entries(params).reduce(
+        (acc, [k, v]) => acc.replace(new RegExp(`{{\\s*${k}\\s*}}`, 'g'), String(v)),
+        fallback,
+      );
+    }
+    return fallback;
+  }
+
   snapGridValue = localStorage.getItem(STORAGE_KEYS.snapGrid) === 'true';
   snapAnglesValue = localStorage.getItem(STORAGE_KEYS.snapAngles) === 'true';
   snapLinesValue = localStorage.getItem(STORAGE_KEYS.snapLines) === 'true';

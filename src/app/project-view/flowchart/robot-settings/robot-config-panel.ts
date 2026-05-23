@@ -4,8 +4,10 @@ import {
   Component,
   ElementRef,
   Input,
+  OnChanges,
   OnDestroy,
   OnInit,
+  SimpleChanges,
   ViewChild,
 } from '@angular/core';
 import { renderRobotAtCenter } from '../table/robot-render';
@@ -18,7 +20,8 @@ import {HttpService} from '../../../services/http-service';
 import {NotificationService} from '../../../services/NotificationService';
 import {TableMapService, TableVisualizationService} from '../table/services';
 import {TypeDefinition} from '../../../entities/TypeDefinition';
-import {Subject} from 'rxjs';
+import {resolveDefinitionType} from '../models';
+import {Subject, Subscription} from 'rxjs';
 import {debounceTime} from 'rxjs/operators';
 
 type EditTarget = { type: 'sensor'; id: number } | { type: 'rotation' } | null;
@@ -72,7 +75,7 @@ interface WheelPosition {
   templateUrl: './robot-config-panel.html',
   styleUrl: './robot-config-panel.scss'
 })
-export class RobotConfigPanel implements OnInit, AfterViewInit, AfterViewChecked, OnDestroy {
+export class RobotConfigPanel implements OnInit, OnChanges, AfterViewInit, AfterViewChecked, OnDestroy {
   @Input() projectUuid: string | null = null;
   @Input() typeDefinitions: TypeDefinition[] = [];
 
@@ -124,6 +127,7 @@ export class RobotConfigPanel implements OnInit, AfterViewInit, AfterViewChecked
   // Drag state
   private isDragging = false;
   private persistSubject = new Subject<void>();
+  private typeDefinitionsSub?: Subscription;
 
   // Guidelines and snapping
   private readonly SNAP_THRESHOLD = 5; // percentage threshold for snapping
@@ -152,7 +156,20 @@ export class RobotConfigPanel implements OnInit, AfterViewInit, AfterViewChecked
   }
 
   ngOnInit() {
+    this.loadTypeDefinitions();
     this.loadDeviceInfo();
+  }
+
+  ngOnChanges(changes: SimpleChanges) {
+    if (changes['projectUuid'] && !changes['projectUuid'].firstChange) {
+      this.loadTypeDefinitions();
+      this.loadDeviceInfo();
+      return;
+    }
+
+    if (changes['typeDefinitions'] && !changes['typeDefinitions'].firstChange) {
+      this.syncSensorsFromDefinitions();
+    }
   }
 
   ngAfterViewInit(): void {
@@ -166,6 +183,7 @@ export class RobotConfigPanel implements OnInit, AfterViewInit, AfterViewChecked
 
   ngOnDestroy(): void {
     this.resizeObserver?.disconnect();
+    this.typeDefinitionsSub?.unsubscribe();
     document.removeEventListener('mousemove', this.boundDocMouseMove);
     document.removeEventListener('mouseup', this.boundDocMouseUp);
   }
@@ -359,6 +377,26 @@ export class RobotConfigPanel implements OnInit, AfterViewInit, AfterViewChecked
       this.loading = false;
       this.syncSensorsFromDefinitions();
     }
+  }
+
+  private loadTypeDefinitions() {
+    this.typeDefinitionsSub?.unsubscribe();
+
+    if (!this.projectUuid || this.typeDefinitions.length > 0) {
+      this.syncSensorsFromDefinitions();
+      return;
+    }
+
+    this.typeDefinitionsSub = this.http.getTypeDefinitions(this.projectUuid).subscribe({
+      next: defs => {
+        this.typeDefinitions = defs;
+        this.syncSensorsFromDefinitions();
+      },
+      error: () => {
+        this.typeDefinitions = [];
+        this.syncSensorsFromDefinitions();
+      }
+    });
   }
 
   private handleDeviceInfoLoaded(info: ConnectionInfo) {
@@ -653,7 +691,9 @@ export class RobotConfigPanel implements OnInit, AfterViewInit, AfterViewChecked
 
   // Sensors
   private syncSensorsFromDefinitions() {
-    const irSensorDefs = this.typeDefinitions.filter(d => d.type === 'IRSensor');
+    const irSensorDefs = this.typeDefinitions.filter(
+      d => resolveDefinitionType(typeof d.type === 'string' ? d.type : null) === 'IRSensor'
+    );
     const sensorLookup = new Map(this.deviceSensors.map(s => [s.name, s]));
 
     this.sensors = irSensorDefs.map((def, index) => {

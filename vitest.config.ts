@@ -11,6 +11,7 @@ export default defineConfig({
       'src/app/project-view/flowchart/table/planning/path-optimizer.spec.ts',
       'src/app/project-view/flowchart/table/planning/catmull-rom.spec.ts',
       'src/app/project-view/flowchart/navigate-flow.spec.ts',
+      'src/app/project-view/flowchart/table/replay/localization-replay.service.spec.ts',
     ],
 
     environment: 'node',
