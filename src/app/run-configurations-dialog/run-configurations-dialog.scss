@@ -1,59 +1,84 @@
-.rcd-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.55);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1500;
-}
+// ============================================
+// Run / Debug Configurations dialog
+// Styled with the project's warm-raccoon tokens (--rc-*) so it matches
+// the rest of the IDE (settings modal, panels, etc.).
+// ============================================
 
-.rcd-modal {
-  width: min(900px, 90vw);
-  max-height: 85vh;
-  background: var(--surface-card, #1f2128);
-  color: var(--text-color, #e6e8ee);
-  border-radius: 10px;
-  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
+:host ::ng-deep .rcd-dialog {
+  .p-dialog-header {
+    padding: 12px 16px;
+    background: var(--rc-shell);
+    border-bottom: 1px solid var(--rc-border);
+    cursor: grab;
 
-.rcd-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 20px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    &:active { cursor: grabbing; }
+  }
 
-  h2 {
-    margin: 0;
-    font-size: 16px;
-    font-weight: 600;
+  .p-dialog-content {
+    padding: 0 !important;
+    background: var(--rc-bg);
+    color: var(--rc-text);
+  }
+
+  .p-dialog-footer {
+    padding: 10px 16px;
+    background: var(--rc-shell);
+    border-top: 1px solid var(--rc-border);
   }
 }
 
-.rcd-close {
-  background: transparent;
-  border: 0;
-  color: inherit;
-  cursor: pointer;
+.rcd-drag-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
   font-size: 14px;
-  padding: 6px 8px;
+  font-weight: 600;
+  color: var(--rc-text);
 
-  &:hover { color: #fff; }
+  > i:first-child {
+    font-size: 16px;
+    color: var(--rc-accent);
+  }
+
+  > span { flex: 1; }
 }
 
-.rcd-body {
+.rcd-close-btn {
   display: flex;
-  flex: 1;
-  min-height: 0;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--rc-muted);
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+
+  &:hover {
+    background: var(--rc-elevated);
+    color: var(--rc-text);
+  }
+
+  i { font-size: 13px; }
+}
+
+// ============================================
+// Layout: sidebar + detail pane
+// ============================================
+
+.rcd-layout {
+  display: flex;
+  height: 520px;
+  max-height: 75vh;
 }
 
 .rcd-sidebar {
-  width: 240px;
-  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  width: 220px;
+  border-right: 1px solid var(--rc-border);
+  background: var(--rc-shell);
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -63,162 +88,307 @@
   display: flex;
   gap: 4px;
   padding: 8px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid var(--rc-border);
+}
 
-  button {
-    background: transparent;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 4px;
-    color: inherit;
-    padding: 4px 8px;
-    cursor: pointer;
+.rcd-tool {
+  background: transparent;
+  border: 1px solid var(--rc-border);
+  border-radius: 4px;
+  color: var(--rc-muted);
+  padding: 4px 8px;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
 
-    &:disabled { opacity: 0.4; cursor: not-allowed; }
-    &:not(:disabled):hover { background: rgba(255, 255, 255, 0.08); }
+  i { font-size: 12px; }
+
+  &:disabled { opacity: 0.4; cursor: not-allowed; }
+  &:not(:disabled):hover {
+    background: var(--rc-elevated);
+    color: var(--rc-text);
+    border-color: var(--rc-accent-dim);
   }
 }
 
 .rcd-list {
   list-style: none;
   margin: 0;
-  padding: 6px 0;
+  padding: 4px 0;
   overflow-y: auto;
   flex: 1;
 }
 
 .rcd-list-item {
-  padding: 8px 14px;
-  cursor: pointer;
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 8px;
+  padding: 7px 14px;
+  cursor: pointer;
   font-size: 13px;
+  color: var(--rc-text);
+  border-left: 2px solid transparent;
+  transition: background 0.1s ease;
 
-  &:hover { background: rgba(255, 255, 255, 0.06); }
-  &.active { background: rgba(99, 132, 255, 0.18); }
+  > i:first-child {
+    font-size: 11px;
+    color: var(--rc-muted);
+  }
+
+  .rcd-list-name { flex: 1; }
+
+  &:hover {
+    background: var(--rc-elevated);
+  }
+
+  &.active {
+    background: var(--rc-accent-dim);
+    border-left-color: var(--rc-accent);
+
+    > i:first-child { color: var(--rc-accent); }
+  }
 }
 
-.rcd-builtin {
-  font-size: 10px;
+.rcd-builtin-pill {
+  font-size: 9px;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  opacity: 0.5;
+  letter-spacing: 0.06em;
+  color: var(--rc-dim);
+  background: var(--rc-bg);
+  padding: 1px 6px;
+  border-radius: 8px;
+  border: 1px solid var(--rc-border);
 }
+
+// ============================================
+// Detail pane
+// ============================================
 
 .rcd-detail {
   flex: 1;
-  padding: 16px 20px;
+  padding: 16px 20px 20px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 14px;
   min-width: 0;
+  background: var(--rc-bg);
+}
+
+.rcd-detail-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rcd-name-input {
+  flex: 1;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.rcd-reset {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: var(--rc-muted);
+  background: transparent;
+  border: 1px solid var(--rc-border);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+
+  &:hover {
+    background: var(--rc-elevated);
+    color: var(--rc-text);
+  }
+
+  i { font-size: 11px; }
 }
 
 .rcd-field {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 5px;
 
-  label {
-    font-size: 12px;
+  > label {
+    font-size: 11px;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: rgba(255, 255, 255, 0.6);
+    letter-spacing: 0.06em;
+    color: var(--rc-muted);
+    font-weight: 500;
   }
 
-  input, select, textarea {
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 4px;
-    color: inherit;
-    padding: 6px 8px;
+  input[pInputText],
+  .rcd-textarea {
+    background: var(--rc-surface);
+    border: 1px solid var(--rc-border);
+    border-radius: 5px;
+    color: var(--rc-text);
+    padding: 7px 10px;
     font-size: 13px;
     font-family: inherit;
+    transition: border-color 0.12s ease, box-shadow 0.12s ease;
 
-    &:disabled { opacity: 0.55; }
+    &::placeholder { color: var(--rc-dim); }
+
+    &:focus {
+      outline: none;
+      border-color: var(--rc-accent);
+      box-shadow: 0 0 0 2px var(--rc-accent-dim);
+    }
   }
 
-  textarea {
-    font-family: 'JetBrains Mono', monospace;
+  .rcd-textarea {
+    font-family: var(--font-mono, 'JetBrains Mono', monospace);
+    font-size: 12px;
     resize: vertical;
+    min-height: 80px;
   }
+}
+
+:host ::ng-deep .rcd-select {
+  width: 100%;
+
+  .p-select {
+    width: 100%;
+    background: var(--rc-surface);
+    border: 1px solid var(--rc-border);
+    border-radius: 5px;
+    color: var(--rc-text);
+
+    .p-select-label {
+      padding: 7px 10px;
+      font-size: 13px;
+      color: var(--rc-text);
+    }
+
+    &:not(.p-disabled):hover { border-color: var(--rc-accent-dim); }
+    &.p-focus {
+      border-color: var(--rc-accent);
+      box-shadow: 0 0 0 2px var(--rc-accent-dim);
+    }
+  }
+}
+
+// ============================================
+// Cards (flags + preview)
+// ============================================
+
+.rcd-card {
+  background: var(--rc-surface);
+  border: 1px solid var(--rc-border);
+  border-radius: 6px;
+  padding: 10px 14px 12px;
 }
 
 .rcd-flags {
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 6px;
-  padding: 10px 14px 12px;
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 6px 16px;
+  gap: 8px 18px;
 
   legend {
     padding: 0 6px;
-    font-size: 12px;
+    font-size: 11px;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: rgba(255, 255, 255, 0.6);
+    letter-spacing: 0.06em;
+    color: var(--rc-muted);
+    font-weight: 500;
   }
-
-  label {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 13px;
-  }
-
-  code { font-size: 12px; opacity: 0.85; }
 }
 
-.rcd-builtin-note,
+.rcd-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--rc-text);
+  cursor: pointer;
+  user-select: none;
+
+  input[type="checkbox"] {
+    margin-top: 2px;
+    accent-color: var(--rc-accent);
+    cursor: pointer;
+  }
+
+  .rcd-check-label {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    line-height: 1.3;
+
+    code {
+      font-family: var(--font-mono, 'JetBrains Mono', monospace);
+      font-size: 12px;
+      color: var(--rc-accent);
+    }
+
+    small {
+      font-size: 11px;
+      color: var(--rc-dim);
+    }
+  }
+}
+
+// Live "Effective command line" preview — PyCharm-style. Updates as the
+// user toggles checkboxes and types args.
+.rcd-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: var(--rc-shell);
+
+  .rcd-preview-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--rc-muted);
+    font-weight: 500;
+
+    i { color: var(--rc-accent); }
+  }
+
+  .rcd-preview-code {
+    display: block;
+    font-family: var(--font-mono, 'JetBrains Mono', monospace);
+    font-size: 12px;
+    color: var(--rc-text);
+    background: var(--rc-bg);
+    border: 1px solid var(--rc-border);
+    border-radius: 4px;
+    padding: 8px 10px;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+}
+
 .rcd-empty {
   font-size: 12px;
-  opacity: 0.7;
+  color: var(--rc-dim);
   margin: 0;
+  padding: 24px 8px;
+  text-align: center;
 
-  i { margin-right: 6px; }
+  i { margin: 0 4px; }
 }
 
 .rcd-error {
-  background: rgba(255, 80, 80, 0.12);
-  border: 1px solid rgba(255, 80, 80, 0.4);
-  border-radius: 4px;
+  background: rgba(186, 100, 60, 0.12);
+  border: 1px solid var(--rc-red);
+  border-radius: 5px;
   padding: 8px 10px;
   font-size: 12px;
-  color: #ffb4b4;
+  color: #f0c4ad;
   margin: 0;
 }
 
-.rcd-footer {
+.rcd-footer-actions {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
-  padding: 12px 20px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.rcd-btn {
-  border-radius: 6px;
-  padding: 6px 14px;
-  font-size: 13px;
-  border: 1px solid transparent;
-  cursor: pointer;
-
-  &.ghost {
-    background: transparent;
-    color: inherit;
-    border-color: rgba(255, 255, 255, 0.16);
-
-    &:hover { background: rgba(255, 255, 255, 0.06); }
-  }
-
-  &.primary {
-    background: #4f6cff;
-    color: #fff;
-
-    &:hover { background: #6280ff; }
-    &:disabled { opacity: 0.55; cursor: not-allowed; }
-  }
 }
