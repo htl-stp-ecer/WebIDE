@@ -10,25 +10,10 @@
     </div>
   }
 
-  <!-- Regular Flowchart View (hidden in planning mode) -->
+  <!-- Save status + legacy sim/real toggle (settings, undo/redo and
+       timestamps now live in the global navbar's run-config bar). -->
   <div class="run-toolbar" [class.hidden]="planningService.isActive()">
     <div class="toolbar-left">
-      <button
-        type="button"
-        class="toggle-chip"
-        (click)="openRobotSettings()"
-        [attr.aria-label]="'ROBOT_SETTINGS.TITLE' | translate"
-        [pTooltip]="'ROBOT_SETTINGS.TITLE' | translate"
-        tooltipPosition="bottom">
-        <i class="pi pi-cog"></i>
-      </button>
-      <div class="toolbar-divider"></div>
-      <button class="ide-btn undo mr-1" (click)="actions.undo()" [attr.aria-label]="'FLOWCHART.UNDO'|translate" [pTooltip]="'FLOWCHART.UNDO'|translate" tooltipPosition="bottom" [disabled]="!canUndoSignal?.()">
-        <i class="pi pi-undo"></i>
-      </button>
-      <button class="ide-btn redo" (click)="actions.redo()" [attr.aria-label]="'FLOWCHART.REDO'|translate" [pTooltip]="'FLOWCHART.REDO'|translate" tooltipPosition="bottom" [disabled]="!canRedoSignal?.()">
-        <i class="pi pi-undo inline-block" style="transform:scaleX(-1)"></i>
-      </button>
       <div class="save-status" [class.visible]="saveStatus() !== 'idle'">
         @if (saveStatus() === 'saving') {
           <i class="pi pi-spin pi-spinner" [pTooltip]="'FLOWCHART.SAVING' | translate" tooltipPosition="bottom"></i>
@@ -38,18 +23,6 @@
       </div>
     </div>
     <div class="toolbar-middle">
-      @for (toggle of viewToggleOptions; track toggle.key) {
-        <button
-          type="button"
-          class="toggle-chip"
-          [class.active]="isToggleEnabled(toggle.key)"
-          (click)="toggleViewOption(toggle.key)"
-          [attr.aria-label]="toggle.labelKey | translate"
-          [pTooltip]="toggle.labelKey | translate"
-          tooltipPosition="bottom">
-          <i [class]="toggle.icon || 'pi pi-sliders-h'" class="toggle-icon"></i>
-        </button>
-      }
       <!-- Legacy per-mission Sim/Real toggle. Hidden now that the navbar's
            IntelliJ-style run-target dropdown owns the run mode. The signal
            is kept around for the upcoming automatic per-mission preview
