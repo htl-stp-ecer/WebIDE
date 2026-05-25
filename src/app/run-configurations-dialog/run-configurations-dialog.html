@@ -9,13 +9,10 @@
   [contentStyle]="{ padding: '0' }"
   styleClass="rcd-dialog">
 
-  <ng-template pTemplate="header">
+  <ng-template #header>
     <div class="rcd-drag-header">
       <i class="pi pi-cog"></i>
       <span>Run / Debug Configurations</span>
-      <button type="button" class="rcd-close-btn" (click)="close()" aria-label="Close">
-        <i class="pi pi-times"></i>
-      </button>
     </div>
   </ng-template>
 
@@ -156,7 +153,7 @@
     </section>
   </div>
 
-  <ng-template pTemplate="footer">
+  <ng-template #footer>
     <div class="rcd-footer-actions">
       @if (hasTombstones()) {
         <span class="rcd-tombstone-note" [title]="'Will be appended to hidden_run_configurations: in raccoon.project.yml'">
