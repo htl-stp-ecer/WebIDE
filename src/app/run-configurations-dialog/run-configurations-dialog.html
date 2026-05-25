@@ -29,7 +29,7 @@
         <button type="button" class="rcd-tool" (click)="duplicateSelected()" [disabled]="!selected()" title="Duplicate">
           <i class="pi pi-copy"></i>
         </button>
-        <button type="button" class="rcd-tool" (click)="removeSelected()" [disabled]="!selected() || selected()!.builtin" title="Remove">
+        <button type="button" class="rcd-tool" (click)="removeSelected()" [disabled]="!selected()" title="Remove (builtins are tombstoned in hidden_run_configurations:)">
           <i class="pi pi-trash"></i>
         </button>
       </div>
@@ -135,14 +135,16 @@
             placeholder="MY_FLAG=1&#10;LIBSTP_LOG_LEVEL=debug"></textarea>
         </div>
 
-        <!-- Live preview: PyCharm's "Effective command line" — updates as
-             you toggle checkboxes, type args, etc. -->
+        <!-- Live YAML preview — the actual snippet that will be written
+             to raccoon.project.yml on save. The CLI loads from this
+             same file: `raccoon run {{ cfg.name }}` is all you need. -->
         <div class="rcd-card rcd-preview">
           <div class="rcd-preview-label">
-            <i class="pi pi-terminal"></i>
-            <span>Effective command line</span>
+            <i class="pi pi-file"></i>
+            <span>raccoon.project.yml &nbsp;›&nbsp; run_configurations</span>
+            <small class="rcd-run-hint">CLI: <code>raccoon run {{ cfg.name }}</code></small>
           </div>
-          <code class="rcd-preview-code">{{ effectiveCommand() }}</code>
+          <pre class="rcd-preview-code">{{ yamlPreview() }}</pre>
         </div>
       } @else {
         <p class="rcd-empty">Select a configuration on the left, or click <i class="pi pi-plus"></i> to create a new one.</p>
@@ -156,6 +158,12 @@
 
   <ng-template pTemplate="footer">
     <div class="rcd-footer-actions">
+      @if (hasTombstones()) {
+        <span class="rcd-tombstone-note" [title]="'Will be appended to hidden_run_configurations: in raccoon.project.yml'">
+          <i class="pi pi-eye-slash"></i>
+          Will hide builtin{{ tombstonedBuiltins().length === 1 ? '' : 's' }}: {{ tombstonedBuiltins().join(', ') }}
+        </span>
+      }
       <p-button label="Cancel" severity="secondary" [text]="true" (onClick)="close()"></p-button>
       <p-button label="Save" icon="pi pi-check" [loading]="busy()" (onClick)="save()"></p-button>
     </div>
