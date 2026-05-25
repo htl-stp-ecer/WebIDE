@@ -48,20 +48,37 @@ export class RunConfigurationsDialog {
     return this.working().find(c => c.name === name) ?? null;
   });
 
-  readonly effectiveCommand = computed<string>(() => {
+  /**
+   * Live preview of the YAML that will be written to
+   * ``raccoon.project.yml`` under ``run_configurations:`` for the
+   * selected entry. Builtins show "(builtin — nothing is persisted)"
+   * because the CLI ships them in code; only user overrides hit disk.
+   *
+   * This matches the user's mental model: edits land in the project
+   * file, and ``raccoon run <name>`` reads from there.
+   */
+  readonly yamlPreview = computed<string>(() => {
     const cfg = this.selected();
-    if (!cfg) return 'raccoon run';
-    const parts = ['raccoon', 'run', cfg.name];
-    if (cfg.dev) parts.push('--dev');
-    if (cfg.no_calibrate) parts.push('--no-calibrate');
-    if (cfg.no_checkpoints) parts.push('--no-checkpoints');
-    if (cfg.no_codegen) parts.push('--no-codegen');
-    if (cfg.no_sync) parts.push('--no-sync');
-    if (cfg.record_localization) parts.push('--record-localization');
-    if (cfg.record_hz != null) parts.push(`--record-hz=${cfg.record_hz}`);
-    if (cfg.target === 'local') parts.push('--local');
-    parts.push(...cfg.args);
-    return parts.join(' ');
+    if (!cfg) return '';
+    if (cfg.builtin) {
+      return `# '${cfg.name}' is a builtin preset shipped with raccoon-cli.\n# Nothing is written to raccoon.project.yml for unchanged builtins.\n# Edit any field to create a user override that lands here.`;
+    }
+    return this.renderYamlEntry(cfg);
+  });
+
+  /** Whether the dialog has any tombstones queued for save. */
+  readonly hasTombstones = computed<boolean>(() => {
+    const workingNames = new Set(this.working().map(c => c.name));
+    return this.runAction.runConfigurations()
+      .some(c => c.builtin && !workingNames.has(c.name));
+  });
+
+  /** Names of builtins the user has tombstoned in this session. */
+  readonly tombstonedBuiltins = computed<string[]>(() => {
+    const workingNames = new Set(this.working().map(c => c.name));
+    return this.runAction.runConfigurations()
+      .filter(c => c.builtin && !workingNames.has(c.name))
+      .map(c => c.name);
   });
 
   // Env vars edited as KEY=VALUE per line — easiest UX and matches the CLI.
@@ -154,14 +171,60 @@ export class RunConfigurationsDialog {
   removeSelected(): void {
     const cfg = this.selected();
     if (!cfg) return;
-    if (cfg.builtin) {
-      // Builtins live in code — there is nothing to delete on disk. Tell
-      // the user to override them via duplicate-then-edit instead.
-      this.error.set(`Builtin preset '${cfg.name}' cannot be removed. Duplicate it to create a custom entry.`);
-      return;
-    }
+    // Builtins are removable too — the backend tombstones them in
+    // hidden_run_configurations: so neither the CLI nor the IDE sees
+    // them after save. Re-adding an entry with the same name brings
+    // them back.
     this.working.update(list => list.filter(c => c.name !== cfg.name));
     this.select(this.working()[0]?.name ?? null);
+  }
+
+  /**
+   * Render a configuration as the YAML snippet that will end up under
+   * ``run_configurations:`` in ``raccoon.project.yml``. The output
+   * matches the format the CLI loader expects so the user can copy/
+   * paste between projects if they want.
+   */
+  private renderYamlEntry(cfg: RunConfiguration): string {
+    const lines: string[] = [`${cfg.name}:`];
+    const indent = '  ';
+    if (cfg.description) lines.push(`${indent}description: ${this.yamlString(cfg.description)}`);
+    if (cfg.target && cfg.target !== 'auto') lines.push(`${indent}target: ${cfg.target}`);
+    if (cfg.dev) lines.push(`${indent}dev: true`);
+    if (cfg.no_calibrate) lines.push(`${indent}no_calibrate: true`);
+    if (cfg.no_checkpoints) lines.push(`${indent}no_checkpoints: true`);
+    if (cfg.no_codegen) lines.push(`${indent}no_codegen: true`);
+    if (cfg.no_sync) lines.push(`${indent}no_sync: true`);
+    if (cfg.record_localization) lines.push(`${indent}record_localization: true`);
+    if (cfg.record_hz != null) lines.push(`${indent}record_hz: ${cfg.record_hz}`);
+    // Flush textareas into args/env for the preview, since those are
+    // edited live as strings and only sync back on save.
+    const args = this.argsText.split(/\s+/).map(s => s.trim()).filter(Boolean);
+    if (args.length) {
+      lines.push(`${indent}args:`);
+      for (const a of args) lines.push(`${indent}  - ${this.yamlString(a)}`);
+    }
+    const env = this.parseEnvTextFor(cfg);
+    const keys = Object.keys(env);
+    if (keys.length) {
+      lines.push(`${indent}env:`);
+      for (const k of keys) lines.push(`${indent}  ${k}: ${this.yamlString(env[k])}`);
+    }
+    if (lines.length === 1) lines.push(`${indent}{}`);
+    return lines.join('\n');
+  }
+
+  private yamlString(s: string): string {
+    // Quote anything that could trip the YAML parser; bare strings work
+    // for the simple identifier-like cases.
+    if (/^[A-Za-z0-9_\-./]+$/.test(s)) return s;
+    return JSON.stringify(s);
+  }
+
+  /** Parse the env textarea but only when the *displayed* config matches. */
+  private parseEnvTextFor(cfg: RunConfiguration): Record<string, string> {
+    if (this.selected() !== cfg) return cfg.env;
+    return this.parseEnvText();
   }
 
   /**
@@ -252,13 +315,14 @@ export class RunConfigurationsDialog {
     this.busy.set(true);
     this.error.set(null);
     try {
-      // Server is the source of truth: PUT each non-builtin entry, then
-      // DELETE anything that was removed.
+      // Server is the source of truth: PUT each user entry, then DELETE
+      // anything that was removed. Builtins go through DELETE too so
+      // the backend can tombstone them in hidden_run_configurations:.
       const original = this.runAction.runConfigurations();
       const current = this.working();
       const currentNames = new Set(current.map(c => c.name));
       for (const removed of original) {
-        if (!removed.builtin && !currentNames.has(removed.name)) {
+        if (!currentNames.has(removed.name)) {
           await this.http.deleteRunConfiguration(projectUuid, removed.name).toPromise();
         }
       }
