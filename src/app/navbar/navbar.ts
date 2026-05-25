@@ -1,13 +1,21 @@
-import { Component, OnInit, OnDestroy, HostListener, ViewChild } from '@angular/core';
+import { Component, OnInit, OnDestroy, HostListener, ViewChild, computed, signal } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink, RouterLinkActive } from '@angular/router';
+import { Tooltip } from 'primeng/tooltip';
 import { Subscription, interval, switchMap, takeUntil, Subject } from 'rxjs';
 import { HttpService, RunConfiguration } from '../services/http-service';
 import { RunActionService, RunTarget } from '../services/run-action-service';
+import { FlowchartToolbarService } from '../services/flowchart-toolbar-service';
 import { enTranslations, deTranslations } from '../i18n/translations';
 import { RunConfigurationsDialog } from '../run-configurations-dialog/run-configurations-dialog';
+
+interface LanguageOption {
+  label: string;
+  value: string;
+  flag: string;
+}
 
 @Component({
   selector: 'app-navbar',
@@ -17,6 +25,7 @@ import { RunConfigurationsDialog } from '../run-configurations-dialog/run-config
     RouterLinkActive,
     TranslateModule,
     DecimalPipe,
+    Tooltip,
     RunConfigurationsDialog,
   ],
   templateUrl: './navbar.html',
@@ -27,11 +36,15 @@ export class Navbar implements OnInit, OnDestroy {
   deviceInfo: ConnectionInfo | undefined;
   deviceInfoLoading = false;
 
-  languages = [
-    { label: 'EN', value: 'en' },
-    { label: 'DE', value: 'de' }
+  readonly languages: LanguageOption[] = [
+    { label: 'English', value: 'en', flag: '🇬🇧' },
+    { label: 'Deutsch', value: 'de', flag: '🇩🇪' },
   ];
-  selectedLanguage = 'en';
+  selectedLanguage = signal('en');
+  readonly currentLanguage = computed(() =>
+    this.languages.find(l => l.value === this.selectedLanguage()) ?? this.languages[0],
+  );
+  langMenuOpen = false;
 
   private deviceBaseSub?: Subscription;
   private pollingSub?: Subscription;
@@ -40,7 +53,8 @@ export class Navbar implements OnInit, OnDestroy {
   constructor(
     private translate: TranslateService,
     private http: HttpService,
-    readonly runAction: RunActionService
+    readonly runAction: RunActionService,
+    readonly toolbar: FlowchartToolbarService,
   ) {
     translate.setTranslation('en', enTranslations, true);
     translate.setTranslation('de', deTranslations, true);
@@ -48,7 +62,7 @@ export class Navbar implements OnInit, OnDestroy {
     translate.setDefaultLang('en');
 
     const savedLang = localStorage.getItem('selectedLanguage') || 'en';
-    this.selectedLanguage = savedLang;
+    this.selectedLanguage.set(savedLang);
     translate.use(savedLang);
   }
 
@@ -113,7 +127,14 @@ export class Navbar implements OnInit, OnDestroy {
 
   changeLanguage(lang: string) {
     this.translate.use(lang);
+    this.selectedLanguage.set(lang);
     localStorage.setItem('selectedLanguage', lang);
+    this.langMenuOpen = false;
+  }
+
+  toggleLangMenu(event: MouseEvent): void {
+    event.stopPropagation();
+    this.langMenuOpen = !this.langMenuOpen;
   }
 
   runTargetMenuOpen = false;
@@ -175,6 +196,9 @@ export class Navbar implements OnInit, OnDestroy {
   closeRunTargetMenuOnOutsideClick(): void {
     if (this.runTargetMenuOpen) {
       this.runTargetMenuOpen = false;
+    }
+    if (this.langMenuOpen) {
+      this.langMenuOpen = false;
     }
   }
 }

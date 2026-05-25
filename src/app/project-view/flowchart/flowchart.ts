@@ -17,6 +17,7 @@ import { StepsStateService } from '../../services/steps-state-service';
 import { HttpService } from '../../services/http-service';
 import { KeybindingsService } from '../../services/keybindings-service';
 import { RunActionService } from '../../services/run-action-service';
+import { FlowchartToolbarService } from '../../services/flowchart-toolbar-service';
 import { FlowHistory } from '../../entities/flow-history';
 import { Mission } from '../../entities/Mission';
 import { MissionSimulationData, ProjectSimulationData } from '../../entities/Simulation';
@@ -257,6 +258,7 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
     readonly keybindingsService: KeybindingsService,
     readonly runActionService: RunActionService,
     readonly replayService: LocalizationReplayService,
+    readonly toolbarService: FlowchartToolbarService,
   ) {
     this.historyManager = createHistoryManager(this);
     this.runManager = createRunManager(this);
@@ -303,6 +305,18 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
 
       this.scheduleOffscreenIndicatorUpdate();
     });
+
+    // Mirror flowchart-local state into the navbar toolbar service so the
+    // settings / undo / redo / timestamps buttons can live in the global navbar.
+    effect(() => {
+      this.toolbarService.canUndo.set(!!this.canUndoSignal?.());
+      this.toolbarService.canRedo.set(!!this.canRedoSignal?.());
+    });
+    effect(() => {
+      this.toolbarService.timestampsEnabled.set(
+        !!this.viewToggleState()['timestamps'],
+      );
+    });
   }
 
   ngOnInit(): void {
@@ -310,6 +324,12 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
       onRun: mode => this.actions.onRun(mode),
       onStop: () => this.actions.stopRun(),
       onContinueDebug: () => this.actions.continueDebug(),
+    });
+    this.toolbarService.register({
+      undo: () => this.actions.undo(),
+      redo: () => this.actions.redo(),
+      toggleTimestamps: () => this.toggleViewOption('timestamps'),
+      openSettings: () => this.openRobotSettings(),
     });
     this.loadTypeDefinitions();
     this.preloadMissionAndSteps();
@@ -361,6 +381,7 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
 
   ngOnDestroy(): void {
     this.runActionService.unregister();
+    this.toolbarService.unregister();
     this.actions.stopRun();
     this.stopPanelDrag();
     this.stopSelectionDrag();

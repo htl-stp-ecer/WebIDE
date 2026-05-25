@@ -5,39 +5,67 @@
     <span class="navbar-wordmark">RACCOON</span>
   </a>
 
-  @if (deviceBase) {
+  @if (deviceBase && (deviceInfo?.battery_voltage_v != null || deviceInfo?.battery_percent != null)) {
     <div class="navbar-device">
-      <span class="device-name">{{ deviceInfo?.hostname || ('COMMON.UNNAMED_DEVICE' | translate) }}</span>
-      <span class="device-sep">/</span>
-      <span class="device-ip">{{ deviceBase }}</span>
-
-      @if (deviceInfoLoading) {
-        <span class="status-pill loading">
-          <span class="status-dot"></span>
-          {{ 'COMMON.LOADING' | translate }}
-        </span>
-      } @else if (deviceInfo?.battery_voltage_v != null || deviceInfo?.battery_percent != null) {
-        <span class="status-pill online">
-          <span class="status-dot"></span>
-          {{ 'COMMON.ONLINE' | translate }}
-        </span>
-        <span class="device-battery">
-          @if (deviceInfo?.battery_voltage_v != null) {
-            {{ deviceInfo!.battery_voltage_v | number:'1.1-1' }}<span class="battery-unit">V</span>
-          } @else {
-            {{ deviceInfo!.battery_percent | number:'1.0-0' }}<span class="battery-unit">%</span>
-          }
-        </span>
-      } @else {
-        <span class="status-pill offline">
-          <span class="status-dot"></span>
-          {{ 'COMMON.OFFLINE' | translate }}
-        </span>
-      }
+      <span class="device-battery" [pTooltip]="(deviceInfo?.hostname || deviceBase) + ' · battery'" tooltipPosition="bottom">
+        <i class="pi pi-bolt"></i>
+        @if (deviceInfo?.battery_voltage_v != null) {
+          {{ deviceInfo!.battery_voltage_v | number:'1.1-1' }}<span class="battery-unit">V</span>
+        } @else {
+          {{ deviceInfo!.battery_percent | number:'1.0-0' }}<span class="battery-unit">%</span>
+        }
+      </span>
     </div>
   }
 
   <div class="navbar-end">
+    <!-- Flowchart-scoped tools — only visible while the project view's
+         flowchart is mounted (registers via FlowchartToolbarService). -->
+    @if (toolbar.available()) {
+      <div class="navbar-tools">
+        <button
+          type="button"
+          class="nav-tool-btn"
+          (click)="toolbar.openSettings()"
+          [attr.aria-label]="'ROBOT_SETTINGS.TITLE' | translate"
+          [pTooltip]="'ROBOT_SETTINGS.TITLE' | translate"
+          tooltipPosition="bottom">
+          <i class="pi pi-cog"></i>
+        </button>
+        <button
+          type="button"
+          class="nav-tool-btn"
+          [class.active]="toolbar.timestampsEnabled()"
+          (click)="toolbar.toggleTimestamps()"
+          [attr.aria-label]="'FLOWCHART.VIEW_TOGGLE_TIMESTAMPS' | translate"
+          [pTooltip]="'FLOWCHART.VIEW_TOGGLE_TIMESTAMPS' | translate"
+          tooltipPosition="bottom">
+          <i class="pi pi-clock"></i>
+        </button>
+        <div class="nav-tool-divider"></div>
+        <button
+          type="button"
+          class="nav-tool-btn"
+          (click)="toolbar.undo()"
+          [disabled]="!toolbar.canUndo()"
+          [attr.aria-label]="'FLOWCHART.UNDO' | translate"
+          [pTooltip]="'FLOWCHART.UNDO' | translate"
+          tooltipPosition="bottom">
+          <i class="pi pi-undo"></i>
+        </button>
+        <button
+          type="button"
+          class="nav-tool-btn"
+          (click)="toolbar.redo()"
+          [disabled]="!toolbar.canRedo()"
+          [attr.aria-label]="'FLOWCHART.REDO' | translate"
+          [pTooltip]="'FLOWCHART.REDO' | translate"
+          tooltipPosition="bottom">
+          <i class="pi pi-undo" style="transform: scaleX(-1)"></i>
+        </button>
+      </div>
+    }
+
     <!-- Run target selector + Run / Debug -->
     <div class="run-actions">
       <!-- PyCharm-style run-configuration chip: clicking opens the dropdown. -->
@@ -120,14 +148,30 @@
       </button>
     </div>
 
-    <div class="lang-toggle" [attr.aria-label]="'NAVBAR.LANGUAGE_SELECTOR' | translate">
-      @for (lang of languages; track lang.value) {
-        <button
-          class="lang-btn"
-          [class.active]="selectedLanguage === lang.value"
-          (click)="changeLanguage(lang.value)">
-          {{ lang.label }}
-        </button>
+    <div class="lang-selector" [attr.aria-label]="'NAVBAR.LANGUAGE_SELECTOR' | translate">
+      <button
+        type="button"
+        class="lang-flag-btn"
+        (click)="toggleLangMenu($event)"
+        [attr.aria-expanded]="langMenuOpen"
+        [attr.aria-haspopup]="true"
+        [pTooltip]="(currentLanguage()?.label || '') + ' · ' + ('NAVBAR.LANGUAGE_SELECTOR' | translate)"
+        tooltipPosition="bottom">
+        <span class="lang-flag" aria-hidden="true">{{ currentLanguage()?.flag }}</span>
+      </button>
+      @if (langMenuOpen) {
+        <div class="lang-menu" (click)="$event.stopPropagation()">
+          @for (lang of languages; track lang.value) {
+            <button
+              type="button"
+              class="lang-menu-item"
+              [class.active]="selectedLanguage() === lang.value"
+              (click)="changeLanguage(lang.value)">
+              <span class="lang-flag" aria-hidden="true">{{ lang.flag }}</span>
+              <span class="lang-name">{{ lang.label }}</span>
+            </button>
+          }
+        </div>
       }
     </div>
   </div>
