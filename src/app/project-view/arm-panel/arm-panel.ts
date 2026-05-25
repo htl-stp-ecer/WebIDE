@@ -109,6 +109,8 @@ export class ArmPanel implements AfterViewInit, OnDestroy, OnChanges {
   chain = signal<ArmChain | null>(null);
   loading = signal(false);
   errorMsg = signal<string | null>(null);
+  /** 'missing-extra' = pip install raccoon-cli[arm] needed; 'no-arm' = no ArmChain in defs; 'other' = generic. */
+  errorKind = signal<'missing-extra' | 'no-arm' | 'other' | null>(null);
   jointAngles = signal<number[]>([]);
   targetXYZ = signal<[number, number, number]>([0, 0, 0]);
   endEffector = signal<[number, number, number]>([0, 0, 0]);
@@ -246,6 +248,7 @@ export class ArmPanel implements AfterViewInit, OnDestroy, OnChanges {
   private loadChain() {
     this.loading.set(true);
     this.errorMsg.set(null);
+    this.errorKind.set(null);
     this.http.get<ArmChain>(this.apiBase() + '/chain').subscribe({
       next: chain => {
         this.chain.set(chain);
@@ -264,9 +267,18 @@ export class ArmPanel implements AfterViewInit, OnDestroy, OnChanges {
       },
       error: err => {
         this.loading.set(false);
-        this.errorMsg.set(
-          err?.status === 404 ? 'No arm configured for this project.' : 'Failed to load arm.',
-        );
+        this.chain.set(null);
+        const detail: string = err?.error?.detail ?? '';
+        if (err?.status === 503 || /ikpy|raccoon-cli\[arm\]/i.test(detail)) {
+          this.errorKind.set('missing-extra');
+          this.errorMsg.set(detail || 'ArmChain kinematics require the [arm] extra.');
+        } else if (err?.status === 404) {
+          this.errorKind.set('no-arm');
+          this.errorMsg.set(detail || 'No ArmChain definition in this project.');
+        } else {
+          this.errorKind.set('other');
+          this.errorMsg.set(detail || 'Failed to load arm.');
+        }
       },
     });
   }

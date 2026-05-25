@@ -40,17 +40,15 @@
           aria-label="Table Visualization">
           <i class="pi pi-map"></i>
         </button>
-        @if (armAvailable()) {
-          <button
-            type="button"
-            class="tool-stripe-btn"
-            [class.active]="activeBottomPanel() === 'arm'"
-            (click)="toggleBottomPanel('arm')"
-            title="Arm Visualizer"
-            aria-label="Arm Visualizer">
-            <i class="pi pi-android"></i>
-          </button>
-        }
+        <button
+          type="button"
+          class="tool-stripe-btn"
+          [class.active]="activeBottomPanel() === 'arm'"
+          (click)="toggleBottomPanel('arm')"
+          title="Arm Visualizer"
+          aria-label="Arm Visualizer">
+          <i class="pi pi-android"></i>
+        </button>
       </div>
     </div>
 

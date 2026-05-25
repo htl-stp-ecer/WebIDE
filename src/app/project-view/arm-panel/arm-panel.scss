@@ -26,6 +26,48 @@
   &--error {
     color: #ff8888;
   }
+
+  &--hint {
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: flex-start;
+    gap: 8px;
+    max-width: 560px;
+    margin: 0 auto;
+    line-height: 1.5;
+
+    h4 {
+      margin: 0;
+      font-size: 14px;
+      color: var(--rc-text, #e6e6ef);
+    }
+
+    p {
+      margin: 0;
+    }
+
+    code {
+      background: rgba(255, 255, 255, 0.06);
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+
+    pre {
+      margin: 0;
+      padding: 8px 10px;
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid var(--rc-border, #2E3044);
+      border-radius: 4px;
+      width: 100%;
+      overflow-x: auto;
+    }
+
+    .arm-status-detail {
+      font-size: 11px;
+      opacity: 0.6;
+    }
+  }
 }
 
 .arm-controls {

@@ -12,7 +12,6 @@ import {RobotConfigPanel} from './flowchart/robot-settings/robot-config-panel';
 import {FormsModule} from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { HttpService } from '../services/http-service';
-import { HttpClient } from '@angular/common/http';
 import { RunActionService } from '../services/run-action-service';
 import {TableMapService, TableVisualizationService} from './flowchart/table/services';
 import {Pose2D, thetaToDegrees} from './flowchart/table/models';
@@ -91,7 +90,6 @@ export class ProjectView implements OnDestroy {
   activeBottomPanel = signal<BottomToolPanel>(this.loadActiveBottomPanel());
   tableEditMode = signal(false);
   centerView = signal<CenterView>('flowchart');
-  armAvailable = signal(false);
   startPoseEditMode = signal(false);
   projectUUID = '';
 
@@ -104,7 +102,6 @@ export class ProjectView implements OnDestroy {
   constructor(
     private route: ActivatedRoute,
     private http: HttpService,
-    private httpClient: HttpClient,
     readonly runAction: RunActionService,
     private vizService: TableVisualizationService,
     private mapService: TableMapService,
@@ -119,18 +116,7 @@ export class ProjectView implements OnDestroy {
     this.projectUUID = projectUUID;
     this.runAction.currentProjectUUID.set(projectUUID);
 
-    // Check arm availability
-    this.httpClient.get(`/api/v1/projects/${projectUUID}/arm/chain`).subscribe({
-      next: () => this.armAvailable.set(true),
-      error: () => {
-        this.armAvailable.set(false);
-        if (this.activeBottomPanel() === 'arm') {
-          this.activeBottomPanel.set(null);
-        }
-      },
-    });
-
-    // Auto-open logs panel when a run starts
+// Auto-open logs panel when a run starts
     effect(() => {
       if (this.runAction.isRunActive()) {
         this.activeBottomPanel.set('logs');

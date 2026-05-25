@@ -1,6 +1,26 @@
 <div class="arm-panel">
   @if (loading()) {
     <div class="arm-status">Loading arm…</div>
+  } @else if (errorKind() === 'missing-extra') {
+    <div class="arm-status arm-status--hint">
+      <h4>Arm-Erweiterung fehlt</h4>
+      <p>
+        Für den Arm-Visualizer wird das optionale <code>[arm]</code>-Extra (ikpy)
+        benötigt. Installation:
+      </p>
+      <pre><code>pip install 'raccoon-cli[arm]'</code></pre>
+      <p class="arm-status-detail">{{ errorMsg() }}</p>
+    </div>
+  } @else if (errorKind() === 'no-arm') {
+    <div class="arm-status arm-status--hint">
+      <h4>Kein Arm konfiguriert</h4>
+      <p>
+        Dieses Projekt enthält keine <code>ArmChain</code>-Definition. Lege in
+        <code>raccoon.project.yml</code> unter <code>definitions:</code> einen
+        Eintrag mit <code>type: ArmChain</code> am, damit der Visualizer aktiv wird.
+      </p>
+      <p class="arm-status-detail">{{ errorMsg() }}</p>
+    </div>
   } @else if (errorMsg()) {
     <div class="arm-status arm-status--error">{{ errorMsg() }}</div>
   } @else if (chain(); as c) {
