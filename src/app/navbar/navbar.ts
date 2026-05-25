@@ -1,12 +1,13 @@
-import { Component, OnInit, OnDestroy, HostListener } from '@angular/core';
+import { Component, OnInit, OnDestroy, HostListener, ViewChild } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink, RouterLinkActive } from '@angular/router';
 import { Subscription, interval, switchMap, takeUntil, Subject } from 'rxjs';
-import { HttpService } from '../services/http-service';
+import { HttpService, RunConfiguration } from '../services/http-service';
 import { RunActionService, RunTarget } from '../services/run-action-service';
 import { enTranslations, deTranslations } from '../i18n/translations';
+import { RunConfigurationsDialog } from '../run-configurations-dialog/run-configurations-dialog';
 
 @Component({
   selector: 'app-navbar',
@@ -16,6 +17,7 @@ import { enTranslations, deTranslations } from '../i18n/translations';
     RouterLinkActive,
     TranslateModule,
     DecimalPipe,
+    RunConfigurationsDialog,
   ],
   templateUrl: './navbar.html',
   styleUrl: './navbar.scss'
@@ -121,9 +123,46 @@ export class Navbar implements OnInit, OnDestroy {
     this.runTargetMenuOpen = !this.runTargetMenuOpen;
   }
 
+  @ViewChild(RunConfigurationsDialog) private configsDialog?: RunConfigurationsDialog;
+
   selectRunTarget(target: RunTarget): void {
     this.runAction.setRunTarget(target);
     this.runTargetMenuOpen = false;
+  }
+
+  selectRunConfig(name: string): void {
+    this.runAction.selectRunConfig(name);
+    this.runTargetMenuOpen = false;
+  }
+
+  openEditConfigurations(): void {
+    this.runTargetMenuOpen = false;
+    this.configsDialog?.show();
+  }
+
+  iconForConfig(cfg: RunConfiguration | null): string {
+    if (!cfg) return 'pi pi-question';
+    if (cfg.target === 'simulated') return 'pi pi-objects-column';
+    if (cfg.dev) return 'pi pi-wrench';
+    if (cfg.no_calibrate || cfg.no_checkpoints) return 'pi pi-forward';
+    return 'pi pi-bolt';
+  }
+
+  configSummary(cfg: RunConfiguration): string {
+    const flags: string[] = [];
+    if (cfg.dev) flags.push('--dev');
+    if (cfg.no_calibrate) flags.push('--no-calibrate');
+    if (cfg.no_checkpoints) flags.push('--no-checkpoints');
+    if (cfg.no_codegen) flags.push('--no-codegen');
+    if (cfg.no_sync) flags.push('--no-sync');
+    if (cfg.record_localization) flags.push('--record-localization');
+    return flags.length ? flags.join(' ') : 'raccoon run';
+  }
+
+  runConfigTooltip(): string {
+    const cfg = this.runAction.selectedRunConfig();
+    if (!cfg) return 'Select a run configuration';
+    return cfg.description || this.configSummary(cfg);
   }
 
   runTargetTooltip(): string {

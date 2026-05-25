@@ -42,6 +42,8 @@ interface FlowchartRunContext {
   runTarget?(): 'simulated' | 'real';
   /** Whether to record localization data during real runs. */
   recordLocalization?(): boolean;
+  /** Name of the active PyCharm-style run configuration, if any. */
+  runConfigName?(): string | null;
   /** Called after a real run that produced a recording. */
   onRunRecorded?(projectUuid: string, runId: string): void;
   /** Optional sink for live pose samples — drawn by TableVisualizationPanel. */
@@ -631,9 +633,10 @@ export class FlowchartRunManager {
     }
 
     const recordLocalization = target === 'real' && mode !== 'debug' && (this.ctx.recordLocalization?.() ?? false);
+    const runConfig = mode === 'debug' ? null : (this.ctx.runConfigName?.() ?? null);
     const runOptions = mode === 'debug'
       ? { simulate, debug: true, onSocket: (socket: WebSocket | null) => this.updateSocket(socket) }
-      : { simulate, recordLocalization, onSocket: (socket: WebSocket | null) => this.updateSocket(socket) };
+      : { simulate, recordLocalization, runConfig, onSocket: (socket: WebSocket | null) => this.updateSocket(socket) };
 
     this.runSubscription = this.ctx.http.runMission(projectId, runMissionKey, runOptions).subscribe({
       next: event => this.handleRunEvent(event),

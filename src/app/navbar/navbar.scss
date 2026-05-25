@@ -290,6 +290,26 @@
     color: var(--rc-muted, #A0A0AF);
     margin-top: 2px;
   }
+
+  .builtin-tag {
+    margin-left: 6px;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    opacity: 0.55;
+    font-weight: 400;
+  }
+
+  .run-target-divider {
+    height: 1px;
+    background: var(--rc-border, #2E3044);
+    margin: 4px 0;
+  }
+
+  .run-target-edit {
+    opacity: 0.85;
+    i { opacity: 0.7; }
+  }
 }
 
 .run-btn {
