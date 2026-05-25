@@ -40,7 +40,7 @@
   <div class="navbar-end">
     <!-- Run target selector + Run / Debug -->
     <div class="run-actions">
-      <!-- IntelliJ-style run-configuration chip: clicking opens the dropdown. -->
+      <!-- PyCharm-style run-configuration chip: clicking opens the dropdown. -->
       <div class="run-target-wrapper">
         <button
           type="button"
@@ -48,33 +48,38 @@
           (click)="toggleRunTargetMenu($event)"
           [attr.aria-expanded]="runTargetMenuOpen"
           [attr.aria-haspopup]="true"
-          [title]="runTargetTooltip()">
-          <i [class]="runAction.runTarget() === 'simulated' ? 'pi pi-objects-column' : 'pi pi-bolt'"></i>
-          <span class="run-target-label">{{ runAction.runTarget() === 'simulated' ? 'Simulated' : 'Real' }}</span>
+          [title]="runConfigTooltip()">
+          <i [class]="iconForConfig(runAction.selectedRunConfig())"></i>
+          <span class="run-target-label">{{ runAction.selectedRunConfig()?.name ?? 'Select…' }}</span>
           <i class="pi pi-chevron-down run-target-caret"></i>
         </button>
         @if (runTargetMenuOpen) {
           <div class="run-target-menu" (click)="$event.stopPropagation()">
+            @for (cfg of runAction.runConfigurations(); track cfg.name) {
+              <button
+                type="button"
+                class="run-target-option"
+                [class.active]="runAction.selectedRunConfigName() === cfg.name"
+                (click)="selectRunConfig(cfg.name)">
+                <i [class]="iconForConfig(cfg)"></i>
+                <div class="run-target-option-text">
+                  <span class="run-target-option-title">
+                    {{ cfg.name }}
+                    @if (cfg.builtin) { <small class="builtin-tag">builtin</small> }
+                  </span>
+                  <span class="run-target-option-sub">{{ cfg.description || configSummary(cfg) }}</span>
+                </div>
+              </button>
+            }
+            <div class="run-target-divider"></div>
             <button
               type="button"
-              class="run-target-option"
-              [class.active]="runAction.runTarget() === 'simulated'"
-              (click)="selectRunTarget('simulated')">
-              <i class="pi pi-objects-column"></i>
+              class="run-target-option run-target-edit"
+              (click)="openEditConfigurations()">
+              <i class="pi pi-cog"></i>
               <div class="run-target-option-text">
-                <span class="run-target-option-title">Simulated</span>
-                <span class="run-target-option-sub">libstp simulator on this laptop</span>
-              </div>
-            </button>
-            <button
-              type="button"
-              class="run-target-option"
-              [class.active]="runAction.runTarget() === 'real'"
-              (click)="selectRunTarget('real')">
-              <i class="pi pi-bolt"></i>
-              <div class="run-target-option-text">
-                <span class="run-target-option-title">Real</span>
-                <span class="run-target-option-sub">raccoon run (wombat if connected)</span>
+                <span class="run-target-option-title">Edit Configurations…</span>
+                <span class="run-target-option-sub">Manage run_configurations: in raccoon.project.yml</span>
               </div>
             </button>
           </div>
@@ -139,3 +144,5 @@
   </div>
 
 </header>
+
+<app-run-configurations-dialog></app-run-configurations-dialog>

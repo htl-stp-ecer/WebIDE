@@ -38,6 +38,7 @@ export function createRunManager(flow: Flowchart): FlowchartRunManager {
     simulationMode: () => flow.simulationMode(),
     runTarget: () => flow.runActionService.runTarget(),
     recordLocalization: () => flow.runActionService.recordLocalization(),
+    runConfigName: () => flow.runActionService.selectedRunConfigName(),
     onRunRecorded: (projectUuid, runId) => {
       flow.replayService.requestAutoLoad(projectUuid, runId);
     },

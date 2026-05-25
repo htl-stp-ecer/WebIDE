@@ -126,6 +126,24 @@ export function migrateTableMap(file: TableMapFile | null | undefined): TableMap
 
 export type SimulateMode = 'fast' | 'real';
 
+/** PyCharm-style run configuration, mirrors the Python dataclass. */
+export interface RunConfiguration {
+  name: string;
+  description: string;
+  target: 'auto' | 'local' | 'remote' | 'simulated';
+  dev: boolean;
+  no_calibrate: boolean;
+  no_checkpoints: boolean;
+  no_codegen: boolean;
+  no_sync: boolean;
+  record_localization: boolean;
+  record_hz: number | null;
+  args: string[];
+  env: Record<string, string>;
+  /** True for the always-available presets (default/dev/simulated). */
+  builtin: boolean;
+}
+
 interface RunMissionOptions {
   /**
    * Simulation mode for the run:
@@ -136,6 +154,8 @@ interface RunMissionOptions {
   simulate?: boolean | SimulateMode;
   debug?: boolean;
   recordLocalization?: boolean;
+  /** Name of a run configuration to apply on the backend. */
+  runConfig?: string | null;
   onSocket?: (socket: WebSocket | null) => void;
 }
 
@@ -543,6 +563,9 @@ export class HttpService {
     if (options?.recordLocalization) {
       params.push('record_localization=1');
     }
+    if (options?.runConfig) {
+      params.push(`run_config=${encodeURIComponent(options.runConfig)}`);
+    }
     const query = params.length ? `?${params.join('&')}` : '';
     // No mission name -> hit the project-level /run endpoint (IntelliJ-style
     // whole-project run). With a name we keep using the per-mission route.
@@ -625,6 +648,26 @@ export class HttpService {
     return this.http.put<{ success: boolean; path: string }>(
       this.localApi(`/files/${projectUuid}/content`),
       { path, content }
+    );
+  }
+
+  // Run Configurations API (CLI + Web-IDE share the same storage).
+  listRunConfigurations(projectUuid: string): Observable<{ configurations: RunConfiguration[] }> {
+    return this.http.get<{ configurations: RunConfiguration[] }>(
+      this.localApi(`/run-configurations/${projectUuid}`)
+    );
+  }
+
+  upsertRunConfiguration(projectUuid: string, cfg: RunConfiguration): Observable<{ status: string; name: string }> {
+    return this.http.put<{ status: string; name: string }>(
+      this.localApi(`/run-configurations/${projectUuid}/${encodeURIComponent(cfg.name)}`),
+      cfg,
+    );
+  }
+
+  deleteRunConfiguration(projectUuid: string, name: string): Observable<{ status: string }> {
+    return this.http.delete<{ status: string }>(
+      this.localApi(`/run-configurations/${projectUuid}/${encodeURIComponent(name)}`)
     );
   }
 

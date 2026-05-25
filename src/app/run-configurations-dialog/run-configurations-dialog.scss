@@ -1,0 +1,224 @@
+.rcd-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1500;
+}
+
+.rcd-modal {
+  width: min(900px, 90vw);
+  max-height: 85vh;
+  background: var(--surface-card, #1f2128);
+  color: var(--text-color, #e6e8ee);
+  border-radius: 10px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.rcd-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+
+  h2 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+  }
+}
+
+.rcd-close {
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 6px 8px;
+
+  &:hover { color: #fff; }
+}
+
+.rcd-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.rcd-sidebar {
+  width: 240px;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.rcd-toolbar {
+  display: flex;
+  gap: 4px;
+  padding: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+
+  button {
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 4px;
+    color: inherit;
+    padding: 4px 8px;
+    cursor: pointer;
+
+    &:disabled { opacity: 0.4; cursor: not-allowed; }
+    &:not(:disabled):hover { background: rgba(255, 255, 255, 0.08); }
+  }
+}
+
+.rcd-list {
+  list-style: none;
+  margin: 0;
+  padding: 6px 0;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.rcd-list-item {
+  padding: 8px 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+
+  &:hover { background: rgba(255, 255, 255, 0.06); }
+  &.active { background: rgba(99, 132, 255, 0.18); }
+}
+
+.rcd-builtin {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  opacity: 0.5;
+}
+
+.rcd-detail {
+  flex: 1;
+  padding: 16px 20px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.rcd-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+
+  label {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: rgba(255, 255, 255, 0.6);
+  }
+
+  input, select, textarea {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 4px;
+    color: inherit;
+    padding: 6px 8px;
+    font-size: 13px;
+    font-family: inherit;
+
+    &:disabled { opacity: 0.55; }
+  }
+
+  textarea {
+    font-family: 'JetBrains Mono', monospace;
+    resize: vertical;
+  }
+}
+
+.rcd-flags {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  padding: 10px 14px 12px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 16px;
+
+  legend {
+    padding: 0 6px;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: rgba(255, 255, 255, 0.6);
+  }
+
+  label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+  }
+
+  code { font-size: 12px; opacity: 0.85; }
+}
+
+.rcd-builtin-note,
+.rcd-empty {
+  font-size: 12px;
+  opacity: 0.7;
+  margin: 0;
+
+  i { margin-right: 6px; }
+}
+
+.rcd-error {
+  background: rgba(255, 80, 80, 0.12);
+  border: 1px solid rgba(255, 80, 80, 0.4);
+  border-radius: 4px;
+  padding: 8px 10px;
+  font-size: 12px;
+  color: #ffb4b4;
+  margin: 0;
+}
+
+.rcd-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.rcd-btn {
+  border-radius: 6px;
+  padding: 6px 14px;
+  font-size: 13px;
+  border: 1px solid transparent;
+  cursor: pointer;
+
+  &.ghost {
+    background: transparent;
+    color: inherit;
+    border-color: rgba(255, 255, 255, 0.16);
+
+    &:hover { background: rgba(255, 255, 255, 0.06); }
+  }
+
+  &.primary {
+    background: #4f6cff;
+    color: #fff;
+
+    &:hover { background: #6280ff; }
+    &:disabled { opacity: 0.55; cursor: not-allowed; }
+  }
+}

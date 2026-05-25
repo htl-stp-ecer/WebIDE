@@ -117,6 +117,7 @@ export class ProjectView implements OnDestroy {
       return;
     }
     this.projectUUID = projectUUID;
+    this.runAction.currentProjectUUID.set(projectUUID);
 
     // Check arm availability
     this.httpClient.get(`/api/v1/projects/${projectUUID}/arm/chain`).subscribe({
@@ -184,6 +185,13 @@ export class ProjectView implements OnDestroy {
       error: () => {
         this.http.clearDeviceBase();
       }
+    });
+
+    // Fetch the PyCharm-style run-configuration list — builtins + the
+    // user's run_configurations: entries from raccoon.project.yml.
+    this.http.listRunConfigurations(projectUUID).subscribe({
+      next: res => this.runAction.setRunConfigurations(res.configurations ?? []),
+      error: err => console.warn('Failed to load run configurations', err),
     });
 
     // Debounce persistence of start pose
