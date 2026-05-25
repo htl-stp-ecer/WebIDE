@@ -1,124 +1,163 @@
-@if (open()) {
-  <div class="rcd-backdrop" (click)="close()">
-    <div class="rcd-modal" (click)="$event.stopPropagation()">
-      <header class="rcd-header">
-        <h2>Run / Debug Configurations</h2>
-        <button type="button" class="rcd-close" (click)="close()" aria-label="Close">
-          <i class="pi pi-times"></i>
-        </button>
-      </header>
+<p-dialog
+  [visible]="visible()"
+  (visibleChange)="onVisibleChange($event)"
+  [modal]="true"
+  [dismissableMask]="true"
+  [draggable]="true"
+  [resizable]="false"
+  [style]="{ width: '780px', maxWidth: '95vw', maxHeight: '88vh' }"
+  [contentStyle]="{ padding: '0' }"
+  styleClass="rcd-dialog">
 
-      <div class="rcd-body">
-        <aside class="rcd-sidebar">
-          <div class="rcd-toolbar">
-            <button type="button" (click)="addConfiguration()" title="New configuration">
-              <i class="pi pi-plus"></i>
-            </button>
-            <button type="button" (click)="duplicateSelected()" [disabled]="!selected()" title="Duplicate">
-              <i class="pi pi-copy"></i>
-            </button>
-            <button type="button" (click)="removeSelected()" [disabled]="!selected() || selected()!.builtin" title="Remove">
-              <i class="pi pi-trash"></i>
-            </button>
-          </div>
-          <ul class="rcd-list">
-            @for (cfg of working(); track cfg.name) {
-              <li
-                class="rcd-list-item"
-                [class.active]="selectedName() === cfg.name"
-                (click)="select(cfg.name)">
-                <span class="rcd-list-name">{{ cfg.name }}</span>
-                @if (cfg.builtin) { <small class="rcd-builtin">builtin</small> }
-              </li>
-            }
-          </ul>
-        </aside>
-
-        <section class="rcd-detail">
-          @if (selected(); as cfg) {
-            <div class="rcd-field">
-              <label>Name</label>
-              <input
-                type="text"
-                [value]="cfg.name"
-                [disabled]="cfg.builtin"
-                (change)="onNameChange($any($event.target).value)"
-                placeholder="dev">
-            </div>
-
-            <div class="rcd-field">
-              <label>Description</label>
-              <input
-                type="text"
-                [value]="cfg.description"
-                [disabled]="cfg.builtin"
-                (change)="patch('description', $any($event.target).value)"
-                placeholder="Optional summary shown in the dropdown">
-            </div>
-
-            <div class="rcd-field">
-              <label>Target</label>
-              <select
-                [value]="cfg.target"
-                [disabled]="cfg.builtin"
-                (change)="patch('target', $any($event.target).value)">
-                <option value="auto">Auto (remote if connected, else local)</option>
-                <option value="local">Local</option>
-                <option value="remote">Remote (Pi)</option>
-                <option value="simulated">Simulated (libstp)</option>
-              </select>
-            </div>
-
-            <fieldset class="rcd-flags" [disabled]="cfg.builtin">
-              <legend>Flags</legend>
-              <label><input type="checkbox" [checked]="cfg.dev" (change)="patch('dev', $any($event.target).checked)"> <code>--dev</code></label>
-              <label><input type="checkbox" [checked]="cfg.no_calibrate" (change)="patch('no_calibrate', $any($event.target).checked)"> <code>--no-calibrate</code></label>
-              <label><input type="checkbox" [checked]="cfg.no_checkpoints" (change)="patch('no_checkpoints', $any($event.target).checked)"> <code>--no-checkpoints</code></label>
-              <label><input type="checkbox" [checked]="cfg.no_codegen" (change)="patch('no_codegen', $any($event.target).checked)"> <code>--no-codegen</code></label>
-              <label><input type="checkbox" [checked]="cfg.no_sync" (change)="patch('no_sync', $any($event.target).checked)"> <code>--no-sync</code></label>
-              <label><input type="checkbox" [checked]="cfg.record_localization" (change)="patch('record_localization', $any($event.target).checked)"> <code>--record-localization</code></label>
-            </fieldset>
-
-            <div class="rcd-field">
-              <label>Extra args (space-separated)</label>
-              <input
-                type="text"
-                [(ngModel)]="argsText"
-                [disabled]="cfg.builtin"
-                placeholder="--no-m0 --no-m2">
-            </div>
-
-            <div class="rcd-field">
-              <label>Environment variables (KEY=VALUE per line)</label>
-              <textarea
-                rows="4"
-                [(ngModel)]="envText"
-                [disabled]="cfg.builtin"
-                placeholder="MY_FLAG=1&#10;LIBSTP_LOG_LEVEL=debug"></textarea>
-            </div>
-
-            @if (cfg.builtin) {
-              <p class="rcd-builtin-note">
-                <i class="pi pi-info-circle"></i>
-                Builtin presets cannot be edited. Duplicate this one to create an editable copy.
-              </p>
-            }
-          } @else {
-            <p class="rcd-empty">Select a configuration on the left, or click + to create a new one.</p>
-          }
-
-          @if (error()) {
-            <p class="rcd-error">{{ error() }}</p>
-          }
-        </section>
-      </div>
-
-      <footer class="rcd-footer">
-        <button type="button" class="rcd-btn ghost" (click)="close()">Cancel</button>
-        <button type="button" class="rcd-btn primary" (click)="save()" [disabled]="busy()">
-          @if (busy()) { Saving… } @else { Save }
-        </button>
-      </footer>
+  <ng-template pTemplate="header">
+    <div class="rcd-drag-header">
+      <i class="pi pi-cog"></i>
+      <span>Run / Debug Configurations</span>
+      <button type="button" class="rcd-close-btn" (click)="close()" aria-label="Close">
+        <i class="pi pi-times"></i>
+      </button>
     </div>
+  </ng-template>
+
+  <div class="rcd-layout">
+    <!-- Sidebar -->
+    <aside class="rcd-sidebar">
+      <div class="rcd-toolbar">
+        <button type="button" class="rcd-tool" (click)="addConfiguration()" title="New configuration">
+          <i class="pi pi-plus"></i>
+        </button>
+        <button type="button" class="rcd-tool" (click)="duplicateSelected()" [disabled]="!selected()" title="Duplicate">
+          <i class="pi pi-copy"></i>
+        </button>
+        <button type="button" class="rcd-tool" (click)="removeSelected()" [disabled]="!selected() || selected()!.builtin" title="Remove">
+          <i class="pi pi-trash"></i>
+        </button>
+      </div>
+      <ul class="rcd-list">
+        @for (cfg of working(); track cfg.name) {
+          <li
+            class="rcd-list-item"
+            [class.active]="selectedName() === cfg.name"
+            (click)="select(cfg.name)">
+            <i class="pi" [class.pi-objects-column]="cfg.target === 'simulated'" [class.pi-bolt]="cfg.target !== 'simulated'"></i>
+            <span class="rcd-list-name">{{ cfg.name }}</span>
+            @if (cfg.builtin) { <span class="rcd-builtin-pill" title="Builtin preset">builtin</span> }
+          </li>
+        }
+      </ul>
+    </aside>
+
+    <!-- Detail -->
+    <section class="rcd-detail">
+      @if (selected(); as cfg) {
+        <div class="rcd-detail-head">
+          <input
+            type="text"
+            pInputText
+            class="rcd-name-input"
+            [value]="cfg.name"
+            (change)="onNameChange($any($event.target).value)"
+            placeholder="configuration name">
+          @if (isOverridingBuiltin()) {
+            <button type="button" class="rcd-reset" (click)="resetSelectedToBuiltin()" title="Reset to shipped defaults">
+              <i class="pi pi-refresh"></i>
+              <span>Reset to builtin</span>
+            </button>
+          }
+        </div>
+
+        <div class="rcd-field">
+          <label>Description</label>
+          <input
+            type="text"
+            pInputText
+            [value]="cfg.description"
+            (change)="patch('description', $any($event.target).value)"
+            placeholder="Optional summary shown in the dropdown">
+        </div>
+
+        <div class="rcd-field">
+          <label>Target</label>
+          <p-select
+            [options]="targetOptions"
+            [ngModel]="cfg.target"
+            (ngModelChange)="patch('target', $event)"
+            optionLabel="label"
+            optionValue="value"
+            appendTo="body"
+            styleClass="rcd-select">
+          </p-select>
+        </div>
+
+        <fieldset class="rcd-card rcd-flags">
+          <legend>Flags</legend>
+          <label class="rcd-check">
+            <input type="checkbox" [checked]="cfg.dev" (change)="patch('dev', $any($event.target).checked)">
+            <span class="rcd-check-label"><code>--dev</code><small>Dev mode (button instead of wait-for-light)</small></span>
+          </label>
+          <label class="rcd-check">
+            <input type="checkbox" [checked]="cfg.no_calibrate" (change)="patch('no_calibrate', $any($event.target).checked)">
+            <span class="rcd-check-label"><code>--no-calibrate</code><small>Use stored calibration values</small></span>
+          </label>
+          <label class="rcd-check">
+            <input type="checkbox" [checked]="cfg.no_checkpoints" (change)="patch('no_checkpoints', $any($event.target).checked)">
+            <span class="rcd-check-label"><code>--no-checkpoints</code><small>Skip wait-for-checkpoint steps</small></span>
+          </label>
+          <label class="rcd-check">
+            <input type="checkbox" [checked]="cfg.no_codegen" (change)="patch('no_codegen', $any($event.target).checked)">
+            <span class="rcd-check-label"><code>--no-codegen</code><small>Skip hardware code generation</small></span>
+          </label>
+          <label class="rcd-check">
+            <input type="checkbox" [checked]="cfg.no_sync" (change)="patch('no_sync', $any($event.target).checked)">
+            <span class="rcd-check-label"><code>--no-sync</code><small>Skip syncing to the Pi</small></span>
+          </label>
+          <label class="rcd-check">
+            <input type="checkbox" [checked]="cfg.record_localization" (change)="patch('record_localization', $any($event.target).checked)">
+            <span class="rcd-check-label"><code>--record-localization</code><small>Capture localization data for replay</small></span>
+          </label>
+        </fieldset>
+
+        <div class="rcd-field">
+          <label>Extra args (space-separated)</label>
+          <input
+            type="text"
+            pInputText
+            [(ngModel)]="argsText"
+            placeholder="--no-m0 --no-m2">
+        </div>
+
+        <div class="rcd-field">
+          <label>Environment variables (KEY=VALUE per line)</label>
+          <textarea
+            class="rcd-textarea"
+            rows="4"
+            [(ngModel)]="envText"
+            placeholder="MY_FLAG=1&#10;LIBSTP_LOG_LEVEL=debug"></textarea>
+        </div>
+
+        <!-- Live preview: PyCharm's "Effective command line" — updates as
+             you toggle checkboxes, type args, etc. -->
+        <div class="rcd-card rcd-preview">
+          <div class="rcd-preview-label">
+            <i class="pi pi-terminal"></i>
+            <span>Effective command line</span>
+          </div>
+          <code class="rcd-preview-code">{{ effectiveCommand() }}</code>
+        </div>
+      } @else {
+        <p class="rcd-empty">Select a configuration on the left, or click <i class="pi pi-plus"></i> to create a new one.</p>
+      }
+
+      @if (error()) {
+        <p class="rcd-error">{{ error() }}</p>
+      }
+    </section>
   </div>
-}
+
+  <ng-template pTemplate="footer">
+    <div class="rcd-footer-actions">
+      <p-button label="Cancel" severity="secondary" [text]="true" (onClick)="close()"></p-button>
+      <p-button label="Save" icon="pi pi-check" [loading]="busy()" (onClick)="save()"></p-button>
+    </div>
+  </ng-template>
+</p-dialog>

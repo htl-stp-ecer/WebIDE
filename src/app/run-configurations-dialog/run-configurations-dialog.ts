@@ -1,6 +1,10 @@
 import { Component, computed, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { Dialog } from 'primeng/dialog';
+import { Button } from 'primeng/button';
+import { InputText } from 'primeng/inputtext';
+import { Select } from 'primeng/select';
 import { HttpService, RunConfiguration } from '../services/http-service';
 import { RunActionService } from '../services/run-action-service';
 
@@ -10,18 +14,29 @@ import { RunActionService } from '../services/run-action-service';
  * pane and edit it in the right pane. Save persists to the IDE backend
  * which writes ``run_configurations:`` in ``raccoon.project.yml`` —
  * the same file the ``raccoon run`` CLI reads.
+ *
+ * Builtins (default, dev, simulated) are editable too: editing one
+ * writes a user-defined entry that shadows the builtin in the merged
+ * view. Removing that override surfaces the builtin again.
  */
 @Component({
   selector: 'app-run-configurations-dialog',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, Dialog, Button, InputText, Select],
   templateUrl: './run-configurations-dialog.html',
   styleUrl: './run-configurations-dialog.scss',
 })
 export class RunConfigurationsDialog {
-  readonly open = signal(false);
+  readonly visible = signal(false);
   readonly busy = signal(false);
   readonly error = signal<string | null>(null);
+
+  readonly targetOptions = [
+    { label: 'Auto (remote if connected, else local)', value: 'auto' },
+    { label: 'Local', value: 'local' },
+    { label: 'Remote (Pi)', value: 'remote' },
+    { label: 'Simulated (libstp)', value: 'simulated' },
+  ];
 
   // Working copy: edited locally, only synced back on Save.
   readonly working = signal<RunConfiguration[]>([]);
@@ -33,8 +48,23 @@ export class RunConfigurationsDialog {
     return this.working().find(c => c.name === name) ?? null;
   });
 
-  // Env-var editing as a textarea (KEY=VALUE per line) — easiest UX
-  // for an MVP and matches how the CLI prints them.
+  readonly effectiveCommand = computed<string>(() => {
+    const cfg = this.selected();
+    if (!cfg) return 'raccoon run';
+    const parts = ['raccoon', 'run', cfg.name];
+    if (cfg.dev) parts.push('--dev');
+    if (cfg.no_calibrate) parts.push('--no-calibrate');
+    if (cfg.no_checkpoints) parts.push('--no-checkpoints');
+    if (cfg.no_codegen) parts.push('--no-codegen');
+    if (cfg.no_sync) parts.push('--no-sync');
+    if (cfg.record_localization) parts.push('--record-localization');
+    if (cfg.record_hz != null) parts.push(`--record-hz=${cfg.record_hz}`);
+    if (cfg.target === 'local') parts.push('--local');
+    parts.push(...cfg.args);
+    return parts.join(' ');
+  });
+
+  // Env vars edited as KEY=VALUE per line — easiest UX and matches the CLI.
   envText = '';
   argsText = '';
 
@@ -45,23 +75,37 @@ export class RunConfigurationsDialog {
 
   show(): void {
     this.error.set(null);
-    // Snapshot the live configs so the dialog is independent until Save.
-    const snapshot = this.runAction.runConfigurations().map(c => ({ ...c, args: [...c.args], env: { ...c.env } }));
+    // Snapshot the live configs so the dialog stays independent until Save.
+    const snapshot = this.runAction.runConfigurations().map(c => ({
+      ...c,
+      args: [...c.args],
+      env: { ...c.env },
+    }));
     this.working.set(snapshot);
     const current = this.runAction.selectedRunConfigName();
-    const initial = current && snapshot.some(c => c.name === current) ? current : (snapshot[0]?.name ?? null);
+    const initial = current && snapshot.some(c => c.name === current)
+      ? current
+      : (snapshot[0]?.name ?? null);
     this.select(initial);
-    this.open.set(true);
+    this.visible.set(true);
   }
 
   close(): void {
-    this.open.set(false);
+    this.visible.set(false);
+  }
+
+  onVisibleChange(v: boolean): void {
+    this.visible.set(v);
   }
 
   select(name: string | null): void {
+    // Flush previous selection's textareas before switching panes.
+    this.flushTextAreas();
     this.selectedName.set(name);
     const cfg = this.selected();
-    this.envText = cfg ? Object.entries(cfg.env).map(([k, v]) => `${k}=${v}`).join('\n') : '';
+    this.envText = cfg
+      ? Object.entries(cfg.env).map(([k, v]) => `${k}=${v}`).join('\n')
+      : '';
     this.argsText = cfg ? cfg.args.join(' ') : '';
   }
 
@@ -96,7 +140,13 @@ export class RunConfigurationsDialog {
     const names = new Set(this.working().map(c => c.name));
     let i = 1;
     while (names.has(newName)) newName = `${cfg.name}-copy-${++i}`;
-    const copy: RunConfiguration = { ...cfg, args: [...cfg.args], env: { ...cfg.env }, name: newName, builtin: false };
+    const copy: RunConfiguration = {
+      ...cfg,
+      args: [...cfg.args],
+      env: { ...cfg.env },
+      name: newName,
+      builtin: false,
+    };
     this.working.update(list => [...list, copy]);
     this.select(newName);
   }
@@ -105,7 +155,9 @@ export class RunConfigurationsDialog {
     const cfg = this.selected();
     if (!cfg) return;
     if (cfg.builtin) {
-      this.error.set(`Cannot remove builtin preset '${cfg.name}'`);
+      // Builtins live in code — there is nothing to delete on disk. Tell
+      // the user to override them via duplicate-then-edit instead.
+      this.error.set(`Builtin preset '${cfg.name}' cannot be removed. Duplicate it to create a custom entry.`);
       return;
     }
     this.working.update(list => list.filter(c => c.name !== cfg.name));
@@ -113,25 +165,54 @@ export class RunConfigurationsDialog {
   }
 
   /**
-   * Patch the selected configuration in the working copy. The signal-based
-   * model rejects in-place mutation, so we splice in a fresh object.
+   * Patch the selected configuration in the working copy. Editing a
+   * builtin clears its ``builtin`` flag so Save persists it as a
+   * user-defined override of the preset.
    */
   patch<K extends keyof RunConfiguration>(key: K, value: RunConfiguration[K]): void {
     const cfg = this.selected();
     if (!cfg) return;
-    this.working.update(list => list.map(c => c === cfg ? { ...c, [key]: value } : c));
+    this.working.update(list => list.map(c => c === cfg ? { ...c, builtin: false, [key]: value } : c));
   }
 
   onNameChange(newName: string): void {
     const cfg = this.selected();
-    if (!cfg || cfg.builtin) return;
+    if (!cfg) return;
     const trimmed = newName.trim();
-    if (!trimmed) return;
-    this.working.update(list => list.map(c => c === cfg ? { ...c, name: trimmed } : c));
+    if (!trimmed || trimmed === cfg.name) return;
+    const taken = this.working().some(c => c !== cfg && c.name === trimmed);
+    if (taken) {
+      this.error.set(`A configuration named '${trimmed}' already exists`);
+      return;
+    }
+    this.error.set(null);
+    this.working.update(list => list.map(c => c === cfg ? { ...c, builtin: false, name: trimmed } : c));
     this.selectedName.set(trimmed);
   }
 
-  /** Parse the env textarea on demand — keeps the model clean of malformed entries. */
+  /**
+   * Reset a builtin override back to the shipped defaults by removing
+   * the user copy. The backend re-surfaces the original builtin on
+   * reload.
+   */
+  resetSelectedToBuiltin(): void {
+    const cfg = this.selected();
+    if (!cfg) return;
+    const original = this.runAction.runConfigurations().find(c => c.name === cfg.name);
+    if (!original?.builtin) return;
+    const restored = { ...original, args: [...original.args], env: { ...original.env } };
+    this.working.update(list => list.map(c => c === cfg ? restored : c));
+    this.select(cfg.name);
+  }
+
+  isOverridingBuiltin(): boolean {
+    const cfg = this.selected();
+    if (!cfg) return false;
+    const original = this.runAction.runConfigurations().find(c => c.name === cfg.name);
+    return !!original?.builtin && !cfg.builtin;
+  }
+
+  /** Parse the env textarea — keeps the model clean of malformed entries. */
   private parseEnvText(): Record<string, string> {
     const result: Record<string, string> = {};
     for (const raw of this.envText.split('\n')) {
@@ -150,17 +231,24 @@ export class RunConfigurationsDialog {
     return this.argsText.split(/\s+/).map(s => s.trim()).filter(Boolean);
   }
 
+  /** Sync the textarea editors back into the selected config's model. */
+  private flushTextAreas(): void {
+    const cfg = this.selected();
+    if (!cfg) return;
+    const env = this.parseEnvText();
+    const args = this.parseArgs();
+    this.working.update(list => list.map(c => c === cfg
+      ? { ...c, env, args, builtin: false }
+      : c));
+  }
+
   async save(): Promise<void> {
     const projectUuid = this.runAction.currentProjectUUID();
     if (!projectUuid) {
       this.error.set('No active project');
       return;
     }
-    const cfg = this.selected();
-    if (cfg) {
-      // Flush the textareas back into the working copy before persisting.
-      this.working.update(list => list.map(c => c === cfg ? { ...c, env: this.parseEnvText(), args: this.parseArgs() } : c));
-    }
+    this.flushTextAreas();
     this.busy.set(true);
     this.error.set(null);
     try {
@@ -175,7 +263,7 @@ export class RunConfigurationsDialog {
         }
       }
       for (const c of current) {
-        if (c.builtin) continue;
+        if (c.builtin) continue;  // unchanged builtins live in code
         await this.http.upsertRunConfiguration(projectUuid, c).toPromise();
       }
       const fresh = await this.http.listRunConfigurations(projectUuid).toPromise();
