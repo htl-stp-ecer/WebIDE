@@ -52,6 +52,33 @@ const GIZMO_ARROW_SIZE = 10;
 const GIZMO_ROT_RADIUS = 58;
 const GIZMO_HIT_TOLERANCE = 10;
 
+type OverlayKey =
+  | 'expectedPath'
+  | 'stepPreview'
+  | 'liveTrace'
+  | 'recordedTrace'
+  | 'recordedParticles'
+  | 'recordedSensors'
+  | 'ghostRobots';
+
+interface OverlayOption {
+  key: OverlayKey;
+  label: string;
+}
+
+type OverlayVisibility = Record<OverlayKey, boolean>;
+
+const OVERLAY_STORAGE_KEY = 'table-visualization-overlays';
+const DEFAULT_OVERLAYS: OverlayVisibility = {
+  expectedPath: true,
+  stepPreview: true,
+  liveTrace: true,
+  recordedTrace: true,
+  recordedParticles: false,
+  recordedSensors: true,
+  ghostRobots: true,
+};
+
 type GizmoDragMode = 'translate-x' | 'translate-y' | 'rotate' | 'body';
 
 interface GizmoDragState {
@@ -90,6 +117,15 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
   readonly planningService = inject(PlanningModeService);
   readonly replayService = inject(LocalizationReplayService);
   private readonly httpService = inject(HttpService);
+  readonly overlayOptions: OverlayOption[] = [
+    { key: 'expectedPath', label: 'Expected' },
+    { key: 'stepPreview', label: 'Step Preview' },
+    { key: 'liveTrace', label: 'Live Trace' },
+    { key: 'recordedTrace', label: 'Recorded' },
+    { key: 'recordedParticles', label: 'Particles' },
+    { key: 'recordedSensors', label: 'Sensor Hits' },
+    { key: 'ghostRobots', label: 'Ghosts' },
+  ];
 
   /** Expose formatter so the template can render the timestamp. */
   readonly formatTns = formatTns;
@@ -105,6 +141,7 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
   // Zoom & pan state
   readonly zoom = signal(1);
   readonly panOffset = signal({ x: 0, y: 0 });
+  readonly overlayVisibility = signal<OverlayVisibility>(this.loadOverlayVisibility());
   private isPanning = false;
   private panStartPos = { x: 0, y: 0 };
 
@@ -148,6 +185,7 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
       // Replay overlay reactivity — re-render on frame changes / load.
       this.replayService.loadedRunId();
       this.replayService.currentFrameIndex();
+      this.overlayVisibility();
       this.render();
     });
   }
@@ -223,6 +261,18 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
       parts.push(`${run.frame_count}f`);
     }
     return parts.join(' · ');
+  }
+
+  isOverlayEnabled(key: OverlayKey): boolean {
+    return this.overlayVisibility()[key];
+  }
+
+  toggleOverlay(key: OverlayKey): void {
+    this.overlayVisibility.update(current => {
+      const next = { ...current, [key]: !current[key] };
+      localStorage.setItem(OVERLAY_STORAGE_KEY, JSON.stringify(next));
+      return next;
+    });
   }
 
   /** Load robot dimensions/pose from backend so the robot renders correctly without opening the robot editor */
@@ -325,22 +375,24 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
     this.renderMap(width, height);
 
     // Draw planned path
-    if (this.showPaths()) {
+    if (this.showPaths() && this.isOverlayEnabled('expectedPath')) {
       this.renderPlannedPath(width, height);
     }
 
     // Draw path
-    if (this.showPaths()) {
+    if (this.showPaths() && this.isOverlayEnabled('stepPreview')) {
       this.renderPath(width, height);
     }
 
     // Draw live trajectory streamed from a real-sim run.
-    this.renderLiveTrajectory(width, height);
+    if (this.showPaths() && this.isOverlayEnabled('liveTrace')) {
+      this.renderLiveTrajectory(width, height);
+    }
 
     const replayActive = this.replayService.loadedRunId() !== null;
 
     // Draw ghost robot at planned end position
-    if (this.showPaths() && !replayActive) {
+    if (this.showPaths() && !replayActive && this.isOverlayEnabled('ghostRobots')) {
       this.renderGhostRobot(width, height);
     }
 
@@ -362,10 +414,14 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
     const params = { tableToCanvasX, tableToCanvasY };
 
     // Trail of estimate poses up to now.
-    renderReplayTrail(this.ctx, this.replayService.trailUpToNow(), params);
+    if (this.isOverlayEnabled('recordedTrace')) {
+      renderReplayTrail(this.ctx, this.replayService.trailUpToNow(), params);
+    }
 
     // Particle cloud.
-    renderParticleCloud(this.ctx, frame, params);
+    if (this.isOverlayEnabled('recordedParticles')) {
+      renderParticleCloud(this.ctx, frame, params);
+    }
 
     // Ghost robot at recorded pose (use header dims if present, fall back to live config).
     const header = this.replayService.header();
@@ -380,21 +436,25 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
       rotationCenterStrafeCm: liveCfg.rotationCenterStrafeCm,
     };
 
-    this.ctx.save();
-    this.ctx.globalAlpha = 0.6;
-    renderRobotAtCenter(this.ctx, cx, cy, pose.theta, robotConfig, scaleX, scaleY, {
-      bodyFill: 'rgba(125, 211, 252, 0.35)',
-      bodyStroke: '#7dd3fc',
-      arrowFill: '#facc15',
-      rotationCenterFill: '#a855f7',
-      geometricCenterFill: '#facc15',
-      dashed: false,
-      sensors: [],
-    });
-    this.ctx.restore();
+    if (this.isOverlayEnabled('ghostRobots')) {
+      this.ctx.save();
+      this.ctx.globalAlpha = 0.6;
+      renderRobotAtCenter(this.ctx, cx, cy, pose.theta, robotConfig, scaleX, scaleY, {
+        bodyFill: 'rgba(125, 211, 252, 0.35)',
+        bodyStroke: '#7dd3fc',
+        arrowFill: '#facc15',
+        rotationCenterFill: '#a855f7',
+        geometricCenterFill: '#facc15',
+        dashed: false,
+        sensors: [],
+      });
+      this.ctx.restore();
+    }
 
     // Sensor-hit markers (only on resync ticks observations are non-empty).
-    renderSensorHits(this.ctx, frame, params, header);
+    if (this.isOverlayEnabled('recordedSensors')) {
+      renderSensorHits(this.ctx, frame, params, header);
+    }
   }
 
   private renderMap(width: number, height: number): void {
@@ -990,6 +1050,20 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
     }
 
     return segmentEndIndex;
+  }
+
+  private loadOverlayVisibility(): OverlayVisibility {
+    try {
+      const raw = localStorage.getItem(OVERLAY_STORAGE_KEY);
+      if (!raw) return { ...DEFAULT_OVERLAYS };
+      const parsed = JSON.parse(raw) as Partial<OverlayVisibility>;
+      return {
+        ...DEFAULT_OVERLAYS,
+        ...parsed,
+      };
+    } catch {
+      return { ...DEFAULT_OVERLAYS };
+    }
   }
 
   // --- Zoom & Pan ---
