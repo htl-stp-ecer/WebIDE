@@ -117,6 +117,31 @@
       (dblclick)="onDoubleClick()"
       (contextmenu)="$event.preventDefault()"></canvas>
 
+    @if (hasMultipleLayers()) {
+      <div class="layer-switcher" (pointerdown)="$event.stopPropagation()" (wheel)="$event.stopPropagation()">
+        <button
+          type="button"
+          class="layer-arrow"
+          (click)="goUpLayer()"
+          [disabled]="!canGoUp()"
+          title="Layer above">
+          <i class="pi pi-chevron-up"></i>
+        </button>
+        <div class="layer-display">
+          <span class="layer-name" [title]="activeLayerName()">{{ activeLayerName() }}</span>
+          <span class="layer-meta">z {{ activeLayerZLabel() }} · {{ activeLayerIndex() + 1 }}/{{ layerCount() }}</span>
+        </div>
+        <button
+          type="button"
+          class="layer-arrow"
+          (click)="goDownLayer()"
+          [disabled]="!canGoDown()"
+          title="Layer below">
+          <i class="pi pi-chevron-down"></i>
+        </button>
+      </div>
+    }
+
     @if (mapService.isLoading() || vizService.plannedPathLoading()) {
       <div class="viz-loading-overlay">
         <i class="pi pi-spin pi-spinner viz-overlay-spinner"></i>

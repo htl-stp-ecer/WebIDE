@@ -1,4 +1,4 @@
-export type EditorTool = 'draw' | 'select' | 'measure';
+export type EditorTool = 'draw' | 'select' | 'measure' | 'transition';
 export type CoordOrigin = 'tl' | 'tr' | 'bl' | 'br';
 export type LineKind = 'line' | 'wall';
 export type MeasurementUnit = 'cm' | 'inch';
@@ -51,6 +51,7 @@ export const TOOL_OPTIONS: { value: EditorTool; labelKey: string; icon: string }
   { value: 'draw', labelKey: 'FLOWCHART.TABLE_TOOL_DRAW', icon: 'pi pi-pencil' },
   { value: 'select', labelKey: 'FLOWCHART.TABLE_TOOL_SELECT', icon: 'pi pi-mouse' },
   { value: 'measure', labelKey: 'FLOWCHART.TABLE_TOOL_MEASURE', icon: 'pi pi-arrows-h' },
+  { value: 'transition', labelKey: 'FLOWCHART.TABLE_TOOL_TRANSITION', icon: 'pi pi-sort-alt' },
 ];
 
 export const LINE_KIND_OPTIONS: { value: LineKind; labelKey: string }[] = [

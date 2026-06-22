@@ -8,6 +8,7 @@ import {
   effect,
   input,
   signal,
+  computed,
   EventEmitter,
   Output,
 } from '@angular/core';
@@ -148,11 +149,56 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
   // Gizmo drag state
   private gizmoDragState: GizmoDragState | null = null;
 
+  // --- Layer switcher (Dwarf-Fortress-style z-level stepper) ---
+  /** All layers ordered bottom→top by z-height (ground first). */
+  readonly layerStack = computed(() =>
+    [...this.mapService.layers()].sort((a, b) => a.zCm - b.zCm)
+  );
+  readonly hasMultipleLayers = computed(() => this.layerStack().length > 1);
+  readonly layerCount = computed(() => this.layerStack().length);
+  /** Index of the active layer within the bottom→top stack (-1 if none). */
+  readonly activeLayerIndex = computed(() => {
+    const id = this.mapService.activeLayerId();
+    return this.layerStack().findIndex(l => l.id === id);
+  });
+  readonly canGoUp = computed(() => {
+    const idx = this.activeLayerIndex();
+    return idx >= 0 && idx < this.layerStack().length - 1;
+  });
+  readonly canGoDown = computed(() => this.activeLayerIndex() > 0);
+  readonly activeLayerName = computed(() => this.mapService.activeLayer()?.name ?? '');
+  readonly activeLayerZLabel = computed(() => {
+    const z = this.mapService.activeLayer()?.zCm ?? 0;
+    return Number.isInteger(z) ? `${z}` : z.toFixed(1);
+  });
+
+  /** Move the view one layer up (toward higher z). */
+  goUpLayer(): void {
+    const stack = this.layerStack();
+    const idx = this.activeLayerIndex();
+    if (idx >= 0 && idx < stack.length - 1) {
+      this.mapService.setActiveLayer(stack[idx + 1].id);
+    }
+  }
+
+  /** Move the view one layer down (toward lower z). */
+  goDownLayer(): void {
+    const stack = this.layerStack();
+    const idx = this.activeLayerIndex();
+    if (idx > 0) {
+      this.mapService.setActiveLayer(stack[idx - 1].id);
+    }
+  }
+
   constructor() {
     effect(() => {
       // React to changes in map and visualization state
       this.mapService.mapImage();
       this.mapService.lineSegmentsCm();
+      // React to layer switches and stack changes (ghost-layer rendering).
+      this.mapService.layers();
+      this.mapService.activeLayerId();
+      this.mapService.transitions();
       const wallSegments = this.mapService.wallSegmentsCm();
       const mapConfig = this.mapService.config();
       const robotConfig = this.vizService.robotConfig();
@@ -374,6 +420,9 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
     // Draw map (white surface with vector lines)
     this.renderMap(width, height);
 
+    // Draw transitions (ramps/portals) touching the active layer.
+    this.renderTransitions(width, height);
+
     // Draw planned path
     if (this.showPaths() && this.isOverlayEnabled('expectedPath')) {
       this.renderPlannedPath(width, height);
@@ -480,6 +529,9 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
       this.ctx.fillText('Draw a map in the Table Editor panel', offsetX + drawWidth / 2, offsetY + drawHeight - 8);
     }
 
+    // Dwarf-Fortress depth: layers below the active one show through, dimmed.
+    this.renderGhostLayers(offsetX, offsetY, scaleX, scaleY, drawHeight);
+
     // Draw black line segments
     this.ctx.strokeStyle = '#000000';
     this.ctx.lineCap = 'round';
@@ -524,6 +576,115 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
     this.ctx.strokeStyle = '#4b5563';
     this.ctx.lineWidth = Math.max(3, WALL_THICKNESS_CM * 1.5 * Math.min(scaleX, scaleY));
     this.ctx.strokeRect(offsetX, offsetY, drawWidth, drawHeight);
+  }
+
+  /**
+   * Render transitions (ramps/portals) whose endpoints touch the active layer.
+   * Transition edges are stored in top-left (file) coordinates, so the Y axis is
+   * flipped to match this panel's bottom-left rendering space.
+   */
+  private renderTransitions(width: number, height: number): void {
+    const transitions = this.mapService.transitions();
+    if (!transitions.length) return;
+    const active = this.mapService.activeLayerId();
+    const { offsetX, offsetY, scaleX, scaleY, drawHeight } = this.getDrawParams(width, height);
+    const heightCm = this.mapService.config().heightCm;
+    const toCanvas = (xCm: number, yTopLeft: number) =>
+      this.tableToCanvasWithParams(xCm, heightCm - yTopLeft, offsetX, offsetY, scaleX, scaleY, drawHeight);
+
+    this.ctx.save();
+    this.ctx.lineCap = 'round';
+    for (const t of transitions) {
+      const fromActive = t.fromLayer === active;
+      const toActive = t.toLayer === active;
+      if (!fromActive && !toActive) continue;
+
+      const fromMid = toCanvas((t.from.startX + t.from.endX) / 2, (t.from.startY + t.from.endY) / 2);
+      const toMid = toCanvas((t.to.startX + t.to.endX) / 2, (t.to.startY + t.to.endY) / 2);
+
+      // Dashed connector between the two edges.
+      this.ctx.setLineDash([4, 3]);
+      this.ctx.strokeStyle = 'rgba(245, 158, 11, 0.55)';
+      this.ctx.lineWidth = 1;
+      this.ctx.beginPath();
+      this.ctx.moveTo(fromMid.x, fromMid.y);
+      this.ctx.lineTo(toMid.x, toMid.y);
+      this.ctx.stroke();
+      this.ctx.setLineDash([]);
+
+      // Primary edge (on active layer) solid, counterpart edge faded.
+      const drawEdge = (edge: { startX: number; startY: number; endX: number; endY: number }, primary: boolean) => {
+        const a = toCanvas(edge.startX, edge.startY);
+        const b = toCanvas(edge.endX, edge.endY);
+        this.ctx.strokeStyle = primary ? '#f59e0b' : 'rgba(245, 158, 11, 0.4)';
+        this.ctx.lineWidth = primary ? 3 : 2;
+        this.ctx.beginPath();
+        this.ctx.moveTo(a.x, a.y);
+        this.ctx.lineTo(b.x, b.y);
+        this.ctx.stroke();
+      };
+      drawEdge(t.from, fromActive);
+      drawEdge(t.to, toActive);
+    }
+    this.ctx.restore();
+  }
+
+  /**
+   * Render the layers below the active one as dimmed "ghost" geometry, so the
+   * operator perceives depth like a Dwarf-Fortress z-level view: the deeper a
+   * layer sits, the fainter it appears. Layers above the active one are hidden.
+   */
+  private renderGhostLayers(
+    offsetX: number,
+    offsetY: number,
+    scaleX: number,
+    scaleY: number,
+    drawHeight: number
+  ): void {
+    const stack = this.layerStack();
+    const activeIdx = this.activeLayerIndex();
+    if (activeIdx <= 0) return; // Nothing below the active layer.
+
+    this.ctx.save();
+    this.ctx.lineCap = 'round';
+    this.ctx.lineJoin = 'round';
+
+    // Paint deepest first so nearer layers stack on top.
+    for (let i = 0; i < activeIdx; i++) {
+      const layer = stack[i];
+      const depth = activeIdx - i; // 1 = directly beneath the active layer
+      const alpha = Math.max(0.07, 0.34 / depth);
+
+      this.ctx.globalAlpha = alpha;
+
+      // Ghost lines — slate so they read as "below" against the white surface.
+      this.ctx.strokeStyle = '#1f2a3a';
+      for (const seg of layer.lineSegments) {
+        const t = seg.thickness ?? LINE_THICKNESS_CM;
+        this.ctx.lineWidth = Math.max(0.75, t * Math.min(scaleX, scaleY) * 0.85);
+        const start = this.tableToCanvasWithParams(seg.startX, seg.startY, offsetX, offsetY, scaleX, scaleY, drawHeight);
+        const end = this.tableToCanvasWithParams(seg.endX, seg.endY, offsetX, offsetY, scaleX, scaleY, drawHeight);
+        this.ctx.beginPath();
+        this.ctx.moveTo(start.x, start.y);
+        this.ctx.lineTo(end.x, end.y);
+        this.ctx.stroke();
+      }
+
+      // Ghost walls — cooler blue-gray.
+      this.ctx.strokeStyle = '#334766';
+      for (const wall of layer.wallSegments) {
+        const t = wall.thickness || WALL_THICKNESS_CM;
+        this.ctx.lineWidth = Math.max(1, t * Math.min(scaleX, scaleY) * 0.85);
+        const start = this.tableToCanvasWithParams(wall.startX, wall.startY, offsetX, offsetY, scaleX, scaleY, drawHeight);
+        const end = this.tableToCanvasWithParams(wall.endX, wall.endY, offsetX, offsetY, scaleX, scaleY, drawHeight);
+        this.ctx.beginPath();
+        this.ctx.moveTo(start.x, start.y);
+        this.ctx.lineTo(end.x, end.y);
+        this.ctx.stroke();
+      }
+    }
+
+    this.ctx.restore();
   }
 
   private tableToCanvasWithParams(

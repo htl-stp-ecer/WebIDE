@@ -15,8 +15,12 @@ import {
 import { CommonModule } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { TableEditorToolbar } from './table-editor-toolbar';
-import { TableMapService, type LineSegmentCm, type WallSegmentCm } from './services';
-import { HttpService } from '../../../services/http-service';
+import { TableMapService, type LineSegmentCm, type WallSegmentCm, type LayerVectorData } from './services';
+import {
+  HttpService,
+  type TableMapTransition,
+  type TableMapTransitionEdge,
+} from '../../../services/http-service';
 import {
   CoordOrigin,
   EditorTool,
@@ -62,6 +66,22 @@ type SelectDragState =
       endpoint: EndpointHandle;
       anchor: VectorPoint;
     };
+
+type TransitionEdgeRole = 'from' | 'to';
+type TransitionEndpoint = 'start' | 'end';
+
+type TransitionDragState =
+  | { kind: 'endpoint'; id: string; role: TransitionEdgeRole; endpoint: TransitionEndpoint }
+  | {
+      kind: 'edge';
+      id: string;
+      role: TransitionEdgeRole;
+      startPointer: VectorPoint;
+      origin: TableMapTransitionEdge;
+    };
+
+/** Default ramp/portal clearance width for a freshly drawn transition. */
+const DEFAULT_TRANSITION_WIDTH_CM = 20;
 
 const TABLE_MAP_FILE_FORMAT = 'flowchart-table-map';
 const TABLE_MAP_FILE_VERSION = 2;
@@ -185,6 +205,113 @@ export class TableEditorView implements AfterViewInit, OnDestroy {
     const id = this.selectedLineId();
     if (!id) return null;
     return this.lines().find(line => line.id === id) ?? null;
+  });
+
+  // ─── Layers & transitions ──────────────────────────────────────────────
+  /** Currently selected transition in the side panel (for property editing). */
+  readonly selectedTransitionId = signal<string | null>(null);
+  /**
+   * In-progress transition while the user draws the FROM edge on one layer and
+   * the TO edge on another. Coordinates are top-left origin (file space).
+   */
+  readonly pendingTransition = signal<{ fromLayer: string; fromEdge: TableMapTransitionEdge } | null>(null);
+  private transitionDragState: TransitionDragState | null = null;
+
+  /** All layers, ordered bottom→top by z-height. Falls back to a virtual ground layer. */
+  readonly editorLayers = computed<LayerVectorData[]>(() => {
+    const layers = this.mapService.layers();
+    if (layers.length) return [...layers].sort((a, b) => a.zCm - b.zCm);
+    return [{ id: 'ground', name: 'Ground', zCm: 0, lineSegments: [], wallSegments: [] }];
+  });
+  /** Layers ordered top→bottom (highest z first) for the layer list display. */
+  readonly layersTopDown = computed<LayerVectorData[]>(() => [...this.editorLayers()].reverse());
+  readonly activeLayerId = computed(() => this.mapService.activeLayerId() || 'ground');
+  readonly activeLayerIndex = computed(() =>
+    this.editorLayers().findIndex(l => l.id === this.activeLayerId())
+  );
+  readonly activeLayerName = computed(
+    () => this.editorLayers().find(l => l.id === this.activeLayerId())?.name ?? 'Ground'
+  );
+  readonly hasMultipleLayers = computed(() => this.editorLayers().length > 1);
+  readonly canLayerUp = computed(() => {
+    const idx = this.activeLayerIndex();
+    return idx >= 0 && idx < this.editorLayers().length - 1;
+  });
+  readonly canLayerDown = computed(() => this.activeLayerIndex() > 0);
+
+  /**
+   * Dimmed "ghost" geometry of the layers below the active one (Dwarf-Fortress
+   * depth). Converted to editor (top-left) coordinates. The active layer itself
+   * is rendered live from `lines()`; layers above are hidden.
+   */
+  readonly ghostLayers = computed(() => {
+    const stack = this.editorLayers();
+    const activeIdx = this.activeLayerIndex();
+    if (activeIdx <= 0) return [];
+    const out: { depth: number; opacity: number; segments: { x1: number; y1: number; x2: number; y2: number; kind: LineKind; width: number }[] }[] = [];
+    for (let i = 0; i < activeIdx; i++) {
+      const layer = stack[i];
+      const segments = [
+        ...layer.lineSegments.map(s => ({
+          x1: s.startX, y1: TABLE_HEIGHT_CM - s.startY,
+          x2: s.endX, y2: TABLE_HEIGHT_CM - s.endY,
+          kind: 'line' as LineKind, width: s.thickness ?? DEFAULT_LINE_WIDTH_CM,
+        })),
+        ...layer.wallSegments.map(s => ({
+          x1: s.startX, y1: TABLE_HEIGHT_CM - s.startY,
+          x2: s.endX, y2: TABLE_HEIGHT_CM - s.endY,
+          kind: 'wall' as LineKind, width: s.thickness,
+        })),
+      ];
+      const depth = activeIdx - i;
+      out.push({ depth, opacity: Math.max(0.06, 0.32 / depth), segments });
+    }
+    return out;
+  });
+
+  readonly transitions = computed(() => this.mapService.transitions());
+  readonly selectedTransition = computed(() => {
+    const id = this.selectedTransitionId();
+    if (!id) return null;
+    return this.transitions().find(t => t.id === id) ?? null;
+  });
+
+  /**
+   * Renderable transition edges that touch the active layer. The edge living on
+   * the active layer is `primary` (draggable, with handles); the counterpart
+   * edge on the other layer is shown dimmed for reference.
+   */
+  readonly transitionRenders = computed(() => {
+    const active = this.activeLayerId();
+    const sel = this.selectedTransitionId();
+    const out: {
+      id: string; name: string; role: TransitionEdgeRole;
+      edge: TableMapTransitionEdge; primary: boolean; selected: boolean;
+    }[] = [];
+    for (const t of this.transitions()) {
+      const fromActive = t.fromLayer === active;
+      const toActive = t.toLayer === active;
+      if (!fromActive && !toActive) continue;
+      const primaryRole: TransitionEdgeRole = fromActive ? 'from' : 'to';
+      out.push({ id: t.id, name: t.name ?? '', role: 'from', edge: t.from, primary: primaryRole === 'from', selected: t.id === sel });
+      out.push({ id: t.id, name: t.name ?? '', role: 'to', edge: t.to, primary: primaryRole === 'to', selected: t.id === sel });
+    }
+    return out;
+  });
+
+  /** Dashed connectors linking the two edges of each transition touching the active layer. */
+  readonly transitionConnectors = computed(() => {
+    const active = this.activeLayerId();
+    return this.transitions()
+      .filter(t => t.fromLayer === active || t.toLayer === active)
+      .map(t => ({
+        id: t.id,
+        x1: (t.from.startX + t.from.endX) / 2,
+        y1: (t.from.startY + t.from.endY) / 2,
+        x2: (t.to.startX + t.to.endX) / 2,
+        y2: (t.to.startY + t.to.endY) / 2,
+        selected: t.id === this.selectedTransitionId(),
+      }));
   });
 
   readonly canvasTransform = computed(() => {
@@ -366,6 +493,17 @@ export class TableEditorView implements AfterViewInit, OnDestroy {
       return;
     }
 
+    if (event.key === 'Escape' && this.activeTool() === 'transition') {
+      this.transitionDragState = null;
+      this.clearDraft();
+      if (this.pendingTransition()) {
+        this.pendingTransition.set(null);
+      } else {
+        this.activeTool.set('draw');
+      }
+      return;
+    }
+
     if (event.key !== 'Delete' && event.key !== 'Backspace') return;
     const activeElement = document.activeElement;
     if (activeElement && ['INPUT', 'TEXTAREA', 'SELECT'].includes(activeElement.tagName)) return;
@@ -373,6 +511,9 @@ export class TableEditorView implements AfterViewInit, OnDestroy {
     if (this.selectedLine()) {
       event.preventDefault();
       this.deleteSelectedLine();
+    } else if (this.selectedTransitionId()) {
+      event.preventDefault();
+      this.deleteTransition(this.selectedTransitionId()!);
     }
   }
 
@@ -438,11 +579,15 @@ export class TableEditorView implements AfterViewInit, OnDestroy {
   setTool(tool: EditorTool): void {
     this.activeTool.set(tool);
     this.selectDragState = null;
+    this.transitionDragState = null;
     this.guideLines.set([]);
     this.clearDraft();
     if (tool !== 'measure') {
       this.measurePointA.set(null);
       this.measurePointB.set(null);
+    }
+    if (tool !== 'transition') {
+      this.pendingTransition.set(null);
     }
   }
 
@@ -516,6 +661,11 @@ export class TableEditorView implements AfterViewInit, OnDestroy {
       return;
     }
 
+    if (this.transitionDragState) {
+      this.updateTransitionDrag(this.getMapCoordsClamped(event));
+      return;
+    }
+
     const start = this.draftStart();
     if (!start || !hoverPoint) return;
 
@@ -541,9 +691,21 @@ export class TableEditorView implements AfterViewInit, OnDestroy {
       return;
     }
 
+    if (this.transitionDragState) {
+      this.transitionDragState = null;
+      this.guideLines.set([]);
+      return;
+    }
+
     const start = this.draftStart();
     const end = this.draftEnd();
     if (!start || !end) return;
+
+    if (this.activeTool() === 'transition') {
+      this.commitTransitionDraft(start, end);
+      this.clearDraft();
+      return;
+    }
 
     const newLine: VectorLine = {
       id: this.createLineId(),
@@ -570,6 +732,10 @@ export class TableEditorView implements AfterViewInit, OnDestroy {
     }
     if (this.selectDragState) {
       this.selectDragState = null;
+      this.guideLines.set([]);
+    }
+    if (this.transitionDragState) {
+      this.transitionDragState = null;
       this.guideLines.set([]);
     }
   }
@@ -1279,6 +1445,252 @@ export class TableEditorView implements AfterViewInit, OnDestroy {
 
   measurementLabel(valueCm: number): string {
     return formatDistance(valueCm, this.measurementUnit());
+  }
+
+  // ─── Layer management ──────────────────────────────────────────────────
+
+  /** Push the editor's working lines into the service's active layer. */
+  private commitActiveLayerToService(): void {
+    const lineSegments = this.toServiceLineSegments(this.lines().filter(l => l.kind === 'line'));
+    const wallSegments = this.toServiceWallSegments(this.lines().filter(l => l.kind === 'wall'));
+    this.mapService.setVectorMap(lineSegments, wallSegments);
+  }
+
+  /** Make sure the service holds a layered state (seeds a ground layer from the working copy). */
+  private ensureServiceLayered(): void {
+    if (!this.mapService.layers().length) {
+      this.commitActiveLayerToService();
+    }
+  }
+
+  /** Switch the active layer, committing the current working copy first. */
+  switchToLayer(layerId: string): void {
+    if (layerId === this.activeLayerId()) return;
+    this.ensureServiceLayered();
+    this.commitActiveLayerToService();
+    this.mapService.setActiveLayer(layerId);
+    this.rebuildLinesFromMapService();
+    this.selectedLineId.set(null);
+    this.clearDraft();
+  }
+
+  layerUp(): void {
+    const stack = this.editorLayers();
+    const idx = this.activeLayerIndex();
+    if (idx >= 0 && idx < stack.length - 1) this.switchToLayer(stack[idx + 1].id);
+  }
+
+  layerDown(): void {
+    const stack = this.editorLayers();
+    const idx = this.activeLayerIndex();
+    if (idx > 0) this.switchToLayer(stack[idx - 1].id);
+  }
+
+  addLayer(): void {
+    this.ensureServiceLayered();
+    this.commitActiveLayerToService();
+    const count = this.mapService.layers().length;
+    const id = this.mapService.addLayer(`Layer ${count + 1}`);
+    this.mapService.setActiveLayer(id);
+    this.rebuildLinesFromMapService();
+    this.selectedLineId.set(null);
+    this.clearDraft();
+  }
+
+  renameLayer(id: string, name: string): void {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    this.ensureServiceLayered();
+    this.mapService.renameLayer(id, trimmed);
+  }
+
+  onLayerNameInput(id: string, event: Event): void {
+    this.renameLayer(id, (event.target as HTMLInputElement).value);
+  }
+
+  removeLayer(id: string): void {
+    if (this.editorLayers().length <= 1) return;
+    this.ensureServiceLayered();
+    const wasActive = id === this.activeLayerId();
+    if (wasActive) this.commitActiveLayerToService();
+    this.mapService.removeLayer(id);
+    if (wasActive) {
+      this.rebuildLinesFromMapService();
+      this.selectedLineId.set(null);
+      this.clearDraft();
+    }
+  }
+
+  layerName(id: string): string {
+    return this.editorLayers().find(l => l.id === id)?.name ?? id;
+  }
+
+  ghostStrokeColor(kind: LineKind): string {
+    return kind === 'wall' ? '#334766' : '#1f2a3a';
+  }
+
+  // ─── Transitions ───────────────────────────────────────────────────────
+
+  /** Finish drawing one edge of a transition (FROM first, then TO). */
+  private commitTransitionDraft(start: VectorPoint, end: VectorPoint): void {
+    const length = Math.hypot(end.x - start.x, end.y - start.y);
+    if (length < this.createLineThresholdCm) return;
+
+    const edge: TableMapTransitionEdge = {
+      startX: roundTo(start.x, 2),
+      startY: roundTo(start.y, 2),
+      endX: roundTo(end.x, 2),
+      endY: roundTo(end.y, 2),
+    };
+
+    const pending = this.pendingTransition();
+    if (!pending) {
+      this.pendingTransition.set({ fromLayer: this.activeLayerId(), fromEdge: edge });
+      this.message.set(this.translate.instant('FLOWCHART.TABLE_TRANSITION_HINT'));
+      return;
+    }
+
+    this.ensureServiceLayered();
+    const id = this.createLineId();
+    const count = this.transitions().length;
+    this.mapService.addTransition({
+      id,
+      name: `Ramp ${count + 1}`,
+      fromLayer: pending.fromLayer,
+      toLayer: this.activeLayerId(),
+      from: pending.fromEdge,
+      to: edge,
+      bidirectional: true,
+      costMultiplier: 1,
+      widthCm: DEFAULT_TRANSITION_WIDTH_CM,
+    });
+    this.pendingTransition.set(null);
+    this.selectedTransitionId.set(id);
+  }
+
+  cancelPendingTransition(): void {
+    this.pendingTransition.set(null);
+  }
+
+  selectTransition(id: string): void {
+    this.selectedTransitionId.set(id);
+    const t = this.transitions().find(x => x.id === id);
+    if (!t) return;
+    // Bring it onto the canvas if neither edge sits on the active layer.
+    if (t.fromLayer !== this.activeLayerId() && t.toLayer !== this.activeLayerId()) {
+      this.switchToLayer(t.fromLayer);
+    }
+  }
+
+  deleteTransition(id: string): void {
+    this.mapService.removeTransition(id);
+    if (this.selectedTransitionId() === id) this.selectedTransitionId.set(null);
+  }
+
+  private updateTransition(id: string, patch: Partial<TableMapTransition>): void {
+    const next = this.transitions().map(t => (t.id === id ? { ...t, ...patch } : t));
+    this.mapService.setTransitions(next);
+  }
+
+  setTransitionTarget(id: string, event: Event): void {
+    this.updateTransition(id, { toLayer: (event.target as HTMLSelectElement).value });
+  }
+
+  toggleTransitionBidirectional(id: string): void {
+    const t = this.transitions().find(x => x.id === id);
+    if (!t) return;
+    this.updateTransition(id, { bidirectional: t.bidirectional === false });
+  }
+
+  setTransitionWidth(id: string, event: Event): void {
+    const raw = (event.target as HTMLInputElement).value.replace(',', '.');
+    const value = Number.parseFloat(raw);
+    if (!Number.isFinite(value) || value <= 0) return;
+    this.updateTransition(id, { widthCm: roundTo(value, 2) });
+  }
+
+  onTransitionNameInput(id: string, event: Event): void {
+    this.updateTransition(id, { name: (event.target as HTMLInputElement).value.trim() });
+  }
+
+  transitionWidthLabel(t: TableMapTransition): number {
+    return roundTo(t.widthCm ?? DEFAULT_TRANSITION_WIDTH_CM, 2);
+  }
+
+  isTransitionBidirectional(t: TableMapTransition): boolean {
+    return t.bidirectional !== false;
+  }
+
+  onTransitionHandlePointerDown(
+    event: PointerEvent,
+    id: string,
+    role: TransitionEdgeRole,
+    endpoint: TransitionEndpoint
+  ): void {
+    if (event.button !== 0) return;
+    event.stopPropagation();
+    this.clearDraft();
+    this.selectedTransitionId.set(id);
+    this.containerRef.nativeElement.setPointerCapture(event.pointerId);
+    this.transitionDragState = { kind: 'endpoint', id, role, endpoint };
+  }
+
+  onTransitionEdgePointerDown(event: PointerEvent, id: string, role: TransitionEdgeRole): void {
+    if (event.button !== 0) return;
+    event.stopPropagation();
+    this.selectedTransitionId.set(id);
+    const t = this.transitions().find(x => x.id === id);
+    if (!t) return;
+    const active = this.activeLayerId();
+    const primary = (role === 'from' && t.fromLayer === active) || (role === 'to' && t.toLayer === active);
+    if (!primary) return; // Edge lives on another layer — select only, no drag.
+    this.clearDraft();
+    const point = this.getMapCoords(event) ?? this.getMapCoordsClamped(event);
+    this.containerRef.nativeElement.setPointerCapture(event.pointerId);
+    this.transitionDragState = {
+      kind: 'edge',
+      id,
+      role,
+      startPointer: point,
+      origin: { ...(role === 'from' ? t.from : t.to) },
+    };
+  }
+
+  private updateTransitionDrag(point: VectorPoint): void {
+    const drag = this.transitionDragState;
+    if (!drag) return;
+    const t = this.transitions().find(x => x.id === drag.id);
+    if (!t) return;
+
+    const edge: TableMapTransitionEdge = { ...(drag.role === 'from' ? t.from : t.to) };
+
+    if (drag.kind === 'endpoint') {
+      const snapped = this.findNearestAnchor(point, this.endpointSnapThresholdCm) ?? point;
+      if (drag.endpoint === 'start') {
+        edge.startX = roundTo(snapped.x, 2);
+        edge.startY = roundTo(snapped.y, 2);
+      } else {
+        edge.endX = roundTo(snapped.x, 2);
+        edge.endY = roundTo(snapped.y, 2);
+      }
+    } else {
+      let dx = point.x - drag.startPointer.x;
+      let dy = point.y - drag.startPointer.y;
+      const minX = Math.min(drag.origin.startX, drag.origin.endX);
+      const maxX = Math.max(drag.origin.startX, drag.origin.endX);
+      const minY = Math.min(drag.origin.startY, drag.origin.endY);
+      const maxY = Math.max(drag.origin.startY, drag.origin.endY);
+      if (minX + dx < 0) dx = -minX;
+      if (maxX + dx > TABLE_WIDTH_CM) dx = TABLE_WIDTH_CM - maxX;
+      if (minY + dy < 0) dy = -minY;
+      if (maxY + dy > TABLE_HEIGHT_CM) dy = TABLE_HEIGHT_CM - maxY;
+      edge.startX = roundTo(drag.origin.startX + dx, 2);
+      edge.startY = roundTo(drag.origin.startY + dy, 2);
+      edge.endX = roundTo(drag.origin.endX + dx, 2);
+      edge.endY = roundTo(drag.origin.endY + dy, 2);
+    }
+
+    this.updateTransition(drag.id, drag.role === 'from' ? { from: edge } : { to: edge });
   }
 
   exportMapFile(): void {

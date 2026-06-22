@@ -27,6 +27,7 @@
     [class.draw-mode]="activeTool() === 'draw'"
     [class.select-mode]="activeTool() === 'select'"
     [class.measure-mode]="activeTool() === 'measure'"
+    [class.transition-mode]="activeTool() === 'transition'"
     (wheel)="onWheel($event)"
     (pointerdown)="onPointerDown($event)"
     (pointermove)="onPointerMove($event)"
@@ -70,6 +71,24 @@
           </g>
         }
 
+        @if (ghostLayers().length) {
+          <g class="ghost-layer">
+            @for (ghost of ghostLayers(); track ghost.depth) {
+              @for (seg of ghost.segments; track $index) {
+                <line
+                  [attr.x1]="seg.x1"
+                  [attr.y1]="seg.y1"
+                  [attr.x2]="seg.x2"
+                  [attr.y2]="seg.y2"
+                  [attr.stroke]="ghostStrokeColor(seg.kind)"
+                  [attr.stroke-width]="seg.width"
+                  [attr.opacity]="ghost.opacity"
+                  stroke-linecap="round"></line>
+              }
+            }
+          </g>
+        }
+
         @if (showSmartGuides()) {
           <g class="guide-layer">
             @for (guide of guideLines(); track $index) {
@@ -103,7 +122,7 @@
               [attr.y1]="draftStart()!.y"
               [attr.x2]="draftEnd()!.x"
               [attr.y2]="draftEnd()!.y"
-              [attr.stroke]="lineKind() === 'wall' ? '#94a3b8' : '#0f172a'"
+              [attr.stroke]="activeTool() === 'transition' ? '#f59e0b' : (lineKind() === 'wall' ? '#94a3b8' : '#0f172a')"
               [attr.stroke-width]="draftLineStrokeWidth()"></line>
           }
 
@@ -151,6 +170,54 @@
               fill="#0f172a">
               {{ label }}
             </svg:text>
+          }
+        </g>
+
+        <g class="transition-layer">
+          @for (c of transitionConnectors(); track c.id) {
+            <line
+              class="transition-connector"
+              [class.selected]="c.selected"
+              [attr.x1]="c.x1"
+              [attr.y1]="c.y1"
+              [attr.x2]="c.x2"
+              [attr.y2]="c.y2"></line>
+          }
+
+          @if (pendingTransition(); as pend) {
+            <line
+              class="transition-pending"
+              [attr.x1]="pend.fromEdge.startX"
+              [attr.y1]="pend.fromEdge.startY"
+              [attr.x2]="pend.fromEdge.endX"
+              [attr.y2]="pend.fromEdge.endY"></line>
+          }
+
+          @for (tr of transitionRenders(); track tr.id + '-' + tr.role) {
+            <line
+              class="transition-edge"
+              [class.primary]="tr.primary"
+              [class.secondary]="!tr.primary"
+              [class.selected]="tr.selected"
+              [attr.x1]="tr.edge.startX"
+              [attr.y1]="tr.edge.startY"
+              [attr.x2]="tr.edge.endX"
+              [attr.y2]="tr.edge.endY"
+              (pointerdown)="onTransitionEdgePointerDown($event, tr.id, tr.role)"></line>
+            @if (tr.primary) {
+              <svg:circle
+                class="transition-handle"
+                [attr.cx]="tr.edge.startX"
+                [attr.cy]="tr.edge.startY"
+                r="1.4"
+                (pointerdown)="onTransitionHandlePointerDown($event, tr.id, tr.role, 'start')"></svg:circle>
+              <svg:circle
+                class="transition-handle"
+                [attr.cx]="tr.edge.endX"
+                [attr.cy]="tr.edge.endY"
+                r="1.4"
+                (pointerdown)="onTransitionHandlePointerDown($event, tr.id, tr.role, 'end')"></svg:circle>
+            }
           }
         </g>
 
@@ -281,6 +348,123 @@
         </div>
       </div>
     }
+
+    <div
+      class="editor-side-panel"
+      (pointerdown)="$event.stopPropagation()"
+      (wheel)="$event.stopPropagation()">
+
+      <div class="side-section">
+        <div class="side-header">
+          <span class="side-title">{{ 'FLOWCHART.TABLE_LAYERS' | translate }}</span>
+          <button class="side-icon-btn" (click)="addLayer()" [title]="'FLOWCHART.TABLE_LAYER_ADD' | translate">
+            <i class="pi pi-plus"></i>
+          </button>
+        </div>
+        <div class="layer-list">
+          @for (layer of layersTopDown(); track layer.id) {
+            <div
+              class="layer-row"
+              [class.active]="layer.id === activeLayerId()"
+              (click)="switchToLayer(layer.id)">
+              <i class="pi pi-clone layer-row-icon"></i>
+              <input
+                class="layer-name-input"
+                [value]="layer.name"
+                (pointerdown)="$event.stopPropagation()"
+                (click)="$event.stopPropagation()"
+                (change)="onLayerNameInput(layer.id, $event)" />
+              <span class="layer-z">z {{ layer.zCm }}</span>
+              <button
+                class="side-icon-btn danger"
+                [disabled]="layersTopDown().length <= 1"
+                (click)="removeLayer(layer.id); $event.stopPropagation()"
+                [title]="'FLOWCHART.TABLE_LAYER_DELETE' | translate">
+                <i class="pi pi-trash"></i>
+              </button>
+            </div>
+          }
+        </div>
+      </div>
+
+      <div class="side-section">
+        <div class="side-header">
+          <span class="side-title">{{ 'FLOWCHART.TABLE_TRANSITIONS' | translate }}</span>
+          <button
+            class="side-icon-btn"
+            [class.active]="activeTool() === 'transition'"
+            (click)="setTool('transition')"
+            [title]="'FLOWCHART.TABLE_TRANSITION_ADD' | translate">
+            <i class="pi pi-plus"></i>
+          </button>
+        </div>
+
+        @if (activeTool() === 'transition') {
+          <div class="transition-hint">
+            <span>{{ 'FLOWCHART.TABLE_TRANSITION_HINT' | translate }}</span>
+            @if (pendingTransition()) {
+              <button class="text-btn" (click)="cancelPendingTransition()">✕</button>
+            }
+          </div>
+        }
+
+        @if (transitions().length) {
+          <div class="transition-list">
+            @for (t of transitions(); track t.id) {
+              <div
+                class="transition-row"
+                [class.active]="t.id === selectedTransitionId()"
+                (click)="selectTransition(t.id)">
+                <div class="transition-row-head">
+                  <input
+                    class="transition-name-input"
+                    [value]="t.name || ''"
+                    placeholder="Ramp"
+                    (pointerdown)="$event.stopPropagation()"
+                    (click)="$event.stopPropagation()"
+                    (change)="onTransitionNameInput(t.id, $event)" />
+                  <button
+                    class="side-icon-btn danger"
+                    (click)="deleteTransition(t.id); $event.stopPropagation()">
+                    <i class="pi pi-trash"></i>
+                  </button>
+                </div>
+                <div class="transition-row-body">
+                  <span class="transition-path">
+                    {{ layerName(t.fromLayer) }} →
+                    <select
+                      class="transition-target"
+                      (pointerdown)="$event.stopPropagation()"
+                      (click)="$event.stopPropagation()"
+                      (change)="setTransitionTarget(t.id, $event)">
+                      @for (l of editorLayers(); track l.id) {
+                        <option [value]="l.id" [selected]="l.id === t.toLayer">{{ l.name }}</option>
+                      }
+                    </select>
+                  </span>
+                  <label class="transition-flag" (click)="$event.stopPropagation()" [title]="'FLOWCHART.TABLE_TRANSITION_BIDIRECTIONAL' | translate">
+                    <input
+                      type="checkbox"
+                      [checked]="isTransitionBidirectional(t)"
+                      (change)="toggleTransitionBidirectional(t.id)" />
+                    ⇅
+                  </label>
+                  <span class="transition-width" (click)="$event.stopPropagation()" [title]="'FLOWCHART.TABLE_TRANSITION_WIDTH' | translate">
+                    <input
+                      type="number"
+                      step="any"
+                      min="1"
+                      [value]="transitionWidthLabel(t)"
+                      (change)="setTransitionWidth(t.id, $event)" />
+                    cm
+                  </span>
+                </div>
+              </div>
+            }
+          </div>
+        }
+      </div>
+    </div>
   </div>
 
   <div class="status-bar">

@@ -81,7 +81,7 @@ const VECTOR_MAP_CACHE_KEY = 'tableVectorMapCacheV1';
  * Service for loading and querying the game table map.
  * Provides line detection based on the map image and parsed vector data.
  */
-interface LayerVectorData {
+export interface LayerVectorData {
   id: string;
   name: string;
   zCm: number;
