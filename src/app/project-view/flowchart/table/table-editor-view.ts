@@ -9,7 +9,6 @@ import {
   effect,
   inject,
   input,
-  output,
   signal,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
@@ -46,8 +45,6 @@ import {
   lineLengthCm,
   pointToSegmentDistanceCm,
   roundTo,
-  CM_PER_PIXEL_X,
-  CM_PER_PIXEL_Y,
 } from './models/editor-state';
 
 type EndpointHandle = 'start' | 'end';
@@ -87,6 +84,8 @@ const TABLE_MAP_FILE_FORMAT = 'flowchart-table-map';
 const TABLE_MAP_FILE_VERSION = 2;
 const TABLE_MAP_FILE_LEGACY_VERSION = 1;
 const TABLE_MAP_FILE_EXTENSION = 'ftmap';
+/** Debounce window before an edit is auto-persisted to the .ftmap file. */
+const AUTO_SAVE_DEBOUNCE_MS = 600;
 
 interface TableMapFileLine {
   kind: LineKind;
@@ -155,7 +154,6 @@ export class TableEditorView implements AfterViewInit, OnDestroy {
   @ViewChild('canvasContainer') containerRef!: ElementRef<HTMLDivElement>;
 
   readonly projectUuid = input<string | null>(null);
-  readonly mapExported = output<string>();
 
   readonly TABLE_WIDTH_CM = TABLE_WIDTH_CM;
   readonly TABLE_HEIGHT_CM = TABLE_HEIGHT_CM;
@@ -409,6 +407,11 @@ export class TableEditorView implements AfterViewInit, OnDestroy {
   private readonly http = inject(HttpService);
 
   private resizeObserver?: ResizeObserver;
+  private autoSaveTimer?: ReturnType<typeof setTimeout>;
+  /** Becomes true once the initial map load settled — guards against persisting before load. */
+  private autoSaveReady = false;
+  /** Serialized payload of the last successful persist, to skip redundant writes. */
+  private lastSavedPayload = '';
   private readonly viewportVersion = signal(0);
   private isPanning = false;
   private panStartPos = { x: 0, y: 0 };
@@ -444,6 +447,17 @@ export class TableEditorView implements AfterViewInit, OnDestroy {
       this.startYInputValue.set(`${roundTo(convertFromCm(this.toDisplayY(selected.startY, origin), unit), 2)}`);
       this.endXInputValue.set(`${roundTo(convertFromCm(this.toDisplayX(selected.endX, origin), unit), 2)}`);
       this.endYInputValue.set(`${roundTo(convertFromCm(this.toDisplayY(selected.endY, origin), unit), 2)}`);
+    });
+
+    // Auto-persist: any change to the working lines, layers, transitions or the
+    // active layer schedules a debounced write of the .ftmap file. No manual
+    // save/export/import buttons needed.
+    effect(() => {
+      this.lines();
+      this.mapService.layers();
+      this.mapService.transitions();
+      this.mapService.activeLayerId();
+      this.scheduleAutoSave();
     });
   }
 
@@ -482,6 +496,14 @@ export class TableEditorView implements AfterViewInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.resizeObserver?.disconnect();
+    // Flush any pending debounced edit so leaving edit mode never loses changes.
+    if (this.autoSaveTimer) {
+      clearTimeout(this.autoSaveTimer);
+      this.autoSaveTimer = undefined;
+    }
+    if (this.autoSaveReady) {
+      void this.persistMapToDisk();
+    }
   }
 
   @HostListener('window:keydown', ['$event'])
@@ -1693,48 +1715,6 @@ export class TableEditorView implements AfterViewInit, OnDestroy {
     this.updateTransition(drag.id, drag.role === 'from' ? { from: edge } : { to: edge });
   }
 
-  exportMapFile(): void {
-    try {
-      const content = JSON.stringify(this.buildMapFilePayload(), null, 2);
-      const blob = new Blob([content], { type: 'application/x-flowchart-tablemap+json' });
-      const timestamp = this.buildFileTimestamp();
-      const fileName = `table-map-${timestamp}.${TABLE_MAP_FILE_EXTENSION}`;
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement('a');
-      anchor.href = url;
-      anchor.download = fileName;
-      anchor.click();
-      setTimeout(() => URL.revokeObjectURL(url), 0);
-      this.message.set(`Exported ${fileName}`);
-    } catch (err) {
-      this.message.set(`Map export failed: ${err instanceof Error ? err.message : String(err)}`);
-    }
-  }
-
-  async importMapFile(): Promise<void> {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = `.${TABLE_MAP_FILE_EXTENSION}`;
-
-    input.onchange = async () => {
-      const file = input.files?.[0];
-      if (!file) return;
-
-      try {
-        const content = await file.text();
-        const importedLines = this.parseMapFile(content);
-        this.lines.set(importedLines);
-        this.selectedLineId.set(null);
-        this.clearDraft();
-        this.message.set(`Imported ${importedLines.length} line(s) from ${file.name}`);
-      } catch (err) {
-        this.message.set(`Map import failed: ${err instanceof Error ? err.message : String(err)}`);
-      }
-    };
-
-    input.click();
-  }
-
   clearCanvas(): void {
     this.lines.set([]);
     this.selectedLineId.set(null);
@@ -1742,137 +1722,51 @@ export class TableEditorView implements AfterViewInit, OnDestroy {
     this.message.set(this.translate.instant('FLOWCHART.TABLE_MESSAGE_CLEARED'));
   }
 
-  async loadMap(): Promise<void> {
-    const mapPayload = this.buildMapFilePayload();
-    const base64 = this.exportRasterBase64();
+  /** Schedule a debounced auto-save. No-op until the initial load has settled. */
+  private scheduleAutoSave(): void {
+    if (!this.autoSaveReady) return;
+    if (this.autoSaveTimer) clearTimeout(this.autoSaveTimer);
+    this.autoSaveTimer = setTimeout(() => {
+      void this.persistMapToDisk();
+    }, AUTO_SAVE_DEBOUNCE_MS);
+  }
 
+  /**
+   * Capture the current state as the auto-save baseline and enable auto-saving.
+   * Called once the startup load has settled so the freshly loaded (or empty)
+   * map is not immediately written back.
+   */
+  private markAutoSaveReady(): void {
     try {
-      const lineSegments = this.toServiceLineSegments(this.lines().filter(line => line.kind === 'line'));
-      const wallSegments = this.toServiceWallSegments(this.lines().filter(line => line.kind === 'wall'));
-      this.mapService.setVectorMap(lineSegments, wallSegments);
-      this.mapService.cacheVectorMapForBase64(base64, lineSegments, wallSegments);
-      this.mapExported.emit(base64);
-    } catch (err) {
-      this.message.set(
-        this.translate.instant('FLOWCHART.TABLE_MESSAGE_FAILED', {
-          error: err instanceof Error ? err.message : String(err),
-        })
-      );
-      return;
+      this.lastSavedPayload = JSON.stringify(this.buildMapFilePayload());
+    } catch {
+      this.lastSavedPayload = '';
     }
+    this.autoSaveReady = true;
+  }
+
+  /** Persist the current map to the project's .ftmap (or device) — idempotent. */
+  private async persistMapToDisk(): Promise<void> {
+    const payload = this.buildMapFilePayload();
+    const serialized = JSON.stringify(payload);
+    if (serialized === this.lastSavedPayload) return;
+    this.lastSavedPayload = serialized;
 
     try {
       const projectUuid = this.projectUuid();
       if (projectUuid) {
-        await this.http.saveLocalTableMap(projectUuid, mapPayload).toPromise();
+        await this.http.saveLocalTableMap(projectUuid, payload).toPromise();
       } else {
-        await this.http.saveTableMap(mapPayload).toPromise();
+        await this.http.saveTableMap(payload).toPromise();
       }
-
-      this.message.set(
-        this.translate.instant('FLOWCHART.TABLE_MESSAGE_SAVED', {
-          width: MAP_WIDTH,
-          height: MAP_HEIGHT,
-        })
-      );
     } catch (err) {
+      // Allow a retry on the next change.
+      this.lastSavedPayload = '';
       this.message.set(
         this.translate.instant('FLOWCHART.TABLE_MESSAGE_FAILED', {
           error: err instanceof Error ? err.message : String(err),
         })
       );
-    }
-  }
-
-  private exportRasterBase64(): string {
-    const canvas = document.createElement('canvas');
-    canvas.width = MAP_WIDTH;
-    canvas.height = MAP_HEIGHT;
-
-    const ctx = canvas.getContext('2d');
-    if (!ctx) {
-      throw new Error('Unable to create raster export context');
-    }
-
-    const imageData = ctx.createImageData(MAP_WIDTH, MAP_HEIGHT);
-    const data = imageData.data;
-
-    for (let i = 0; i < data.length; i += 4) {
-      data[i] = 255;
-      data[i + 1] = 255;
-      data[i + 2] = 255;
-      data[i + 3] = 255;
-    }
-
-    for (const line of this.lines()) {
-      const x0 = Math.round(line.startX / CM_PER_PIXEL_X);
-      const y0 = Math.round(line.startY / CM_PER_PIXEL_Y);
-      const x1 = Math.round(line.endX / CM_PER_PIXEL_X);
-      const y1 = Math.round(line.endY / CM_PER_PIXEL_Y);
-      const color = line.kind === 'wall' ? 128 : 0;
-      const cmPerPixelAvg = (CM_PER_PIXEL_X + CM_PER_PIXEL_Y) * 0.5;
-      const thickness = Math.max(1, Math.round(line.widthCm / cmPerPixelAvg));
-
-      this.rasterizeLine(imageData, x0, y0, x1, y1, color, thickness);
-    }
-
-    ctx.putImageData(imageData, 0, 0);
-
-    return canvas.toDataURL('image/png').split(',')[1];
-  }
-
-  private rasterizeLine(
-    imageData: ImageData,
-    x0: number,
-    y0: number,
-    x1: number,
-    y1: number,
-    grayValue: number,
-    thickness: number
-  ): void {
-    const dx = Math.abs(x1 - x0);
-    const dy = Math.abs(y1 - y0);
-    const sx = x0 < x1 ? 1 : -1;
-    const sy = y0 < y1 ? 1 : -1;
-    let err = dx - dy;
-
-    let x = x0;
-    let y = y0;
-    const radius = Math.max(0, Math.floor((thickness - 1) / 2));
-
-    while (true) {
-      this.setPixelWithRadius(imageData, x, y, grayValue, radius);
-      if (x === x1 && y === y1) break;
-
-      const e2 = err * 2;
-      if (e2 > -dy) {
-        err -= dy;
-        x += sx;
-      }
-      if (e2 < dx) {
-        err += dx;
-        y += sy;
-      }
-    }
-  }
-
-  private setPixelWithRadius(imageData: ImageData, x: number, y: number, grayValue: number, radius: number): void {
-    const width = imageData.width;
-    const height = imageData.height;
-    const data = imageData.data;
-
-    for (let oy = -radius; oy <= radius; oy++) {
-      for (let ox = -radius; ox <= radius; ox++) {
-        const px = x + ox;
-        const py = y + oy;
-        if (px < 0 || py < 0 || px >= width || py >= height) continue;
-
-        const idx = (py * width + px) * 4;
-        data[idx] = grayValue;
-        data[idx + 1] = grayValue;
-        data[idx + 2] = grayValue;
-        data[idx + 3] = 255;
-      }
     }
   }
 
@@ -2055,17 +1949,6 @@ export class TableEditorView implements AfterViewInit, OnDestroy {
     return value;
   }
 
-  private buildFileTimestamp(): string {
-    const now = new Date();
-    const yyyy = now.getFullYear();
-    const mm = String(now.getMonth() + 1).padStart(2, '0');
-    const dd = String(now.getDate()).padStart(2, '0');
-    const hh = String(now.getHours()).padStart(2, '0');
-    const min = String(now.getMinutes()).padStart(2, '0');
-    const ss = String(now.getSeconds()).padStart(2, '0');
-    return `${yyyy}-${mm}-${dd}_${hh}-${min}-${ss}`;
-  }
-
   private rebuildLinesFromMapService(): void {
     const vectorLines: VectorLine[] = [];
 
@@ -2105,11 +1988,14 @@ export class TableEditorView implements AfterViewInit, OnDestroy {
 
       request$.subscribe({
         next: response => {
-          if (!response.map) return;
-          this.loadSavedVectorMap(response.map);
+          if (response.map) {
+            this.loadSavedVectorMap(response.map);
+          }
+          this.markAutoSaveReady();
         },
         error: () => {
-          // Silently ignore when there is no stored map.
+          // No stored map yet — still arm auto-save so the first edit persists.
+          this.markAutoSaveReady();
         },
       });
     } catch {

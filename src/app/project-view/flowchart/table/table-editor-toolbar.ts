@@ -39,10 +39,7 @@ export class TableEditorToolbar {
   readonly toolChange = output<EditorTool>();
   readonly lineKindChange = output<LineKind>();
   readonly unitChange = output<MeasurementUnit>();
-  readonly importFileRequest = output<void>();
-  readonly exportFileRequest = output<void>();
   readonly clearRequest = output<void>();
-  readonly loadMapRequest = output<void>();
   readonly deleteLineRequest = output<void>();
   readonly zoomToFit = output<void>();
 
