@@ -1,5 +1,7 @@
+import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 
+import { appConfig } from '../../app.config';
 import { StepPanel } from './step-panel';
 
 describe('StepPanel', () => {
@@ -8,7 +10,8 @@ describe('StepPanel', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [StepPanel]
+      imports: [StepPanel],
+      providers: [...appConfig.providers, provideHttpClientTesting()]
     })
     .compileComponents();
 
