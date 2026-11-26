@@ -6,6 +6,7 @@ import {
   inject,
   Input,
   signal,
+  ChangeDetectionStrategy
 } from '@angular/core';
 
 import { HttpService } from '../../services/http-service';
@@ -18,6 +19,7 @@ import { CodeEditorComponent } from './code-editor';
   standalone: true,
   imports: [CodeEditorComponent],
   templateUrl: './code-view.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './code-view.scss',
 })
 export class CodeView {

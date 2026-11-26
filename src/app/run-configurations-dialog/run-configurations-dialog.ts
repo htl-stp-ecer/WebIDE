@@ -1,10 +1,10 @@
-import { Component, computed, signal } from '@angular/core';
+import { Component, computed, signal, ChangeDetectionStrategy } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
-import { Dialog } from 'primeng/dialog';
-import { Button } from 'primeng/button';
-import { InputText } from 'primeng/inputtext';
-import { Select } from 'primeng/select';
+import { Dialog } from '@openng/optimus-ui/dialog';
+import { Button } from '@openng/optimus-ui/button';
+import { InputText } from '@openng/optimus-ui/inputtext';
+import { Select } from '@openng/optimus-ui/select';
 import { HttpService, RunConfiguration } from '../services/http-service';
 import { RunActionService } from '../services/run-action-service';
 
@@ -24,6 +24,7 @@ import { RunActionService } from '../services/run-action-service';
   standalone: true,
   imports: [FormsModule, Dialog, Button, InputText, Select],
   templateUrl: './run-configurations-dialog.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './run-configurations-dialog.scss',
 })
 export class RunConfigurationsDialog {

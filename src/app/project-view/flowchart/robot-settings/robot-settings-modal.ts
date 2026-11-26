@@ -8,13 +8,14 @@ import {
   Output,
   signal,
   SimpleChanges,
-  WritableSignal
+  WritableSignal,
+  ChangeDetectionStrategy
 } from '@angular/core';
 import {FormsModule} from '@angular/forms';
 import {NgClass} from '@angular/common';
-import {Dialog} from 'primeng/dialog';
-import {InputText} from 'primeng/inputtext';
-import { Button } from 'primeng/button';
+import {Dialog} from '@openng/optimus-ui/dialog';
+import {InputText} from '@openng/optimus-ui/inputtext';
+import { Button } from '@openng/optimus-ui/button';
 import {TranslateModule, TranslateService} from '@ngx-translate/core';
 import {HttpService} from '../../../services/http-service';
 import {KeybindingsService, StepKeybinding} from '../../../services/keybindings-service';
@@ -36,6 +37,7 @@ interface StepIndexStatus {
   standalone: true,
   imports: [FormsModule, NgClass, Dialog, InputText, Button, TranslateModule],
   templateUrl: './robot-settings-modal.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './robot-settings-modal.scss'
 })
 export class RobotSettingsModal implements OnInit, OnChanges {

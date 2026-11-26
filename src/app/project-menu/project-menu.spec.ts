@@ -4,7 +4,7 @@ import { of, throwError } from 'rxjs';
 
 import { ProjectMenu } from './project-menu';
 import { HttpService } from '../services/http-service';
-import { ConfirmationService } from 'primeng/api';
+import { ConfirmationService } from '@openng/optimus-ui/api';
 import { TranslateModule } from '@ngx-translate/core';
 import { NotificationService } from '../services/NotificationService';
 

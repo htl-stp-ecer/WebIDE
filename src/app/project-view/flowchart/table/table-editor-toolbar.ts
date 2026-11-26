@@ -1,7 +1,7 @@
-import { Component, computed, input, output } from '@angular/core';
+import { Component, computed, input, output, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule } from '@ngx-translate/core';
-import { Tooltip } from 'primeng/tooltip';
+import { Tooltip } from '@openng/optimus-ui/tooltip';
 import {
   EditorTool,
   LineKind,
@@ -20,6 +20,7 @@ import {
   standalone: true,
   imports: [CommonModule, TranslateModule, Tooltip],
   templateUrl: './table-editor-toolbar.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './table-editor-toolbar.scss',
 })
 export class TableEditorToolbar {

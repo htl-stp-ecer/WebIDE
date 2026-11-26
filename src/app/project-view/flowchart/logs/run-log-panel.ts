@@ -1,6 +1,6 @@
-import { AfterViewInit, Component, ElementRef, EventEmitter, Input, OnChanges, Output, SimpleChanges, ViewChild } from '@angular/core';
+import { AfterViewInit, Component, ElementRef, EventEmitter, Input, OnChanges, Output, SimpleChanges, ViewChild, ChangeDetectionStrategy } from '@angular/core';
 import { DatePipe } from '@angular/common';
-import { Tooltip } from 'primeng/tooltip';
+import { Tooltip } from '@openng/optimus-ui/tooltip';
 import { TranslateModule } from '@ngx-translate/core';
 import type { RunLogEntry } from '../flowchart-run-manager';
 
@@ -9,6 +9,7 @@ import type { RunLogEntry } from '../flowchart-run-manager';
   standalone: true,
   imports: [DatePipe, Tooltip, TranslateModule],
   templateUrl: './run-log-panel.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './run-log-panel.scss',
 })
 export class RunLogPanel implements AfterViewInit, OnChanges {

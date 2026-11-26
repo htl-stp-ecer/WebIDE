@@ -1,9 +1,9 @@
-import { Component, OnInit, OnDestroy, signal } from '@angular/core';
+import { Component, OnInit, OnDestroy, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FExternalItemDirective } from '@foblex/flow';
 import { HttpService } from '../../services/http-service';
 import { StepsStateService } from '../../services/steps-state-service';
 import { ActivatedRoute } from '@angular/router';
-import { Skeleton } from 'primeng/skeleton';
+import { Skeleton } from '@openng/optimus-ui/skeleton';
 import { Subscription } from 'rxjs';
 import { NgClass } from '@angular/common';
 import { StepSearchComponent } from './step-search/step-search';
@@ -23,6 +23,7 @@ interface StepGroup {
     NgClass,
     StepSearchComponent,
   ],
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./step-panel.scss']
 })
 export class StepPanel implements OnInit, OnDestroy {
