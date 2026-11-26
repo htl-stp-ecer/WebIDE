@@ -1,9 +1,10 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { BehaviorSubject, map, Observable } from 'rxjs';
+import { BehaviorSubject, map, Observable, of, switchMap } from 'rxjs';
 import {Mission} from '../entities/Mission';
 import { TypeDefinition } from '../entities/TypeDefinition';
 import { MissionSimulationData, ProjectSimulationData } from '../entities/Simulation';
+import { DeviceInfoPayload, normalizeDeviceInfo, toWombatCenter, toWombatSensor } from './device-coordinates';
 
 /** A single drawn line or wall segment, in table coordinates (cm). */
 export interface TableMapLine {
@@ -309,75 +310,89 @@ export class HttpService {
     return `${base}${path}`;
   }
 
+  private readDeviceInfo(url: string) {
+    return this.http.get<DeviceInfoPayload>(url).pipe(map(normalizeDeviceInfo));
+  }
+
+  private writeDeviceInfo(url: string, body: object) {
+    return this.http.put<DeviceInfoPayload>(url, body).pipe(map(normalizeDeviceInfo));
+  }
+
   getDeviceInfo(ip: string) {
-    return this.http.get<ConnectionInfo>(`${ip}/api/v1/device/info`);
+    return this.readDeviceInfo(`${ip}/api/v1/device/info`);
   }
 
   getDeviceInfoDefault() {
-    return this.http.get<ConnectionInfo>(this.deviceApi('/api/v1/device/info'));
+    return this.readDeviceInfo(this.deviceApi('/api/v1/device/info'));
   }
 
   changeHostname(newName: string) {
-    return this.http.put<ConnectionInfo>(this.deviceApi('/api/v1/device/hostname'), { hostname: newName });
+    return this.writeDeviceInfo(this.deviceApi('/api/v1/device/hostname'), { hostname: newName });
   }
 
   updateDeviceDimensions(widthCm: number, lengthCm: number) {
-    return this.http.put<ConnectionInfo>(this.deviceApi('/api/v1/device/dimensions'), {
+    return this.writeDeviceInfo(this.deviceApi('/api/v1/device/dimensions'), {
       width_cm: widthCm,
       length_cm: lengthCm,
     });
   }
 
   updateDeviceSensors(sensors: DeviceSensorInfo[]) {
-    return this.http.put<ConnectionInfo>(this.deviceApi('/api/v1/device/sensors'), {
-      sensors,
-    });
+    const base = this.deviceApi('/api/v1/device');
+    const hasPositions = sensors.some(sensor => sensor.x_cm != null || sensor.y_cm != null);
+    const dimensions: Observable<Pick<ConnectionInfo, 'width_cm' | 'length_cm'>> =
+      hasPositions ? this.readDeviceInfo(`${base}/info`) : of({});
+    return dimensions.pipe(switchMap(({ width_cm, length_cm }) =>
+      this.writeDeviceInfo(`${base}/sensors`, {
+        sensors: sensors.map(sensor => toWombatSensor(sensor, width_cm, length_cm)),
+      }),
+    ));
   }
 
   updateDeviceRotationCenter(rotationCenter?: DeviceCenterPoint) {
-    return this.http.put<ConnectionInfo>(this.deviceApi('/api/v1/device/rotation-center'), {
-      rotation_center: rotationCenter,
-    });
+    const base = this.deviceApi('/api/v1/device');
+    if (!rotationCenter) {
+      return this.writeDeviceInfo(`${base}/rotation-center`, { rotation_center: null });
+    }
+    return this.readDeviceInfo(`${base}/info`).pipe(switchMap(({ width_cm, length_cm }) =>
+      this.writeDeviceInfo(`${base}/rotation-center`, {
+        rotation_center: toWombatCenter(rotationCenter, width_cm, length_cm),
+      }),
+    ));
   }
 
-  updateDeviceStartPose(startPose: { x_cm: number; y_cm: number; theta_deg: number }) {
-    return this.http.put<ConnectionInfo>(this.deviceApi('/api/v1/device/start-pose'), {
-      start_pose: startPose,
-    });
+  updateDeviceStartPose(startPose: DeviceStartPose) {
+    return this.writeDeviceInfo(this.deviceApi('/api/v1/device/start-pose'), { start_pose: startPose });
   }
 
   // Local device API (for projects without Pi connection)
   getLocalDeviceInfo(projectUuid: string) {
-    return this.http.get<ConnectionInfo>(this.localApi(`/device/${projectUuid}/info`));
+    return this.readDeviceInfo(this.localApi(`/device/${projectUuid}/info`));
   }
 
   updateLocalDeviceDimensions(projectUuid: string, widthCm: number, lengthCm: number) {
-    return this.http.put<ConnectionInfo>(this.localApi(`/device/${projectUuid}/dimensions`), {
+    return this.writeDeviceInfo(this.localApi(`/device/${projectUuid}/dimensions`), {
       width_cm: widthCm,
       length_cm: lengthCm,
     });
   }
 
   updateLocalDeviceSensors(projectUuid: string, sensors: DeviceSensorInfo[]) {
-    return this.http.put<ConnectionInfo>(this.localApi(`/device/${projectUuid}/sensors`), {
-      sensors,
-    });
+    return this.writeDeviceInfo(this.localApi(`/device/${projectUuid}/sensors`), { sensors });
   }
 
   updateLocalDeviceRotationCenter(projectUuid: string, rotationCenter?: DeviceCenterPoint) {
-    return this.http.put<ConnectionInfo>(this.localApi(`/device/${projectUuid}/rotation-center`), {
+    return this.writeDeviceInfo(this.localApi(`/device/${projectUuid}/rotation-center`), {
       rotation_center: rotationCenter,
     });
   }
 
-  updateLocalDeviceStartPose(projectUuid: string, startPose: { x_cm: number; y_cm: number; theta_deg: number }) {
-    return this.http.put<ConnectionInfo>(this.localApi(`/device/${projectUuid}/start-pose`), {
-      start_pose: startPose,
-    });
+  updateLocalDeviceStartPose(projectUuid: string, startPose: DeviceStartPose) {
+    return this.writeDeviceInfo(this.localApi(`/device/${projectUuid}/start-pose`), { start_pose: startPose });
   }
 
   updateLocalDeviceKinematics(projectUuid: string, kinematics: { track_width_m?: number; wheelbase_m?: number; wheel_radius_m?: number }) {
-    return this.http.put<ConnectionInfo>(this.localApi(`/device/${projectUuid}/kinematics`), kinematics);
+    return this.writeDeviceInfo(this.localApi(`/device/${projectUuid}/kinematics`), kinematics);
   }
 
   getLocalTableMap(projectUuid: string) {
