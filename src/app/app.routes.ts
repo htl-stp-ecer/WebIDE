@@ -6,7 +6,7 @@ import {ProjectView} from './project-view/project-view';
 
 export const routes: Routes = [
   {path: "projects", component: LocalProjects},
-  {path: "projects/:uuid", component: ProjectView},
+  {path: "projects/:uuid", component: ProjectView, data: {recreateOnProjectChange: true}},
   {path: "device/:ip/projects", component: ProjectMenu},
   {path: "", component: Home},
   {path: "**", component: Home}

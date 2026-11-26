@@ -5,7 +5,8 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { HttpService } from '../../services/http-service';
 import { KeybindingsService } from '../../services/keybindings-service';
 import { StepsStateService } from '../../services/steps-state-service';
-import { TranslateService } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { enTranslations } from '../../i18n/translations';
 import { RobotSettingsModal } from '../flowchart/robot-settings/robot-settings-modal';
 import { StepDocsPanel } from '../step-docs-panel/step-docs-panel';
 import { StepPanel } from './step-panel';
@@ -27,9 +28,12 @@ describe('Project step catalog', () => {
   beforeEach(() => {
     originalPort = localStorage.getItem('localBackendPort');
     TestBed.configureTestingModule({
-      imports: [StepPanel, StepDocsPanel],
+      imports: [StepPanel, StepDocsPanel, TranslateModule.forRoot()],
       providers: [provideHttpClient(), provideHttpClientTesting()],
     });
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('en', enTranslations);
+    translate.use('en');
     fixture = TestBed.createComponent(StepPanel);
     http = TestBed.inject(HttpTestingController);
     service = TestBed.inject(HttpService);
@@ -125,7 +129,7 @@ describe('Project step catalog', () => {
     state.triggerRefresh();
     requestSteps(PROJECT_A).flush({}, { status: 500, statusText: 'Error' });
     expect(renderedSteps()).toEqual([]);
-    expect(fixture.nativeElement.textContent).toContain('Could not load steps');
+    expect(fixture.nativeElement.textContent).toContain(enTranslations.STEP_INDEX.LOAD_ERROR);
 
     state.triggerRefresh();
     requestSteps(PROJECT_A).flush([step('other_step')]);

@@ -3,6 +3,7 @@ import { NgClass } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { StepsStateService } from '../../services/steps-state-service';
 import { Skeleton } from '@openng/optimus-ui/skeleton';
+import { TranslateModule } from '@ngx-translate/core';
 
 interface ParsedParam {
   name: string;
@@ -242,7 +243,7 @@ function parseDocstring(docstring: string, paramMap: Record<string, ParsedParam>
 @Component({
   selector: 'app-step-docs-panel',
   standalone: true,
-  imports: [NgClass, FormsModule, Skeleton],
+  imports: [NgClass, FormsModule, Skeleton, TranslateModule],
   templateUrl: './step-docs-panel.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./step-docs-panel.scss'],

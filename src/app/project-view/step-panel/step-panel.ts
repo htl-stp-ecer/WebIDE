@@ -2,6 +2,7 @@ import { Component, computed, inject, signal, ChangeDetectionStrategy } from '@a
 import { FExternalItemDirective } from '@foblex/flow';
 import { StepsStateService } from '../../services/steps-state-service';
 import { Skeleton } from '@openng/optimus-ui/skeleton';
+import { TranslateModule } from '@ngx-translate/core';
 import { NgClass } from '@angular/common';
 import { StepSearchComponent } from './step-search/step-search';
 
@@ -19,6 +20,7 @@ const UNGROUPED_KEY = 'Other';
   imports: [
     FExternalItemDirective,
     Skeleton,
+    TranslateModule,
     NgClass,
     StepSearchComponent,
   ],

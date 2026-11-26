@@ -1,4 +1,5 @@
 import {Component, effect, ElementRef, OnDestroy, signal, ViewChild, ChangeDetectionStrategy} from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {MissionPanel} from './mission-panel/mission-panel';
 import {Flowchart} from './flowchart/flowchart';
 import {StepPanel} from './step-panel/step-panel';
@@ -16,10 +17,10 @@ import { RunActionService } from '../services/run-action-service';
 import { StepsStateService } from '../services/steps-state-service';
 import {TableMapService, TableVisualizationService} from './flowchart/table/services';
 import {Pose2D, thetaToDegrees} from './flowchart/table/models';
-import {Subject, Subscription} from 'rxjs';
+import {Subject} from 'rxjs';
 import {debounceTime} from 'rxjs/operators';
 import {NotificationService} from '../services/NotificationService';
-import {TranslateService} from '@ngx-translate/core';
+import {TranslateModule, TranslateService} from '@ngx-translate/core';
 import { LocalizationReplayService } from './flowchart/table/replay/localization-replay.service';
 
 type ResizeSide = 'left' | 'right' | 'bottom';
@@ -64,6 +65,7 @@ export type RightToolPanel = 'steps' | 'docs' | 'robot' | null;
     ArmPanel,
     RobotConfigPanel,
     FormsModule,
+    TranslateModule,
   ],
   templateUrl: './project-view.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -96,7 +98,6 @@ export class ProjectView implements OnDestroy {
   startPoseEditMode = signal(false);
   projectUUID = '';
 
-  private readonly stepsRouteSub: Subscription;
   private persistStartPoseSubject = new Subject<void>();
 
   toggleCenterView(): void {
@@ -113,14 +114,12 @@ export class ProjectView implements OnDestroy {
     private replayService: LocalizationReplayService,
     readonly stepsState: StepsStateService,
   ) {
-    this.stepsRouteSub = this.route.paramMap.subscribe(params => this.stepsState.setProject(params.get('uuid')));
     const projectUUID = this.route.snapshot.paramMap.get('uuid');
-    if (!projectUUID) {
-      this.http.clearDeviceBase();
-      return;
-    }
+    this.http.clearDeviceBase();
+    if (!projectUUID) return;
     this.projectUUID = projectUUID;
     this.runAction.currentProjectUUID.set(projectUUID);
+    this.stepsState.setProject(projectUUID);
 
 // Auto-open logs panel when a run starts
     effect(() => {
@@ -143,7 +142,7 @@ export class ProjectView implements OnDestroy {
 
     // Sync robot dimensions/sensors/rotation center into viz service on load
     // so the table visualization has correct robot data even before the robot panel is opened.
-    this.http.getLocalDeviceInfo(projectUUID).subscribe({
+    this.http.getLocalDeviceInfo(projectUUID).pipe(takeUntilDestroyed()).subscribe({
       next: info => {
         if (info.width_cm && info.length_cm) {
           this.vizService.setRobotDimensions(info.width_cm, info.length_cm);
@@ -164,7 +163,7 @@ export class ProjectView implements OnDestroy {
       },
     });
 
-    this.http.getProject(projectUUID).subscribe({
+    this.http.getProject(projectUUID).pipe(takeUntilDestroyed()).subscribe({
       next: project => {
         const connection = project.connection;
         if (connection?.pi_address) {
@@ -181,13 +180,13 @@ export class ProjectView implements OnDestroy {
 
     // Fetch the PyCharm-style run-configuration list — builtins + the
     // user's run_configurations: entries from raccoon.project.yml.
-    this.http.listRunConfigurations(projectUUID).subscribe({
+    this.http.listRunConfigurations(projectUUID).pipe(takeUntilDestroyed()).subscribe({
       next: res => this.runAction.setRunConfigurations(res.configurations ?? []),
       error: err => console.warn('Failed to load run configurations', err),
     });
 
     // Debounce persistence of start pose
-    this.persistStartPoseSubject.pipe(debounceTime(300)).subscribe(() => {
+    this.persistStartPoseSubject.pipe(debounceTime(300), takeUntilDestroyed()).subscribe(() => {
       this.persistStartPoseToServer();
     });
   }
@@ -330,7 +329,6 @@ export class ProjectView implements OnDestroy {
   }
 
   ngOnDestroy(): void {
-    this.stepsRouteSub.unsubscribe();
     this.stopResize();
   }
 
