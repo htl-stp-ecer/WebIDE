@@ -10,8 +10,9 @@
 
 .modal-layout {
   display: flex;
-  height: 480px;
-  max-height: 80vh;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
 }
 
 // ============================================
@@ -20,6 +21,7 @@
 
 :host ::ng-deep .settings-dialog {
   .p-dialog-header {
+    flex-shrink: 0;
     padding: 12px 16px;
     border-bottom: 1px solid rgba(0, 0, 0, 0.08);
     cursor: grab;
@@ -30,71 +32,20 @@
   }
 
   .p-dialog-content {
-    padding: 0 !important;
+    display: flex;
+    flex: 1 1 auto;
+    min-height: 0;
+    padding: 0;
+    overflow: hidden;
   }
 }
 
 :host-context(.dark) ::ng-deep .settings-dialog,
 :host-context(.p-dark) ::ng-deep .settings-dialog {
   .p-dialog-header {
-    border-bottom-color: rgba(255, 255, 255, 0.08);
-  }
-}
-
-.dialog-drag-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  font-size: 14px;
-  font-weight: 600;
-  color: #1e293b;
-
-  > i:first-child {
-    font-size: 16px;
-    opacity: 0.7;
-  }
-
-  > span {
-    flex: 1;
-  }
-}
-
-:host-context(.dark) .dialog-drag-header,
-:host-context(.p-dark) .dialog-drag-header {
-  color: #f1f5f9;
-}
-
-.dialog-close-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border: none;
-  border-radius: 6px;
-  background: transparent;
-  color: #64748b;
-  cursor: pointer;
-  transition: background 0.12s ease, color 0.12s ease;
-
-  &:hover {
-    background: rgba(0, 0, 0, 0.06);
-    color: #1e293b;
-  }
-
-  i {
-    font-size: 14px;
-  }
-}
-
-:host-context(.dark) .dialog-close-btn,
-:host-context(.p-dark) .dialog-close-btn {
-  color: #94a3b8;
-
-  &:hover {
-    background: rgba(255, 255, 255, 0.08);
-    color: #f1f5f9;
+    background: var(--rc-shell);
+    color: var(--rc-text);
+    border-bottom-color: var(--rc-border);
   }
 }
 
@@ -103,7 +54,7 @@
 // ============================================
 
 .modal-sidebar {
-  width: 200px;
+  width: 160px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -112,7 +63,8 @@
 
 :host-context(.dark) .modal-sidebar,
 :host-context(.p-dark) .modal-sidebar {
-  border-right-color: rgba(255, 255, 255, 0.08);
+  background: var(--rc-shell);
+  border-color: var(--rc-border);
 }
 
 .sidebar-nav {
@@ -154,14 +106,16 @@
 
 :host-context(.dark) .sidebar-nav-item,
 :host-context(.p-dark) .sidebar-nav-item {
-  color: #94a3b8;
+  color: var(--rc-muted);
 
   &:hover {
-    color: #e2e8f0;
+    color: var(--rc-text);
+    background: var(--rc-surface);
   }
 
   &.active {
-    color: #f1f5f9;
+    color: var(--rc-accent);
+    background: var(--rc-accent-dim);
   }
 }
 
@@ -180,6 +134,7 @@
 
 :host-context(.dark) .modal-content,
 :host-context(.p-dark) .modal-content {
+  background: var(--rc-bg);
 }
 
 // ============================================
@@ -201,8 +156,6 @@
 @media (max-width: 768px) {
   .modal-layout {
     flex-direction: column;
-    height: auto;
-    max-height: 85vh;
   }
 
   .modal-sidebar {
@@ -237,32 +190,5 @@
       font-size: 13px;
       width: auto;
     }
-  }
-
-  .modal-content {
-    flex: 1;
-    min-height: 0;
-    overflow: auto;
-  }
-}
-
-@media (max-width: 480px) {
-  .sidebar-nav-item {
-    padding: 6px 10px;
-    font-size: 11px;
-
-    // Hide label text, show icon only
-    span {
-      display: none;
-    }
-
-    i {
-      font-size: 16px;
-    }
-  }
-
-  .dialog-drag-header {
-    font-size: 13px;
-    gap: 8px;
   }
 }

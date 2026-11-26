@@ -131,6 +131,8 @@ export const enTranslations = {
     NO_PROJECTS_HINT: 'Upload a project to the device to see it here.',
   },
   STEP_INDEX: {
+    CATALOG: 'Step Catalog',
+    STEP_DETAILS: 'Details for {{step}}',
     TITLE: 'Step indexing',
     DESCRIPTION: 'The library index and project steps are scanned on this machine.',
     STATUS_READY: 'Index ready',
@@ -538,6 +540,8 @@ export const deTranslations = {
     NO_PROJECTS_HINT: 'Laden Sie ein Projekt auf das Gerät hoch, um es hier zu sehen.',
   },
   STEP_INDEX: {
+    CATALOG: 'Step-Katalog',
+    STEP_DETAILS: 'Details zu {{step}}',
     TITLE: 'Step-Index',
     DESCRIPTION: 'Der Bibliotheksindex und die Projektschritte werden auf diesem Rechner gescannt.',
     STATUS_READY: 'Index bereit',

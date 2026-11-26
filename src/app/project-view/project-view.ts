@@ -2,7 +2,6 @@ import {Component, effect, ElementRef, OnDestroy, signal, ViewChild, ChangeDetec
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {MissionPanel} from './mission-panel/mission-panel';
 import {Flowchart} from './flowchart/flowchart';
-import {StepPanel} from './step-panel/step-panel';
 import {StepDocsPanel} from './step-docs-panel/step-docs-panel';
 import {CodeView} from './code-view/code-view';
 import {RunLogPanel} from './flowchart/logs/run-log-panel';
@@ -49,7 +48,7 @@ interface ResizeState {
 export type CenterView = 'flowchart' | 'code';
 export type SideToolPanel = 'missions' | null;
 export type BottomToolPanel = 'logs' | 'table' | 'arm' | null;
-export type RightToolPanel = 'steps' | 'docs' | 'robot' | null;
+export type RightToolPanel = 'steps' | 'robot' | null;
 
 @Component({
   selector: 'app-project-view',
@@ -57,7 +56,6 @@ export type RightToolPanel = 'steps' | 'docs' | 'robot' | null;
   imports: [
     MissionPanel,
     Flowchart,
-    StepPanel,
     StepDocsPanel,
     CodeView,
     RunLogPanel,
@@ -194,7 +192,8 @@ export class ProjectView implements OnDestroy {
 
   private loadActiveRightPanel(): RightToolPanel {
     const saved = localStorage.getItem(STORAGE_KEYS.activeRightPanel);
-    return (saved === 'steps' || saved === 'docs' || saved === 'robot') ? saved : null;
+    if (saved === 'docs' || saved === 'steps') return 'steps';
+    return saved === 'robot' ? 'robot' : null;
   }
 
   private loadActiveToolPanel(): SideToolPanel {

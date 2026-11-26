@@ -13,7 +13,6 @@ import {
   ChangeDetectionStrategy
 } from '@angular/core';
 import {FormsModule} from '@angular/forms';
-import {NgClass} from '@angular/common';
 import {Dialog} from '@openng/optimus-ui/dialog';
 import {InputText} from '@openng/optimus-ui/inputtext';
 import { Button } from '@openng/optimus-ui/button';
@@ -37,7 +36,7 @@ interface StepIndexStatus {
 @Component({
   selector: 'app-robot-settings-modal',
   standalone: true,
-  imports: [FormsModule, NgClass, Dialog, InputText, Button, TranslateModule],
+  imports: [FormsModule, Dialog, InputText, Button, TranslateModule],
   templateUrl: './robot-settings-modal.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './robot-settings-modal.scss'
@@ -169,11 +168,6 @@ export class RobotSettingsModal implements OnInit, OnChanges, OnDestroy {
       default:
         return this.translate.instant('STEP_INDEX.STATUS_EMPTY');
     }
-  }
-
-  closeModal() {
-    this.visible = false;
-    this.visibleChange.emit(false);
   }
 
   // Layout settings

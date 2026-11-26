@@ -60,7 +60,7 @@
       </div>
     }
     <f-flow class="flow-root" fDraggable fEmitOnNodeIntersect (fNodeIntersectedWithConnections)="actions.onNodeIntersected($event)" (fDropToGroup)="actions.onDropToGroup($event)" (fLoaded)="actions.onLoaded()" (fCreateNode)="actions.onCreateNode($event)" (fCreateConnection)="actions.addConnection($event)" (fDragStarted)="onDragStarted($event)" (fDragEnded)="onDragEnded()" [class.external-drag-active]="externalDragActive()" [class.internal-drag-active]="internalDragActive()" [class.any-drag-active]="anyDragActive()">
-      <f-background class="flow-bg"><f-circle-pattern color="#4a5565"></f-circle-pattern></f-background>
+      <f-background class="flow-bg"><f-circle-pattern color="var(--rc-border)"></f-circle-pattern></f-background>
       <f-canvas fZoom class="flow-canvas" (fCanvasChange)="onCanvasChange()">
         <!-- Manual connection drawing removed: steps are inserted via edge + buttons or keyboard -->
 

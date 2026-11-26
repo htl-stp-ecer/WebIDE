@@ -5,19 +5,9 @@
   [dismissableMask]="true"
   [draggable]="true"
   [resizable]="false"
-  [style]="{ width: '680px', maxWidth: '95vw', maxHeight: '90vh' }"
-  [contentStyle]="{ padding: 0 }"
+  [header]="'ROBOT_SETTINGS.MODAL_TITLE' | translate"
+  [style]="{ width: '740px', maxWidth: 'calc(100vw - 24px)', height: 'min(620px, calc(100dvh - 24px))', maxHeight: 'none' }"
   styleClass="settings-dialog">
-
-  <ng-template pTemplate="header">
-    <div class="dialog-drag-header">
-      <i class="pi pi-cog"></i>
-      <span>{{ 'ROBOT_SETTINGS.MODAL_TITLE' | translate }}</span>
-      <button type="button" class="dialog-close-btn" (click)="closeModal()">
-        <i class="pi pi-times"></i>
-      </button>
-    </div>
-  </ng-template>
 
   <div class="modal-layout">
     <!-- Sidebar Navigation -->
@@ -27,6 +17,7 @@
           type="button"
           class="sidebar-nav-item"
           [class.active]="activeTab() === 'project'"
+          [attr.aria-pressed]="activeTab() === 'project'"
           (click)="activeTab.set('project')">
           <i class="pi pi-sliders-h"></i>
           <span>{{ 'ROBOT_SETTINGS.PROJECT_TAB' | translate }}</span>
@@ -35,6 +26,7 @@
           type="button"
           class="sidebar-nav-item"
           [class.active]="activeTab() === 'keybindings'"
+          [attr.aria-pressed]="activeTab() === 'keybindings'"
           (click)="activeTab.set('keybindings')">
           <i class="pi pi-key"></i>
           <span>Keybindings</span>
@@ -61,6 +53,7 @@
                   type="button"
                   class="orientation-btn"
                   [class.active]="currentOrientation === 'vertical'"
+                  [attr.aria-pressed]="currentOrientation === 'vertical'"
                   (click)="onOrientationChange('vertical')">
                   <i class="pi pi-arrows-v"></i>
                   <span>{{ 'FLOWCHART.ORIENTATION_VERTICAL' | translate }}</span>
@@ -69,6 +62,7 @@
                   type="button"
                   class="orientation-btn"
                   [class.active]="currentOrientation === 'horizontal'"
+                  [attr.aria-pressed]="currentOrientation === 'horizontal'"
                   (click)="onOrientationChange('horizontal')">
                   <i class="pi pi-arrows-h"></i>
                   <span>{{ 'FLOWCHART.ORIENTATION_HORIZONTAL' | translate }}</span>
@@ -93,14 +87,14 @@
               </label>
             </div>
 
-            <div class="setting-card">
+            <div class="setting-card setting-card-wide">
               <div class="setting-card-header">
                 <i class="pi pi-database"></i>
                 <span>{{ 'STEP_INDEX.TITLE' | translate }}</span>
               </div>
               <p class="setting-card-desc">{{ 'STEP_INDEX.DESCRIPTION' | translate }}</p>
 
-              <div class="text-sm text-slate-500 dark:text-slate-400">
+              <div class="setting-card-desc">
                 @if (stepIndexLoading) {
                   {{ 'COMMON.LOADING' | translate }}
                 } @else {

@@ -8,8 +8,7 @@ import { StepsStateService } from '../../services/steps-state-service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { enTranslations } from '../../i18n/translations';
 import { RobotSettingsModal } from '../flowchart/robot-settings/robot-settings-modal';
-import { StepDocsPanel } from '../step-docs-panel/step-docs-panel';
-import { StepPanel } from './step-panel';
+import { StepDocsPanel } from './step-docs-panel';
 
 const PROJECT_A = '78dcbdbc-9718-4cb3-a23c-a16a4edb3a92';
 const PROJECT_B = '17431732-49a2-43b9-914b-aa71ffd0a077';
@@ -19,7 +18,7 @@ function step(name: string): Step {
 }
 
 describe('Project step catalog', () => {
-  let fixture: ComponentFixture<StepPanel>;
+  let fixture: ComponentFixture<StepDocsPanel>;
   let http: HttpTestingController;
   let service: HttpService;
   let state: StepsStateService;
@@ -28,13 +27,13 @@ describe('Project step catalog', () => {
   beforeEach(() => {
     originalPort = localStorage.getItem('localBackendPort');
     TestBed.configureTestingModule({
-      imports: [StepPanel, StepDocsPanel, TranslateModule.forRoot()],
+      imports: [StepDocsPanel, TranslateModule.forRoot()],
       providers: [provideHttpClient(), provideHttpClientTesting()],
     });
     const translate = TestBed.inject(TranslateService);
     translate.setTranslation('en', enTranslations);
     translate.use('en');
-    fixture = TestBed.createComponent(StepPanel);
+    fixture = TestBed.createComponent(StepDocsPanel);
     http = TestBed.inject(HttpTestingController);
     service = TestBed.inject(HttpService);
     state = TestBed.inject(StepsStateService);
@@ -53,24 +52,26 @@ describe('Project step catalog', () => {
 
   function renderedSteps(): (string | undefined)[] {
     fixture.detectChanges();
-    return Array.from(fixture.nativeElement.querySelectorAll('.step-item') as NodeListOf<HTMLElement>)
+    return Array.from(fixture.nativeElement.querySelectorAll('.docs-card-sig .sig-name') as NodeListOf<HTMLElement>)
       .map(item => item.textContent?.trim());
   }
 
-  it('shows a renamed project step after refresh in both the palette and docs', () => {
+  it('shows a renamed project step after refresh in the catalog', () => {
     state.setProject(PROJECT_A);
     requestSteps(PROJECT_A).flush([step('old_step')]);
     expect(renderedSteps()).toEqual(['old_step']);
+    const card = fixture.nativeElement.querySelector('.docs-card-summary') as HTMLElement;
+    expect(card.hasAttribute('fExternalItem')).toBeTrue();
+    const toggle = fixture.nativeElement.querySelector('.docs-card-toggle') as HTMLButtonElement;
+    toggle.click();
+    fixture.detectChanges();
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
 
-    const docs = TestBed.createComponent(StepDocsPanel);
-    docs.detectChanges();
-    expect(docs.componentInstance.allSteps().map(item => item.name)).toEqual(['old_step']);
     http.expectNone(request => request.url.includes('/api/v1/steps/'));
 
     state.triggerRefresh();
     requestSteps(PROJECT_A).flush([step('renamed_step')]);
     expect(renderedSteps()).toEqual(['renamed_step']);
-    expect(docs.componentInstance.allSteps().map(item => item.name)).toEqual(['renamed_step']);
   });
 
   it('cancels superseded requests and switches the palette when the project changes', () => {
@@ -123,7 +124,7 @@ describe('Project step catalog', () => {
   it('clears filtered stale results on error and lets the active project retry', () => {
     state.setProject(PROJECT_A);
     requestSteps(PROJECT_A).flush([step('my_step')]);
-    fixture.componentInstance.onFilterChange('step');
+    fixture.componentInstance.searchQuery.set('step');
     expect(renderedSteps()).toEqual(['my_step']);
 
     state.triggerRefresh();

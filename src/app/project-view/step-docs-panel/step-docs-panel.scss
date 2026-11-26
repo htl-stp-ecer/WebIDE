@@ -48,7 +48,7 @@
   box-sizing: border-box;
 
   &::placeholder {
-    color: var(--rc-dim, #5A5A6A);
+    color: var(--rc-muted, #C8B9A5);
   }
 
   &:focus {
@@ -122,7 +122,7 @@
 /* ── Count ─────────────────────────────────────────────── */
 .docs-count {
   font-size: 0.65rem;
-  color: var(--rc-dim, #5A5A6A);
+  color: var(--rc-muted, #C8B9A5);
   font-family: 'JetBrains Mono', monospace;
   letter-spacing: 0.02em;
   flex-shrink: 0;
@@ -188,7 +188,7 @@
 
 /* ── Card ──────────────────────────────────────────────── */
 .docs-card {
-  background: var(--rc-surface, #1C1E2A);
+  background: color-mix(in srgb, var(--rc-bg), var(--rc-surface) 65%);
   border: 1px solid var(--rc-border, #2E3044);
   border-radius: 5px;
   transition: border-color 0.15s;
@@ -203,18 +203,44 @@
   }
 }
 
+.docs-card-heading {
+  display: flex;
+  align-items: center;
+}
+
 .docs-card-summary {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 0.5rem;
+  flex: 1;
+  min-width: 0;
   padding: 0.4rem 0.6rem;
-  width: 100%;
+  cursor: grab;
+  user-select: none;
+
+  &:active { cursor: grabbing; }
+}
+
+.docs-card-toggle {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  margin-right: 0.25rem;
+  border-radius: 4px;
   background: transparent;
   border: none;
   cursor: pointer;
-  user-select: none;
-  text-align: left;
+
+  &:hover { background: var(--rc-elevated); }
+  &:focus-visible { outline: 2px solid var(--rc-accent); }
+}
+
+.docs-drag-grip {
+  flex-shrink: 0;
+  color: var(--rc-muted);
+  font-size: 0.7rem;
 }
 
 .docs-card-sig-wrap {
@@ -241,7 +267,7 @@
 
 .docs-card-brief {
   font-size: 0.68rem;
-  color: var(--rc-dim, #5A5A6A);
+  color: var(--rc-muted, #C8B9A5);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -251,6 +277,7 @@
 
 .docs-card-meta {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.2rem;
   flex-shrink: 0;
@@ -386,7 +413,7 @@
 }
 
 .docs-arg-desc {
-  color: var(--rc-dim, #5A5A6A);
+  color: var(--rc-muted, #C8B9A5);
   line-height: 1.45;
   font-size: 0.68rem;
 }
@@ -398,7 +425,7 @@
 
 .docs-section-body {
   font-size: 0.7rem;
-  color: var(--rc-dim, #5A5A6A);
+  color: var(--rc-muted, #C8B9A5);
   line-height: 1.5;
   padding-left: 0.4rem;
   border-left: 2px solid var(--rc-border, #2E3044);
@@ -418,14 +445,14 @@
 /* ── No docs hint ──────────────────────────────────────── */
 .docs-no-docs {
   font-size: 0.7rem;
-  color: var(--rc-dim, #5A5A6A);
+  color: var(--rc-muted, #C8B9A5);
   font-style: italic;
   padding: 0.2rem 0;
 }
 
 /* ── Empty / Skeleton ──────────────────────────────────── */
 .docs-empty {
-  color: var(--rc-dim, #5A5A6A);
+  color: var(--rc-muted, #C8B9A5);
   font-size: 0.75rem;
   padding: 2rem 0;
   text-align: center;

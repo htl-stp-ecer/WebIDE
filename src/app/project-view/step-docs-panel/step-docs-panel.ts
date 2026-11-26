@@ -1,6 +1,7 @@
 import { Component, inject, signal, computed, ChangeDetectionStrategy } from '@angular/core';
 import { NgClass } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { FExternalItemDirective } from '@foblex/flow';
 import { StepsStateService } from '../../services/steps-state-service';
 import { Skeleton } from '@openng/optimus-ui/skeleton';
 import { TranslateModule } from '@ngx-translate/core';
@@ -17,6 +18,8 @@ interface ParsedSignature {
 }
 
 interface DocStep {
+  id: string;
+  step: Step;
   name: string;
   tags: string[];
   signature: string;
@@ -243,7 +246,7 @@ function parseDocstring(docstring: string, paramMap: Record<string, ParsedParam>
 @Component({
   selector: 'app-step-docs-panel',
   standalone: true,
-  imports: [NgClass, FormsModule, Skeleton, TranslateModule],
+  imports: [NgClass, FormsModule, Skeleton, TranslateModule, FExternalItemDirective],
   templateUrl: './step-docs-panel.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./step-docs-panel.scss'],
@@ -255,6 +258,8 @@ export class StepDocsPanel {
   readonly hasLoadError = this.stepsState.hasLoadError;
   readonly allSteps = computed(() => {
     const steps = (this.stepsState.currentSteps() ?? []).map((step): DocStep => ({
+      id: JSON.stringify([step.import, step.file, step.name]),
+      step,
       name: step.name,
       tags: step.tags ?? [],
       signature: step.signature || `${step.name}(${step.arguments.map(a => a.name).join(', ')})`,

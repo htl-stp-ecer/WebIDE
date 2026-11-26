@@ -15,7 +15,7 @@
 
 /* Default connection color */
 :host ::ng-deep f-connection path {
-  stroke: var(--rc-border, #4A4038);
+  stroke: color-mix(in srgb, var(--rc-border), var(--rc-muted) 45%);
   stroke-width: 2;
 }
 

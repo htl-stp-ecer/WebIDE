@@ -60,30 +60,34 @@
           </div>
         }
         <div class="docs-group-steps">
-          @for (step of group.steps; track step.name) {
-            <div class="docs-card" [ngClass]="{ open: isExpanded(step.name) }">
-              <!-- Summary (always visible) -->
-              <button type="button" class="docs-card-summary" (click)="toggleStep(step.name)">
-                <div class="docs-card-sig-wrap">
-                  <code class="docs-card-sig" [innerHTML]="compactSigHtml(step.signature)"></code>
-                  @if (!isExpanded(step.name)) {
-                    <span class="docs-card-brief">{{ step.brief }}</span>
-                  }
+          @for (step of group.steps; track step.id) {
+            <div class="docs-card" [ngClass]="{ open: isExpanded(step.id) }">
+              <div class="docs-card-heading">
+                <div class="docs-card-summary" fExternalItem [fData]="step.step" [fPreviewMatchSize]="true">
+                  <i class="pi pi-bars docs-drag-grip" aria-hidden="true"></i>
+                  <div class="docs-card-sig-wrap">
+                    <code class="docs-card-sig" [innerHTML]="compactSigHtml(step.signature)"></code>
+                    @if (!isExpanded(step.id)) {
+                      <span class="docs-card-brief">{{ step.brief }}</span>
+                    }
+                    <div class="docs-card-meta">
+                      @for (tag of step.tags; track tag) {
+                        <span class="docs-tag" [ngClass]="tagClass(tag)">{{ tag }}</span>
+                      }
+                    </div>
+                  </div>
                 </div>
-                <div class="docs-card-meta">
-                  @for (tag of step.tags; track tag) {
-                    <span class="docs-tag" [ngClass]="tagClass(tag)">{{ tag }}</span>
-                  }
-                  <span class="docs-expand-arrow" [ngClass]="{ rotated: isExpanded(step.name) }">
-                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                      <path d="M3 5L7 9L11 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-                    </svg>
+                <button type="button" class="docs-card-toggle"
+                        [attr.aria-label]="'STEP_INDEX.STEP_DETAILS' | translate:{step: step.name}"
+                        [attr.aria-expanded]="isExpanded(step.id)" (click)="toggleStep(step.id)">
+                  <span class="docs-expand-arrow" [ngClass]="{ rotated: isExpanded(step.id) }" aria-hidden="true">
+                    <i class="pi pi-chevron-down"></i>
                   </span>
-                </div>
-              </button>
+                </button>
+              </div>
 
               <!-- Body (expanded) -->
-              @if (isExpanded(step.name)) {
+              @if (isExpanded(step.id)) {
                 <div class="docs-card-body">
                   <!-- Full signature -->
                   <pre class="docs-full-sig" [innerHTML]="fullSigHtml(step.signature)"></pre>
