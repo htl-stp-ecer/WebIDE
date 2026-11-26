@@ -1,16 +1,12 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { ActivatedRoute, convertToParamMap, Router } from '@angular/router';
+import { ActivatedRoute, convertToParamMap, provideRouter, Router } from '@angular/router';
 import { of, throwError } from 'rxjs';
 
 import { ProjectMenu } from './project-menu';
 import { HttpService } from '../services/http-service';
 import { ConfirmationService } from 'primeng/api';
-import { TranslateService } from '@ngx-translate/core';
+import { TranslateModule } from '@ngx-translate/core';
 import { NotificationService } from '../services/NotificationService';
-
-class MockTranslateService {
-  instant(key: string) { return key; }
-}
 
 describe('ProjectMenu UI behavior', () => {
   let component: ProjectMenu;
@@ -23,10 +19,7 @@ describe('ProjectMenu UI behavior', () => {
       hostname: 'Raccoon bot',
       ip: 'http://127.0.0.1:8000',
     })),
-    getDeviceProjects: jasmine.createSpy('getDeviceProjects').and.returnValue(of([
-      { uuid: 'abc-12345', name: 'Alpha Project' },
-      { uuid: 'def-67890', name: 'Beta Project' },
-    ])),
+    getDeviceProjects: jasmine.createSpy('getDeviceProjects'),
     createDeviceProject: jasmine.createSpy('createDeviceProject').and.returnValue(of({
       uuid: 'ghi-24680',
       name: 'Gamma Project',
@@ -39,25 +32,27 @@ describe('ProjectMenu UI behavior', () => {
     confirm: jasmine.createSpy('confirm'),
   };
 
-  const routerMock = {
-    navigate: jasmine.createSpy('navigate'),
-  };
+  let navigate: jasmine.Spy;
 
   beforeEach(async () => {
+    (httpMock.getDeviceProjects as jasmine.Spy).and.returnValue(of([
+      { uuid: 'abc-12345', name: 'Alpha Project' },
+      { uuid: 'def-67890', name: 'Beta Project' },
+    ]));
     await TestBed.configureTestingModule({
-      imports: [ProjectMenu],
+      imports: [ProjectMenu, TranslateModule.forRoot()],
       providers: [
-        { provide: Router, useValue: routerMock },
+        provideRouter([]),
         {
           provide: ActivatedRoute,
           useValue: { snapshot: { paramMap: convertToParamMap({ ip: '127_0_0_1-8000' }) } },
         },
         { provide: HttpService, useValue: httpMock },
         { provide: ConfirmationService, useValue: confirmationMock },
-        { provide: TranslateService, useClass: MockTranslateService },
       ],
     }).compileComponents();
 
+    navigate = spyOn(TestBed.inject(Router), 'navigate');
     fixture = TestBed.createComponent(ProjectMenu);
     component = fixture.componentInstance;
     fixture.detectChanges();
@@ -75,7 +70,6 @@ describe('ProjectMenu UI behavior', () => {
     (httpMock.changeHostname as jasmine.Spy).calls.reset();
     (httpMock.deleteDeviceProject as jasmine.Spy).calls.reset();
     confirmationMock.confirm.calls.reset();
-    routerMock.navigate.calls.reset();
   });
 
   it('should create', () => {
@@ -115,7 +109,7 @@ describe('ProjectMenu UI behavior', () => {
 
   it('routes back to home when back action is clicked', () => {
     component.backToProjects();
-    expect(routerMock.navigate).toHaveBeenCalledWith(['/']);
+    expect(navigate).toHaveBeenCalledWith(['/']);
   });
 
   it('shows and hides the create project form', () => {

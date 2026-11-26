@@ -1,6 +1,8 @@
 import { signal } from '@angular/core';
+import { TestBed } from '@angular/core/testing';
 import { NEVER } from 'rxjs';
 import { HttpService } from '../../services/http-service';
+import { RunActionService } from '../../services/run-action-service';
 import { FlowchartRunManager } from './flowchart-run-manager';
 
 describe('FlowchartRunManager', () => {
@@ -12,12 +14,13 @@ describe('FlowchartRunManager', () => {
 
     const manager = new FlowchartRunManager({
       http: httpStub,
+      runAction: TestBed.inject(RunActionService),
       isRunActive: signal(false),
-      debugState: signal('idle' as any),
+      debugState: signal<'idle' | 'running' | 'paused'>('idle'),
       breakpointInfo: signal(null),
       getProjectUUID: () => 'project',
       getMissionKey: () => 'mission',
-    } as any);
+    });
 
     manager.updatePathLookups(new Map([['1', 'node-1'], ['2', 'node-2']]), new Map());
 
