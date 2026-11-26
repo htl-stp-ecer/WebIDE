@@ -1,8 +1,8 @@
-import {Component, signal} from '@angular/core';
+import {Component, signal, ChangeDetectionStrategy} from '@angular/core';
 import {Router, RouterOutlet} from '@angular/router';
 import {FormsModule} from '@angular/forms';
 import {Navbar} from './navbar/navbar';
-import {Toast} from 'primeng/toast';
+import {Toast} from '@openng/optimus-ui/toast';
 import {NotificationService} from './services/NotificationService';
 import {NgClass} from '@angular/common';
 
@@ -16,6 +16,7 @@ import {NgClass} from '@angular/common';
     NgClass,
   ],
   templateUrl: './app.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './app.scss'
 })
 export class App {

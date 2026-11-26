@@ -5,6 +5,7 @@ import {
   Output,
   signal,
   ViewChild,
+  ChangeDetectionStrategy
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 
@@ -39,6 +40,7 @@ import { FormsModule } from '@angular/forms';
       </div>
     </div>
   `,
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: [`
     .step-search-container {
       margin-bottom: 0.75rem;

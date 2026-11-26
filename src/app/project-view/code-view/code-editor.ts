@@ -9,6 +9,7 @@ import {
   Output,
   SimpleChanges,
   ViewChild,
+  ChangeDetectionStrategy
 } from '@angular/core';
 import { EditorState, Extension } from '@codemirror/state';
 import {
@@ -72,6 +73,7 @@ function pythonLinter(view: EditorView): Diagnostic[] {
   selector: 'app-code-editor',
   standalone: true,
   template: '<div #host class="cm-host"></div>',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: [`
     :host { display: block; height: 100%; overflow: hidden; }
     .cm-host { height: 100%; }

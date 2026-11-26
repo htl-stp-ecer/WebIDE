@@ -1,9 +1,9 @@
-import { Component, OnInit, OnDestroy, HostListener, ViewChild, computed, signal } from '@angular/core';
+import { Component, OnInit, OnDestroy, HostListener, ViewChild, computed, signal, ChangeDetectionStrategy } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink, RouterLinkActive } from '@angular/router';
-import { Tooltip } from 'primeng/tooltip';
+import { Tooltip } from '@openng/optimus-ui/tooltip';
 import { Subscription, interval, switchMap, takeUntil, Subject } from 'rxjs';
 import { HttpService, RunConfiguration } from '../services/http-service';
 import { RunActionService, RunTarget } from '../services/run-action-service';
@@ -29,6 +29,7 @@ interface LanguageOption {
     RunConfigurationsDialog,
   ],
   templateUrl: './navbar.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './navbar.scss'
 })
 export class Navbar implements OnInit, OnDestroy {

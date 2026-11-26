@@ -9,15 +9,16 @@ import {
   Output,
   SimpleChanges,
   ViewChild,
+  ChangeDetectionStrategy
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { catchError, forkJoin, of, Subscription } from 'rxjs';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { Dialog } from 'primeng/dialog';
-import { MultiSelect } from 'primeng/multiselect';
-import { Select } from 'primeng/select';
-import { SliderModule } from 'primeng/slider';
+import { Dialog } from '@openng/optimus-ui/dialog';
+import { MultiSelect } from '@openng/optimus-ui/multiselect';
+import { Select } from '@openng/optimus-ui/select';
+import { SliderModule } from '@openng/optimus-ui/slider';
 
 import { HttpService, type TableMapFile } from '../../services/http-service';
 import { TableMapService } from '../../project-view/flowchart/table/services';
@@ -42,6 +43,7 @@ const DEFAULT_MAP_HEIGHT_CM = 100;
   standalone: true,
   imports: [CommonModule, FormsModule, TranslateModule, Dialog, MultiSelect, Select, SliderModule],
   templateUrl: './project-collision-compare.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './project-collision-compare.scss',
 })
 export class ProjectCollisionCompareComponent implements OnChanges, AfterViewInit, OnDestroy {

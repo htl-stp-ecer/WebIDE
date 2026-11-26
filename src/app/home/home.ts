@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectionStrategy } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpService } from '../services/http-service';
@@ -16,6 +16,7 @@ import { encodeRouteIp } from '../services/route-ip-serializer';
     TranslateModule,
   ],
   templateUrl: './home.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './home.scss'
 })
 export class Home implements OnInit, OnDestroy {

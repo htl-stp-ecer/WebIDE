@@ -1,11 +1,11 @@
-import { Component, OnInit, OnDestroy, signal, computed } from '@angular/core';
+import { Component, OnInit, OnDestroy, signal, computed, ChangeDetectionStrategy } from '@angular/core';
 import { NgClass } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpService } from '../../services/http-service';
 import { StepsStateService } from '../../services/steps-state-service';
 import { ActivatedRoute } from '@angular/router';
 import { Subscription } from 'rxjs';
-import { Skeleton } from 'primeng/skeleton';
+import { Skeleton } from '@openng/optimus-ui/skeleton';
 
 interface ParsedParam {
   name: string;
@@ -247,6 +247,7 @@ function parseDocstring(docstring: string, paramMap: Record<string, ParsedParam>
   standalone: true,
   imports: [NgClass, FormsModule, Skeleton],
   templateUrl: './step-docs-panel.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./step-docs-panel.scss'],
 })
 export class StepDocsPanel implements OnInit, OnDestroy {

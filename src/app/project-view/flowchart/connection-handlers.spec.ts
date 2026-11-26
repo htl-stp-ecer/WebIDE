@@ -86,6 +86,9 @@ const createTestFlow = ({ mission, steps = [] }: TestFlowchartDeps) => {
     adHocNodes: signal<FlowNode[]>([]),
     adHocConnections: signal<Connection[]>([]),
     comments: signal([]),
+    groups: signal([]),
+    internalDragActive: signal(false),
+    rebuildParallelGroupLookup: jasmine.createSpy('rebuildParallelGroupLookup'),
     orientation: signal<'vertical' | 'horizontal'>('vertical'),
   };
 
@@ -169,7 +172,7 @@ describe('connection-handlers', () => {
       expect(updatedSteps[3]).toBe(stepB);
     });
 
-    it('inserts node into parallel lane sequence when splitting lane exit', () => {
+    it('inserts a node between two steps in one parallel lane', () => {
       const laneOne = createStep('Lane-1');
       const laneTwo = createStep('Lane-2');
       const laneSeq = createStep('Lane-Seq', [], [laneOne, laneTwo], 'seq');
@@ -202,10 +205,10 @@ describe('connection-handlers', () => {
       flow.adHocNodes.set([...flow.adHocNodes(), adHocNode]);
       recomputeMergedView(flow);
 
+      const laneOneNodeId = flow.lookups.stepToNodeId.get(laneOne)!;
       const laneTwoNodeId = flow.lookups.stepToNodeId.get(laneTwo)!;
-      const tailNodeId = flow.lookups.stepToNodeId.get(tail)!;
       const targetConnection = flow.connections().find(
-        c => c.sourceNodeId === laneTwoNodeId && c.targetNodeId === tailNodeId
+        c => c.sourceNodeId === laneOneNodeId && c.targetNodeId === laneTwoNodeId
       );
       expect(targetConnection).toBeTruthy();
 
@@ -216,16 +219,16 @@ describe('connection-handlers', () => {
       const laneChildren = laneSeq.children ?? [];
       expect(laneChildren.length).toBe(3);
       expect(laneChildren[0]).toBe(laneOne);
-      expect(laneChildren[1]).toBe(laneTwo);
+      expect(laneChildren[2]).toBe(laneTwo);
 
-      const insertedStep = laneChildren[2];
+      const insertedStep = laneChildren[1];
       expect(insertedStep?.function_name).toBe('Insert');
       expect(insertedStep?.children?.length ?? 0).toBe(0);
       expect(mission.steps?.[1]).toBe(tail);
       expect(flow.historyManager.recordHistory).toHaveBeenCalledWith('split-mission-connection');
   });
 
-  it('keeps downstream node outside parallel when splitting lane wrapped in seq', () => {
+  it('keeps the downstream node outside a parallel group when intersecting its join', () => {
     const laneStep = createStep('Lane');
     const laneSeq = createStep('Lane-Seq', [], [laneStep], 'seq');
     const otherLane = createStep('Other-Lane');
@@ -258,20 +261,15 @@ describe('connection-handlers', () => {
     recomputeMergedView(flow);
 
     const laneNodeId = flow.lookups.stepToNodeId.get(laneStep)!;
-    const tailNodeId = flow.lookups.stepToNodeId.get(tail)!;
-    const targetConnection = flow.connections().find(
-      c => c.sourceNodeId === laneNodeId && c.targetNodeId === tailNodeId
-    );
+    const targetConnection = flow.connections().find(c => c.sourceNodeId === laneNodeId);
     expect(targetConnection).toBeTruthy();
 
     const event = new FNodeIntersectedWithConnections(adHocNode.id, [targetConnection!.id]);
     handleNodeIntersected(flow, event);
 
     const laneChildren = laneSeq.children ?? [];
-    expect(laneChildren.length).toBe(2);
-    expect(laneChildren[0]).toBe(laneStep);
-    const insertedLaneStep = laneChildren[1];
-    expect(insertedLaneStep?.function_name).toBe('InsertLane');
+    expect(laneChildren).toEqual([laneStep]);
+    expect(flow.adHocNodes()).toContain(adHocNode);
 
     const rootSeqChildren = rootSeq.children ?? [];
     expect(rootSeqChildren.length).toBe(2);
@@ -312,7 +310,7 @@ it('keeps downstream node outside parallel when adding new parallel child', () =
     expect(seqChildren[1]).toBe(tail);
   });
 
-  it('successfully inserts between every connection in a sample mission', () => {
+  it('inserts between executable endpoints in a sample mission', () => {
     const branchLeaf = createStep('Leaf');
     const parallelChild1 = createStep('Parallel-1');
     const parallelChild2 = createStep('Parallel-2', [], [branchLeaf]);
@@ -344,7 +342,7 @@ it('keeps downstream node outside parallel when adding new parallel child', () =
     const connections = flow.missionConnections();
     expect(connections.length).toBeGreaterThan(0);
 
-    const connectionInfos = connections.map(conn => {
+    const connectionInfos = connections.flatMap(conn => {
       const parentNodeId = conn.sourceNodeId ?? (conn.outputId ? baseId(conn.outputId, 'output') : null);
       const childNodeId = conn.targetNodeId ?? (conn.inputId ? baseId(conn.inputId, 'input') : null);
 
@@ -353,12 +351,15 @@ it('keeps downstream node outside parallel when adding new parallel child', () =
         : null;
       const childStep = childNodeId ? flow.lookups.nodeIdToStep.get(childNodeId) ?? null : null;
 
-      return {
+      // Synthetic fork, join and end nodes do not have mission steps.
+      if (!childStep || (parentNodeId !== 'start-node' && !parentStep)) return [];
+      return [{
         parentPath: parentStep ? flow.lookups.stepPaths.get(parentStep) ?? null : null,
-        childPath: childStep ? flow.lookups.stepPaths.get(childStep) ?? null : null,
-      };
+        childPath: flow.lookups.stepPaths.get(childStep) ?? null,
+      }];
     });
 
+    expect(connectionInfos.length).toBeGreaterThan(0);
     connectionInfos.forEach((info, idx) => {
       const clonedMission = cloneMission(mission);
       const clonedFlow = createTestFlow({ mission: clonedMission });
@@ -389,7 +390,7 @@ it('keeps downstream node outside parallel when adding new parallel child', () =
       is_setup: false,
       is_shutdown: false,
       order: 0,
-      steps: [step1],
+      steps: [step1, createStep('After')],
       comments: [],
     };
 
@@ -421,7 +422,6 @@ it('keeps downstream node outside parallel when adding new parallel child', () =
     );
 
     handleAddConnection(flow, event);
-    console.log('step1 children after', step1.children);
 
     const updatedMission = flow.missionState.currentMission()!;
     const seqStep = updatedMission.steps[0].children?.[0];
@@ -439,11 +439,9 @@ it('keeps downstream node outside parallel when adding new parallel child', () =
     expect(tailStep?.function_name).toBe('N4');
 
     const currentConnections = flow.connections();
-    const n3ToN4 = currentConnections.find(
-      conn => baseId(conn.outputId, 'output') === adHocNode.id &&
-        baseId(conn.inputId, 'input') === n4Id
-    );
-    expect(n3ToN4).toBeTruthy();
+    const join = currentConnections.find(conn => conn.sourceNodeId === adHocNode.id)?.targetNodeId;
+    expect(join).toBeTruthy();
+    expect(currentConnections.some(conn => conn.sourceNodeId === join && conn.targetNodeId === n4Id)).toBeTrue();
   });
 
   it('appends a new top-level step when connecting from the tail node', () => {

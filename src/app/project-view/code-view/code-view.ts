@@ -6,8 +6,9 @@ import {
   inject,
   Input,
   signal,
+  ChangeDetectionStrategy
 } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { HttpService } from '../../services/http-service';
 import { NotificationService } from '../../services/NotificationService';
 import { MissionStateService } from '../../services/mission-sate-service';
@@ -16,8 +17,9 @@ import { CodeEditorComponent } from './code-editor';
 @Component({
   selector: 'app-code-view',
   standalone: true,
-  imports: [CommonModule, CodeEditorComponent],
+  imports: [CodeEditorComponent],
   templateUrl: './code-view.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './code-view.scss',
 })
 export class CodeView {

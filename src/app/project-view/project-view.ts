@@ -1,4 +1,4 @@
-import {Component, effect, ElementRef, OnDestroy, signal, ViewChild} from '@angular/core';
+import {Component, effect, ElementRef, OnDestroy, signal, ViewChild, ChangeDetectionStrategy} from '@angular/core';
 import {MissionPanel} from './mission-panel/mission-panel';
 import {Flowchart} from './flowchart/flowchart';
 import {StepPanel} from './step-panel/step-panel';
@@ -64,6 +64,7 @@ export type RightToolPanel = 'steps' | 'docs' | 'robot' | null;
     FormsModule,
   ],
   templateUrl: './project-view.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './project-view.scss'
 })
 export class ProjectView implements OnDestroy {

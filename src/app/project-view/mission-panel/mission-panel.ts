@@ -1,23 +1,23 @@
-import { Component, OnInit, ViewChild } from '@angular/core';
+import { Component, OnInit, ViewChild, ChangeDetectionStrategy } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { HttpService } from '../../services/http-service';
 import { Mission } from '../../entities/Mission';
 import { NotificationService } from '../../services/NotificationService';
-import { Card } from 'primeng/card';
-import { PrimeTemplate } from 'primeng/api';
-import { ConfirmationService } from 'primeng/api';
-import type { MenuItem } from 'primeng/api';
+import { Card } from '@openng/optimus-ui/card';
+import { PrimeTemplate } from '@openng/optimus-ui/api';
+import { ConfirmationService } from '@openng/optimus-ui/api';
+import type { MenuItem } from '@openng/optimus-ui/api';
 import { FormsModule } from '@angular/forms';
-import { InputText } from 'primeng/inputtext';
-import { Button } from 'primeng/button';
+import { InputText } from '@openng/optimus-ui/inputtext';
+import { Button } from '@openng/optimus-ui/button';
 import { CdkDragDrop, DragDropModule, moveItemInArray } from '@angular/cdk/drag-drop';
 import {NgClass} from '@angular/common';
 import {MissionStateService} from '../../services/mission-sate-service';
-import { ContextMenu } from 'primeng/contextmenu';
-import {ConfirmDialog} from 'primeng/confirmdialog';
-import { Dialog } from 'primeng/dialog';
+import { ContextMenu } from '@openng/optimus-ui/contextmenu';
+import {ConfirmDialog} from '@openng/optimus-ui/confirmdialog';
+import { Dialog } from '@openng/optimus-ui/dialog';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { Skeleton } from 'primeng/skeleton';
+import { Skeleton } from '@openng/optimus-ui/skeleton';
 
 @Component({
   selector: 'app-mission-panel',
@@ -25,6 +25,7 @@ import { Skeleton } from 'primeng/skeleton';
   imports: [Card, PrimeTemplate, FormsModule, InputText, Button, DragDropModule, NgClass, ContextMenu, ConfirmDialog, Dialog, TranslateModule],
   templateUrl: './mission-panel.html',
   styleUrl: './mission-panel.scss',
+  changeDetection: ChangeDetectionStrategy.Eager,
   providers: [ConfirmationService]
 })
 export class MissionPanel implements OnInit {

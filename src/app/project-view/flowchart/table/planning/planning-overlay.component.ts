@@ -11,13 +11,14 @@ import {
   output,
   signal,
   HostListener,
+  ChangeDetectionStrategy
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
-import { ButtonModule } from 'primeng/button';
-import { SliderModule } from 'primeng/slider';
-import { ToggleButtonModule } from 'primeng/togglebutton';
-import { TooltipModule } from 'primeng/tooltip';
+import { ButtonModule } from '@openng/optimus-ui/button';
+import { SliderModule } from '@openng/optimus-ui/slider';
+import { ToggleButtonModule } from '@openng/optimus-ui/togglebutton';
+import { TooltipModule } from '@openng/optimus-ui/tooltip';
 import { PlanningModeService, type PlanningPathMode, type SplineHeadingMode } from './planning-mode.service';
 import { formatStepForPreview } from './path-to-steps';
 import { sampleCatmullRom, tangentsAtWaypoints } from './catmull-rom';
@@ -107,6 +108,7 @@ interface LineSnapMenuState {
     TooltipModule,
   ],
   templateUrl: './planning-overlay.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './planning-overlay.component.scss',
 })
 export class PlanningOverlayComponent implements OnInit, AfterViewInit, OnDestroy {

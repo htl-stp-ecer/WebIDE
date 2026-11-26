@@ -1,8 +1,8 @@
-import { Component, EventEmitter, Input, Output } from '@angular/core';
+import { Component, EventEmitter, Input, Output, ChangeDetectionStrategy } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
-import { Tooltip } from 'primeng/tooltip';
+import { Tooltip } from '@openng/optimus-ui/tooltip';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { ChartModule } from 'primeng/chart';
+import { ChartModule } from '@openng/optimus-ui/chart';
 import type { ChartData, ChartOptions } from 'chart.js';
 import type { StepTiming } from '../flowchart-run-manager';
 
@@ -13,6 +13,7 @@ export type TimingViewMode = 'list' | 'chart';
   standalone: true,
   imports: [DecimalPipe, Tooltip, TranslateModule, ChartModule],
   templateUrl: './timing-panel.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './timing-panel.scss',
 })
 export class TimingPanel {

@@ -1,6 +1,6 @@
-@import "primeicons/primeicons.css";
+@import "@openng/icons/openng-icons.css";
 @import "tailwindcss";
-@plugin "tailwindcss-primeui";
+@import "@openng/optimus-ui-tailwindcss";
 
 @variant dark (.dark &);
 

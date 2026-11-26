@@ -1,4 +1,4 @@
-import { MenuItem } from 'primeng/api';
+import { MenuItem } from '@openng/optimus-ui/api';
 
 interface Point {
   clientX: number;

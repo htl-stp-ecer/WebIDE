@@ -10,6 +10,7 @@ import {
   inject,
   input,
   signal,
+  ChangeDetectionStrategy
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -148,6 +149,7 @@ type TableMapFileAny = TableMapFileV1 | TableMapFileV2;
   standalone: true,
   imports: [CommonModule, TranslateModule, TableEditorToolbar],
   templateUrl: './table-editor-view.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './table-editor-view.scss',
 })
 export class TableEditorView implements AfterViewInit, OnDestroy {
