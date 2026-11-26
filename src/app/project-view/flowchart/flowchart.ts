@@ -208,7 +208,8 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
   themeObserver?: MutationObserver;
   typeDefinitionsSub?: Subscription;
   simulationPathSub?: Subscription;
-  private stepsSub?: Subscription;
+  private deviceInfoSub?: Subscription;
+  private deviceStepIndexSub?: Subscription;
   private missionListSub?: Subscription;
   private missionDetailSub?: Subscription;
   private nodeElsChangesSub?: Subscription;
@@ -216,7 +217,6 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
   private activePanelDrag: PanelDragState | null = null;
   private deviceInfo: ConnectionInfo | null = null;
   private loadingDeviceInfo = false;
-  private libstpIndexTriggered = false;
   private projectSimulationCache: ProjectSimulationData | null = null;
   private plannedPathUpdateTimeout?: ReturnType<typeof setTimeout>;
   private robotSettingsWasOpen = false;
@@ -333,7 +333,7 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
       openSettings: () => this.openRobotSettings(),
     });
     this.loadTypeDefinitions();
-    this.preloadMissionAndSteps();
+    this.preloadMissions();
   }
 
   get useAutoLayout(): boolean {
@@ -390,7 +390,8 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
     this.themeObserver?.disconnect();
     this.typeDefinitionsSub?.unsubscribe();
     this.simulationPathSub?.unsubscribe();
-    this.stepsSub?.unsubscribe();
+    this.deviceInfoSub?.unsubscribe();
+    this.deviceStepIndexSub?.unsubscribe();
     this.missionListSub?.unsubscribe();
     this.missionDetailSub?.unsubscribe();
     this.nodeElsChangesSub?.unsubscribe();
@@ -1278,23 +1279,9 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
     this.offscreenIndicator.set({ visible: false, x: 0, y: 0, angle: 0 });
   }
 
-  private preloadMissionAndSteps(): void {
+  private preloadMissions(): void {
     const projectUUID = this.projectUUID;
     if (!projectUUID) return;
-
-    try {
-      this.stepsSub?.unsubscribe();
-      this.stepsSub = this.http.getAllSteps(projectUUID).subscribe({
-        next: steps => {
-          this.stepsState.setSteps(steps);
-        },
-        error: () => {
-          this.stepsState.setSteps([]);
-        },
-      });
-    } catch {
-      this.stepsState.setSteps([]);
-    }
 
     try {
       this.missionListSub?.unsubscribe();
@@ -1484,7 +1471,7 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
     if (this.deviceInfo || this.loadingDeviceInfo) return;
     this.loadingDeviceInfo = true;
     try {
-      this.http.getDeviceInfoDefault().subscribe({
+      this.deviceInfoSub = this.http.getDeviceInfoDefault().subscribe({
         next: info => {
           this.deviceInfo = info;
           this.loadingDeviceInfo = false;
@@ -1500,38 +1487,15 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
     }
   }
 
-  private refreshDeviceStepIndexCache() {
-    if (this.libstpIndexTriggered) {
-      return;
-    }
-    this.libstpIndexTriggered = true;
-    this.http.refreshStepIndex().subscribe({
-      next: () => {
-        this.refreshLocalSteps();
-        this.libstpIndexTriggered = false;
-      },
+  private refreshDeviceStepIndexCache(): void {
+    if (this.deviceStepIndexSub && !this.deviceStepIndexSub.closed) return;
+    const projectUuid = this.projectUUID;
+    this.deviceStepIndexSub = this.http.refreshStepIndex().subscribe({
+      next: () => this.stepsState.triggerRefresh(projectUuid),
       error: () => {
-        this.libstpIndexTriggered = false;
+        // The project catalog remains available if the library re-index fails.
       },
     });
-  }
-
-  private refreshLocalSteps(): void {
-    const projectUUID = this.projectUUID;
-    if (!projectUUID) return;
-    try {
-      this.stepsSub?.unsubscribe();
-      this.stepsSub = this.http.getAllSteps(projectUUID).subscribe({
-        next: steps => {
-          this.stepsState.setSteps(steps);
-        },
-        error: () => {
-          this.stepsState.setSteps([]);
-        },
-      });
-    } catch {
-      this.stepsState.setSteps([]);
-    }
   }
 
   private applyDeviceVisualizationInfo(info: ConnectionInfo): void {

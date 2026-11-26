@@ -1,10 +1,7 @@
-import { Component, OnInit, OnDestroy, signal, computed, ChangeDetectionStrategy } from '@angular/core';
+import { Component, inject, signal, computed, ChangeDetectionStrategy } from '@angular/core';
 import { NgClass } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { HttpService } from '../../services/http-service';
 import { StepsStateService } from '../../services/steps-state-service';
-import { ActivatedRoute } from '@angular/router';
-import { Subscription } from 'rxjs';
 import { Skeleton } from '@openng/optimus-ui/skeleton';
 
 interface ParsedParam {
@@ -250,9 +247,25 @@ function parseDocstring(docstring: string, paramMap: Record<string, ParsedParam>
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./step-docs-panel.scss'],
 })
-export class StepDocsPanel implements OnInit, OnDestroy {
-  allSteps = signal<DocStep[]>([]);
-  loading = signal(true);
+export class StepDocsPanel {
+  private readonly stepsState = inject(StepsStateService);
+
+  readonly loading = this.stepsState.isLoading;
+  readonly hasLoadError = this.stepsState.hasLoadError;
+  readonly allSteps = computed(() => {
+    const steps = (this.stepsState.currentSteps() ?? []).map((step): DocStep => ({
+      name: step.name,
+      tags: step.tags ?? [],
+      signature: step.signature || `${step.name}(${step.arguments.map(a => a.name).join(', ')})`,
+      docstring: step.docstring || '',
+      module: step.import,
+      brief: step.docstring ? firstSentence(step.docstring) : '',
+    }));
+    return steps.sort((a, b) => {
+      const tagCmp = (a.tags[0] || 'zzz').localeCompare(b.tags[0] || 'zzz');
+      return tagCmp !== 0 ? tagCmp : a.name.localeCompare(b.name);
+    });
+  });
   searchQuery = signal('');
   activeTag = signal<string | null>(null);
   expandedSteps = signal<Set<string>>(new Set());
@@ -307,57 +320,6 @@ export class StepDocsPanel implements OnInit, OnDestroy {
     if (raw || tag) return `Showing ${visible} of ${total} steps`;
     return `${total} steps available`;
   });
-
-  private refreshSub?: Subscription;
-  private projectUUID: string | null = null;
-
-  constructor(
-    private http: HttpService,
-    private stepsState: StepsStateService,
-    private route: ActivatedRoute,
-  ) {}
-
-  ngOnInit(): void {
-    this.projectUUID = this.route.snapshot.paramMap.get('uuid');
-    this.loadDocs();
-    this.refreshSub = this.stepsState.refresh$.subscribe(() => this.loadDocs());
-  }
-
-  ngOnDestroy(): void {
-    this.refreshSub?.unsubscribe();
-  }
-
-  private loadDocs(): void {
-    if (!this.projectUUID) {
-      this.allSteps.set([]);
-      this.loading.set(false);
-      return;
-    }
-    this.loading.set(true);
-    this.http.getAllSteps(this.projectUUID).subscribe({
-      next: (steps) => {
-        const docSteps: DocStep[] = steps
-          .map(s => ({
-            name: s.name,
-            tags: s.tags ?? [],
-            signature: s.signature || `${s.name}(${s.arguments.map(a => a.name).join(', ')})`,
-            docstring: s.docstring || '',
-            module: s.import,
-            brief: s.docstring ? firstSentence(s.docstring) : '',
-          }));
-        docSteps.sort((a, b) => {
-          const tagCmp = (a.tags[0] || 'zzz').localeCompare(b.tags[0] || 'zzz');
-          return tagCmp !== 0 ? tagCmp : a.name.localeCompare(b.name);
-        });
-        this.allSteps.set(docSteps);
-        this.loading.set(false);
-      },
-      error: () => {
-        this.allSteps.set([]);
-        this.loading.set(false);
-      },
-    });
-  }
 
   toggleTag(tag: string): void {
     this.activeTag.set(this.activeTag() === tag ? null : tag);

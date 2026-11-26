@@ -1,7 +1,7 @@
 <div class="external-panel">
   <app-step-search (filterChange)="onFilterChange($event)"></app-step-search>
   <div class="groups-scroll flex-1 min-h-0 flex flex-col gap-2 select-none" (pointerdown)="clearSelection()">
-    @if (stepsLoading) {
+    @if (stepsLoading()) {
       <!-- Loading Skeleton -->
       @for (groupIndex of [1, 2, 3]; track groupIndex) {
         <div>
@@ -15,13 +15,15 @@
           </div>
         </div>
       }
-    } @else if (filteredStepGroups.length === 0 && searchFilter) {
+    } @else if (hasLoadError()) {
+      <p role="status" class="text-center text-gray-500 dark:text-gray-400 py-8">Could not load steps. Try refreshing.</p>
+    } @else if (filteredStepGroups().length === 0 && searchFilter()) {
       <div class="text-center text-gray-500 dark:text-gray-400 py-8">
         <i class="pi pi-search text-2xl mb-2"></i>
-        <p>No steps match "{{ searchFilter }}"</p>
+        <p>No steps match "{{ searchFilter() }}"</p>
       </div>
     } @else {
-      @for (group of filteredStepGroups; track group.headline) {
+      @for (group of filteredStepGroups(); track group.headline) {
         <div class="step-group">
           <button
             type="button"

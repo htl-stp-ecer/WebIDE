@@ -13,9 +13,10 @@ import {FormsModule} from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { HttpService } from '../services/http-service';
 import { RunActionService } from '../services/run-action-service';
+import { StepsStateService } from '../services/steps-state-service';
 import {TableMapService, TableVisualizationService} from './flowchart/table/services';
 import {Pose2D, thetaToDegrees} from './flowchart/table/models';
-import {Subject} from 'rxjs';
+import {Subject, Subscription} from 'rxjs';
 import {debounceTime} from 'rxjs/operators';
 import {NotificationService} from '../services/NotificationService';
 import {TranslateService} from '@ngx-translate/core';
@@ -50,6 +51,7 @@ export type RightToolPanel = 'steps' | 'docs' | 'robot' | null;
 
 @Component({
   selector: 'app-project-view',
+  providers: [StepsStateService],
   imports: [
     MissionPanel,
     Flowchart,
@@ -94,6 +96,7 @@ export class ProjectView implements OnDestroy {
   startPoseEditMode = signal(false);
   projectUUID = '';
 
+  private readonly stepsRouteSub: Subscription;
   private persistStartPoseSubject = new Subject<void>();
 
   toggleCenterView(): void {
@@ -108,7 +111,9 @@ export class ProjectView implements OnDestroy {
     private mapService: TableMapService,
     private translate: TranslateService,
     private replayService: LocalizationReplayService,
+    readonly stepsState: StepsStateService,
   ) {
+    this.stepsRouteSub = this.route.paramMap.subscribe(params => this.stepsState.setProject(params.get('uuid')));
     const projectUUID = this.route.snapshot.paramMap.get('uuid');
     if (!projectUUID) {
       this.http.clearDeviceBase();
@@ -325,6 +330,7 @@ export class ProjectView implements OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.stepsRouteSub.unsubscribe();
     this.stopResize();
   }
 

@@ -46,6 +46,8 @@
           <p-skeleton width="90%" height="0.7rem"></p-skeleton>
         </div>
       }
+    } @else if (hasLoadError()) {
+      <p role="status" class="docs-empty">Could not load steps. Try refreshing.</p>
     } @else if (visibleSteps().length === 0) {
       <div class="docs-empty">No steps match this filter.</div>
     } @else {

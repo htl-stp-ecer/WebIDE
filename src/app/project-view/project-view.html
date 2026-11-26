@@ -122,9 +122,14 @@
         @if (activeRightPanel() === 'steps') {
           <div class="tool-window-header">
             <span class="tool-window-title">Steps</span>
-            <button class="tool-window-hide" (click)="toggleRightPanel(null)" title="Hide">
-              <i class="pi pi-minus"></i>
-            </button>
+            <div class="tool-window-actions">
+              <button type="button" class="tool-window-action" (click)="stepsState.triggerRefresh()" title="Refresh steps" aria-label="Refresh steps">
+                <i class="pi pi-refresh"></i>
+              </button>
+              <button class="tool-window-hide" (click)="toggleRightPanel(null)" title="Hide">
+                <i class="pi pi-minus"></i>
+              </button>
+            </div>
           </div>
           <div class="panel-scroll no-scrollbar">
             <app-step-panel></app-step-panel>
@@ -132,9 +137,14 @@
         } @else if (activeRightPanel() === 'docs') {
           <div class="tool-window-header">
             <span class="tool-window-title">Docs</span>
-            <button class="tool-window-hide" (click)="toggleRightPanel(null)" title="Hide">
-              <i class="pi pi-minus"></i>
-            </button>
+            <div class="tool-window-actions">
+              <button type="button" class="tool-window-action" (click)="stepsState.triggerRefresh()" title="Refresh steps" aria-label="Refresh steps">
+                <i class="pi pi-refresh"></i>
+              </button>
+              <button class="tool-window-hide" (click)="toggleRightPanel(null)" title="Hide">
+                <i class="pi pi-minus"></i>
+              </button>
+            </div>
           </div>
           <div class="tool-panel-content">
             <app-step-docs-panel></app-step-docs-panel>
