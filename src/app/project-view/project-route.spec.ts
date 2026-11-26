@@ -3,6 +3,7 @@ import { TestBed } from '@angular/core/testing';
 import { RouterTestingHarness } from '@angular/router/testing';
 
 import { appConfig } from '../app.config';
+import { MissionStateService } from '../services/mission-sate-service';
 import { ProjectView } from './project-view';
 
 const PROJECT_A = '78dcbdbc-9718-4cb3-a23c-a16a4edb3a92';
@@ -25,12 +26,17 @@ describe('Project editor navigation', () => {
     const oldRequests = http.match(request => request.url.includes(PROJECT_A));
     expect(oldRequests.length).toBe(4);
     expect(first.projectUUID).toBe(PROJECT_A);
+    const firstMissionState = harness.routeDebugElement?.injector.get(MissionStateService);
+    expect(firstMissionState).toBeDefined();
+    firstMissionState?.setMission({ name: 'First project mission', is_setup: false, is_shutdown: false, order: 0, steps: [] });
     expect(await harness.navigateByUrl(`/projects/${PROJECT_A}?tab=steps`, ProjectView)).toBe(first);
 
     const second = await harness.navigateByUrl(`/projects/${PROJECT_B}`, ProjectView);
     expect(second).not.toBe(first);
     expect(oldRequests.every(request => request.cancelled)).toBeTrue();
     expect(second.projectUUID).toBe(PROJECT_B);
+    const secondMissionState = harness.routeDebugElement?.injector.get(MissionStateService);
+    expect(secondMissionState?.currentMission()).toBeNull();
 
     http.expectOne(request => request.url.endsWith(`/api/v1/steps/?project_uuid=${PROJECT_B}`))
       .flush([{ name: 'new_project_step', import: 'steps.project', file: 'steps/project.py', arguments: [] }]);

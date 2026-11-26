@@ -15,6 +15,7 @@ import { ActivatedRoute } from '@angular/router';
 import { HttpService } from '../services/http-service';
 import { RunActionService } from '../services/run-action-service';
 import { StepsStateService } from '../services/steps-state-service';
+import { MissionStateService } from '../services/mission-sate-service';
 import {TableMapService, TableVisualizationService} from './flowchart/table/services';
 import {Pose2D, thetaToDegrees} from './flowchart/table/models';
 import {Subject} from 'rxjs';
@@ -52,7 +53,7 @@ export type RightToolPanel = 'steps' | 'docs' | 'robot' | null;
 
 @Component({
   selector: 'app-project-view',
-  providers: [StepsStateService],
+  providers: [MissionStateService, StepsStateService],
   imports: [
     MissionPanel,
     Flowchart,
