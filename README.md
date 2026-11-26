@@ -1,16 +1,16 @@
 # WebIDE
 
-This project was generated using [Angular CLI](https://github.com/angular/angular-cli) version 20.1.0.
+WebIDE uses Angular 22 and Optimus UI. Install the locked dependencies with `npm ci` using Node.js 24.15 or later in the Node.js 24 release line.
 
 ## Development server
 
 To start a local development server, run:
 
 ```bash
-ng serve
+npm start
 ```
 
-Once the server is running, open your browser and navigate to `http://localhost:4200/`. The application will automatically reload whenever you modify any of the source files.
+Once the server is running, open your browser and navigate to `http://localhost:4300/`. The application will automatically reload whenever you modify any of the source files.
 
 ## Code scaffolding
 
@@ -31,28 +31,19 @@ ng generate --help
 To build the project run:
 
 ```bash
-ng build
+npm run build
 ```
 
 This will compile your project and store the build artifacts in the `dist/` directory. By default, the production build optimizes your application for performance and speed.
 
 ## Running unit tests
 
-To execute unit tests with the [Karma](https://karma-runner.github.io) test runner, use the following command:
+Run the logic suite with branch coverage and run the browser suite in Chrome Headless:
 
 ```bash
-ng test
+npm run test:logic
+npm test -- --watch=false --browsers=ChromeHeadless
 ```
-
-## Running end-to-end tests
-
-For end-to-end (e2e) testing, run:
-
-```bash
-ng e2e
-```
-
-Angular CLI does not come with an end-to-end testing framework by default. You can choose one that suits your needs.
 
 ## Additional Resources
 

@@ -80,6 +80,26 @@ describe('path-to-steps', () => {
     expect(formatStepForPreview({ ...base, function_name: 'drive_backward', arguments: [{ name: 'cm', value: 7, type: 'float' }] })).toBe('drive_backward(7cm)');
   });
 
+  it('returns no commands for a path with only a start point', () => {
+    expect(waypointsToMissionSteps([{ id: 'start', x: 0, y: 0 }])).toEqual([]);
+  });
+
+  it('uses step types and canonical names when the function name is missing', () => {
+    const base = { function_name: '', arguments: [], position: { x: 0, y: 0 }, children: [] };
+    expect(formatStepForPreview({ ...base, step_type: 'follow_line' })).toBe('follow_line');
+    expect(formatStepForPreview({ ...base, step_type: '' })).toBe('');
+  });
+
+  it('summarizes an incomplete spline preview with a default speed', () => {
+    const base = { function_name: '', step_type: 'spline_path', position: { x: 0, y: 0 }, children: [] };
+    for (const waypoints of ['invalid', '{}']) {
+      const arguments_ = [{ name: 'waypoints', value: waypoints, type: 'list' }];
+      expect(formatStepForPreview({ ...base, arguments: arguments_ })).toBe('spline_path(0 pts, speed=1)');
+    }
+    const arguments_ = [{ name: 'speed', value: 0.5, type: 'float' }];
+    expect(formatStepForPreview({ ...base, arguments: arguments_ })).toBe('spline_path(0 pts, speed=0.5)');
+  });
+
   describe('waypointsToSplineStep', () => {
     const baseOpts = { startX: 0, startY: 0, startHeading: 0, speed: 0.8 };
 
@@ -141,8 +161,29 @@ describe('path-to-steps', () => {
       const tuples = JSON.parse(
         String(step!.arguments.find((a) => a.name === 'waypoints')!.value)
       ) as number[][];
-      expect(tuples[0]).toHaveLength(3);
+      expect(tuples[0].length).toBe(3);
       expect(tuples[1][2]).toBeCloseTo(90, 6);
+    });
+
+    it('keeps headings in the table frame when absolute headings are requested', () => {
+      const waypoints = [{ id: 'a', x: 0, y: 0 }, { id: 'b', x: 5, y: 0, headingDeg: 65 }];
+      const step = waypointsToSplineStep(waypoints, {
+        ...baseOpts, startHeading: Math.PI / 2, useExplicitHeadings: true, absoluteHeading: true,
+      });
+      const tuples = JSON.parse(String(step!.arguments[0].value)) as number[][];
+      expect(tuples[0].length).toBe(2);
+      expect(tuples[1][2]).toBe(65);
+    });
+
+    it('includes a final heading when waypoint headings are inferred', () => {
+      const step = waypointsToSplineStep(
+        [{ id: 'a', x: 0, y: 0 }, { id: 'b', x: 0, y: 4 }],
+        { ...baseOpts, finalHeadingDeg: 0, absoluteHeading: true },
+      );
+      expect(step!.arguments.slice(-2)).toEqual([
+        { name: 'final_heading_deg', value: 0, type: 'float' },
+        { name: 'absolute_heading', value: true, type: 'bool' },
+      ]);
     });
 
     it('formatStepForPreview summarizes a spline_path step', () => {

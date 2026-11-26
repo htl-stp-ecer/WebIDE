@@ -1,13 +1,13 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import { Router } from '@angular/router';
-import { Button } from 'primeng/button';
-import { ConfirmDialog } from 'primeng/confirmdialog';
-import { ConfirmationService } from 'primeng/api';
+import { Button } from '@openng/optimus-ui/button';
+import { ConfirmDialog } from '@openng/optimus-ui/confirmdialog';
+import { ConfirmationService } from '@openng/optimus-ui/api';
 import { SlicePipe } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { Skeleton } from 'primeng/skeleton';
+import { Skeleton } from '@openng/optimus-ui/skeleton';
 import { FormsModule } from '@angular/forms';
-import { InputText } from 'primeng/inputtext';
+import { InputText } from '@openng/optimus-ui/inputtext';
 
 import { HttpService } from '../services/http-service';
 import { NotificationService } from '../services/NotificationService';
@@ -19,6 +19,7 @@ import { ProjectCollisionCompareComponent } from './project-collision-compare/pr
   imports: [Button, ConfirmDialog, TranslateModule, Skeleton, SlicePipe, FormsModule, InputText, ProjectCollisionCompareComponent],
   templateUrl: './local-projects.html',
   styleUrl: './local-projects.scss',
+  changeDetection: ChangeDetectionStrategy.Eager,
   providers: [ConfirmationService]
 })
 export class LocalProjects implements OnInit {

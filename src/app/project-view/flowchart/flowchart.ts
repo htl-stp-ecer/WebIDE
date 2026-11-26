@@ -1,14 +1,14 @@
-import { AfterViewChecked, AfterViewInit, Component, ElementRef, HostListener, OnDestroy, OnInit, QueryList, Signal, ViewChild, ViewChildren, computed, effect, signal, viewChild } from '@angular/core';
+import { AfterViewChecked, AfterViewInit, Component, ElementRef, HostListener, OnDestroy, OnInit, QueryList, Signal, ViewChild, ViewChildren, computed, effect, signal, viewChild, ChangeDetectionStrategy } from '@angular/core';
 import { EFMarkerType, F_CONNECTION_BUILDERS, FCanvasComponent, FFlowComponent, FFlowModule } from '@foblex/flow';
 import { ElbowPathBuilder } from './elbow-path-builder';
-import { ContextMenu, ContextMenuModule } from 'primeng/contextmenu';
-import type { MenuItem } from 'primeng/api';
-import { CheckboxModule } from 'primeng/checkbox';
+import { ContextMenu, ContextMenuModule } from '@openng/optimus-ui/contextmenu';
+import type { MenuItem } from '@openng/optimus-ui/api';
+import { CheckboxModule } from '@openng/optimus-ui/checkbox';
 import { FormsModule } from '@angular/forms';
-import { InputNumberModule } from 'primeng/inputnumber';
-import { InputTextModule } from 'primeng/inputtext';
-import { SelectButtonModule } from 'primeng/selectbutton';
-import { Tooltip } from 'primeng/tooltip';
+import { InputNumberModule } from '@openng/optimus-ui/inputnumber';
+import { InputTextModule } from '@openng/optimus-ui/inputtext';
+import { SelectButtonModule } from '@openng/optimus-ui/selectbutton';
+import { Tooltip } from '@openng/optimus-ui/tooltip';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ActivatedRoute } from '@angular/router';
 import { Subscription } from 'rxjs';
@@ -37,10 +37,10 @@ import { recomputeMergedView } from './view-merger';
 import { rebuildFromMission } from './mission-handlers';
 import { createFlowchartActions, FlowchartActions } from './flowchart-actions';
 import { TypeDefinition } from '../../entities/TypeDefinition';
-import { Select } from 'primeng/select';
-import { MultiSelect } from 'primeng/multiselect';
+import { Select } from '@openng/optimus-ui/select';
+import { MultiSelect } from '@openng/optimus-ui/multiselect';
 import { DecimalPipe } from '@angular/common';
-import { ProgressSpinner } from 'primeng/progressspinner';
+import { ProgressSpinner } from '@openng/optimus-ui/progressspinner';
 import { TimingPanel, type TimingViewMode } from './timing/timing-panel';
 import { RobotSettingsModal } from './robot-settings/robot-settings-modal';
 import { TableMapService, TableVisualizationService } from './table/services';
@@ -109,6 +109,7 @@ const OFFSCREEN_INDICATOR_CANVAS_DEBOUNCE_MS = 80;
   templateUrl: './flowchart.html',
   styleUrl: './flowchart.scss',
   providers: [FlowHistory, { provide: F_CONNECTION_BUILDERS, useValue: { elbow: new ElbowPathBuilder() } }],
+  changeDetection: ChangeDetectionStrategy.Eager,
   standalone: true,
 })
 export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, OnInit {
@@ -207,7 +208,8 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
   themeObserver?: MutationObserver;
   typeDefinitionsSub?: Subscription;
   simulationPathSub?: Subscription;
-  private stepsSub?: Subscription;
+  private deviceInfoSub?: Subscription;
+  private deviceStepIndexSub?: Subscription;
   private missionListSub?: Subscription;
   private missionDetailSub?: Subscription;
   private nodeElsChangesSub?: Subscription;
@@ -215,7 +217,6 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
   private activePanelDrag: PanelDragState | null = null;
   private deviceInfo: ConnectionInfo | null = null;
   private loadingDeviceInfo = false;
-  private libstpIndexTriggered = false;
   private projectSimulationCache: ProjectSimulationData | null = null;
   private plannedPathUpdateTimeout?: ReturnType<typeof setTimeout>;
   private robotSettingsWasOpen = false;
@@ -332,7 +333,7 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
       openSettings: () => this.openRobotSettings(),
     });
     this.loadTypeDefinitions();
-    this.preloadMissionAndSteps();
+    this.preloadMissions();
   }
 
   get useAutoLayout(): boolean {
@@ -389,7 +390,8 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
     this.themeObserver?.disconnect();
     this.typeDefinitionsSub?.unsubscribe();
     this.simulationPathSub?.unsubscribe();
-    this.stepsSub?.unsubscribe();
+    this.deviceInfoSub?.unsubscribe();
+    this.deviceStepIndexSub?.unsubscribe();
     this.missionListSub?.unsubscribe();
     this.missionDetailSub?.unsubscribe();
     this.nodeElsChangesSub?.unsubscribe();
@@ -1277,23 +1279,9 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
     this.offscreenIndicator.set({ visible: false, x: 0, y: 0, angle: 0 });
   }
 
-  private preloadMissionAndSteps(): void {
+  private preloadMissions(): void {
     const projectUUID = this.projectUUID;
     if (!projectUUID) return;
-
-    try {
-      this.stepsSub?.unsubscribe();
-      this.stepsSub = this.http.getAllSteps(projectUUID).subscribe({
-        next: steps => {
-          this.stepsState.setSteps(steps);
-        },
-        error: () => {
-          this.stepsState.setSteps([]);
-        },
-      });
-    } catch {
-      this.stepsState.setSteps([]);
-    }
 
     try {
       this.missionListSub?.unsubscribe();
@@ -1483,7 +1471,7 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
     if (this.deviceInfo || this.loadingDeviceInfo) return;
     this.loadingDeviceInfo = true;
     try {
-      this.http.getDeviceInfoDefault().subscribe({
+      this.deviceInfoSub = this.http.getDeviceInfoDefault().subscribe({
         next: info => {
           this.deviceInfo = info;
           this.loadingDeviceInfo = false;
@@ -1499,38 +1487,15 @@ export class Flowchart implements AfterViewChecked, AfterViewInit, OnDestroy, On
     }
   }
 
-  private refreshDeviceStepIndexCache() {
-    if (this.libstpIndexTriggered) {
-      return;
-    }
-    this.libstpIndexTriggered = true;
-    this.http.refreshStepIndex().subscribe({
-      next: () => {
-        this.refreshLocalSteps();
-        this.libstpIndexTriggered = false;
-      },
+  private refreshDeviceStepIndexCache(): void {
+    if (this.deviceStepIndexSub && !this.deviceStepIndexSub.closed) return;
+    const projectUuid = this.projectUUID;
+    this.deviceStepIndexSub = this.http.refreshStepIndex().subscribe({
+      next: () => this.stepsState.triggerRefresh(projectUuid),
       error: () => {
-        this.libstpIndexTriggered = false;
+        // The project catalog remains available if the library re-index fails.
       },
     });
-  }
-
-  private refreshLocalSteps(): void {
-    const projectUUID = this.projectUUID;
-    if (!projectUUID) return;
-    try {
-      this.stepsSub?.unsubscribe();
-      this.stepsSub = this.http.getAllSteps(projectUUID).subscribe({
-        next: steps => {
-          this.stepsState.setSteps(steps);
-        },
-        error: () => {
-          this.stepsState.setSteps([]);
-        },
-      });
-    } catch {
-      this.stepsState.setSteps([]);
-    }
   }
 
   private applyDeviceVisualizationInfo(info: ConnectionInfo): void {

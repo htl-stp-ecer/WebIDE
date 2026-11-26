@@ -106,10 +106,10 @@
                 } @else {
                   <div>{{ getStepIndexStatusLabel() }}</div>
                   @if (stepIndexStatus?.count != null) {
-                    <div>{{ 'STEP_INDEX.COUNT' | translate:{ count: stepIndexStatus?.count } }}</div>
+                    <div>{{ 'STEP_INDEX.COUNT' | translate:{ count: $safeNavigationMigration(stepIndexStatus?.count) } }}</div>
                   }
                   @if (stepIndexStatus?.last_indexed_at) {
-                    <div>{{ 'STEP_INDEX.LAST_INDEXED' | translate:{ value: stepIndexStatus?.last_indexed_at } }}</div>
+                    <div>{{ 'STEP_INDEX.LAST_INDEXED' | translate:{ value: $safeNavigationMigration(stepIndexStatus?.last_indexed_at) } }}</div>
                   }
                   @if (stepIndexStatus?.error) {
                     <div class="text-red-500">{{ stepIndexStatus?.error }}</div>

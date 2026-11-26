@@ -9,12 +9,13 @@ import {
   OnInit,
   SimpleChanges,
   ViewChild,
+  ChangeDetectionStrategy
 } from '@angular/core';
 import { renderRobotAtCenter } from '../table/robot-render';
 import {FormsModule} from '@angular/forms';
 import {NgClass} from '@angular/common';
-import {InputText} from 'primeng/inputtext';
-import {Button} from 'primeng/button';
+import {InputText} from '@openng/optimus-ui/inputtext';
+import {Button} from '@openng/optimus-ui/button';
 import {TranslateModule, TranslateService} from '@ngx-translate/core';
 import {HttpService} from '../../../services/http-service';
 import {NotificationService} from '../../../services/NotificationService';
@@ -73,6 +74,7 @@ interface WheelPosition {
   standalone: true,
   imports: [FormsModule, NgClass, InputText, Button, TranslateModule],
   templateUrl: './robot-config-panel.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './robot-config-panel.scss'
 })
 export class RobotConfigPanel implements OnInit, OnChanges, AfterViewInit, AfterViewChecked, OnDestroy {

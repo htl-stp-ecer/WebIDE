@@ -4,17 +4,20 @@ import {
   HostListener,
   Input,
   OnChanges,
+  OnDestroy,
   OnInit,
   Output,
   signal,
   SimpleChanges,
-  WritableSignal
+  WritableSignal,
+  ChangeDetectionStrategy
 } from '@angular/core';
 import {FormsModule} from '@angular/forms';
 import {NgClass} from '@angular/common';
-import {Dialog} from 'primeng/dialog';
-import {InputText} from 'primeng/inputtext';
-import { Button } from 'primeng/button';
+import {Dialog} from '@openng/optimus-ui/dialog';
+import {InputText} from '@openng/optimus-ui/inputtext';
+import { Button } from '@openng/optimus-ui/button';
+import { Subscription } from 'rxjs';
 import {TranslateModule, TranslateService} from '@ngx-translate/core';
 import {HttpService} from '../../../services/http-service';
 import {KeybindingsService, StepKeybinding} from '../../../services/keybindings-service';
@@ -36,9 +39,10 @@ interface StepIndexStatus {
   standalone: true,
   imports: [FormsModule, NgClass, Dialog, InputText, Button, TranslateModule],
   templateUrl: './robot-settings-modal.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './robot-settings-modal.scss'
 })
-export class RobotSettingsModal implements OnInit, OnChanges {
+export class RobotSettingsModal implements OnInit, OnChanges, OnDestroy {
   @Input() visible = false;
   @Input() projectUuid: string | null = null;
   @Input() orientation: WritableSignal<FlowOrientation> | null = null;
@@ -58,6 +62,8 @@ export class RobotSettingsModal implements OnInit, OnChanges {
   stepIndexLoading = false;
   stepIndexRefreshing = false;
   private stepIndexPoll?: ReturnType<typeof setTimeout>;
+  private stepIndexStatusRequest?: Subscription;
+  private stepIndexActionRequest?: Subscription;
 
   constructor(
     private http: HttpService,
@@ -71,73 +77,83 @@ export class RobotSettingsModal implements OnInit, OnChanges {
   }
 
   ngOnChanges(changes: SimpleChanges) {
-    if (changes['visible'] && changes['visible'].currentValue) {
+    if (changes['visible']?.currentValue && !this.stepIndexRefreshing) {
       this.loadStepIndexStatus();
     }
   }
 
-  private loadStepIndexStatus() {
-    if (this.stepIndexPoll) {
-      clearTimeout(this.stepIndexPoll);
-      this.stepIndexPoll = undefined;
-    }
+  ngOnDestroy(): void {
+    this.stopStepIndexPolling();
+    this.stepIndexActionRequest?.unsubscribe();
+  }
+
+  private stopStepIndexPolling(): void {
+    clearTimeout(this.stepIndexPoll);
+    this.stepIndexStatusRequest?.unsubscribe();
+    this.stepIndexLoading = false;
+  }
+
+  private loadStepIndexStatus(): void {
+    this.stopStepIndexPolling();
     this.stepIndexLoading = true;
     const wasIndexing = this.stepIndexStatus?.status === 'indexing';
-    this.http.getStepIndexStatus().subscribe({
+    const projectUuid = this.projectUuid;
+    this.stepIndexStatusRequest = this.http.getStepIndexStatus().subscribe({
       next: status => {
         this.stepIndexStatus = status;
         this.stepIndexLoading = false;
         if (status.status === 'indexing') {
           this.stepIndexPoll = setTimeout(() => this.loadStepIndexStatus(), 2000);
-        } else if (wasIndexing && status.status === 'ready') {
-          // Indexing just finished - trigger step panel refresh
-          this.stepsStateService.triggerRefresh();
+        } else if (wasIndexing && (status.status === 'ready' || status.status === 'empty')) {
+          this.stepsStateService.triggerRefresh(projectUuid);
         }
       },
       error: () => {
         this.stepIndexLoading = false;
-      }
+      },
     });
   }
 
-  refreshStepIndex(forceClear: boolean = false) {
-    const previousStatus = this.stepIndexStatus ? { ...this.stepIndexStatus } : undefined;
+  refreshStepIndex(forceClear = false): void {
+    if (this.stepIndexRefreshing) return;
+    this.stopStepIndexPolling();
+    const previousStatus = this.stepIndexStatus;
+    const projectUuid = this.projectUuid;
     this.stepIndexRefreshing = true;
-    // Mark current status as indexing so the polling logic knows to trigger refresh when done
-    if (this.stepIndexStatus) {
-      this.stepIndexStatus = { ...this.stepIndexStatus, status: 'indexing' };
-    }
-    this.http.refreshStepIndex(forceClear).subscribe({
+    this.stepIndexStatus = { ...previousStatus, status: 'indexing' };
+    this.stepIndexActionRequest = this.http.refreshStepIndex(forceClear).subscribe({
       next: status => {
         this.stepIndexStatus = status;
         this.stepIndexRefreshing = false;
         if (status.status === 'indexing') {
           this.loadStepIndexStatus();
-        } else if (status.status === 'ready') {
-          // Indexing completed immediately (rare but possible)
-          this.stepsStateService.triggerRefresh();
+        } else if (status.status === 'ready' || status.status === 'empty') {
+          // The project can still have steps when the library index is empty.
+          this.stepsStateService.triggerRefresh(projectUuid);
         }
       },
       error: () => {
         this.stepIndexRefreshing = false;
         this.stepIndexStatus = previousStatus;
         this.loadStepIndexStatus();
-      }
+      },
     });
   }
 
-  clearStepIndexCache() {
+  clearStepIndexCache(): void {
+    if (this.stepIndexRefreshing) return;
+    this.stopStepIndexPolling();
     this.stepIndexRefreshing = true;
-    this.http.clearStepIndex().subscribe({
+    const projectUuid = this.projectUuid;
+    this.stepIndexActionRequest = this.http.clearStepIndex().subscribe({
       next: status => {
         this.stepIndexStatus = status;
         this.stepIndexRefreshing = false;
-        // Trigger refresh to show empty state in step panel
-        this.stepsStateService.triggerRefresh();
+        this.stepsStateService.triggerRefresh(projectUuid);
       },
       error: () => {
         this.stepIndexRefreshing = false;
-      }
+      },
     });
   }
 

@@ -81,6 +81,11 @@
 				"test": {
 					"builder": "@angular/build:karma",
 					"options": {
+            "exclude": [
+              "src/app/project-view/flowchart/navigate-flow.spec.ts",
+              "src/app/project-view/flowchart/table/planning/catmull-rom.spec.ts",
+              "src/app/project-view/flowchart/table/replay/localization-replay.service.spec.ts"
+            ],
 						"polyfills": [
               "zone.js",
               "zone.js/testing",

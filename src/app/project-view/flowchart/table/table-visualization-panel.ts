@@ -11,6 +11,7 @@ import {
   computed,
   EventEmitter,
   Output,
+  ChangeDetectionStrategy
 } from '@angular/core';
 import { TranslateModule } from '@ngx-translate/core';
 import { TableMapService } from './services';
@@ -99,6 +100,7 @@ interface GizmoDragState {
   standalone: true,
   imports: [TranslateModule],
   templateUrl: './table-visualization-panel.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './table-visualization-panel.scss',
 })
 export class TableVisualizationPanel implements AfterViewInit, OnDestroy {

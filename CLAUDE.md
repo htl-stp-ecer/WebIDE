@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Web IDE is an Angular 20 application for managing Botball robotics projects. It provides a visual flowchart mission editor, Python code editor, and remote device management, communicating with a local backend and robot devices over HTTP/WebSocket.
+Web IDE is an Angular 22 application for managing Botball robotics projects. It provides a visual flowchart mission editor, Python code editor, and remote device management, communicating with a local backend and robot devices over HTTP/WebSocket.
 
 ## Commands
 
@@ -54,14 +54,14 @@ The code view uses CodeMirror 6 with Python syntax highlighting.
 
 ### Styling
 
-- Tailwind CSS 4 + PrimeNG 20 with a custom "Noir" preset (zinc palette, Aura base)
+- Tailwind CSS 4 + Optimus UI 2.1 with a custom "Noir" preset (zinc palette, Aura base)
 - Component styles in SCSS
 - Dark mode via `.dark` class selector
 - Production CSS budget: 6MB initial, 35kB per component
 
 ### App Configuration (`src/app/app.config.ts`)
 
-Bootstrapped as standalone (no NgModules). Providers include: PrimeNG theme, `@ngx-translate` HTTP loader (English default), `PortInterceptor`, and `eventCoalescing` change detection.
+Bootstrapped as standalone (no NgModules). Providers include: Optimus UI theme, `@ngx-translate` HTTP loader (English default), `PortInterceptor`, and `eventCoalescing` change detection.
 
 ### Testing Split
 

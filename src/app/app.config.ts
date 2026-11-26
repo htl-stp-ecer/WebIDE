@@ -1,16 +1,17 @@
 import { ApplicationConfig, importProvidersFrom, provideBrowserGlobalErrorListeners, provideZoneChangeDetection } from '@angular/core';
-import { provideRouter } from '@angular/router';
+import { provideRouter, RouteReuseStrategy } from '@angular/router';
 
 import { routes } from './app.routes';
 import {provideAnimationsAsync} from '@angular/platform-browser/animations/async';
-import {providePrimeNG} from 'primeng/config';
-import Aura from '@primeuix/themes/aura';
-import {definePreset} from '@primeuix/themes';
+import {provideOptimus} from '@openng/optimus-ui/config';
+import Aura from '@openng/optimus-ui-themes/aura';
+import {definePreset} from '@openng/optimus-ui-themes';
 import { TranslateLoader, TranslateModule, provideTranslateService } from '@ngx-translate/core';
 import {PortInterceptor} from './interceptors/PortInterceptor';
 import {HTTP_INTERCEPTORS, provideHttpClient, withFetch, withInterceptorsFromDi} from '@angular/common/http';
-import {MessageService} from 'primeng/api';
+import {MessageService} from '@openng/optimus-ui/api';
 import { StaticTranslateLoader } from './i18n/static-translate-loader';
+import { ProjectRouteReuseStrategy } from './services/project-route-reuse-strategy';
 
 const Noir = definePreset(Aura, {
   semantic: {
@@ -65,7 +66,7 @@ export const appConfig: ApplicationConfig = {
   providers: [
     MessageService,
     provideAnimationsAsync(),
-    providePrimeNG({
+    provideOptimus({
       theme: {
         preset: Noir,
         options: {
@@ -76,6 +77,7 @@ export const appConfig: ApplicationConfig = {
     provideBrowserGlobalErrorListeners(),
     provideZoneChangeDetection({ eventCoalescing: true }),
     provideRouter(routes),
+    { provide: RouteReuseStrategy, useClass: ProjectRouteReuseStrategy },
     importProvidersFrom(TranslateModule.forRoot({
       loader: {
         provide: TranslateLoader,

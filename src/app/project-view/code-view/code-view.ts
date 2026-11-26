@@ -6,18 +6,21 @@ import {
   inject,
   Input,
   signal,
+  ChangeDetectionStrategy
 } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { HttpService } from '../../services/http-service';
 import { NotificationService } from '../../services/NotificationService';
 import { MissionStateService } from '../../services/mission-sate-service';
+import { StepsStateService } from '../../services/steps-state-service';
 import { CodeEditorComponent } from './code-editor';
 
 @Component({
   selector: 'app-code-view',
   standalone: true,
-  imports: [CommonModule, CodeEditorComponent],
+  imports: [CodeEditorComponent],
   templateUrl: './code-view.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './code-view.scss',
 })
 export class CodeView {
@@ -25,6 +28,7 @@ export class CodeView {
 
   private http = inject(HttpService);
   private missionState = inject(MissionStateService);
+  private stepsState = inject(StepsStateService);
 
   missionName = computed(() => this.missionState.currentMission()?.name ?? null);
   sourceCode = signal('');
@@ -75,11 +79,13 @@ export class CodeView {
   saveFile(): void {
     const name = this.missionName();
     if (!name || !this.isDirty() || this.isSaving()) return;
+    const projectUuid = this.projectUuid;
     this.isSaving.set(true);
-    this.http.saveMissionSource(this.projectUuid, name, this.sourceCode()).subscribe({
+    this.http.saveMissionSource(projectUuid, name, this.sourceCode()).subscribe({
       next: () => {
         this.savedContent = this.sourceCode();
         this.isDirty.set(false);
+        this.stepsState.triggerRefresh(projectUuid);
         this.isSaving.set(false);
       },
       error: () => {

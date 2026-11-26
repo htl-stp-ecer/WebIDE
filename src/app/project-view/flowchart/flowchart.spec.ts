@@ -1,5 +1,7 @@
+import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 
+import { appConfig } from '../../app.config';
 import { Flowchart } from './flowchart';
 
 describe('Flowchart', () => {
@@ -8,7 +10,8 @@ describe('Flowchart', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [Flowchart]
+      imports: [Flowchart],
+      providers: [...appConfig.providers, provideHttpClientTesting()]
     })
     .compileComponents();
 

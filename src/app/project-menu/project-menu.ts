@@ -1,16 +1,16 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { HttpService } from '../services/http-service';
 import { FormsModule } from '@angular/forms';
-import { InputText } from 'primeng/inputtext';
-import { Button } from 'primeng/button';
+import { InputText } from '@openng/optimus-ui/inputtext';
+import { Button } from '@openng/optimus-ui/button';
 import { NotificationService } from '../services/NotificationService';
-import { ConfirmDialog } from 'primeng/confirmdialog';
-import { ConfirmationService } from 'primeng/api';
+import { ConfirmDialog } from '@openng/optimus-ui/confirmdialog';
+import { ConfirmationService } from '@openng/optimus-ui/api';
 import { SlicePipe } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { decodeRouteIp } from '../services/route-ip-serializer';
-import { Skeleton } from 'primeng/skeleton';
+import { Skeleton } from '@openng/optimus-ui/skeleton';
 
 @Component({
   selector: 'app-project-menu',
@@ -18,6 +18,7 @@ import { Skeleton } from 'primeng/skeleton';
   imports: [FormsModule, InputText, Button, ConfirmDialog, TranslateModule, Skeleton, SlicePipe],
   templateUrl: './project-menu.html',
   styleUrl: './project-menu.scss',
+  changeDetection: ChangeDetectionStrategy.Eager,
   providers: [ConfirmationService]
 })
 export class ProjectMenu implements OnInit {

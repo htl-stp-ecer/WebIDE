@@ -132,7 +132,7 @@ export const enTranslations = {
   },
   STEP_INDEX: {
     TITLE: 'Step indexing',
-    DESCRIPTION: 'Cache libstp steps when the device is online. Local project steps are indexed on this machine.',
+    DESCRIPTION: 'The library index and project steps are scanned on this machine.',
     STATUS_READY: 'Index ready',
     STATUS_INDEXING: 'Indexing in progress',
     STATUS_EMPTY: 'No cached steps yet',
@@ -141,6 +141,8 @@ export const enTranslations = {
     COUNT: '{{ count }} cached steps',
     LAST_INDEXED: 'Last indexed: {{ value }}',
     REFRESH: 'Re-index now',
+    REFRESH_STEPS: 'Refresh steps',
+    LOAD_ERROR: 'Could not load steps. Try refreshing.',
     CLEAR: 'Clear cache',
   },
   ROBOT_SETTINGS: {
@@ -537,7 +539,7 @@ export const deTranslations = {
   },
   STEP_INDEX: {
     TITLE: 'Step-Index',
-    DESCRIPTION: 'Libstp-Steps werden gecacht, sobald das Gerät online ist. Lokale Projekt-Steps werden auf diesem Rechner indiziert.',
+    DESCRIPTION: 'Der Bibliotheksindex und die Projektschritte werden auf diesem Rechner gescannt.',
     STATUS_READY: 'Index bereit',
     STATUS_INDEXING: 'Indexierung läuft',
     STATUS_EMPTY: 'Noch keine Steps im Cache',
@@ -546,6 +548,8 @@ export const deTranslations = {
     COUNT: '{{ count }} Steps im Cache',
     LAST_INDEXED: 'Zuletzt indiziert: {{ value }}',
     REFRESH: 'Neu indizieren',
+    REFRESH_STEPS: 'Schritte aktualisieren',
+    LOAD_ERROR: 'Schritte konnten nicht geladen werden. Bitte aktualisieren.',
     CLEAR: 'Cache leeren',
   },
   ROBOT_SETTINGS: {
