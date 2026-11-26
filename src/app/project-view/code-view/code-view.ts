@@ -7,7 +7,7 @@ import {
   Input,
   signal,
 } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { HttpService } from '../../services/http-service';
 import { NotificationService } from '../../services/NotificationService';
 import { MissionStateService } from '../../services/mission-sate-service';
@@ -16,7 +16,7 @@ import { CodeEditorComponent } from './code-editor';
 @Component({
   selector: 'app-code-view',
   standalone: true,
-  imports: [CommonModule, CodeEditorComponent],
+  imports: [CodeEditorComponent],
   templateUrl: './code-view.html',
   styleUrl: './code-view.scss',
 })

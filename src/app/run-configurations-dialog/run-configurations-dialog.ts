@@ -1,5 +1,5 @@
 import { Component, computed, signal } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule } from '@angular/forms';
 import { Dialog } from 'primeng/dialog';
 import { Button } from 'primeng/button';
@@ -22,7 +22,7 @@ import { RunActionService } from '../services/run-action-service';
 @Component({
   selector: 'app-run-configurations-dialog',
   standalone: true,
-  imports: [CommonModule, FormsModule, Dialog, Button, InputText, Select],
+  imports: [FormsModule, Dialog, Button, InputText, Select],
   templateUrl: './run-configurations-dialog.html',
   styleUrl: './run-configurations-dialog.scss',
 })
