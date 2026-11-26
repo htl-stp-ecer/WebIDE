@@ -39,8 +39,8 @@ const LINE_THICKNESS_CM = 2.54;
 const WALL_THICKNESS_CM = 2.54;
 
 /** Wall color */
-const WALL_COLOR = '#6b7280';
-const HIGHLIGHT_COLOR = '#3b82f6';
+const WALL_COLOR = '#746656';
+const HIGHLIGHT_COLOR = '#ad661e';
 
 /** Zoom/pan constants */
 const MIN_ZOOM = 0.5;
@@ -416,7 +416,7 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
     this.ctx.clearRect(0, 0, width, height);
 
     // Dark canvas background
-    this.ctx.fillStyle = '#0f0f17';
+    this.ctx.fillStyle = '#1c1916';
     this.ctx.fillRect(0, 0, width, height);
 
     // Draw map (white surface with vector lines)
@@ -492,7 +492,7 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
       this.ctx.globalAlpha = 0.6;
       renderRobotAtCenter(this.ctx, cx, cy, pose.theta, robotConfig, scaleX, scaleY, {
         bodyFill: 'rgba(125, 211, 252, 0.35)',
-        bodyStroke: '#7dd3fc',
+        bodyStroke: '#f2bf69',
         arrowFill: '#facc15',
         rotationCenterFill: '#a855f7',
         geometricCenterFill: '#facc15',
@@ -575,7 +575,7 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
     }
 
     // Draw table border
-    this.ctx.strokeStyle = '#4b5563';
+    this.ctx.strokeStyle = '#625447';
     this.ctx.lineWidth = Math.max(3, WALL_THICKNESS_CM * 1.5 * Math.min(scaleX, scaleY));
     this.ctx.strokeRect(offsetX, offsetY, drawWidth, drawHeight);
   }
@@ -659,8 +659,8 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
 
       this.ctx.globalAlpha = alpha;
 
-      // Ghost lines — slate so they read as "below" against the white surface.
-      this.ctx.strokeStyle = '#1f2a3a';
+      // Ghost lines — warm charcoal so they read as "below" against the white surface.
+      this.ctx.strokeStyle = '#372c22';
       for (const seg of layer.lineSegments) {
         const t = seg.thickness ?? LINE_THICKNESS_CM;
         this.ctx.lineWidth = Math.max(0.75, t * Math.min(scaleX, scaleY) * 0.85);
@@ -672,8 +672,8 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
         this.ctx.stroke();
       }
 
-      // Ghost walls — cooler blue-gray.
-      this.ctx.strokeStyle = '#334766';
+      // Ghost walls — warm taupe.
+      this.ctx.strokeStyle = '#604b39';
       for (const wall of layer.wallSegments) {
         const t = wall.thickness || WALL_THICKNESS_CM;
         this.ctx.lineWidth = Math.max(1, t * Math.min(scaleX, scaleY) * 0.85);
@@ -770,10 +770,10 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
     if (!trail || trail.length < 1) return;
 
     const active = this.vizService.liveTrajectoryActive();
-    // Solid cyan while the sim is running; faded once it finishes so the
+    // Solid rose while the sim is running; faded once it finishes so the
     // user can still inspect the final trace without it competing with the
     // planned path.
-    this.ctx.strokeStyle = active ? '#22d3ee' : 'rgba(34, 211, 238, 0.55)';
+    this.ctx.strokeStyle = active ? '#e4add0' : 'rgba(228, 173, 208, 0.55)';
     this.ctx.lineWidth = 2;
     this.ctx.lineCap = 'round';
     this.ctx.lineJoin = 'round';
@@ -791,7 +791,7 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
 
     // Dot at the start of the run so the user can always see where it began.
     const start = this.tableToCanvas(trail[0], width, height);
-    this.ctx.fillStyle = active ? '#22d3ee' : 'rgba(34, 211, 238, 0.55)';
+    this.ctx.fillStyle = active ? '#e4add0' : 'rgba(228, 173, 208, 0.55)';
     this.ctx.beginPath();
     this.ctx.arc(start.x, start.y, 3, 0, Math.PI * 2);
     this.ctx.fill();
@@ -888,7 +888,7 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
     if (step?.isMicroStep && step.parentSensorType) {
       switch (step.parentSensorType) {
         case SensorStepType.LineUp:
-          return '#22d3ee'; // Cyan
+          return '#e4add0'; // Rose
         case SensorStepType.FollowLine:
           return '#e879f9'; // Magenta
       }
@@ -960,9 +960,9 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
     this.ctx.lineCap = 'round';
     this.ctx.setLineDash([]);
 
-    // Rotation ring (blue)
+    // Rotation ring
     const rotActive = isDragging?.mode === 'rotate';
-    this.ctx.strokeStyle = rotActive ? '#93c5fd' : '#60a5fa';
+    this.ctx.strokeStyle = rotActive ? '#ffd495' : '#f2bf69';
     this.ctx.lineWidth = rotActive ? 3.5 : 2.5;
     this.ctx.beginPath();
     this.ctx.arc(cx, cy, GIZMO_ROT_RADIUS, 0, Math.PI * 2);
@@ -1135,7 +1135,7 @@ export class TableVisualizationPanel implements AfterViewInit, OnDestroy {
     renderRobotAtCenter(this.ctx, center.x, center.y, pose.theta, robotConfig, scaleX, scaleY, {
       ...options,
       sensors: options.showSensors
-        ? sensorConfig.lineSensors.map(s => ({ forwardCm: s.forwardCm, strafeCm: s.strafeCm, color: '#22d3ee' }))
+        ? sensorConfig.lineSensors.map(s => ({ forwardCm: s.forwardCm, strafeCm: s.strafeCm, color: '#e4add0' }))
         : [],
     });
   }

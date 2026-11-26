@@ -60,7 +60,7 @@ export class ProjectCollisionCompareComponent implements OnChanges, AfterViewIni
   previewTimeMs = 0;
   selectedCollisionKey: string | null = null;
 
-  readonly projectPalette = ['#2563eb', '#f97316', '#10b981', '#d946ef', '#ef4444', '#14b8a6'];
+  readonly projectPalette = ['#8f4c18', '#f97316', '#10b981', '#d946ef', '#ef4444', '#14b8a6'];
 
   loadedProjects: ProjectComparisonData[] = [];
   collisionEvents: ProjectCollisionEvent[] = [];
@@ -375,12 +375,12 @@ export class ProjectCollisionCompareComponent implements OnChanges, AfterViewIni
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(draw.offsetX, draw.offsetY, draw.drawWidth, draw.drawHeight);
 
-    ctx.strokeStyle = '#d4d4d8';
+    ctx.strokeStyle = '#d5c7b6';
     ctx.lineWidth = 1;
     ctx.strokeRect(draw.offsetX, draw.offsetY, draw.drawWidth, draw.drawHeight);
 
     if (!map.isLoaded) {
-      ctx.fillStyle = 'rgba(100, 116, 139, 0.7)';
+      ctx.fillStyle = 'rgba(116, 102, 86, 0.7)';
       ctx.font = '500 13px system-ui, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
@@ -404,7 +404,7 @@ export class ProjectCollisionCompareComponent implements OnChanges, AfterViewIni
       ctx.stroke();
     }
 
-    ctx.strokeStyle = '#6b7280';
+    ctx.strokeStyle = '#746656';
     for (const segment of map.wallSegmentsCm) {
       ctx.lineWidth = Math.max(1, (segment.thickness ?? WALL_THICKNESS_CM) * Math.min(draw.scaleX, draw.scaleY));
       const start = this.tableToCanvas(segment.startX, segment.startY, draw);

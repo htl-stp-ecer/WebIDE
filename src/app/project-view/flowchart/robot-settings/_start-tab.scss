@@ -34,7 +34,7 @@
   label {
     font-size: 12px;
     font-weight: 500;
-    color: #64748b;
+    color: #746656;
   }
 
   input {
@@ -45,7 +45,7 @@
 
 :host-context(.dark) .start-field label,
 :host-context(.p-dark) .start-field label {
-  color: #94a3b8;
+  color: #b8a795;
 }
 
 .start-hint {
@@ -54,20 +54,20 @@
   gap: 8px;
   margin-top: 12px;
   font-size: 12px;
-  color: #64748b;
+  color: #746656;
 
   i {
-    color: #3b82f6;
+    color: #ad661e;
     font-size: 14px;
   }
 }
 
 :host-context(.dark) .start-hint,
 :host-context(.p-dark) .start-hint {
-  color: #94a3b8;
+  color: #b8a795;
 
   i {
-    color: #60a5fa;
+    color: #f2bf69;
   }
 }
 

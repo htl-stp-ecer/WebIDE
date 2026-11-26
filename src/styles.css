@@ -8,23 +8,30 @@
    RaccoonOS Design Tokens — Warm Raccoon Palette
    (matches documentation site & brand identity)
 ═══════════════════════════════════════════════════════════ */
-@theme {
-  --color-rc-bg:       #2A2421;
-  --color-rc-shell:    #1E1A17;
-  --color-rc-surface:  #3A322C;
-  --color-rc-elevated: #4A4038;
-  --color-rc-border:   #4A4038;
-  --color-rc-text:     #F5EBDC;
-  --color-rc-muted:    #C8B9A5;
-  --color-rc-dim:      #8A7A6A;
-  --color-rc-accent:   #DAA03E;
-  --color-rc-accent-dim: rgba(218,160,62,0.12);
-  --color-rc-green:    #6A994E;
-  --color-rc-blue:     #78A0BE;
-  --color-rc-purple:   #945A78;
-  --color-rc-orange:   #BA643C;
-  --color-rc-yellow:   #DAA03E;
-  --color-rc-red:      #BA643C;
+@theme inline {
+  --color-rc-canvas: var(--rc-canvas);
+  --color-rc-bg: var(--rc-bg);
+  --color-rc-shell: var(--rc-shell);
+  --color-rc-surface: var(--rc-surface);
+  --color-rc-elevated: var(--rc-elevated);
+  --color-rc-field: var(--rc-field);
+  --color-rc-border: var(--rc-border);
+  --color-rc-control-border: var(--rc-control-border);
+  --color-rc-text: var(--rc-text);
+  --color-rc-muted: var(--rc-muted);
+  --color-rc-dim: var(--rc-dim);
+  --color-rc-accent: var(--rc-accent);
+  --color-rc-accent-hover: var(--rc-accent-hover);
+  --color-rc-on-accent: var(--rc-on-accent);
+  --color-rc-accent-glow: var(--rc-accent-glow);
+  --color-rc-accent-dim: var(--rc-accent-dim);
+  --color-rc-green: var(--rc-green);
+  --color-rc-sand: var(--rc-sand);
+  --color-rc-red: var(--rc-red);
+  --color-rc-orange: var(--rc-orange);
+  --color-rc-yellow: var(--rc-yellow);
+  --color-rc-berry: var(--rc-berry);
+  --color-rc-purple: var(--rc-berry);
   --font-sans: 'Space Grotesk', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, 'Cascadia Code', monospace;
 }
@@ -33,25 +40,29 @@
    CSS Custom Properties (for use in non-Tailwind SCSS)
 ═══════════════════════════════════════════════════════════ */
 :root {
-  /* Warm raccoon palette — from RaccoonOS documentation */
-  --rc-bg:            #2A2421;   /* content-bg */
-  --rc-shell:         #1E1A17;   /* sidebar-bg / navbar */
-  --rc-surface:       #3A322C;   /* bg-med — panels, cards */
-  --rc-elevated:      #4A4038;   /* bg-warm — hover, elevated */
-  --rc-border:        #4A4038;   /* structural borders */
-  --rc-border-subtle: rgba(218, 160, 62, 0.12);
-  --rc-text:          #F5EBDC;   /* cream — primary text */
-  --rc-muted:         #C8B9A5;   /* dim — secondary text */
-  --rc-dim:           #8A7A6A;   /* very dim — placeholders */
-  --rc-accent:        #DAA03E;   /* amber — primary accent */
-  --rc-accent-glow:   rgba(218, 160, 62, 0.18);
-  --rc-accent-dim:    rgba(218, 160, 62, 0.10);
-  --rc-green:         #6A994E;   /* online / success */
-  --rc-blue:          #78A0BE;   /* sky — info */
-  --rc-red:           #BA643C;   /* rust — error */
-  --rc-orange:        #BA643C;   /* rust — warning */
-  --rc-yellow:        #DAA03E;   /* same as amber */
-  --rc-berry:         #945A78;   /* secondary accent */
+  --rc-canvas: #1C1916;
+  --rc-bg: #25211D;
+  --rc-shell: #2B2621;
+  --rc-surface: #373029;
+  --rc-elevated: #463C32;
+  --rc-field: #201C18;
+  --rc-border: #5C5044;
+  --rc-control-border: #827160;
+  --rc-text: #FBF2E6;
+  --rc-muted: #DDCEBB;
+  --rc-dim: #C3B29D;
+  --rc-accent: #F2BF69;
+  --rc-accent-hover: #FFD495;
+  --rc-on-accent: #281C0D;
+  --rc-accent-glow: #F2BF6938;
+  --rc-accent-dim: #F2BF691C;
+  --rc-green: #ABD28F;
+  --rc-sand: #E3C696;
+  --rc-red: #F3A294;
+  --rc-orange: #ECB184;
+  --rc-yellow: var(--rc-accent);
+  --rc-berry: #E4ADD0;
+  --rc-border-subtle: #F2BF6920;
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -66,8 +77,23 @@
     font-family: 'Space Grotesk', system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    accent-color: var(--rc-accent);
     margin: 0;
     padding: 0;
+  }
+
+  .dark {
+    color-scheme: dark;
+  }
+
+  .dark :focus-visible {
+    outline: 2px solid var(--rc-accent);
+    outline-offset: 2px;
+  }
+
+  .dark ::selection {
+    color: var(--rc-text);
+    background-color: color-mix(in srgb, var(--rc-accent), var(--rc-canvas) 65%);
   }
 
   /* Dark mode base */
@@ -117,8 +143,8 @@
 
 .dark .p-inputtext {
   font-family: 'Space Grotesk', system-ui, sans-serif;
-  background: var(--rc-surface);
-  border-color: var(--rc-border);
+  background: var(--rc-field);
+  border-color: var(--rc-control-border);
   color: var(--rc-text);
   border-radius: 6px;
 }
@@ -146,8 +172,8 @@
 }
 
 .dark .p-select {
-  background: var(--rc-surface);
-  border-color: var(--rc-border);
+  background: var(--rc-field);
+  border-color: var(--rc-control-border);
   color: var(--rc-text);
   border-radius: 6px;
 }
@@ -251,8 +277,8 @@
   align-items: center;
   padding: 0.5rem 1rem;
   border-radius: 8px;
-  background: var(--rc-surface, #1C1E2A);
-  color: var(--rc-text, #F0F0F5);
+  background: var(--rc-surface);
+  color: var(--rc-text);
   font-family: 'Space Grotesk', system-ui, sans-serif;
   font-weight: 700;
   font-size: 0.8125rem;
@@ -261,4 +287,10 @@
   box-shadow:
     inset 0 0 0 2px var(--rc-accent, #DAA03E),
     0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.dark input:autofill {
+  box-shadow: 0 0 0 1000px var(--rc-field) inset;
+  -webkit-text-fill-color: var(--rc-text);
+  caret-color: var(--rc-text);
 }

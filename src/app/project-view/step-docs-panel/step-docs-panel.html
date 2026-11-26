@@ -63,7 +63,22 @@
           @for (step of group.steps; track step.id) {
             <div class="docs-card" [ngClass]="{ open: isExpanded(step.id) }">
               <div class="docs-card-heading">
-                <div class="docs-card-summary" fExternalItem [fData]="step.step" [fPreviewMatchSize]="true">
+                <div class="docs-card-summary" fExternalItem [fData]="step.step" [fPreviewMatchSize]="false">
+                  <ng-template fExternalItemPreview>
+                    <div class="node catalog-step-preview" aria-hidden="true">
+                      <div class="node-title">{{ step.name }}</div>
+                      @if (step.step.arguments.length) {
+                        <div class="node-args">
+                          @for (arg of step.step.arguments; track arg.name) {
+                            <div class="arg">
+                              <span class="arg-label">{{ arg.name }}</span>
+                              <span class="arg-input"><span class="arg-value">{{ arg.default }}</span></span>
+                            </div>
+                          }
+                        </div>
+                      }
+                    </div>
+                  </ng-template>
                   <i class="pi pi-bars docs-drag-grip" aria-hidden="true"></i>
                   <div class="docs-card-sig-wrap">
                     <code class="docs-card-sig" [innerHTML]="compactSigHtml(step.signature)"></code>

@@ -26,7 +26,7 @@
   padding: 2px 0;
 
   & + & {
-    border-top: 1px solid var(--rc-border, #2E3044);
+    border-top: 1px solid var(--rc-border);
   }
 }
 
@@ -42,7 +42,7 @@
   transition: background 0.1s ease;
 
   &:hover {
-    background: var(--rc-elevated, #252838);
+    background: var(--rc-elevated);
 
     .mission-drag {
       opacity: 1;
@@ -51,10 +51,10 @@
 
   &.active {
     background: rgba(218, 160, 62, 0.06);
-    border-left-color: var(--rc-accent, #DAA03E);
+    border-left-color: var(--rc-accent);
 
     .mission-name {
-      color: var(--rc-text, #F0F0F5);
+      color: var(--rc-text);
     }
   }
 }
@@ -65,7 +65,7 @@
   text-align: right;
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.65rem;
-  color: var(--rc-dim, #5A5A6A);
+  color: var(--rc-dim);
 }
 
 .mission-name {
@@ -76,20 +76,20 @@
   white-space: nowrap;
   font-size: 0.8rem;
   font-weight: 500;
-  color: var(--rc-muted, #A0A0AF);
+  color: var(--rc-muted);
 }
 
 .mission-lock {
   flex: 0 0 auto;
   font-size: 0.6rem;
-  color: var(--rc-dim, #5A5A6A);
+  color: var(--rc-dim);
   opacity: 0.6;
 }
 
 .mission-drag {
   flex: 0 0 auto;
   font-size: 0.6rem;
-  color: var(--rc-dim, #5A5A6A);
+  color: var(--rc-dim);
   opacity: 0;
   cursor: grab;
   transition: opacity 0.1s ease;
@@ -111,7 +111,7 @@
   flex: 0 0 16px;
   height: 8px;
   border-radius: 3px;
-  background: var(--rc-elevated, #252838);
+  background: var(--rc-elevated);
   animation: pulse 1.4s ease-in-out infinite;
 }
 
@@ -119,7 +119,7 @@
   height: 9px;
   width: 65%;
   border-radius: 3px;
-  background: var(--rc-elevated, #252838);
+  background: var(--rc-elevated);
   animation: pulse 1.4s ease-in-out infinite;
   animation-delay: 0.1s;
 }
@@ -134,21 +134,21 @@
   width: 100%;
   height: 32px;
   padding: 0 0.625rem;
-  background: var(--rc-bg, #121218);
-  border: 1px solid var(--rc-border, #2E3044);
+  background: var(--rc-bg);
+  border: 1px solid var(--rc-border);
   border-radius: 5px;
   font-family: 'Space Grotesk', system-ui, sans-serif;
   font-size: 0.8125rem;
-  color: var(--rc-text, #F0F0F5);
+  color: var(--rc-text);
   outline: none;
 
   &:focus {
-    border-color: var(--rc-accent, #DAA03E);
+    border-color: var(--rc-accent);
     box-shadow: 0 0 0 2px rgba(218, 160, 62, 0.1);
   }
 
   &::placeholder {
-    color: var(--rc-dim, #5A5A6A);
+    color: var(--rc-dim);
   }
 }
 
@@ -161,7 +161,7 @@
 .save-btn {
   height: 28px;
   padding: 0 0.75rem;
-  background: var(--rc-accent, #DAA03E);
+  background: var(--rc-accent);
   border: none;
   border-radius: 4px;
   font-family: 'Space Grotesk', system-ui, sans-serif;
@@ -177,16 +177,16 @@
   height: 28px;
   padding: 0 0.75rem;
   background: transparent;
-  border: 1px solid var(--rc-border, #2E3044);
+  border: 1px solid var(--rc-border);
   border-radius: 4px;
   font-family: 'Space Grotesk', system-ui, sans-serif;
   font-size: 0.75rem;
   font-weight: 600;
-  color: var(--rc-muted, #A0A0AF);
+  color: var(--rc-muted);
   cursor: pointer;
 
   &:hover {
-    color: var(--rc-text, #F0F0F5);
-    border-color: var(--rc-dim, #5A5A6A);
+    color: var(--rc-text);
+    border-color: var(--rc-dim);
   }
 }

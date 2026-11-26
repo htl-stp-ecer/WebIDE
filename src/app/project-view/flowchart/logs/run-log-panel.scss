@@ -14,9 +14,9 @@
   min-height: 0;
   min-width: 0;
   border-radius: 12px;
-  border: 1px solid var(--rc-border, #2E3044);
-  background: var(--rc-bg, #121218);
-  color: var(--rc-text, #F0F0F5);
+  border: 1px solid var(--rc-border);
+  background: var(--rc-bg);
+  color: var(--rc-text);
   box-shadow: 0 16px 36px rgba(0, 0, 0, 0.25);
   overflow: hidden;
 }
@@ -44,8 +44,8 @@
   align-items: center;
   justify-content: space-between;
   padding: 0.5rem 0.75rem;
-  background: var(--rc-bg, #121218);
-  border-bottom: 1px solid var(--rc-border, #2E3044);
+  background: var(--rc-bg);
+  border-bottom: 1px solid var(--rc-border);
 }
 
 .run-log-title {
@@ -55,14 +55,14 @@
   font-family: 'Space Grotesk', system-ui, sans-serif;
   font-size: 0.8125rem;
   font-weight: 600;
-  color: var(--rc-muted, #A0A0AF);
+  color: var(--rc-muted);
 }
 
 .run-log-icon {
   width: 1rem;
   height: 1rem;
   display: inline-block;
-  color: var(--rc-dim, #5A5A6A);
+  color: var(--rc-dim);
 }
 
 .run-log-status {
@@ -81,7 +81,7 @@
 
 .run-log-status.idle {
   background: rgba(160, 160, 175, 0.15);
-  color: var(--rc-dim, #5A5A6A);
+  color: var(--rc-dim);
 }
 
 /* ─── Actions ─────────────────────────────────────────── */
@@ -98,17 +98,17 @@
   width: 2rem;
   height: 2rem;
   border-radius: 0.375rem;
-  border: 1px solid var(--rc-border, #2E3044);
+  border: 1px solid var(--rc-border);
   background: transparent;
-  color: var(--rc-dim, #5A5A6A);
+  color: var(--rc-dim);
   cursor: pointer;
   transition: color 0.12s ease, border-color 0.12s ease, background 0.12s ease;
 }
 
 .log-action-btn:hover {
-  border-color: var(--rc-accent, #DAA03E);
+  border-color: var(--rc-accent);
   background: rgba(218, 160, 62, 0.1);
-  color: var(--rc-muted, #A0A0AF);
+  color: var(--rc-muted);
 }
 
 /* ─── Body ────────────────────────────────────────────── */
@@ -121,13 +121,13 @@
   font-size: 0.75rem;
   line-height: 1.5;
   scrollbar-width: thin;
-  scrollbar-color: var(--rc-border, #2E3044) transparent;
+  scrollbar-color: var(--rc-border) transparent;
   /* Allow horizontal scroll so ASCII box-drawing characters stay intact */
   overflow-x: auto;
 }
 
 .run-log-empty {
-  color: var(--rc-dim, #5A5A6A);
+  color: var(--rc-dim);
   font-style: italic;
 }
 
@@ -141,19 +141,19 @@
 }
 
 .run-log-time {
-  color: var(--rc-dim, #5A5A6A);
+  color: var(--rc-dim);
 }
 
 .run-log-stream {
   text-transform: uppercase;
   letter-spacing: 0.04em;
   font-size: 0.65rem;
-  color: var(--rc-dim, #5A5A6A);
+  color: var(--rc-dim);
 }
 
 .run-log-text {
   white-space: pre;
-  color: var(--rc-text, #F0F0F5);
+  color: var(--rc-text);
 }
 
 /* Stream type colors — using warm palette matching --rc-accent */
@@ -170,12 +170,12 @@
 }
 
 .run-log-line.system .run-log-stream {
-  color: var(--rc-accent, #DAA03E);
+  color: var(--rc-accent);
 }
 
 /* raccoon-lib structured log levels */
 .run-log-line.info .run-log-stream {
-  color: #60a5fa;
+  color: #f2bf69;
 }
 
 .run-log-line.warn .run-log-stream {
@@ -196,7 +196,7 @@
 
 /* Step-execution markers — slightly subdued so they don't drown the panel */
 .run-log-line.step .run-log-stream {
-  color: #a78bfa;
+  color: #e4add0;
 }
 
 .run-log-line.step .run-log-text {

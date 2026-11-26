@@ -21,10 +21,10 @@
   align-items: center;
   gap: 8px;
   padding: 10px 14px;
-  background: rgba(15, 23, 42, 0.04);
+  background: rgba(53, 43, 32, 0.04);
   border: 1px solid rgba(0, 0, 0, 0.08);
   border-radius: 8px;
-  color: #475569;
+  color: #625447;
   font-size: 13px;
 
   i {
@@ -37,26 +37,26 @@
 :host-context(.p-dark) .keybindings-hint {
   background: rgba(255, 255, 255, 0.04);
   border-color: rgba(255, 255, 255, 0.1);
-  color: #94a3b8;
+  color: #b8a795;
 }
 
 .keybindings-tabs {
   display: flex;
   gap: 4px;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid #e8dfd3;
   padding-bottom: 8px;
 }
 
 :host-context(.dark) .keybindings-tabs,
 :host-context(.p-dark) .keybindings-tabs {
-  border-bottom-color: #334155;
+  border-bottom-color: #473d33;
 }
 
 .keybindings-tab {
   padding: 6px 12px;
   border: none;
   background: transparent;
-  color: #64748b;
+  color: #746656;
   font-size: 13px;
   font-weight: 500;
   border-radius: 6px;
@@ -64,28 +64,28 @@
   transition: all 0.15s ease;
 
   &:hover {
-    background: #f1f5f9;
-    color: #334155;
+    background: #f4eee5;
+    color: #473d33;
   }
 
   &.active {
-    background: #1e293b;
-    color: #f1f5f9;
+    background: #342b23;
+    color: #f4eee5;
   }
 }
 
 :host-context(.dark) .keybindings-tab,
 :host-context(.p-dark) .keybindings-tab {
-  color: #94a3b8;
+  color: #b8a795;
 
   &:hover {
-    background: #1e293b;
-    color: #e2e8f0;
+    background: #342b23;
+    color: #e8dfd3;
   }
 
   &.active {
-    background: #f1f5f9;
-    color: #0f172a;
+    background: #f4eee5;
+    color: #221c16;
   }
 }
 
@@ -93,28 +93,28 @@
   input {
     width: 100%;
     padding: 8px 12px;
-    border: 1px solid #e2e8f0;
+    border: 1px solid #e8dfd3;
     border-radius: 6px;
     font-size: 13px;
     background: white;
 
     &:focus {
       outline: none;
-      border-color: #3b82f6;
-      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+      border-color: var(--rc-accent);
+      box-shadow: 0 0 0 3px rgba(173, 102, 30, 0.1);
     }
   }
 }
 
 :host-context(.dark) .keybindings-search input,
 :host-context(.p-dark) .keybindings-search input {
-  background: #1e293b;
-  border-color: #334155;
-  color: #e2e8f0;
+  background: #342b23;
+  border-color: #473d33;
+  color: #e8dfd3;
 
   &:focus {
-    border-color: #3b82f6;
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+    border-color: var(--rc-accent);
+    box-shadow: 0 0 0 3px rgba(173, 102, 30, 0.2);
   }
 }
 
@@ -131,17 +131,17 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: #64748b;
+  color: #746656;
   margin: 8px 0 4px;
 }
 
 :host-context(.dark) .keybindings-section-title,
 :host-context(.p-dark) .keybindings-section-title {
-  color: #94a3b8;
+  color: #b8a795;
 }
 
 .keybindings-empty {
-  color: #94a3b8;
+  color: #b8a795;
   font-size: 13px;
   font-style: italic;
   text-align: center;
@@ -153,16 +153,16 @@
   align-items: center;
   justify-content: space-between;
   padding: 10px 12px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: #fbf8f2;
+  border: 1px solid #e8dfd3;
   border-radius: 8px;
   gap: 12px;
 }
 
 :host-context(.dark) .keybinding-item,
 :host-context(.p-dark) .keybinding-item {
-  background: #1e293b;
-  border-color: #334155;
+  background: #342b23;
+  border-color: #473d33;
 }
 
 .keybinding-item-info {
@@ -176,7 +176,7 @@
 .keybinding-step-name {
   font-size: 13px;
   font-weight: 500;
-  color: #1e293b;
+  color: #342b23;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -184,12 +184,12 @@
 
 :host-context(.dark) .keybinding-step-name,
 :host-context(.p-dark) .keybinding-step-name {
-  color: #e2e8f0;
+  color: #e8dfd3;
 }
 
 .keybinding-usage {
   font-size: 11px;
-  color: #94a3b8;
+  color: #b8a795;
   flex-shrink: 0;
 }
 
@@ -204,8 +204,8 @@
   display: inline-flex;
   align-items: center;
   padding: 4px 8px;
-  background: rgba(15, 23, 42, 0.06);
-  color: #475569;
+  background: rgba(53, 43, 32, 0.06);
+  color: #625447;
   border-radius: 4px;
   font-size: 11px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
@@ -215,20 +215,20 @@
 .keybinding-badge-lg {
   padding: 6px 12px;
   font-size: 12px;
-  background: #334155;
-  color: #f1f5f9;
+  background: #473d33;
+  color: #f4eee5;
 }
 
 :host-context(.dark) .keybinding-badge,
 :host-context(.p-dark) .keybinding-badge {
   background: rgba(255, 255, 255, 0.08);
-  color: #94a3b8;
+  color: #b8a795;
 }
 
 :host-context(.dark) .keybinding-badge-lg,
 :host-context(.p-dark) .keybinding-badge-lg {
-  background: #3b82f6;
-  color: white;
+  background: var(--rc-accent);
+  color: var(--rc-on-accent);
 }
 
 .keybinding-set-btn,
@@ -241,13 +241,13 @@
   border: none;
   border-radius: 6px;
   background: transparent;
-  color: #64748b;
+  color: #746656;
   cursor: pointer;
   transition: all 0.15s ease;
 
   &:hover {
-    background: #e2e8f0;
-    color: #1e293b;
+    background: #e8dfd3;
+    color: #342b23;
   }
 
   i {
@@ -269,11 +269,11 @@
 :host-context(.dark) .keybinding-remove-btn,
 :host-context(.p-dark) .keybinding-set-btn,
 :host-context(.p-dark) .keybinding-remove-btn {
-  color: #94a3b8;
+  color: #b8a795;
 
   &:hover {
-    background: #334155;
-    color: #e2e8f0;
+    background: #473d33;
+    color: #e8dfd3;
   }
 }
 
@@ -291,12 +291,12 @@
 
 .keybindings-footer {
   padding-top: 12px;
-  border-top: 1px solid #e2e8f0;
+  border-top: 1px solid #e8dfd3;
 }
 
 :host-context(.dark) .keybindings-footer,
 :host-context(.p-dark) .keybindings-footer {
-  border-top-color: #334155;
+  border-top-color: #473d33;
 }
 
 .keybindings-clear-btn {
@@ -353,35 +353,35 @@
 
 :host-context(.dark) .keybinding-recording-content,
 :host-context(.p-dark) .keybinding-recording-content {
-  background: #1e293b;
+  background: #342b23;
 }
 
 .keybinding-recording-title {
   font-size: 14px;
-  color: #64748b;
+  color: #746656;
   margin-bottom: 8px;
 }
 
 :host-context(.dark) .keybinding-recording-title,
 :host-context(.p-dark) .keybinding-recording-title {
-  color: #94a3b8;
+  color: #b8a795;
 }
 
 .keybinding-recording-step {
   font-size: 20px;
   font-weight: 600;
-  color: #1e293b;
+  color: #342b23;
   margin-bottom: 16px;
 }
 
 :host-context(.dark) .keybinding-recording-step,
 :host-context(.p-dark) .keybinding-recording-step {
-  color: #f1f5f9;
+  color: #f4eee5;
 }
 
 .keybinding-recording-hint {
   font-size: 13px;
-  color: #94a3b8;
+  color: #b8a795;
   margin-bottom: 20px;
 }
 
@@ -389,13 +389,13 @@
   font-size: 28px;
   font-weight: 600;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  color: #475569;
+  color: #625447;
   margin-bottom: 20px;
 }
 
 :host-context(.dark) .keybinding-recording-key,
 :host-context(.p-dark) .keybinding-recording-key {
-  color: #94a3b8;
+  color: #b8a795;
 }
 
 .keybinding-recording-waiting {
@@ -403,7 +403,7 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  color: #94a3b8;
+  color: #b8a795;
   font-size: 14px;
   margin-bottom: 16px;
 
@@ -430,32 +430,32 @@
 }
 
 .keybinding-cancel-btn {
-  background: #f1f5f9;
-  color: #64748b;
+  background: #f4eee5;
+  color: #746656;
 
   &:hover {
-    background: #e2e8f0;
-    color: #334155;
+    background: #e8dfd3;
+    color: #473d33;
   }
 }
 
 :host-context(.dark) .keybinding-cancel-btn,
 :host-context(.p-dark) .keybinding-cancel-btn {
-  background: #334155;
-  color: #94a3b8;
+  background: #473d33;
+  color: #b8a795;
 
   &:hover {
-    background: #475569;
-    color: #e2e8f0;
+    background: #625447;
+    color: #e8dfd3;
   }
 }
 
 .keybinding-save-btn {
-  background: #3b82f6;
-  color: white;
+  background: var(--rc-accent);
+  color: var(--rc-on-accent);
 
   &:hover {
-    background: #2563eb;
+    background: var(--rc-accent-hover);
   }
 }
 

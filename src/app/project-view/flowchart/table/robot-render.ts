@@ -56,8 +56,8 @@ export function renderRobotAtCenter(
   const wheelW = Math.max(4, robotWidthPx * 0.14);
   const wheelXOff = robotLengthPx * 0.28;
   const wheelRadius = Math.min(2, wheelW * 0.25);
-  const wheelFill = options.dashed ? 'rgba(30, 41, 59, 0.45)' : '#1e293b';
-  const wheelStroke = options.dashed ? 'rgba(51, 65, 85, 0.35)' : '#334155';
+  const wheelFill = options.dashed ? 'rgba(52, 43, 35, 0.45)' : '#342b23';
+  const wheelStroke = options.dashed ? 'rgba(71, 61, 51, 0.35)' : '#473d33';
 
   ctx.fillStyle = wheelFill;
   ctx.strokeStyle = wheelStroke;

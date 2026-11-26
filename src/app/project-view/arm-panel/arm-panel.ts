@@ -292,7 +292,7 @@ export class ArmPanel implements AfterViewInit, OnDestroy, OnChanges {
     const height = host.clientHeight || 400;
 
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x121218);
+    this.scene.background = new THREE.Color(0x1c1916);
 
     // Z-up world (robotics convention)
     this.camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 2000);
@@ -310,7 +310,7 @@ export class ArmPanel implements AfterViewInit, OnDestroy, OnChanges {
     this.controls.enableDamping = true;
 
     // Floor grid in XY plane (Z-up)
-    const grid = new THREE.GridHelper(100, 20, 0x444466, 0x2a2a3a);
+    const grid = new THREE.GridHelper(100, 20, 0x5c5044, 0x373029);
     grid.rotation.x = Math.PI / 2;
     this.scene.add(grid);
     this.scene.add(new THREE.AxesHelper(10));
@@ -362,9 +362,9 @@ export class ArmPanel implements AfterViewInit, OnDestroy, OnChanges {
     const SHAFT = 6;
     const HEAD = 2;
     const configs: {axis: 'x' | 'y' | 'z'; color: number; dir: THREE.Vector3}[] = [
-      {axis: 'x', color: 0xff3333, dir: new THREE.Vector3(1, 0, 0)},
-      {axis: 'y', color: 0x33cc33, dir: new THREE.Vector3(0, 1, 0)},
-      {axis: 'z', color: 0x3399ff, dir: new THREE.Vector3(0, 0, 1)},
+      {axis: 'x', color: 0xef8e79, dir: new THREE.Vector3(1, 0, 0)},
+      {axis: 'y', color: 0xabd28f, dir: new THREE.Vector3(0, 1, 0)},
+      {axis: 'z', color: 0xe4add0, dir: new THREE.Vector3(0, 0, 1)},
     ];
 
     for (const {axis, color, dir} of configs) {
@@ -466,7 +466,7 @@ export class ArmPanel implements AfterViewInit, OnDestroy, OnChanges {
     if (reach && reach > 0) {
       const geo = new THREE.SphereGeometry(reach, 32, 16);
       const mat = new THREE.MeshBasicMaterial({
-        color: 0x44aaff, wireframe: true, transparent: true, opacity: 0.12,
+        color: 0xf2bf69, wireframe: true, transparent: true, opacity: 0.12,
       });
       this.workspaceMesh = new THREE.Mesh(geo, mat);
       this.scene.add(this.workspaceMesh);
@@ -477,7 +477,7 @@ export class ArmPanel implements AfterViewInit, OnDestroy, OnChanges {
     if (!this.scene) return;
     while (this.jointMeshes.length < n) {
       const geo = new THREE.SphereGeometry(1.0, 16, 12);
-      const mat = new THREE.MeshStandardMaterial({color: 0x66aaff});
+      const mat = new THREE.MeshStandardMaterial({color: 0xf2bf69});
       const mesh = new THREE.Mesh(geo, mat);
       this.scene.add(mesh);
       this.jointMeshes.push(mesh);
@@ -532,8 +532,8 @@ export class ArmPanel implements AfterViewInit, OnDestroy, OnChanges {
     }
 
     // Primary structural segments — one per joint (skipping length=0 base/rotational joints).
-    // Color: blue, fat bar.
-    this.ensureBarMeshCount(this.segmentMeshes, segments.length, 0x4ea1ff, 0.55);
+    // Sand-colored arm segments.
+    this.ensureBarMeshCount(this.segmentMeshes, segments.length, 0xe3c696, 0.55);
     for (let i = 0; i < segments.length; i++) {
       const s = segments[i];
       const a = new THREE.Vector3(...s.origin_cm);

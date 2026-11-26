@@ -40,7 +40,7 @@
   gap: 8px;
   padding: 12px;
   font-size: 13px;
-  color: #3b82f6;
+  color: #ad661e;
 
   i {
     font-size: 14px;
@@ -49,7 +49,7 @@
 
 :host-context(.dark) .robot-hint,
 :host-context(.p-dark) .robot-hint {
-  color: #60a5fa;
+  color: #f2bf69;
 }
 
 .robot-footer {
@@ -73,17 +73,17 @@
 
 // Sidebar item shading
 .robot-list-item {
-  border: 1px solid rgba(15, 23, 42, 0.06);
-  background: rgba(15, 23, 42, 0.03);
+  border: 1px solid rgba(53, 43, 32, 0.06);
+  background: rgba(53, 43, 32, 0.03);
 }
 
 .robot-list-item--idle:hover {
-  background: rgba(15, 23, 42, 0.06);
+  background: rgba(53, 43, 32, 0.06);
 }
 
 .robot-list-item--active {
-  background: rgba(15, 23, 42, 0.1);
-  border-color: rgba(15, 23, 42, 0.2);
+  background: rgba(53, 43, 32, 0.1);
+  border-color: rgba(53, 43, 32, 0.2);
 }
 
 :host-context(.dark) .robot-list-item,
@@ -104,7 +104,7 @@
 }
 
 .robot-position-panel {
-  background: rgba(15, 23, 42, 0.04);
+  background: rgba(53, 43, 32, 0.04);
 }
 
 :host-context(.dark) .robot-position-panel,
@@ -131,16 +131,16 @@
 }
 
 .robot-body {
-  background: rgba(15, 23, 42, 0.04);
+  background: rgba(53, 43, 32, 0.04);
   overflow: visible;
 }
 
 .robot-body--active {
-  background: rgba(15, 23, 42, 0.08);
+  background: rgba(53, 43, 32, 0.08);
 }
 
 .robot-body--idle {
-  background: rgba(15, 23, 42, 0.04);
+  background: rgba(53, 43, 32, 0.04);
 }
 
 :host-context(.dark) .robot-body,
@@ -162,8 +162,8 @@
 .robot-frame {
   --robot-width: 70%;
   --robot-height: 70%;
-  --robot-line-color: #94a3b8;
-  --robot-label-color: #64748b;
+  --robot-line-color: #b8a795;
+  --robot-label-color: #746656;
 
   // Fill available space while maintaining aspect ratio
   width: 100%;
@@ -182,8 +182,8 @@
 
 :host-context(.dark) .robot-frame,
 :host-context(.p-dark) .robot-frame {
-  --robot-line-color: #475569;
-  --robot-label-color: #94a3b8;
+  --robot-line-color: #625447;
+  --robot-label-color: #b8a795;
 }
 
 // Measurement lines
@@ -263,8 +263,8 @@
   color: var(--robot-label-color);
 
   &:hover {
-    background: rgba(59, 130, 246, 0.1);
-    border-color: rgba(59, 130, 246, 0.3);
+    background: rgba(173, 102, 30, 0.1);
+    border-color: rgba(173, 102, 30, 0.3);
   }
 }
 
@@ -321,7 +321,7 @@
 
 .inline-dim-unit-small {
   font-size: 10px;
-  color: rgba(100, 116, 139, 0.8);
+  color: rgba(116, 102, 86, 0.8);
   font-family: ui-monospace, monospace;
 }
 
@@ -338,8 +338,8 @@
   font-size: 13px;
 
   &:hover {
-    background: rgba(59, 130, 246, 0.08);
-    border-color: rgba(59, 130, 246, 0.2);
+    background: rgba(173, 102, 30, 0.08);
+    border-color: rgba(173, 102, 30, 0.2);
   }
 }
 
@@ -369,8 +369,8 @@
   width: var(--sensor-clear-x);
   height: var(--sensor-clear-y);
   border-radius: 9999px;
-  border: 1px dashed rgba(100, 116, 139, 0.5);
-  background: rgba(100, 116, 139, 0.05);
+  border: 1px dashed rgba(116, 102, 86, 0.5);
+  background: rgba(116, 102, 86, 0.05);
   left: var(--sensor-x);
   top: var(--sensor-y);
   transform: translate(-50%, -50%);
@@ -399,7 +399,7 @@
 }
 
 .center-icon-rotation {
-  background: #8b5cf6;
+  background: #a16850;
 }
 
 // Center markers on robot
@@ -428,13 +428,13 @@
 }
 
 .center-marker-rotation {
-  background: #8b5cf6;
+  background: #a16850;
   border: 2px solid white;
 }
 
 .center-marker-selected {
   transform: translate(-50%, -50%) scale(1.2);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 0 0 3px rgba(173, 102, 30, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
 .center-marker-fixed {
@@ -450,7 +450,7 @@
   z-index: 1;
   --guide-pos: 50%;
   --guide-color: rgba(148, 163, 184, 0.4);
-  --guide-active-color: rgba(59, 130, 246, 0.7);
+  --guide-active-color: rgba(173, 102, 30, 0.7);
   transition: opacity 0.15s ease;
 }
 
@@ -507,7 +507,7 @@
 }
 
 .guideline-center {
-  --guide-color: rgba(59, 130, 246, 0.25);
+  --guide-color: rgba(173, 102, 30, 0.25);
 }
 
 .guideline-edge {
@@ -526,13 +526,13 @@
 
 :host-context(.dark) .guideline,
 :host-context(.p-dark) .guideline {
-  --guide-color: rgba(100, 116, 139, 0.4);
-  --guide-active-color: rgba(96, 165, 250, 0.8);
+  --guide-color: rgba(116, 102, 86, 0.4);
+  --guide-active-color: rgba(242, 191, 105, 0.8);
 }
 
 :host-context(.dark) .guideline-center,
 :host-context(.p-dark) .guideline-center {
-  --guide-color: rgba(96, 165, 250, 0.3);
+  --guide-color: rgba(242, 191, 105, 0.3);
 }
 
 :host-context(.dark) .guideline-sensor,
@@ -562,7 +562,7 @@
   font-family: ui-monospace, SFMono-Regular, monospace;
   font-size: 10px;
   font-weight: 500;
-  color: #64748b;
+  color: #746656;
   background: rgba(255, 255, 255, 0.95);
   padding: 2px 4px;
   border-radius: 3px;
@@ -575,7 +575,7 @@
   &::after {
     content: 'cm';
     font-size: 8px;
-    color: #94a3b8;
+    color: #b8a795;
     margin-left: 1px;
   }
 }
@@ -598,17 +598,17 @@
 
 .distance-grid-snap:not(.distance-symmetric) {
   .distance-label {
-    color: #2563eb;
+    color: #8f4c18;
     background: rgba(219, 234, 254, 0.95);
-    border-color: rgba(59, 130, 246, 0.4);
+    border-color: rgba(173, 102, 30, 0.4);
   }
 
   .distance-line {
-    background: rgba(59, 130, 246, 0.5);
+    background: rgba(173, 102, 30, 0.5);
 
     &::before,
     &::after {
-      background: rgba(59, 130, 246, 0.5);
+      background: rgba(173, 102, 30, 0.5);
     }
   }
 }
@@ -715,39 +715,39 @@
 
 :host-context(.dark) .distance-label,
 :host-context(.p-dark) .distance-label {
-  color: #cbd5e1;
-  background: rgba(30, 41, 59, 0.95);
+  color: #d5c7b6;
+  background: var(--rc-elevated);
   border-color: rgba(71, 85, 105, 0.5);
 
   &::after {
-    color: #64748b;
+    color: #746656;
   }
 }
 
 :host-context(.dark) .distance-line,
 :host-context(.p-dark) .distance-line {
-  background: rgba(100, 116, 139, 0.5);
+  background: rgba(116, 102, 86, 0.5);
 
   &::before,
   &::after {
-    background: rgba(100, 116, 139, 0.5);
+    background: rgba(116, 102, 86, 0.5);
   }
 }
 
 :host-context(.dark) .distance-grid-snap:not(.distance-symmetric) .distance-label,
 :host-context(.p-dark) .distance-grid-snap:not(.distance-symmetric) .distance-label {
-  color: #60a5fa;
+  color: #f2bf69;
   background: rgba(30, 58, 138, 0.9);
-  border-color: rgba(96, 165, 250, 0.4);
+  border-color: rgba(242, 191, 105, 0.4);
 }
 
 :host-context(.dark) .distance-grid-snap:not(.distance-symmetric) .distance-line,
 :host-context(.p-dark) .distance-grid-snap:not(.distance-symmetric) .distance-line {
-  background: rgba(96, 165, 250, 0.5);
+  background: rgba(242, 191, 105, 0.5);
 
   &::before,
   &::after {
-    background: rgba(96, 165, 250, 0.5);
+    background: rgba(242, 191, 105, 0.5);
   }
 }
 
@@ -794,8 +794,8 @@
   min-height: 4px;
   max-height: 40%;
   border-radius: 2px;
-  background: #1e293b;
-  border: 1px solid #334155;
+  background: #342b23;
+  border: 1px solid #473d33;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
   left: var(--wheel-x);
   top: var(--wheel-y);
@@ -814,8 +814,8 @@
 
 :host-context(.dark) .wheel-rect,
 :host-context(.p-dark) .wheel-rect {
-  background: #334155;
-  border-color: #64748b;
+  background: #473d33;
+  border-color: #746656;
 }
 
 // Mecanum roller line (diagonal stripe on wheel)

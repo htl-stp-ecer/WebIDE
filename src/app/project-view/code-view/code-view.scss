@@ -8,7 +8,7 @@
   display: flex;
   height: 100%;
   overflow: hidden;
-  background: var(--rc-bg, #121218);
+  background: var(--rc-bg);
 }
 
 /* ─── Editor Area ─────────────────────────────────────── */
@@ -26,15 +26,15 @@
   align-items: center;
   justify-content: space-between;
   padding: 4px 10px;
-  border-bottom: 1px solid var(--rc-border, #2E3044);
-  background: var(--rc-shell, #0E0E13);
+  border-bottom: 1px solid var(--rc-border);
+  background: var(--rc-shell);
   min-height: 34px;
 }
 
 .file-path {
   font-family: 'JetBrains Mono', ui-monospace, monospace;
   font-size: 0.7rem;
-  color: var(--rc-muted, #A0A0AF);
+  color: var(--rc-muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -46,13 +46,13 @@
 }
 
 .dirty-dot {
-  color: var(--rc-yellow, #FFD600);
+  color: var(--rc-yellow);
   font-size: 1rem;
   line-height: 1;
 }
 
 .no-file {
-  color: var(--rc-dim, #5A5A6A);
+  color: var(--rc-dim);
 }
 
 .save-btn {
@@ -60,22 +60,22 @@
   align-items: center;
   gap: 5px;
   padding: 3px 10px;
-  border: 1px solid var(--rc-border, #2E3044);
+  border: 1px solid var(--rc-border);
   border-radius: 5px;
-  background: var(--rc-surface, #1C1E2A);
+  background: var(--rc-surface);
   font-family: 'Space Grotesk', system-ui, sans-serif;
   font-size: 0.75rem;
   font-weight: 600;
   cursor: pointer;
-  color: var(--rc-muted, #A0A0AF);
+  color: var(--rc-muted);
   flex-shrink: 0;
   margin-left: 8px;
   transition: background 0.1s, border-color 0.1s, color 0.1s;
 
   &:hover:not(:disabled) {
-    background: var(--rc-elevated, #252838);
-    border-color: var(--rc-dim, #5A5A6A);
-    color: var(--rc-text, #F0F0F5);
+    background: var(--rc-elevated);
+    border-color: var(--rc-dim);
+    color: var(--rc-text);
   }
 
   &:disabled {
@@ -95,11 +95,11 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--rc-dim, #5A5A6A);
+  color: var(--rc-dim);
   font-family: 'Space Grotesk', system-ui, sans-serif;
   font-size: 0.8125rem;
 
-  &.error { color: var(--rc-red, #FF5252); }
+  &.error { color: var(--rc-red); }
 
   i { margin-right: 6px; }
 }

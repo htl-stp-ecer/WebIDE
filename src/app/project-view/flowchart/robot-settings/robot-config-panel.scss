@@ -5,8 +5,8 @@
   min-height: 0;
   height: 100%;
   overflow: hidden;
-  background: var(--rc-bg, #2A2421);
-  color: var(--rc-text, #F5EBDC);
+  background: var(--rc-bg);
+  color: var(--rc-text);
 }
 
 .robot-sidebar {
@@ -15,10 +15,10 @@
   flex-direction: column;
   gap: 0;
   overflow: hidden;
-  border-bottom: 1px solid var(--rc-border, #4A4038);
+  border-bottom: 1px solid var(--rc-border);
   background:
     linear-gradient(180deg, rgba(218, 160, 62, 0.06), rgba(218, 160, 62, 0)),
-    var(--rc-surface, #3A322C);
+    var(--rc-surface);
 }
 
 .robot-sidebar-list {
@@ -37,7 +37,7 @@
 
 .robot-section-title {
   margin: 0 0 12px;
-  color: var(--rc-dim, #8A7A6A);
+  color: var(--rc-dim);
   font-size: 0.7rem;
   font-weight: 700;
   letter-spacing: 0.12em;
@@ -56,14 +56,14 @@
   align-items: center;
   justify-content: center;
   padding: 20px 12px;
-  color: var(--rc-dim, #8A7A6A);
+  color: var(--rc-dim);
   text-align: center;
 }
 
 .robot-list-item {
   border: 1px solid var(--rc-border-subtle, rgba(218, 160, 62, 0.12));
   background: rgba(255, 255, 255, 0.02);
-  color: var(--rc-text, #F5EBDC);
+  color: var(--rc-text);
 }
 
 .robot-list-item--idle:hover {
@@ -78,24 +78,24 @@
 }
 
 .robot-sensor-dot {
-  box-shadow: 0 0 0 2px var(--rc-surface, #3A322C);
+  box-shadow: 0 0 0 2px var(--rc-surface);
 }
 
 .robot-item-label {
-  color: var(--rc-text, #F5EBDC);
+  color: var(--rc-text);
 }
 
 .robot-item-check {
-  color: var(--rc-green, #6A994E);
+  color: var(--rc-green);
 }
 
 .robot-meta-list {
-  color: var(--rc-muted, #C8B9A5);
+  color: var(--rc-muted);
 }
 
 .robot-meta-label,
 .robot-input-label {
-  color: var(--rc-dim, #8A7A6A);
+  color: var(--rc-dim);
 }
 
 .robot-position-panel {
@@ -109,7 +109,7 @@
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  background: var(--rc-bg, #2A2421);
+  background: var(--rc-bg);
 }
 
 .robot-canvas-bg {
@@ -118,7 +118,7 @@
   background:
     radial-gradient(circle at top, rgba(218, 160, 62, 0.08), transparent 55%),
     linear-gradient(180deg, rgba(74, 64, 56, 0.35), rgba(30, 26, 23, 0.2)),
-    var(--rc-bg, #2A2421);
+    var(--rc-bg);
 }
 
 .robot-footer {
@@ -127,20 +127,20 @@
   justify-content: space-between;
   gap: 12px;
   padding: 12px 16px;
-  border-top: 1px solid var(--rc-border, #4A4038);
-  background: var(--rc-surface, #3A322C);
+  border-top: 1px solid var(--rc-border);
+  background: var(--rc-surface);
 }
 
 .robot-hint {
   display: flex;
   align-items: center;
   gap: 8px;
-  color: var(--rc-muted, #C8B9A5);
+  color: var(--rc-muted);
   font-size: 0.8125rem;
 }
 
 .robot-hint i {
-  color: var(--rc-accent, #DAA03E);
+  color: var(--rc-accent);
 }
 
 .robot-footer-actions {
@@ -150,8 +150,8 @@
 .robot-frame {
   --robot-width: 70%;
   --robot-height: 70%;
-  --robot-line-color: var(--rc-dim, #8A7A6A);
-  --robot-label-color: var(--rc-muted, #C8B9A5);
+  --robot-line-color: var(--rc-dim);
+  --robot-label-color: var(--rc-muted);
   width: 100%;
   height: 100%;
   max-width: 100%;
@@ -244,7 +244,7 @@
   border-radius: 6px;
   border: 1px solid transparent;
   background: transparent;
-  color: var(--rc-muted, #C8B9A5);
+  color: var(--rc-muted);
   cursor: pointer;
   transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
@@ -253,7 +253,7 @@
 .inline-dim-label-small:hover {
   background: rgba(218, 160, 62, 0.1);
   border-color: rgba(218, 160, 62, 0.22);
-  color: var(--rc-text, #F5EBDC);
+  color: var(--rc-text);
 }
 
 .inline-edit-container,
@@ -269,7 +269,7 @@
 
 .inline-dim-unit,
 .inline-dim-unit-small {
-  color: var(--rc-dim, #8A7A6A);
+  color: var(--rc-dim);
   font-size: 0.75rem;
 }
 
@@ -287,12 +287,12 @@
   height: 18px;
   border-radius: 999px;
   background: rgba(218, 160, 62, 0.14);
-  color: var(--rc-accent, #DAA03E);
+  color: var(--rc-accent);
 }
 
 .distance-indicator {
   position: absolute;
-  color: var(--rc-accent, #DAA03E);
+  color: var(--rc-accent);
   pointer-events: none;
 }
 
@@ -310,7 +310,7 @@
   border: 1px solid rgba(218, 160, 62, 0.24);
   border-radius: 999px;
   background: rgba(30, 26, 23, 0.92);
-  color: var(--rc-text, #F5EBDC);
+  color: var(--rc-text);
   font-size: 0.72rem;
 }
 
@@ -357,5 +357,5 @@
 }
 
 .distance-grid-snap .distance-label {
-  color: var(--rc-accent, #DAA03E);
+  color: var(--rc-accent);
 }

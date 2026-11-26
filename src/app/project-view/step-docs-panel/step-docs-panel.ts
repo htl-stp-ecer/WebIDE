@@ -1,7 +1,7 @@
 import { Component, inject, signal, computed, ChangeDetectionStrategy } from '@angular/core';
 import { NgClass } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { FExternalItemDirective } from '@foblex/flow';
+import { FExternalItemDirective, FExternalItemPreviewDirective } from '@foblex/flow';
 import { StepsStateService } from '../../services/steps-state-service';
 import { Skeleton } from '@openng/optimus-ui/skeleton';
 import { TranslateModule } from '@ngx-translate/core';
@@ -30,8 +30,8 @@ interface DocStep {
 
 const TAG_HUE: Record<string, string> = {
   calibration: 'tag-rust',
-  drive: 'tag-sky',
-  motion: 'tag-sky',
+  drive: 'tag-sand',
+  motion: 'tag-sand',
   control: 'tag-amber',
   concurrent: 'tag-amber',
   sensor: 'tag-green',
@@ -41,9 +41,9 @@ const TAG_HUE: Record<string, string> = {
   wait: 'tag-dim',
   ui: 'tag-dim',
   distance: 'tag-dim',
-  motor: 'tag-sky',
+  motor: 'tag-sand',
   deadzone: 'tag-dim',
-  'line-follow': 'tag-sky',
+  'line-follow': 'tag-sand',
 };
 
 function tagClass(t: string): string {
@@ -246,7 +246,7 @@ function parseDocstring(docstring: string, paramMap: Record<string, ParsedParam>
 @Component({
   selector: 'app-step-docs-panel',
   standalone: true,
-  imports: [NgClass, FormsModule, Skeleton, TranslateModule, FExternalItemDirective],
+  imports: [NgClass, FormsModule, Skeleton, TranslateModule, FExternalItemDirective, FExternalItemPreviewDirective],
   templateUrl: './step-docs-panel.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./step-docs-panel.scss'],

@@ -55,8 +55,8 @@ const SNAP_CONFIG = {
   /** Distance threshold in cm to snap to a black line */
   lineSnapDistance: 3,
   /** Visual colors */
-  gridColor: 'rgba(59, 130, 246, 0.15)',
-  gridMajorColor: 'rgba(59, 130, 246, 0.3)',
+  gridColor: 'rgba(173, 102, 30, 0.15)',
+  gridMajorColor: 'rgba(173, 102, 30, 0.3)',
   angleGuideColor: 'rgba(251, 191, 36, 0.6)',
   lineHighlightColor: 'rgba(34, 197, 94, 0.8)',
 } as const;
@@ -535,7 +535,7 @@ export class PlanningOverlayComponent implements OnInit, AfterViewInit, OnDestro
       const sensorX = bodyCenterX + sensor.forwardCm * scaleX;
       const sensorY = bodyCenterY - sensor.strafeCm * scaleY;
 
-      this.ctx.fillStyle = '#3b82f6';
+      this.ctx.fillStyle = '#ad661e';
       this.ctx.beginPath();
       this.ctx.arc(sensorX, sensorY, 3, 0, Math.PI * 2);
       this.ctx.fill();
@@ -556,7 +556,7 @@ export class PlanningOverlayComponent implements OnInit, AfterViewInit, OnDestro
 
     if (pathPoints.length < 2) return;
 
-    this.ctx.strokeStyle = '#3b82f6';
+    this.ctx.strokeStyle = '#ad661e';
     this.ctx.lineWidth = 2;
     this.ctx.setLineDash([6, 4]);
     this.ctx.lineCap = 'round';
@@ -597,7 +597,7 @@ export class PlanningOverlayComponent implements OnInit, AfterViewInit, OnDestro
     const samples = sampleCatmullRom(controlPoints, 24);
     if (samples.length < 2) return;
 
-    this.ctx.strokeStyle = '#3b82f6';
+    this.ctx.strokeStyle = '#ad661e';
     this.ctx.lineWidth = 3;
     this.ctx.lineCap = 'round';
     this.ctx.lineJoin = 'round';
@@ -638,10 +638,10 @@ export class PlanningOverlayComponent implements OnInit, AfterViewInit, OnDestro
         : angle;
       // Green = explicit heading currently in use.
       // Amber = explicit heading set but mode ignores it (visual reminder).
-      // Blue  = tangent (auto-derived).
+      // Ochre = tangent (auto-derived).
       const color = hasExplicit
         ? (inExplicitMode ? '#10b981' : '#f59e0b')
-        : 'rgba(59, 130, 246, 0.7)';
+        : 'rgba(173, 102, 30, 0.7)';
 
       this.ctx.save();
       this.ctx.translate(pos.x, pos.y);
@@ -780,7 +780,7 @@ export class PlanningOverlayComponent implements OnInit, AfterViewInit, OnDestro
     const angle = Math.atan2(dy, dx);
 
     const arrowSize = 8;
-    this.ctx.fillStyle = '#3b82f6';
+    this.ctx.fillStyle = '#ad661e';
     this.ctx.beginPath();
     this.ctx.moveTo(
       midX + Math.cos(angle) * arrowSize,
@@ -813,10 +813,10 @@ export class PlanningOverlayComponent implements OnInit, AfterViewInit, OnDestro
       this.ctx.beginPath();
       this.ctx.arc(pos.x, pos.y, WAYPOINT_VISUAL_RADIUS, 0, Math.PI * 2);
       this.ctx.fillStyle = isSelected || isDragging
-        ? 'rgba(59, 130, 246, 0.4)'
-        : 'rgba(59, 130, 246, 0.2)';
+        ? 'rgba(173, 102, 30, 0.4)'
+        : 'rgba(173, 102, 30, 0.2)';
       this.ctx.fill();
-      this.ctx.strokeStyle = isSelected ? '#f59e0b' : '#3b82f6';
+      this.ctx.strokeStyle = isSelected ? '#f59e0b' : '#ad661e';
       this.ctx.lineWidth = 2;
       this.ctx.stroke();
 

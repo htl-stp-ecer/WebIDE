@@ -1,3 +1,5 @@
+@use '../flowchart/styles/node-appearance';
+
 :host {
   display: flex;
   flex-direction: column;
@@ -29,7 +31,7 @@
   left: 8px;
   top: 50%;
   transform: translateY(-50%);
-  color: var(--rc-dim, #5A5A6A);
+  color: var(--rc-dim);
   font-size: 0.65rem;
   pointer-events: none;
 }
@@ -39,20 +41,22 @@
   padding: 0.4rem 1.8rem 0.4rem 1.6rem;
   font-size: 0.75rem;
   font-family: 'Space Grotesk', system-ui, sans-serif;
-  background: var(--rc-surface, #1C1E2A);
-  border: 1px solid var(--rc-border, #2E3044);
+  background: var(--rc-field);
+  border: 1px solid var(--rc-control-border);
   border-radius: 5px;
-  color: var(--rc-text, #F0F0F5);
+  color: var(--rc-text);
   outline: none;
   transition: border-color 0.15s;
   box-sizing: border-box;
 
   &::placeholder {
-    color: var(--rc-muted, #C8B9A5);
+    color: var(--rc-muted);
   }
 
   &:focus {
-    border-color: var(--rc-accent, #DAA03E);
+    border-color: var(--rc-accent);
+    outline: 2px solid var(--rc-accent);
+    outline-offset: 1px;
   }
 }
 
@@ -63,7 +67,7 @@
   transform: translateY(-50%);
   background: none;
   border: none;
-  color: var(--rc-dim, #5A5A6A);
+  color: var(--rc-dim);
   cursor: pointer;
   padding: 3px;
   display: flex;
@@ -73,7 +77,7 @@
   transition: color 0.15s, background 0.15s;
 
   &:hover {
-    color: var(--rc-muted, #A0A0AF);
+    color: var(--rc-muted);
     background: rgba(255, 255, 255, 0.06);
   }
 
@@ -91,7 +95,7 @@
   max-height: 4.5rem;
   overflow-y: auto;
   scrollbar-width: thin;
-  scrollbar-color: var(--rc-border, #2E3044) transparent;
+  scrollbar-color: var(--rc-border) transparent;
 }
 
 .docs-chip {
@@ -100,29 +104,29 @@
   font-size: 0.6rem;
   font-family: 'JetBrains Mono', 'Space Grotesk', monospace;
   cursor: pointer;
-  border: 1px solid var(--rc-border, #2E3044);
-  background: var(--rc-surface, #1C1E2A);
-  color: var(--rc-dim, #5A5A6A);
+  border: 1px solid var(--rc-border);
+  background: var(--rc-surface);
+  color: var(--rc-dim);
   transition: all 0.15s;
   letter-spacing: 0.02em;
   white-space: nowrap;
 
   &:hover {
-    border-color: var(--rc-dim, #5A5A6A);
-    color: var(--rc-muted, #A0A0AF);
+    border-color: var(--rc-dim);
+    color: var(--rc-muted);
   }
 
   &.active {
-    background: var(--rc-accent, #DAA03E);
-    color: var(--rc-bg, #121218);
-    border-color: var(--rc-accent, #DAA03E);
+    background: var(--rc-accent);
+    color: var(--rc-bg);
+    border-color: var(--rc-accent);
   }
 }
 
 /* ── Count ─────────────────────────────────────────────── */
 .docs-count {
   font-size: 0.65rem;
-  color: var(--rc-muted, #C8B9A5);
+  color: var(--rc-muted);
   font-family: 'JetBrains Mono', monospace;
   letter-spacing: 0.02em;
   flex-shrink: 0;
@@ -137,7 +141,7 @@
   flex-direction: column;
   gap: 0.25rem;
   scrollbar-width: thin;
-  scrollbar-color: var(--rc-border, #2E3044) transparent;
+  scrollbar-color: var(--rc-border) transparent;
 }
 
 /* ── Group Header ──────────────────────────────────────── */
@@ -147,7 +151,7 @@
   gap: 6px;
   margin: 0.75rem 0 0.35rem;
   padding-bottom: 0.25rem;
-  border-bottom: 1px solid var(--rc-border, #2E3044);
+  border-bottom: 1px solid var(--rc-border);
 
   &:first-child {
     margin-top: 0;
@@ -158,7 +162,7 @@
   display: inline-block;
   width: 3px;
   height: 0.9em;
-  background: var(--rc-accent, #DAA03E);
+  background: var(--rc-accent);
   border-radius: 2px;
   flex-shrink: 0;
 }
@@ -166,7 +170,7 @@
 .docs-group-name {
   font-size: 0.72rem;
   font-weight: 700;
-  color: var(--rc-text, #F0F0F5);
+  color: var(--rc-text);
   text-transform: capitalize;
   letter-spacing: 0.01em;
   font-family: 'Space Grotesk', system-ui, sans-serif;
@@ -175,7 +179,7 @@
 .docs-group-count {
   font-size: 0.6rem;
   font-family: 'JetBrains Mono', monospace;
-  color: var(--rc-dim, #5A5A6A);
+  color: var(--rc-dim);
   margin-left: auto;
 }
 
@@ -188,8 +192,8 @@
 
 /* ── Card ──────────────────────────────────────────────── */
 .docs-card {
-  background: color-mix(in srgb, var(--rc-bg), var(--rc-surface) 65%);
-  border: 1px solid var(--rc-border, #2E3044);
+  background: var(--rc-surface);
+  border: 1px solid var(--rc-border);
   border-radius: 5px;
   transition: border-color 0.15s;
   overflow: hidden;
@@ -267,7 +271,7 @@
 
 .docs-card-brief {
   font-size: 0.68rem;
-  color: var(--rc-muted, #C8B9A5);
+  color: var(--rc-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -293,25 +297,25 @@
   white-space: nowrap;
 }
 
-.tag-amber { background: rgba(218, 160, 62, 0.15); color: var(--rc-accent, #DAA03E); }
-.tag-sky   { background: rgba(120, 160, 190, 0.15); color: #78A0BE; }
-.tag-green { background: rgba(106, 153, 78, 0.15);  color: #6A994E; }
-.tag-rust  { background: rgba(186, 100, 60, 0.15);  color: #BA643C; }
-.tag-berry { background: rgba(148, 90, 120, 0.15);  color: #945A78; }
-.tag-dim   { background: rgba(200, 185, 165, 0.1);  color: var(--rc-dim, #5A5A6A); }
+@each $tag, $token in ('amber': 'accent', 'sand': 'sand', 'green': 'green', 'rust': 'orange', 'berry': 'berry', 'dim': 'dim') {
+  .tag-#{$tag} {
+    background: color-mix(in srgb, var(--rc-#{$token}) 12%, transparent);
+    color: var(--rc-#{$token});
+  }
+}
 
 /* ── Signature highlight classes ───────────────────────── */
 :host ::ng-deep {
-  .sig-name  { color: var(--rc-accent, #DAA03E); font-weight: 700; }
-  .sig-p     { color: var(--rc-text, #F0F0F5); }
-  .sig-type  { color: #78A0BE; }
-  .sig-dflt  { color: #6A994E; }
-  .sig-punc, .sig-sep, .sig-colon, .sig-eq { color: var(--rc-dim, #5A5A6A); }
+  .sig-name  { color: var(--rc-accent); font-weight: 700; }
+  .sig-p     { color: var(--rc-text); }
+  .sig-type  { color: var(--rc-sand); }
+  .sig-dflt  { color: var(--rc-green); }
+  .sig-punc, .sig-sep, .sig-colon, .sig-eq { color: var(--rc-dim); }
 }
 
 /* ── Expand Arrow ──────────────────────────────────────── */
 .docs-expand-arrow {
-  color: var(--rc-dim, #5A5A6A);
+  color: var(--rc-dim);
   display: flex;
   align-items: center;
   transition: transform 0.2s ease, color 0.15s;
@@ -319,15 +323,15 @@
 
   &.rotated {
     transform: rotate(180deg);
-    color: var(--rc-accent, #DAA03E);
+    color: var(--rc-accent);
   }
 }
 
 /* ── Card Body ─────────────────────────────────────────── */
 .docs-card-body {
   padding: 0.5rem 0.6rem 0.6rem;
-  border-top: 1px solid var(--rc-border, #2E3044);
-  background: rgba(18, 18, 24, 0.5);
+  border-top: 1px solid var(--rc-border);
+  background: rgba(28, 25, 22, 0.5);
 }
 
 /* Full signature block */
@@ -335,21 +339,21 @@
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.7rem;
   line-height: 1.7;
-  background: var(--rc-bg, #121218);
-  border: 1px solid var(--rc-border, #2E3044);
-  border-left: 3px solid var(--rc-accent, #DAA03E);
+  background: var(--rc-bg);
+  border: 1px solid var(--rc-border);
+  border-left: 3px solid var(--rc-accent);
   border-radius: 4px;
   padding: 0.45rem 0.6rem;
   margin: 0 0 0.6rem;
   overflow-x: auto;
   white-space: pre;
-  color: var(--rc-text, #F0F0F5);
+  color: var(--rc-text);
 }
 
 /* ── Docstring text ────────────────────────────────────── */
 .docs-card-doc {
   font-size: 0.72rem;
-  color: var(--rc-muted, #A0A0AF);
+  color: var(--rc-muted);
   line-height: 1.55;
   margin-bottom: 0.4rem;
   white-space: pre-line;
@@ -360,7 +364,7 @@
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.6rem;
   font-weight: 700;
-  color: var(--rc-accent, #DAA03E);
+  color: var(--rc-accent);
   text-transform: uppercase;
   letter-spacing: 0.08em;
   margin-bottom: 0.3rem;
@@ -388,7 +392,7 @@
 
 .docs-arg-name {
   font-family: 'JetBrains Mono', monospace;
-  color: var(--rc-text, #F0F0F5);
+  color: var(--rc-text);
   font-weight: 600;
   font-size: 0.68rem;
   white-space: nowrap;
@@ -402,18 +406,18 @@
 
 .docs-arg-type {
   font-family: 'JetBrains Mono', monospace;
-  color: #78A0BE;
+  color: var(--rc-sand);
   font-size: 0.65rem;
 }
 
 .docs-arg-dflt {
   font-family: 'JetBrains Mono', monospace;
-  color: #6A994E;
+  color: var(--rc-green);
   font-size: 0.65rem;
 }
 
 .docs-arg-desc {
-  color: var(--rc-muted, #C8B9A5);
+  color: var(--rc-muted);
   line-height: 1.45;
   font-size: 0.68rem;
 }
@@ -425,34 +429,34 @@
 
 .docs-section-body {
   font-size: 0.7rem;
-  color: var(--rc-muted, #C8B9A5);
+  color: var(--rc-muted);
   line-height: 1.5;
   padding-left: 0.4rem;
-  border-left: 2px solid var(--rc-border, #2E3044);
+  border-left: 2px solid var(--rc-border);
 }
 
 /* ── Module path ───────────────────────────────────────── */
 .docs-card-module {
   margin-top: 0.5rem;
   padding-top: 0.35rem;
-  border-top: 1px solid var(--rc-border, #2E3044);
+  border-top: 1px solid var(--rc-border);
   font-size: 0.6rem;
   font-family: 'JetBrains Mono', monospace;
-  color: var(--rc-dim, #5A5A6A);
+  color: var(--rc-dim);
   opacity: 0.7;
 }
 
 /* ── No docs hint ──────────────────────────────────────── */
 .docs-no-docs {
   font-size: 0.7rem;
-  color: var(--rc-muted, #C8B9A5);
+  color: var(--rc-muted);
   font-style: italic;
   padding: 0.2rem 0;
 }
 
 /* ── Empty / Skeleton ──────────────────────────────────── */
 .docs-empty {
-  color: var(--rc-muted, #C8B9A5);
+  color: var(--rc-muted);
   font-size: 0.75rem;
   padding: 2rem 0;
   text-align: center;
@@ -462,6 +466,17 @@
 .docs-skeleton-card {
   padding: 0.5rem 0.6rem;
   border-radius: 5px;
-  border: 1px solid var(--rc-border, #2E3044);
-  background: var(--rc-surface, #1C1E2A);
+  border: 1px solid var(--rc-border);
+  background: var(--rc-surface);
+}
+
+.catalog-step-preview .arg-input {
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+}
+
+.catalog-step-preview .arg-value {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }

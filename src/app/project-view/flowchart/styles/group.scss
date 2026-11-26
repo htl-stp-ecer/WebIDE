@@ -131,7 +131,7 @@ $corner-offset: 9px;
   border-radius: 6px;
   background: rgba(30, 26, 23, 0.88);
   border: 1px solid rgba(218, 160, 62, 0.25);
-  color: var(--rc-text, #F5EBDC);
+  color: var(--rc-text);
   cursor: grab;
   user-select: none;
   touch-action: none;
@@ -153,7 +153,7 @@ $corner-offset: 9px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--rc-accent, #DAA03E);
+  color: var(--rc-accent);
 }
 
 .group-collapse-btn {
@@ -166,7 +166,7 @@ $corner-offset: 9px;
   border-radius: 4px;
   border: 1px solid rgba(218, 160, 62, 0.2);
   background: rgba(30, 26, 23, 0.6);
-  color: var(--rc-muted, #C8B9A5);
+  color: var(--rc-muted);
   cursor: pointer;
   pointer-events: auto !important;
   touch-action: manipulation;
@@ -175,13 +175,13 @@ $corner-offset: 9px;
 
 .group-collapse-btn:hover {
   border-color: rgba(218, 160, 62, 0.5);
-  color: var(--rc-accent, #DAA03E);
+  color: var(--rc-accent);
 }
 
 // Auto-generated parallel groups
 .group-node.parallel-auto-group {
-  background: rgba(99, 102, 241, 0.04);
-  border: 1.5px dashed rgba(99, 102, 241, 0.25);
+  background: rgba(227, 198, 150, 0.04);
+  border: 1.5px dashed rgba(227, 198, 150, 0.25);
   box-shadow: none;
   pointer-events: none !important;
 }
@@ -194,9 +194,9 @@ $corner-offset: 9px;
   gap: 0.35rem;
   padding: 0.15rem 0.55rem;
   border-radius: 4px;
-  background: rgba(99, 102, 241, 0.12);
-  border: 1px solid rgba(99, 102, 241, 0.2);
-  color: rgba(99, 102, 241, 0.7);
+  background: rgba(227, 198, 150, 0.12);
+  border: 1px solid rgba(227, 198, 150, 0.2);
+  color: rgba(227, 198, 150, 0.7);
   font-family: 'Space Grotesk', system-ui, sans-serif;
   font-weight: 600;
   font-size: 0.7rem;

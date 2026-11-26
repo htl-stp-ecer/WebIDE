@@ -10,17 +10,17 @@
   .step-timing-panel {
     background: rgba(17, 20, 24, 0.9);
     border-color: rgba(148, 163, 184, 0.28);
-    color: #e5e7eb;
+    color: #e8dfd3;
   }
 
   .panel-header {
-    color: #e5e7eb;
+    color: #e8dfd3;
   }
 
   .panel-switch-btn {
     background: rgba(35, 40, 48, 0.9);
     border-color: rgba(75, 85, 99, 0.7);
-    color: #e5e7eb;
+    color: #e8dfd3;
   }
 
   .panel-switch-btn:hover {
@@ -40,18 +40,18 @@
   }
 
   .timing-label {
-    color: #e5e7eb;
+    color: #e8dfd3;
   }
 
   .timing-index {
-    background: rgba(59, 130, 246, 0.16);
-    color: #cbd5ff;
-    border-color: rgba(59, 130, 246, 0.35);
+    background: rgba(173, 102, 30, 0.16);
+    color: #e8cda9;
+    border-color: rgba(173, 102, 30, 0.35);
   }
 
   .timing-name,
   .timing-value {
-    color: #e5e7eb;
+    color: #e8dfd3;
   }
 
   .timing-bar-fill {
@@ -79,7 +79,7 @@
   background: rgba(255, 255, 255, 0.92);
   border: 1px solid rgba(148, 163, 184, 0.35);
   border-radius: 12px;
-  box-shadow: 0 16px 30px rgba(15, 23, 42, 0.2);
+  box-shadow: 0 16px 30px rgba(53, 43, 32, 0.2);
   backdrop-filter: blur(10px) saturate(1.05);
   overflow: hidden;
   display: flex;
@@ -92,7 +92,7 @@
   font-weight: 600;
   letter-spacing: 0.01em;
   text-transform: uppercase;
-  color: #0f172a;
+  color: #221c16;
   margin-bottom: 0.35rem;
   display: flex;
   align-items: center;
@@ -118,7 +118,7 @@
 .panel-switch-btn {
   border: 1px solid rgba(148, 163, 184, 0.65);
   background: rgba(255, 255, 255, 0.85);
-  color: #0f172a;
+  color: #221c16;
   padding: 0.2rem 0.55rem;
   border-radius: 999px;
   font-size: 0.8rem;
@@ -127,7 +127,7 @@
 }
 
 .panel-switch-btn:hover {
-  background: #f1f5f9;
+  background: #f4eee5;
   border-color: rgba(148, 163, 184, 0.9);
 }
 
@@ -161,13 +161,13 @@
   align-items: center;
   gap: 0.4rem;
   font-size: 0.9rem;
-  color: #111827;
+  color: #261f18;
   font-weight: 600;
 }
 
 .timing-index {
   background: rgba(79, 70, 229, 0.08);
-  color: #4338ca;
+  color: #92573d;
   border: 1px solid rgba(67, 56, 202, 0.25);
   border-radius: 8px;
   padding: 0.1rem 0.45rem;
@@ -194,7 +194,7 @@
   width: 100%;
   height: 8px;
   border-radius: 999px;
-  background: rgba(15, 23, 42, 0.08);
+  background: rgba(53, 43, 32, 0.08);
   overflow: hidden;
 }
 
@@ -204,14 +204,14 @@
   top: 0;
   bottom: 0;
   width: 10%;
-  background: linear-gradient(90deg, #2563eb, #38bdf8);
+  background: linear-gradient(90deg, #8f4c18, #e2b27e);
   transition: width 0.15s ease;
 }
 
 .timing-value {
   font-variant-numeric: tabular-nums;
   font-size: 0.82rem;
-  color: #0f172a;
+  color: #221c16;
   min-width: 3.5rem;
   text-align: right;
 }
@@ -232,7 +232,7 @@
 .timing-empty {
   padding: 0.5rem 0.25rem;
   text-align: center;
-  color: #475569;
+  color: #625447;
   font-size: 0.9rem;
 }
 

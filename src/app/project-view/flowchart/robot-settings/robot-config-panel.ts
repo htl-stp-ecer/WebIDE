@@ -104,7 +104,7 @@ export class RobotConfigPanel implements OnInit, OnChanges, AfterViewInit, After
   // Sensors
   sensors: Sensor[] = [];
   private deviceSensors: DeviceSensorInfo[] = [];
-  private readonly sensorPalette = ['#ef4444', '#f97316', '#f59e0b', '#22c55e', '#3b82f6', '#6366f1', '#ec4899'];
+  private readonly sensorPalette = ['#ef4444', '#f97316', '#f59e0b', '#22c55e', '#ad661e', '#99664e', '#ec4899'];
 
   // Center points (geometric is always 50%, 50% - the robot's center)
   rotationCenter: CenterPoint | null = null;
@@ -244,11 +244,11 @@ export class RobotConfigPanel implements OnInit, OnChanges, AfterViewInit, After
       }));
 
     renderRobotAtCenter(this.ctx, rcX, rcY, Math.PI / 2, config, scaleX, scaleY, {
-      bodyFill: 'rgba(15, 23, 42, 0.06)',
-      bodyStroke: '#94a3b8',
-      arrowFill: '#64748b',
+      bodyFill: 'rgba(53, 43, 32, 0.06)',
+      bodyStroke: '#b8a795',
+      arrowFill: '#746656',
       rotationCenterFill: '#a855f7',
-      geometricCenterFill: '#64748b',
+      geometricCenterFill: '#746656',
       dashed: false,
       sensors: rendererSensors,
     });
@@ -264,8 +264,8 @@ export class RobotConfigPanel implements OnInit, OnChanges, AfterViewInit, After
         const gx = w / 2 + (g.position / 100 - 0.5) * robotWidthPx;
         const isActive = this.activeGuidelines.x?.position === g.position && this.activeGuidelines.x?.type === g.type;
         this.ctx.strokeStyle = isActive
-          ? 'rgba(59, 130, 246, 0.9)'
-          : g.type === 'center' ? 'rgba(100,116,139,0.35)' : g.type === 'edge' ? 'rgba(100,116,139,0.25)' : 'rgba(59,130,246,0.5)';
+          ? 'rgba(173, 102, 30, 0.9)'
+          : g.type === 'center' ? 'rgba(116, 102, 86,0.35)' : g.type === 'edge' ? 'rgba(116, 102, 86,0.25)' : 'rgba(173, 102, 30,0.5)';
         this.ctx.lineWidth = isActive ? 1.5 : 1;
         this.ctx.setLineDash(isActive ? [] : [3, 3]);
         this.ctx.beginPath();
@@ -278,8 +278,8 @@ export class RobotConfigPanel implements OnInit, OnChanges, AfterViewInit, After
         const gy = h / 2 + (g.position / 100 - 0.5) * robotLengthPx;
         const isActive = this.activeGuidelines.y?.position === g.position && this.activeGuidelines.y?.type === g.type;
         this.ctx.strokeStyle = isActive
-          ? 'rgba(59, 130, 246, 0.9)'
-          : g.type === 'center' ? 'rgba(100,116,139,0.35)' : g.type === 'edge' ? 'rgba(100,116,139,0.25)' : 'rgba(59,130,246,0.5)';
+          ? 'rgba(173, 102, 30, 0.9)'
+          : g.type === 'center' ? 'rgba(116, 102, 86,0.35)' : g.type === 'edge' ? 'rgba(116, 102, 86,0.25)' : 'rgba(173, 102, 30,0.5)';
         this.ctx.lineWidth = isActive ? 1.5 : 1;
         this.ctx.setLineDash(isActive ? [] : [3, 3]);
         this.ctx.beginPath();

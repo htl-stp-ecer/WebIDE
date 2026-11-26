@@ -3,16 +3,16 @@
   position: absolute;
   inset: 0;
   pointer-events: auto;
-  --planner-surface-ground: var(--p-surface-ground, #f8fafc);
+  --planner-surface-ground: var(--p-surface-ground, #fbf8f2);
   --planner-surface-section: var(--p-surface-section, #ffffff);
   --planner-surface-overlay: var(--p-surface-overlay, #ffffff);
-  --planner-surface-100: var(--p-surface-100, #f1f5f9);
-  --planner-surface-200: var(--p-surface-200, #e2e8f0);
-  --planner-surface-hover: var(--p-surface-hover, #f1f5f9);
-  --planner-content-border: var(--p-content-border-color, #e2e8f0);
-  --planner-text-color: var(--p-text-color, #0f172a);
-  --planner-text-muted: var(--p-text-muted-color, #64748b);
-  --planner-primary: var(--p-primary-color, #3b82f6);
+  --planner-surface-100: var(--p-surface-100, #f4eee5);
+  --planner-surface-200: var(--p-surface-200, #e8dfd3);
+  --planner-surface-hover: var(--p-surface-hover, #f4eee5);
+  --planner-content-border: var(--p-content-border-color, #e8dfd3);
+  --planner-text-color: var(--p-text-color, #221c16);
+  --planner-text-muted: var(--p-text-muted-color, #746656);
+  --planner-primary: var(--p-primary-color, #ad661e);
   --planner-primary-contrast: var(--p-primary-contrast-color, #ffffff);
   --planner-primary-soft: var(--planner-primary);
   --planner-badge-bg: var(--planner-surface-100);
@@ -23,20 +23,20 @@
 
 :host-context(.dark),
 :host-context(.p-dark) {
-  --planner-surface-ground: var(--p-surface-ground, #1b1b2b);
-  --planner-surface-section: var(--p-surface-card, #252536);
-  --planner-surface-overlay: var(--p-surface-card, rgba(30, 41, 59, 0.9));
-  --planner-surface-100: var(--p-surface-100, rgba(255, 255, 255, 0.05));
-  --planner-surface-200: var(--p-surface-200, rgba(255, 255, 255, 0.1));
+  --planner-surface-ground: var(--rc-bg);
+  --planner-surface-section: var(--rc-surface);
+  --planner-surface-overlay: var(--rc-elevated);
+  --planner-surface-100: var(--rc-shell);
+  --planner-surface-200: var(--rc-elevated);
   --planner-surface-hover: var(--p-surface-hover, rgba(255, 255, 255, 0.08));
   --planner-content-border: var(--p-surface-border, rgba(255, 255, 255, 0.12));
-  --planner-text-color: var(--p-text-color, #e2e8f0);
-  --planner-text-muted: var(--p-text-muted-color, #94a3b8);
-  --planner-primary: var(--p-primary-color, #60a5fa);
+  --planner-text-color: var(--p-text-color, #e8dfd3);
+  --planner-text-muted: var(--p-text-muted-color, #b8a795);
+  --planner-primary: var(--p-primary-color, #f2bf69);
   --planner-primary-contrast: var(--p-primary-contrast-color, #ffffff);
-  --planner-primary-soft: var(--p-primary-300, #93c5fd);
+  --planner-primary-soft: var(--p-primary-300, #ffd495);
   --planner-badge-bg: rgba(255, 255, 255, 0.08);
-  --planner-badge-fg: var(--p-text-muted-color, #94a3b8);
+  --planner-badge-fg: var(--p-text-muted-color, #b8a795);
   --planner-badge-border: rgba(255, 255, 255, 0.12);
 }
 
@@ -181,7 +181,7 @@
   gap: 6px;
   max-height: calc(100vh - 16px);
   overflow-y: auto;
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.18);
+  box-shadow: 0 10px 24px rgba(53, 43, 32, 0.18);
   z-index: 50;
   pointer-events: auto;
 }

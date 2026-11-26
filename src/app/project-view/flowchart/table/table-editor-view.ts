@@ -1416,7 +1416,7 @@ export class TableEditorView implements AfterViewInit, OnDestroy {
   }
 
   lineColor(line: VectorLine): string {
-    return line.kind === 'wall' ? '#7a879a' : '#111827';
+    return line.kind === 'wall' ? '#998875' : '#261f18';
   }
 
   lineStrokeWidth(line: VectorLine): number {
@@ -1430,21 +1430,21 @@ export class TableEditorView implements AfterViewInit, OnDestroy {
   guideColor(guide: GuideLine): string {
     switch (guide.kind) {
       case 'endpoint':
-        return '#22d3ee';
+        return '#e4add0';
       case 'angle':
         return '#fb7185';
       case 'axis':
       case 'alignment':
       default:
-        return '#38bdf8';
+        return '#e2b27e';
     }
   }
 
   labelColor(line: VectorLine): string {
     if (this.selectedLineId() === line.id) {
-      return '#0ea5e9';
+      return '#ab6c47';
     }
-    return line.kind === 'wall' ? '#64748b' : '#0f172a';
+    return line.kind === 'wall' ? '#746656' : '#221c16';
   }
 
   lineLengthLabel(line: VectorLine): string {
@@ -1550,7 +1550,7 @@ export class TableEditorView implements AfterViewInit, OnDestroy {
   }
 
   ghostStrokeColor(kind: LineKind): string {
-    return kind === 'wall' ? '#334766' : '#1f2a3a';
+    return kind === 'wall' ? '#604b39' : '#372c22';
   }
 
   // ─── Transitions ───────────────────────────────────────────────────────

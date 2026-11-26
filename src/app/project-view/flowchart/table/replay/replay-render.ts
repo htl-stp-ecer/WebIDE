@@ -28,7 +28,7 @@ export function renderParticleCloud(
   if (maxWeight <= 0) maxWeight = 1;
 
   ctx.save();
-  ctx.fillStyle = '#38bdf8';
+  ctx.fillStyle = '#e2b27e';
   for (const p of particles) {
     const xCm = p[0] * 100;
     const yCm = p[1] * 100;

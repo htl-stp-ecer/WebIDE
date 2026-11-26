@@ -134,7 +134,7 @@
         </div>
 
         @for (connection of actions.visibleConnections(); track connection.id) {
-          <f-connection [fConnectionId]="connection.id" [fReassignDisabled]="true" fBehavior="fixed" fType="elbow" [fOutputId]="connection.outputId" [fInputId]="connection.inputId" [fStartColor]="isDarkMode() ? '#EEE5E9' : '#131217'" [fEndColor]="isDarkMode() ? '#EEE5E9' : '#131217'" [class.connection-completed]="actions.isConnectionCompleted(connection.id)" [class.connection-collapsed]="connection.id.startsWith('collapsed-')" [class.connection-selected]="selectedConnectionId() === connection.id" [attr.data-connection-id]="connection.id" (contextmenu)="actions.onConnectionRightClick($event, connection.id)">
+          <f-connection [fConnectionId]="connection.id" [fReassignDisabled]="true" fBehavior="fixed" fType="elbow" [fOutputId]="connection.outputId" [fInputId]="connection.inputId" [fStartColor]="isDarkMode() ? '#fbf2e6' : '#1c1916'" [fEndColor]="isDarkMode() ? '#fbf2e6' : '#1c1916'" [class.connection-completed]="actions.isConnectionCompleted(connection.id)" [class.connection-collapsed]="connection.id.startsWith('collapsed-')" [class.connection-selected]="selectedConnectionId() === connection.id" [attr.data-connection-id]="connection.id" (contextmenu)="actions.onConnectionRightClick($event, connection.id)">
             @if (connection.hasBreakpoint) {
               <div fConnectionCenter class="connection-breakpoint-indicator"></div>
             }

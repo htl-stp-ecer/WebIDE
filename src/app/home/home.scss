@@ -1,7 +1,7 @@
 :host {
   display: block;
   height: calc(100vh - 44px);
-  background: var(--rc-bg, #121218);
+  background: var(--rc-bg);
   font-family: 'Space Grotesk', system-ui, sans-serif;
 }
 
@@ -20,8 +20,8 @@
   flex: 0 0 280px;
   display: flex;
   flex-direction: column;
-  border-right: 1px solid var(--rc-border, #2E3044);
-  background: var(--rc-bg, #121218);
+  border-right: 1px solid var(--rc-border);
+  background: var(--rc-bg);
   overflow: hidden;
 }
 
@@ -29,7 +29,7 @@
   display: flex;
   align-items: center;
   padding: 12px 16px;
-  border-bottom: 1px solid var(--rc-border, #2E3044);
+  border-bottom: 1px solid var(--rc-border);
   flex-shrink: 0;
 }
 
@@ -38,7 +38,7 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  color: var(--rc-dim, #5A5A6A);
+  color: var(--rc-dim);
   margin: 0;
 }
 
@@ -46,7 +46,7 @@
   flex: 1 1 auto;
   overflow-y: auto;
   scrollbar-width: thin;
-  scrollbar-color: var(--rc-border, #2E3044) transparent;
+  scrollbar-color: var(--rc-border) transparent;
 }
 
 .sidebar-empty {
@@ -55,7 +55,7 @@
   align-items: center;
   gap: 0.5rem;
   padding: 3rem 1rem;
-  color: var(--rc-dim, #5A5A6A);
+  color: var(--rc-dim);
   text-align: center;
 
   i {
@@ -87,7 +87,7 @@
   position: relative;
 
   &:hover {
-    background: var(--rc-elevated, #252838);
+    background: var(--rc-elevated);
 
     .device-delete {
       opacity: 1;
@@ -106,16 +106,16 @@
   border-radius: 50%;
 
   &.online {
-    background: var(--rc-green, #4CAF50);
+    background: var(--rc-green);
     box-shadow: 0 0 4px rgba(76, 175, 80, 0.5);
   }
 
   &.offline {
-    background: var(--rc-dim, #5A5A6A);
+    background: var(--rc-dim);
   }
 
   &.loading {
-    background: var(--rc-yellow, #FFD600);
+    background: var(--rc-yellow);
     animation: pulse-dot 1.2s ease-in-out infinite;
   }
 }
@@ -136,7 +136,7 @@
 .device-hostname {
   font-size: 0.8125rem;
   font-weight: 600;
-  color: var(--rc-text, #F0F0F5);
+  color: var(--rc-text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -145,7 +145,7 @@
 .device-addr {
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.6875rem;
-  color: var(--rc-muted, #A0A0AF);
+  color: var(--rc-muted);
 }
 
 .device-meta {
@@ -161,15 +161,15 @@
   text-transform: uppercase;
   letter-spacing: 0.06em;
 
-  &.online { color: var(--rc-green, #4CAF50); }
-  &.offline { color: var(--rc-dim, #5A5A6A); }
-  &.loading { color: var(--rc-yellow, #FFD600); }
+  &.online { color: var(--rc-green); }
+  &.offline { color: var(--rc-dim); }
+  &.loading { color: var(--rc-yellow); }
 }
 
 .device-battery {
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.6875rem;
-  color: var(--rc-muted, #A0A0AF);
+  color: var(--rc-muted);
 }
 
 .device-delete {
@@ -182,14 +182,14 @@
   background: transparent;
   border: none;
   border-radius: 4px;
-  color: var(--rc-dim, #5A5A6A);
+  color: var(--rc-dim);
   cursor: pointer;
   font-size: 0.7rem;
   opacity: 0;
   transition: opacity 0.12s ease, color 0.12s ease, background 0.12s ease;
 
   &:hover {
-    color: var(--rc-red, #FF5252);
+    color: var(--rc-red);
     background: rgba(255, 82, 82, 0.1);
   }
 }
@@ -237,7 +237,7 @@
   background: rgba(218, 160, 62, 0.06);
   border: 1px solid rgba(218, 160, 62, 0.15);
   border-radius: 8px;
-  color: var(--rc-accent, #DAA03E);
+  color: var(--rc-accent);
 
   svg {
     width: 18px;
@@ -248,26 +248,26 @@
 .section-title {
   font-size: 1rem;
   font-weight: 700;
-  color: var(--rc-text, #F0F0F5);
+  color: var(--rc-text);
   margin: 0;
   letter-spacing: -0.01em;
 }
 
 .section-subtitle {
   font-size: 0.8125rem;
-  color: var(--rc-muted, #A0A0AF);
+  color: var(--rc-muted);
   margin: 0.1rem 0 0;
 }
 
 .section-hint {
   font-size: 0.75rem;
-  color: var(--rc-dim, #5A5A6A);
+  color: var(--rc-dim);
   margin: 0;
 }
 
 .section-divider {
   height: 1px;
-  background: var(--rc-border, #2E3044);
+  background: var(--rc-border);
 }
 
 /* ─── Connect Form ───────────────────────────────────── */
@@ -295,7 +295,7 @@
   left: 0.75rem;
   width: 14px;
   height: 14px;
-  color: var(--rc-dim, #5A5A6A);
+  color: var(--rc-dim);
   pointer-events: none;
 }
 
@@ -303,21 +303,21 @@
   width: 100%;
   height: 36px;
   padding: 0 0.75rem 0 2.25rem;
-  background: var(--rc-surface, #1C1E2A);
-  border: 1px solid var(--rc-border, #2E3044);
+  background: var(--rc-surface);
+  border: 1px solid var(--rc-border);
   border-radius: 6px;
   font-family: 'JetBrains Mono', ui-monospace, monospace;
   font-size: 0.8125rem;
-  color: var(--rc-text, #F0F0F5);
+  color: var(--rc-text);
   transition: border-color 0.12s ease, box-shadow 0.12s ease;
   outline: none;
 
   &::placeholder {
-    color: var(--rc-dim, #5A5A6A);
+    color: var(--rc-dim);
   }
 
   &:focus {
-    border-color: var(--rc-accent, #DAA03E);
+    border-color: var(--rc-accent);
     box-shadow: 0 0 0 2px rgba(218, 160, 62, 0.1);
   }
 }
@@ -328,7 +328,7 @@
   gap: 0.35rem;
   height: 36px;
   padding: 0 1rem;
-  background: var(--rc-accent, #DAA03E);
+  background: var(--rc-accent);
   border: none;
   border-radius: 6px;
   font-family: 'Space Grotesk', system-ui, sans-serif;
@@ -380,7 +380,7 @@
 
 .connect-hint {
   font-size: 0.75rem;
-  color: var(--rc-dim, #5A5A6A);
+  color: var(--rc-dim);
   margin: 0;
 }
 
@@ -399,7 +399,7 @@
   gap: 0.4rem;
   font-size: 0.8125rem;
   font-weight: 700;
-  color: var(--rc-orange, #FF7043);
+  color: var(--rc-orange);
   margin-bottom: 0.375rem;
 
   svg {
@@ -411,7 +411,7 @@
 
 .cors-warning-text {
   font-size: 0.75rem;
-  color: var(--rc-muted, #A0A0AF);
+  color: var(--rc-muted);
   margin: 0 0 0.25rem;
   line-height: 1.4;
 }
@@ -420,7 +420,7 @@
   display: block;
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.6875rem;
-  color: var(--rc-orange, #FF7043);
+  color: var(--rc-orange);
   word-break: break-all;
   text-decoration: none;
   margin-top: 0.25rem;
@@ -438,12 +438,12 @@
   height: 32px;
   padding: 0 0.75rem;
   background: transparent;
-  border: 1px solid var(--rc-border, #2E3044);
+  border: 1px solid var(--rc-border);
   border-radius: 5px;
   font-family: 'Space Grotesk', system-ui, sans-serif;
   font-size: 0.775rem;
   font-weight: 600;
-  color: var(--rc-muted, #A0A0AF);
+  color: var(--rc-muted);
   cursor: pointer;
   transition: color 0.12s ease, border-color 0.12s ease, background 0.12s ease;
   align-self: flex-start;
@@ -455,8 +455,8 @@
   }
 
   &:hover {
-    color: var(--rc-text, #F0F0F5);
-    border-color: var(--rc-dim, #5A5A6A);
-    background: var(--rc-elevated, #252838);
+    color: var(--rc-text);
+    border-color: var(--rc-dim);
+    background: var(--rc-elevated);
   }
 }

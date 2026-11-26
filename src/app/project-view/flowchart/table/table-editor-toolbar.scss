@@ -7,8 +7,8 @@
   align-items: stretch;
   gap: 0.35rem;
   padding: 0.4rem 0.75rem;
-  background: var(--rc-bg, #121218);
-  border-bottom: 1px solid var(--rc-border, #2E3044);
+  background: var(--rc-bg);
+  border-bottom: 1px solid var(--rc-border);
   user-select: none;
 }
 
@@ -31,7 +31,7 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  color: var(--rc-muted, #A0A0AF);
+  color: var(--rc-muted);
   font-family: 'Space Grotesk', system-ui, sans-serif;
   font-size: 11px;
   text-transform: uppercase;
@@ -44,21 +44,21 @@
   select {
     height: 28px;
     padding: 0 0.5rem;
-    border: 1px solid var(--rc-border, #2E3044);
+    border: 1px solid var(--rc-border);
     border-radius: 4px;
-    background: var(--rc-elevated, #252838);
-    color: var(--rc-text, #F0F0F5);
+    background: var(--rc-elevated);
+    color: var(--rc-text);
     font-size: 12px;
     min-width: 86px;
 
     &:focus {
       outline: none;
-      border-color: var(--rc-accent, #DAA03E);
+      border-color: var(--rc-accent);
     }
 
     option {
-      background: var(--rc-elevated, #252838);
-      color: var(--rc-text, #F0F0F5);
+      background: var(--rc-elevated);
+      color: var(--rc-text);
     }
   }
 }
@@ -66,7 +66,7 @@
 .toolbar-divider {
   width: 1px;
   height: 22px;
-  background: var(--rc-border, #2E3044);
+  background: var(--rc-border);
   margin: 0 0.15rem;
 }
 
@@ -83,19 +83,19 @@
   border: 1px solid transparent;
   border-radius: 4px;
   background: transparent;
-  color: var(--rc-dim, #5A5A6A);
+  color: var(--rc-dim);
   cursor: pointer;
   transition: color 0.12s ease, background 0.12s ease, border-color 0.12s ease;
 
   &:hover {
-    background: var(--rc-elevated, #252838);
-    color: var(--rc-muted, #A0A0AF);
+    background: var(--rc-elevated);
+    color: var(--rc-muted);
   }
 
   &.active {
     background: rgba(218, 160, 62, 0.15);
     border-color: rgba(218, 160, 62, 0.4);
-    color: var(--rc-accent, #DAA03E);
+    color: var(--rc-accent);
   }
 
   &:disabled {
@@ -118,22 +118,22 @@
   width: 74px;
   height: 26px;
   padding: 0 0.5rem;
-  border: 1px solid var(--rc-border, #2E3044);
+  border: 1px solid var(--rc-border);
   border-radius: 4px;
-  background: var(--rc-elevated, #252838);
-  color: var(--rc-text, #F0F0F5);
+  background: var(--rc-elevated);
+  color: var(--rc-text);
   font-size: 12px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   cursor: pointer;
 
   &:focus {
     outline: none;
-    border-color: var(--rc-accent, #DAA03E);
+    border-color: var(--rc-accent);
   }
 
   option {
-    background: var(--rc-elevated, #252838);
-    color: var(--rc-text, #F0F0F5);
+    background: var(--rc-elevated);
+    color: var(--rc-text);
   }
 }
 
@@ -143,10 +143,10 @@
   justify-content: center;
   height: 30px;
   padding: 0 0.85rem;
-  border: 1px solid var(--rc-border, #2E3044);
+  border: 1px solid var(--rc-border);
   border-radius: 4px;
   background: transparent;
-  color: var(--rc-muted, #A0A0AF);
+  color: var(--rc-muted);
   font-family: 'Space Grotesk', system-ui, sans-serif;
   font-size: 0.75rem;
   font-weight: 500;
@@ -154,15 +154,15 @@
   transition: color 0.12s ease, background 0.12s ease, border-color 0.12s ease;
 
   &:hover {
-    background: var(--rc-elevated, #252838);
-    border-color: var(--rc-muted, #A0A0AF);
-    color: var(--rc-text, #F0F0F5);
+    background: var(--rc-elevated);
+    border-color: var(--rc-muted);
+    color: var(--rc-text);
   }
 
   &.primary {
     background: rgba(218, 160, 62, 0.12);
     border-color: rgba(218, 160, 62, 0.35);
-    color: var(--rc-accent, #DAA03E);
+    color: var(--rc-accent);
 
     &:hover {
       background: rgba(218, 160, 62, 0.2);

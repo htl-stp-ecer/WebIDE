@@ -13,7 +13,7 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: var(--rc-bg, #121218);
+  background: var(--rc-bg);
 }
 
 .flow-surface {
@@ -22,12 +22,7 @@
   min-height: 0;
   width: 100%;
   overflow: hidden;
-  background: var(--rc-bg, #121218);
-
-  /* Dot-grid background — warm amber tint */
-  background-image: radial-gradient(circle, rgba(218, 160, 62, 0.08) 1px, transparent 1px);
-  background-size: 24px 24px;
-  background-position: center center;
+  background: var(--rc-canvas);
 }
 
 /* Offscreen indicator */
@@ -47,7 +42,7 @@
   box-shadow:
     0 16px 40px rgba(0, 0, 0, 0.4),
     0 0 0 1px rgba(218, 160, 62, 0.08) inset;
-  color: var(--rc-text, #F5EBDC);
+  color: var(--rc-text);
   cursor: pointer;
   transform: translate(-50%, -50%);
   transition: transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease;
@@ -109,7 +104,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(18, 18, 24, 0.88);
+  background: rgba(28, 25, 22, 0.88);
   backdrop-filter: blur(4px);
 }
 
@@ -124,7 +119,7 @@
   font-family: 'Space Grotesk', system-ui, sans-serif;
   font-size: 0.8125rem;
   font-weight: 500;
-  color: var(--rc-muted, #A0A0AF);
+  color: var(--rc-muted);
 }
 
 :host ::ng-deep .flow-spinner {
